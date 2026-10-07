@@ -628,6 +628,42 @@ const resubmitOpenDecision = (over = {}) => ({
     ...over,
 });
 
+// K4: the flagged code must be IN the diff, or the rule judge never evaluates
+// it and the repeat claim passes for the wrong reason (no-history control).
+const touchedJobsRepo = {
+    ...jobsRepo,
+    'src/jobs/handler.ts': lines(
+        "import { db } from './db';",
+        "import type { Run, Batch } from './types';",
+        '',
+        'export async function finishRun(run: Run) {',
+        '    const output = run.output ?? null;',
+        '    await db.results.insert(run.id, output);',
+        "    await db.progress.update(run.id, 'done');",
+        '}',
+        '',
+        'export async function finishBatch(batch: Batch) {',
+        '    await db.results.insertMany(batch.id, batch.outputs);',
+        "    await db.progress.update(batch.id, 'done');",
+        '}',
+    ),
+};
+const touchedJobsDiff = [
+    patch('src/jobs/handler.ts', 4, [
+        ' export async function finishRun(run: Run) {',
+        '-    await db.results.insert(run.id, run.output);',
+        '+    const output = run.output ?? null;',
+        '+    await db.results.insert(run.id, output);',
+        "     await db.progress.update(run.id, 'done');",
+        ' }',
+        '+',
+        '+export async function finishBatch(batch: Batch) {',
+        '+    await db.results.insertMany(batch.id, batch.outputs);',
+        "+    await db.progress.update(batch.id, 'done');",
+        '+}',
+    ]),
+];
+
 const cases = [
     { id: 'U1-premise-unread', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'dead', claims: settleClaims('not_deliver_normal') },
     { id: 'U2-premise-readable', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'alive', claims: settleClaims('not_deliver') },
@@ -760,7 +796,7 @@ const cases = [
     // The bug finder raised the problem earlier and the developer declined it;
     // the rule judge must not post the same problem again as a rule violation.
     {
-        id: 'K4-rule-repeats-declined-bug', family: 'rounds', agent: 'kody-rules', repo: jobsRepo, changedFiles: jobsDiff, sandbox: 'alive',
+        id: 'K4-rule-repeats-declined-bug', family: 'rounds', agent: 'kody-rules', repo: touchedJobsRepo, changedFiles: touchedJobsDiff, sandbox: 'alive',
         kodyRules: [progressFirstRule],
         previousDecisions: [{ ...declinedRuleDecision(), suggestionId: 'round-a-bug-progress', label: 'bug', brokenKodyRulesIds: undefined, suggestionContent: 'finishRun stores the result (db.results.insert) before recording progress (db.progress.update); a crash in between leaves output for a run whose progress was never recorded. Update progress first.' }],
         claims: [ruleRepeatClaim('not_deliver'), ruleNewSiteClaim],

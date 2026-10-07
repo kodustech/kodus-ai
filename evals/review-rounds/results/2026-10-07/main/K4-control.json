@@ -1,0 +1,271 @@
+{
+  "model": "deepseek-v4-flash",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "engine": {
+    "commit": "55d8f485ddf8dafe4b499bfa7d465badc1efdc0b",
+    "sourceDigest": "fee252845aa649cc3ba7314467a684e89f9d78a41eca9da2bd03d7076b1846e7"
+  },
+  "startedAt": "2026-10-07T17:25:51.812Z",
+  "updatedAt": "2026-10-07T17:26:59.300Z",
+  "complete": true,
+  "selectedCases": [
+    "K4-rule-repeats-declined-bug-control"
+  ],
+  "casesSourceDigest": "07f8f1aab28663148750acdb0ce29e64791b6590d2ac9fb7964a0781d3395e10",
+  "summary": {
+    "measured": 3,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "K4-rule-repeats-declined-bug-control · finishRun-control [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "K4-rule-repeats-declined-bug-control · finishBatch-new-site [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash",
+      "rep": 1,
+      "case": "K4-rule-repeats-declined-bug-control",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25408,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In `finishRun`, the result is inserted before progress is recorded, so a result can become visible for a job whose progress was never updated. Call `db.progress.update` before `db.results.insert` in the same handler."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In `finishBatch`, the results are inserted before progress is recorded, so results can become visible for a batch whose progress was never updated. Call `db.progress.update` before `db.results.insertMany` in the same handler."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "rep": 2,
+      "case": "K4-rule-repeats-declined-bug-control",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21237,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In `finishRun`, `db.results.insert` on line 6 runs before `db.progress.update` on line 7, but Rule [1] requires progress to be recorded first so a result is never visible for a job whose progress was not recorded. Swap the order so `await db.progress.update(run.id, 'done');` is called before `await db.results.insert(run.id, output);`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In the newly added `finishBatch`, `db.results.insertMany` on line 11 runs before `db.progress.update` on line 12, but Rule [1] requires progress to be recorded first so results are never visible for a job whose progress was not recorded. Swap the order so `await db.progress.update(batch.id, 'done');` is called before `await db.results.insertMany(batch.id, batch.outputs);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "rep": 3,
+      "case": "K4-rule-repeats-declined-bug-control",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19857,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "`finishRun` persists the result before recording job progress, but Rule [1] requires `db.progress.update` to be called before `db.results.insert`/`insertMany` in the same job handler so a result is never visible for a job whose progress was not recorded. Reorder the calls so `db.progress.update(run.id, 'done')` executes first, then `db.results.insert(run.id, output)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "`finishBatch` persists the results before recording job progress, but Rule [1] requires `db.progress.update` to be called before `db.results.insert`/`insertMany` in the same job handler so results are never visible for a job whose progress was not recorded. Reorder the calls so `db.progress.update(batch.id, 'done')` executes first, then `db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}
