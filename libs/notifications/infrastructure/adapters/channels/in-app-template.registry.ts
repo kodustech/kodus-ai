@@ -153,11 +153,15 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
         };
     },
 
-    [NotificationEvent.BYOK_LLM_ERRORS_THRESHOLD]: (m) => ({
-        title: 'BYOK LLM errors exceeded threshold',
-        body: `Your ${m.provider ?? 'BYOK'} model returned ${m.errorCount ?? 0} errors in the recent window. Reviews may be impacted. Latest error: ${m.sampleError ?? 'n/a'}.`,
-        ctaUrl: APP_LINKS.models,
-    }),
+    [NotificationEvent.BYOK_LLM_ERRORS_THRESHOLD]: (m) => {
+        const status =
+            typeof m.httpStatus === 'number' ? `HTTP ${m.httpStatus} — ` : '';
+        return {
+            title: 'BYOK LLM errors exceeded threshold',
+            body: `Your ${m.provider ?? 'BYOK'} model returned ${m.errorCount ?? 0} errors in the recent window. Reviews may be impacted. Latest error: ${status}${m.sampleError ?? 'n/a'}.`,
+            ctaUrl: APP_LINKS.models,
+        };
+    },
 
     [NotificationEvent.CREDITS_PURCHASED]: (m) => ({
         title: 'Kodus credits added',

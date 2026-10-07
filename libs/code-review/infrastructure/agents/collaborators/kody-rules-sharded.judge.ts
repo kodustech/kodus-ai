@@ -396,7 +396,7 @@ function ruleBlock(rules: Array<Partial<IKodyRule>>): string {
  * Extra user-prompt lines instructing the model to answer in `languageLabel`
  * (a resolved label like "Portuguese (Brazil)", not a raw locale code). Both
  * shard prompts have zero language templating on their own (the root cause
- * of the Starian GitLab MR !16111 bug: a PR-scope kody-rules comment shipped
+ * of a customer-reported bug: a PR-scope kody-rules comment shipped
  * in raw English despite the org's Kody Language being pt-BR), so this is
  * the ONLY place a language instruction enters either shard's prompt.
  * Returns `[]` when no label is given, so callers that splice this in with

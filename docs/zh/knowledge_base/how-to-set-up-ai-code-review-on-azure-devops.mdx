@@ -8,21 +8,21 @@ Kodus 通过 webhooks 与 Azure DevOps 集成。配置完成后，每个拉取�
 ## 步骤
 
 1. **创建帐户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/zh/how_to_deploy/deploy_kodus/generic_vm)
-2. **连接 Azure DevOps** — 在设置过程中授权并配置个人访问令牌
-3. **配置 webhooks** — 按照引导设置启用拉取请求事件
-4. **选择代码库** — 选择 Kodus 应审查的 Azure DevOps 代码库
+2. **连接 Azure DevOps** — 在入门引导的 **Connect your Git tool** 步骤中，打开 **Azure Repos** 选项卡，点击 **Connect via token**，然后输入您的 Azure Repos 组织名称和个人访问令牌（之后也可以从侧边栏的 **Repositories** 进行连接）
+3. **选择代码库** — 选择 Kodus 应审查的 Azure DevOps 代码库
+4. **Webhooks** — 保存选择时，Kodus 会自动创建拉取请求服务挂钩。如果没有创建（通常发生在自托管安装中），请按照 [Azure DevOps Webhooks](/zh/how_to_deploy/platforms/azure_devops/azdevops_webhook) 指南手动注册
 5. **打开拉取请求** — Kodus 自动审查
 
 ## 您获得什么
 
 - 每个 PR 自动审查
 - 直接在拉取请求中发布的评论
-- 可自定义的规则和建议控制
+- 可自定义的规则、审查类别和最低严重性阈值
 - 根据关联工作项的业务逻辑验证
 
 ## 自定义配置
 
-在代码库根目录放置 `kodus-config.yml` 以自定义每个代码库的行为。该文件自动覆盖 Web 设置。
+在代码库根目录放置 `kodus-config.yml` 以自定义每个代码库的行为。该文件会在该代码库开启 **kodus Config File Overrides Web Preferences**（**Code review → General**）后覆盖 Web 设置。
 
 ## 使用个人访问令牌
 

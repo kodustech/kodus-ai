@@ -31,9 +31,9 @@ If you're connected via a token, ensure these points are checked:
 
 ### Configuration Issues
 
-- **Automated Reviews**: Ensure automated reviews are enabled in your [Global Settings](https://app.kodus.io/settings/code-review/global/general). If disabled, start reviews manually with `@kody start-review`.
-- **Review Types**: Ensure at least one review type is selected for Kody to provide suggestions. [Configure review types](https://app.kodus.io/settings/code-review/global/general).
-- **Branch Reviews**: By default, Kody reviews PRs merged into the default branch. To include additional branches, [update your configuration](https://app.kodus.io/settings/code-review/global/general).
+- **Automated Reviews**: Ensure **Enable Automated Code Review** is on in **Code review → General** at the Global scope ([open](https://app.kodus.io/settings/code-review/global/general)). If disabled, start reviews manually with `@kody start-review`.
+- **Review Categories**: Ensure at least one category (Bug, Performance, Security, Business Logic) is turned on for Kody to provide suggestions, and check the **Minimum severity to post**. Both live in **Code review → What to review** ([open](https://app.kodus.io/settings/code-review/global/review-scope)).
+- **Branch Reviews**: By default, Kody reviews PRs merged into the default branch. To include additional branches, update **Base Branches** in **Code review → General** ([open](https://app.kodus.io/settings/code-review/global/general)).
 - **Large PRs**: Be aware that PRs with a high number of changes may take longer to process.
 
 ---
@@ -49,10 +49,11 @@ Kody uses a hierarchical configuration system. Here's how it works:
 
 1. **Check Global Configuration**: Review and confirm global settings are correct. [Access Global Settings](https://app.kodus.io/settings/code-review/global/general).
 2. **Verify Repository Settings**:
-   - Navigate to the **By Repositories** section in your settings.
+   - Open the scope picker at the top of the **Code review** group in the sidebar. Repositories (and directories) with their own configuration are listed under **Global**.
    - Confirm if custom configurations are set for the repository in question.
+   - Also check that the repository is selected for review on the **Repositories** page (sidebar → **Repositories**).
 3. **Align or Clear Configurations**:
-   - To apply global settings, clear any repository-specific configurations.
+   - To apply global settings, clear any repository-specific configurations (the repository's **⋯** menu in the scope picker → **Delete configuration**).
    - Alternatively, adjust the repository-specific settings to meet your needs.
 
 #### Common Symptoms
@@ -68,7 +69,7 @@ Work through this quick checklist:
 
 1. PR contains reviewable code changes (not only docs or images)? Kody may skip if there's nothing relevant to analyze.
 2. Branch is in scope? By default, only PRs targeting the default branch are reviewed unless additional base branches are configured.
-3. **Large PRs:** Kody reviews PRs with up to 2,000 **reviewable files** (after applying ignore patterns). Example: PR with 2,500 total files but 600 are `.lock` files → Kody reviews the remaining 1,900 files ✅
+3. **Large PRs:** Kody reviews PRs with up to 2,000 **reviewable files** (after applying **Ignored files**). Example: PR with 2,500 total files but 600 are `.lock` files → Kody reviews the remaining 1,900 files ✅
 4. Mode: If automated reviews are disabled, trigger manually with `@kody start-review`.
 5. Push cadence: If using auto-pause, wait for the cool-down or request a manual review.
 6. Repository overrides: Repo-specific settings can override global ones. Clear or align them as needed.

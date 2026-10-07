@@ -24,14 +24,13 @@ description: "PRが境界サーフェスに触れるとき、兄弟リポジト�
 
 リンクリポジトリは**リポジトリ単位**であり、グローバルではありません。関係は一方向です: `frontend` 上のリンクは `frontend` のPRをレビューするときだけ適用されます。
 
-1. **コードレビュー設定**を開きます。
-2. **特定のリポジトリ**を選択します（Global ではない）。
-3. そのリポジトリのメニューから**Linked Repositories**ページを開きます。
-4. **Linked repositories** で、組織にすでに接続されている兄弟リポジトリを追加します。
-5. 任意で設定:
-   - **Instructions** — Kody向けの自由記述のヒント（例: 「このフロントエンドが消費するREST API」）。
-   - **Ref** — 任意の branch/tag ピン。空欄のままにすると自動のrefカスケード（下記）を使います。
-6. 保存します。
+1. サイドバーの **Code review** グループ上部にあるスコープピッカーで、**特定のリポジトリ**を選択します（Global ではない）。
+2. **Linked repositories** を開きます（リポジトリスコープでのみ表示されます）。
+3. **Add repository** をクリックし、組織にすでに接続されている兄弟リポジトリを選択します。
+4. 任意で設定:
+   - **Instructions · optional** — Kody向けの自由記述のヒント（例: 「このフロントエンドが消費するREST API」）。
+   - **Branch / ref pin · optional** — branch/tag ピン。空欄のままにすると自動のrefカスケード（下記）を使います。
+5. **Save settings** をクリックします。
 
 リンクできるのは最大**3**リポジトリです。同じ組織にすでに接続されているリポジトリのみ受け付けます。
 
@@ -131,5 +130,5 @@ Also needs org/shared-contracts@feature/new-events
 ## 関連ガイド
 
 - [リポジトリ間でコーディング標準を共有する方法](/ja/knowledge_base/how-to-share-standards-across-repositories) — 組織レベルのルールと継承（ソースコンテキストではない）
-- [プロジェクト固有のコンテキストでPRをレビューする方法](/ja/knowledge_base/how-to-review-prs-with-project-context) — メモリ、ファイル参照、カスタムプロンプト、MCP
+- [プロジェクト固有のコンテキストでPRをレビューする方法](/ja/knowledge_base/how-to-review-prs-with-project-context) — メモリ、ファイル参照、カテゴリの指示、MCP
 - [コードレビューのノイズを減らす方法](/ja/knowledge_base/how-to-reduce-code-review-noise) — コンテキストを増やしてもレビューを焦点に保つ

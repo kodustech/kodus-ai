@@ -21,15 +21,15 @@ El límite mensual de gasto vigila cuánto estás gastando en tus **modelos BYOK
 
 ## Cómo configurarlo
 
-El límite está en la pantalla de BYOK, debajo de tus modelos Main y Fallback.
+El límite está en la página **AI providers**, en la pestaña **Budget** (sección **Budget & alerts**).
 
 <Steps>
-  <Step title="Abre los ajustes de BYOK">
-    Ve a [app.kodus.io/byok](https://app.kodus.io/byok) y desplázate hasta **Monthly spend limit**. (La sección aparece cuando tienes al menos un modelo BYOK configurado.)
+  <Step title="Abre la pestaña Budget">
+    En la barra lateral, abre **AI providers** y elige la pestaña **Budget** ([app.kodus.io/byok?tab=budget](https://app.kodus.io/byok?tab=budget)). (Los ajustes aparecen cuando tienes al menos un modelo conectado con tu propia clave; hasta entonces, la pestaña te remite a **Go to Providers**.)
   </Step>
 
   <Step title="Revisa los precios de los modelos">
-    Cada modelo configurado muestra su precio por token — **input, output, cache read, cache write** — como **$ / 1M tokens**. Una etiqueta **Catalog** significa que Kodus encontró el precio automáticamente; una etiqueta **Manual** significa que lo introdujiste tú.
+    Expande **Adjust model prices**. Cada modelo configurado muestra su precio por token — **Input, Output, Cache read, Cache write** — como **$ / 1M tokens**. Una etiqueta **Catalog** significa que Kodus encontró el precio automáticamente; una etiqueta **Manual** significa que lo introdujiste tú.
   </Step>
 
   <Step title="Corrige cualquier modelo sin precio">
@@ -37,7 +37,7 @@ El límite está en la pantalla de BYOK, debajo de tus modelos Main y Fallback.
   </Step>
 
   <Step title="Fija el límite mensual y habilítalo">
-    Introduce tu tope en US$, activa **Enable spend alerts** y haz clic en **Save spend limit**.
+    Introduce el importe en **Monthly limit (US$)**, activa **Enable spend alerts** y haz clic en **Save budget & alerts**. La pestaña también muestra **Projected this month**, y **Open Costs** te lleva al desglose completo en **Organization → Token usage**.
   </Step>
 </Steps>
 
@@ -79,7 +79,7 @@ Puedes gestionar dónde llegan (y qué roles las reciben) en **Spend Limit** den
 
 ## Precisión
 
-El gasto es una **estimación**. Se deriva de los tokens que usaron tus revisiones y de los precios por token mostrados en la pantalla de BYOK — no cuadrará al céntimo con la factura de tu proveedor.
+El gasto es una **estimación**. Se deriva de los tokens que usaron tus revisiones y de los precios por token mostrados en la pestaña **Budget** — no cuadrará al céntimo con la factura de tu proveedor.
 
 <CardGroup cols={2}>
   <Card title="Mantén los precios exactos" icon="tags">
@@ -102,7 +102,7 @@ El gasto es una **estimación**. Se deriva de los tokens que usaron tus revision
   </Accordion>
 
   <Accordion title="¿Qué cuenta para el gasto?">
-    Solo el uso de tokens en tus modelos **BYOK**, valorado a las tarifas actuales mostradas en la pantalla de BYOK. Los modelos alojados por Kodus no cuentan.
+    Solo el uso de tokens en tus modelos **BYOK**, valorado a las tarifas actuales mostradas en la pestaña **Budget**. Los modelos alojados por Kodus no cuentan.
   </Accordion>
 
   <Accordion title="¿Cuándo se reinicia el gasto?">
@@ -112,7 +112,7 @@ El gasto es una **estimación**. Se deriva de los tokens que usaron tus revision
   <Accordion title="Cambié de modelo a mitad de mes, ¿mi gasto da un salto?">
     No. El gasto se mide **por modelo**: los tokens de cada modelo se valoran a la tarifa de *ese* modelo. Si gastaste \$50 en el modelo A y luego cambias al modelo B, el uso del modelo A se queda en \$50 — cambiar a B nunca revalora los tokens de A a la tarifa de B. Tu total simplemente crece con lo que el modelo B consuma a partir de entonces.
 
-    Lo único que revalora el uso ya incurrido es un cambio en el precio de **ese mismo modelo** — cuando el catálogo de precios actualiza la tarifa de un modelo, o editas su precio manual en la pantalla de BYOK, el uso de ese modelo en lo que va de mes se recalcula con la nueva tarifa (no hay snapshot congelado).
+    Lo único que revalora el uso ya incurrido es un cambio en el precio de **ese mismo modelo** — cuando el catálogo de precios actualiza la tarifa de un modelo, o editas su precio manual en **Adjust model prices**, el uso de ese modelo en lo que va de mes se recalcula con la nueva tarifa (no hay snapshot congelado).
   </Accordion>
 
   <Accordion title="¿Por qué no puedo habilitar el límite?">

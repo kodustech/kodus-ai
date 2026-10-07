@@ -29,7 +29,7 @@ kodus review --verbose    # または --verbose 付きの任意のコマンド
 
   <Accordion title="AUTH_REQUIRED または 401 Unauthorized">
     - `kodus auth status` で現在のモードを確認。
-    - チームキーを使用している場合は、<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> でまだアクティブであることを確認。
+    - チームキーを使用している場合は、**Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）でその **Status** がまだ **Active** であることを確認。
     - 個人ログインを使用している場合は、`kodus auth login` を再試行 — リフレッシュトークンが期限切れになっている可能性があります。
     - CI の場合、`KODUS_TOKEN`（または `KODUS_TEAM_KEY`）がパイプラインが実行される環境に設定されていることを確認。
     - セルフホストの場合、`KODUS_API_URL` が正しいインスタンスを向いていることを確認。
@@ -89,7 +89,7 @@ kodus review --verbose    # または --verbose 付きの任意のコマンド
   </Accordion>
 
   <Accordion title="デバイス制限に達しました">
-    セルフホスト型インスタンスは組織ごとにデバイス制限を強制できます。制限を増やすか、ダッシュボードから未使用のデバイスを削除するよう管理者に依頼してください。
+    セルフホスト型インスタンスは組織ごとにデバイス制限を強制できます。Web アプリには整理できるデバイス一覧がないため、制限を増やすよう管理者に依頼してください（API の `CLI_DEVICE_LIMIT` 設定。デフォルトの `0` は無制限を意味します）。
   </Accordion>
 </AccordionGroup>
 

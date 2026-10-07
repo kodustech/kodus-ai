@@ -55,7 +55,7 @@ description: "将 Kodus CLI 连接到您的自托管 Kodus 实例。"
   <Step title="认证">
     <Tabs>
       <Tab title="团队密钥（推荐）">
-        从您的自托管 Kodus 仪表板生成团队密钥并配置：
+        在您的自托管 Kodus Web 应用的 **Organization → CLI keys** 下生成团队密钥并配置：
 
         ```bash
         kodus auth team-key --key kodus_xxxxx
@@ -74,7 +74,7 @@ description: "将 Kodus CLI 连接到您的自托管 Kodus 实例。"
         kodus auth login
         ```
 
-        输入在自托管实例上注册的邮箱和密码。令牌以受限权限（600）存储在 `~/.kodus/credentials.json` 中。
+        CLI 会打开您自托管 Web 应用的 **Authorize Kodus CLI** 页面。使用在您的实例上注册的账户登录，然后点击 **Authorize CLI**。如需非交互式登录，请改为传入 `--email` 和 `--password`（参见 [`auth login`](/zh/how_to_use/cli/commands#auth-login)）。令牌以受限权限（600）存储在 `~/.kodus/credentials.json` 中。
       </Tab>
       <Tab title="CI/CD 令牌">
         从个人账户生成令牌，然后在流水线中使用：
@@ -234,7 +234,7 @@ KODUS_API_URL=https://kodus-api.yourcompany.com \
 
   <Accordion title="认证失败 (401)">
     - 运行 `kodus auth status` 检查当前认证状态
-    - 如果使用团队密钥，在自托管仪表板上验证其有效性
+    - 如果使用团队密钥，在自托管 Web 应用的 **Organization → CLI keys** 下确认其仍为 **Active**
     - 如果使用个人登录，令牌在 1 小时后过期 — CLI 会自动刷新，但如果刷新令牌也已过期，您可能需要重新登录
     - 确保 `KODUS_API_URL` 指向正确的实例
   </Accordion>
@@ -247,6 +247,6 @@ KODUS_API_URL=https://kodus-api.yourcompany.com \
   </Accordion>
 
   <Accordion title="设备限制已达上限">
-    您的自托管实例可能对每个组织强制执行设备限制。联系管理员增加限制或从仪表板中移除旧设备。
+    您的自托管实例可能对每个组织强制执行设备限制。Web 应用中没有可供清理的设备列表，因此请联系管理员提高限制（API 的 `CLI_DEVICE_LIMIT` 设置；默认值 `0` 表示不限制）。
   </Accordion>
 </AccordionGroup>

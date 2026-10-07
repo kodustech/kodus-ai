@@ -15,7 +15,7 @@ description: "将所有代码审查配置和 Kody 规则作为代码保存在单
 ## 工作原理
 
 1. 选择一个代码库作为集中式配置源。它必须是 Kodus 中已选择的代码库之一。
-2. 在 UI 中启用集中式配置并指向该代码库。
+2. 在 UI 中(在 Global 作用域下的 **Code review → General** → **Configure centralized config**)启用集中式配置并指向该代码库。
 3. 选择**初始同步方式**:
    - `pr` — Kodus 使用您当前的有效设置和规则打开初始化 PR。
    - `manual` — Kodus 生成文件;您的团队下载并自行打开 PR。
@@ -120,24 +120,26 @@ inheritance:
 
 ## UI 工作流
 
-从**设置 → 代码审查 → 通用**:
+在侧边栏中,在 **Code review** 分组顶部的作用域选择器中选择 **Global**,然后
+打开 **Code review → General**:
 
-1. 打开**集中式配置**。
-2. 启用集中式配置。
-3. 选择源代码库。
+1. 点击页面标题栏中的 **Configure centralized config**(会打开 **Centralized Config**
+   对话框)。
+2. 打开 **Enable centralized config**。
+3. 选择源代码库(**Selected repository**)。
 4. 选择**初始同步方式**:
    - 自动(立即创建 PR)
    - 手动(稍后同步)
-5. 保存并确认状态。
+5. 点击 **Initialize**(或 **Save Changes**)并确认状态。
 
 ## 启用后的 Web UI 行为
 
 启用集中式配置后,配置的真实来源是集中式代码库。Web UI 会相应反映:
 
-- **代码库、目录和全局的代码审查设置**在 Web UI 中变为只读。通过在集中式代码库上打开 PR 进行编辑。
-- **Kody 规则和 PR 消息**在 Web UI 中仍可编辑。保存编辑并不直接修改规则 — Kodus 会在集中式代码库上打开一个包含建议变更的拉取请求。PR 合并后,变更生效。
+- **全局、代码库和目录的代码审查设置**(General、What to review、What Kody writes、Linked repositories)在 Web UI 中仍可编辑,但保存不会直接应用变更。每个页面都会显示一条横幅 —— "Centralized config is enabled. Changes on this page are proposed through pull requests in the `<repo>` repository and applied after merge." —— 当存在已打开的拉取请求时还会显示 **View active pull request**;**Save settings** 会将变更作为集中式代码库上的拉取请求提出。PR 合并后,变更生效。您也可以直接编辑集中式代码库中的文件。
+- **Kody 规则**的工作方式相同。保存编辑并不直接修改规则 — Kodus 会在集中式代码库上打开一个包含建议变更的拉取请求。PR 合并后,变更生效。
 
-这保证了"所有变更都经过评审并版本化",同时保留了规则和消息的可视化编辑体验。
+这保证了"所有变更都经过评审并版本化",同时保留了设置、规则和消息的可视化编辑体验。
 
 ### UI 中的规则与仓库中的规则共存
 

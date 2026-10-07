@@ -30,9 +30,9 @@ description: "Kody 代码审查故障排除"
 
 ### 配置问题
 
-- **自动审查**：确保在您的[全局设置](https://app.kodus.io/settings/code-review/global/general)中启用了自动审查。如果禁用，请使用 `@kody start-review` 手动开始审查。
-- **审查类型**：确保至少选择了一种审查类型，以便 Kody 提供建议。[配置审查类型](https://app.kodus.io/settings/code-review/global/general)。
-- **分支审查**：默认情况下，Kody 审查合并到默认分支的 PR。要包括其他分支，请[更新您的配置](https://app.kodus.io/settings/code-review/global/general)。
+- **自动审查**：确保在 Global 范围的 **Code review → General** 中开启了 **Enable Automated Code Review**（[打开](https://app.kodus.io/settings/code-review/global/general)）。如果禁用，请使用 `@kody start-review` 手动开始审查。
+- **审查类别**：确保至少开启了一个类别（Bug、Performance、Security、Business Logic），以便 Kody 提供建议，并检查 **Minimum severity to post**。两者都位于 **Code review → What to review** 中（[打开](https://app.kodus.io/settings/code-review/global/review-scope)）。
+- **分支审查**：默认情况下，Kody 审查合并到默认分支的 PR。要包括其他分支，请在 **Code review → General** 中更新 **Base Branches**（[打开](https://app.kodus.io/settings/code-review/global/general)）。
 - **大型 PR**：请注意，具有大量更改的 PR 可能需要更长时间来处理。
 
 ---
@@ -48,10 +48,11 @@ Kody 使用分层配置系统。其工作原理如下：
 
 1. **检查全局配置**：查看并确认全局设置正确。[访问全局设置](https://app.kodus.io/settings/code-review/global/general)。
 2. **验证代码库设置**：
-   - 导航到设置中的 **By Repositories** 部分。
+   - 打开侧边栏中 **Code review** 分组顶部的范围选择器。拥有自己配置的代码库（以及目录）会列在 **Global** 下方。
    - 确认是否为相关代码库设置了自定义配置。
+   - 同时检查该代码库是否已在 **Repositories** 页面（侧边栏 → **Repositories**）中被选中进行审查。
 3. **对齐或清除配置**：
-   - 要应用全局设置，请清除任何代码库特定的配置。
+   - 要应用全局设置，请清除任何代码库特定的配置（范围选择器中该代码库的 **⋯** 菜单 → **Delete configuration**）。
    - 或者，调整代码库特定的设置以满足您的需求。
 
 #### 常见症状
@@ -67,7 +68,7 @@ Kody 使用分层配置系统。其工作原理如下：
 
 1. PR 包含可审查的代码更改（不仅仅是文档或图像）？如果没有相关内容可供分析，Kody 可能会跳过。
 2. 分支在范围内？默认情况下，除非配置了其他基础分支，否则仅审查针对默认分支的 PR。
-3. **大型 PR：** Kody 审查最多 2,000 个**可审查文件**（应用忽略模式后）。示例：PR 有 2,500 个总文件，但 600 个是 `.lock` 文件 → Kody 审查剩余的 1,900 个文件 ✅
+3. **大型 PR：** Kody 审查最多 2,000 个**可审查文件**（应用 **Ignored files** 后）。示例：PR 有 2,500 个总文件，但 600 个是 `.lock` 文件 → Kody 审查剩余的 1,900 个文件 ✅
 4. 模式：如果禁用了自动审查，请使用 `@kody start-review` 手动触发。
 5. 推送节奏：如果使用自动暂停，请等待冷却时间或请求手动审查。
 6. 代码库覆盖：代码库特定的设置可以覆盖全局设置。根据需要清除或对齐它们。

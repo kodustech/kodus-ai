@@ -4,7 +4,7 @@ description: "Crie Kody Rules personalizadas diretamente no seu repositório usa
 ---
 
 <Info>
-As Regras do Repositório usam o mesmo mecanismo de sincronização automática que a detecção de arquivos de regras da IDE. Habilite "Sincronizar automaticamente regras do repositório" nas configurações para ativar ambos os recursos. Veja <a href="/pt-BR/how_to_use/code_review/configs/rules_file_detection">Detecção de Arquivos de Regras</a> para a configuração.
+As Regras do Repositório usam o mesmo mecanismo de sincronização automática que a detecção de arquivos de regras da IDE. Habilite **Auto-sync rules from repo** (em **Code review → Kody Rules** no escopo de repositório, em **Configuration**) para ativar ambos os recursos. Veja <a href="/pt-BR/how_to_use/code_review/configs/rules_file_detection">Detecção de Arquivos de Regras</a> para a configuração.
 </Info>
 
 ## Como Usar
@@ -17,7 +17,7 @@ Arquivos de regras do repositório são importados **verbatim** — sem convers�
 ### Sincronização
 - **Detecção Automática**: As regras do repositório são detectadas e sincronizadas automaticamente quando habilitado
 - **Sincronização Manual**: Adicione `@kody-sync` a qualquer arquivo de regra para sincronizá-lo individualmente (funciona mesmo com a sincronização automática desabilitada)
-- **Aplicação Web**: As regras sincronizadas aparecem no painel do aplicativo web Kodus
+- **Aplicação Web**: As regras sincronizadas aparecem na página **Code review → Kody Rules** do repositório, com a origem **Auto-sync**
 - **Atualizações em Tempo Real**: As alterações nos arquivos de regras são sincronizadas quando Pull Requests são fechados
 
 ## Localização dos Arquivos
@@ -162,7 +162,7 @@ Added new endpoint `/api/users/profile` with corresponding test file `tests/api/
 Para usar as Regras do Repositório, você tem duas opções:
 
 ### Opção 1: Habilitar Sincronização Automática (Recomendado)
-1. **Habilitar Detecção de Arquivos de Regras**: Alterne "Sincronizar automaticamente regras do repositório" nas configurações
+1. **Habilitar Detecção de Arquivos de Regras**: Escolha o repositório no seletor de escopo de **Code review**, abra **Kody Rules → Configuration** e ative **Auto-sync rules from repo**
 2. **Criar arquivos de regras**: Coloque arquivos `.md` nos diretórios `.kody/rules/**` ou `rules/**`
 3. **Sincronização automática**: Todos os arquivos de regras são sincronizados quando PRs são fechados
 

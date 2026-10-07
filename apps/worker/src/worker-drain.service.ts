@@ -3,6 +3,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { Injectable, OnApplicationShutdown, Optional } from '@nestjs/common';
 
 const DEFAULT_DRAIN_TIMEOUT_MS = 25_000;
+const CANCEL_CONSUMERS_TIMEOUT_MS = 5_000;
 
 function parseDrainTimeoutMs(): number {
     const raw = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
@@ -37,6 +38,8 @@ export class WorkerDrainService implements OnApplicationShutdown {
             metadata: { signal, drainTimeoutMs: this.drainTimeoutMs },
         });
 
+        await this.cancelConsumers();
+
         try {
             // AmqpConnection.close():
             // - cancels all consumers (stop getting new messages)
@@ -67,6 +70,65 @@ export class WorkerDrainService implements OnApplicationShutdown {
                 context: WorkerDrainService.name,
                 error: error instanceof Error ? error : undefined,
             });
+        }
+    }
+
+    /**
+     * AmqpConnection.close() claims to cancel consumers first, but it does
+     * so via ChannelWrapper.cancelAll(), which only knows consumers created
+     * through the wrapper. golevelup (<= 9.1.0) creates @RabbitSubscribe
+     * consumers on the raw amqplib channel inside addSetup, so cancelAll()
+     * cancels nothing and a draining worker keeps taking new jobs until
+     * SIGKILL. Cancel them explicitly through golevelup's own registry.
+     *
+     * Best-effort and bounded: the amqplib cancel RPC has no timeout, and a
+     * half-open connection must not keep close() from running.
+     */
+    private async cancelConsumers(): Promise<void> {
+        const timeoutMs = Math.min(CANCEL_CONSUMERS_TIMEOUT_MS, this.drainTimeoutMs);
+        let timer: NodeJS.Timeout | undefined;
+        let consumerCount: number | undefined;
+
+        try {
+            const consumerTags = this.amqpConnection?.consumerTags ?? [];
+            consumerCount = consumerTags.length;
+
+            const results = await Promise.race([
+                Promise.allSettled(
+                    consumerTags.map((tag) =>
+                        this.amqpConnection!.cancelConsumer(tag),
+                    ),
+                ),
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(
+                        () =>
+                            reject(
+                                new Error(
+                                    `Consumer cancel timeout after ${timeoutMs}ms`,
+                                ),
+                            ),
+                        timeoutMs,
+                    );
+                }),
+            ]);
+            const failed = results.filter((r) => r.status === 'rejected').length;
+
+            this.logger.log({
+                message: 'Worker drain: RabbitMQ consumers cancelled',
+                context: WorkerDrainService.name,
+                metadata: { cancelled: consumerTags.length - failed, failed },
+            });
+        } catch (error) {
+            this.logger.error({
+                message:
+                    'Worker drain: failed to cancel RabbitMQ consumers; closing anyway',
+                context: WorkerDrainService.name,
+                error: error instanceof Error ? error : undefined,
+                // consumerCount stays undefined when reading the registry threw
+                metadata: { timeoutMs, consumerCount },
+            });
+        } finally {
+            clearTimeout(timer);
         }
     }
 }

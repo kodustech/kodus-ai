@@ -35,10 +35,12 @@ Reúne estos datos antes de abrir el catálogo de Plugins:
 
 ## Instala el plugin en Kodus
 
-<iframe src="https://www.youtube.com/embed/rtBxGnb9nIs?si=z2538VqglaqBOpio" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen width="100%" height="500px"></iframe>
+<Frame caption="En Plugins, el botón Add Plugin de la tarjeta Add Custom Plugin abre este formulario">
+  <img src="/images/custom-plugin.png" alt="Add Custom Plugin form" />
+</Frame>
 
-1. Ve a **Configuración de Code Review → Plugins** (beta) dentro de tu workspace de Kodus.
-2. Haz clic en **Agregar Plugin**.
+1. En la barra lateral, abre **Plugins** (Beta) dentro de tu workspace de Kodus.
+2. En la tarjeta **Add Custom Plugin**, haz clic en **Add Plugin**.
 3. Completa el formulario:
 
    ```text
@@ -65,7 +67,7 @@ Reúne estos datos antes de abrir el catálogo de Plugins:
    @kody ¿puedes obtener la lista de verificación de despliegue desde nuestro MCP y confirmar si se requieren feature flags?
    ```
 
-3. En el panel lateral, revisa la sección **Plugins**. Deberías ver una llamada a tu nuevo plugin. Si falla, expande el error para inspeccionar el código de estado o el mensaje de validación.
+3. Revisa la respuesta de Kody: debería incluir datos devueltos por tu nuevo plugin. Si no es así, confirma la URL, el protocolo y la autorización del plugin en la página **Plugins**.
 
 <Info>
   El MCP de Kodus Docs (`https://docs.kodus.io/mcp`) es una prueba de verificación rápida: puedes instalarlo primero para asegurarte de que tu workspace puede alcanzar hosts externos.

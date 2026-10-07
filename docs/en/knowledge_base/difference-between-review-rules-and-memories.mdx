@@ -21,7 +21,7 @@ Review Rules are **traditional code review checks** that run during the dedicate
 - Structural validation using variables like `fileDiff`, `pr_files_diff`
 
 **How they work:**
-- Applied at file-level or PR-level scope
+- Run per file or per PR (the rule's **Execution mode**)
 - Run only during code review
 - Support file references (`@file`, `@repo`) and MCP functions
 - Produce suggestions with severity levels
@@ -39,7 +39,7 @@ Memories are **persistent contextual instructions** injected across all interact
 **How they work:**
 - Injected as high-priority context in all prompts
 - Improve future suggestions by grounding Kody in repo-specific context
-- Created via conversation (`@kody remember: ...`) or manually in the UI
+- Created via conversation (`@kody remember: ...`) or manually with **New memory** on the **Memories** tab of **Code review → Kody Rules**
 - Scoped to directory, repository, or organization level
 - Kody auto-deduplicates and resolves conflicts between memories
 
@@ -56,6 +56,6 @@ Memories are **persistent contextual instructions** injected across all interact
 
 ## Can I convert between them?
 
-Yes. In the Pending Memories modal, you can **convert a memory into a Review Rule** if you decide it needs more structured enforcement with file paths and severity levels.
+Not directly — there is no convert action in the app. Pending memories appear in the **Pending review** section of **Code review → Kody Rules**, where you can **Approve** or **Discard** them. If a memory needs more structured enforcement with file paths and severity levels, create a Review Rule with **New rule** on the **Review Rules** tab and delete or discard the memory.
 
 For details, see [Kody Rules](/en/how_to_use/code_review/configs/kody_rules).

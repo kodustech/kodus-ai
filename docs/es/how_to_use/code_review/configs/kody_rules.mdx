@@ -3,27 +3,19 @@ title: "Descripción General"
 description: "Las Kody Rules son pautas personalizables que tu equipo configura para aplicar automáticamente calidad de código, consistencia, seguridad y mantenibilidad."
 ---
 
-
-<iframe
-  width="100%"
-  height="400"
-  src="https://www.youtube.com/embed/KrzlUmmJh3s?si=igZuKTjlfT2FwRVm"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  referrerpolicy="strict-origin-when-cross-origin"
-  allowfullscreen
-></iframe>
+<Frame caption="Code review → Kody Rules en el alcance de repositorio: revisión pendiente, pestañas Review Rules y Memories, filtros y la tabla de reglas">
+  <img src="/images/kody-rules.png" alt="Kody Rules page" />
+</Frame>
 
 ## Dos tipos en la interfaz de Kody Rules
 
-Las Kody Rules están organizadas en dos categorías, gestionadas a través de una interfaz con pestañas en tu configuración:
+Las Kody Rules están organizadas en dos categorías, gestionadas a través de las pestañas **Review Rules** y **Memories** en la barra lateral, en **Code review → Kody Rules**. Elige **Global** (o un repositorio / directorio) en el selector de alcance en la parte superior del grupo **Code review** para elegir qué nivel estás editando.
 
 <Tabs>
   <Tab title="Reglas de Revisión">
     Reglas de revisión de código tradicionales que se ejecutan durante la etapa dedicada de revisión de código. Analizan los diffs de archivos y los metadatos del PR para aplicar estándares de codificación.
 
-    - Se aplican a **nivel de archivo** o **nivel de pull request**
+    - Se aplican a **nivel de archivo** (modo de ejecución **Per file**) o **nivel de pull request** (modo de ejecución **Per PR**)
     - Soportan variables, referencias a archivos y funciones MCP
     - Se activan durante las revisiones de código automatizadas
   </Tab>
@@ -42,7 +34,7 @@ Las Kody Rules están organizadas en dos categorías, gestionadas a través de u
 
 ### Crear Reglas Personalizadas
 
-Define reglas basadas en las necesidades exactas de tu equipo. Las Reglas de Revisión pueden aplicarse en dos niveles diferentes: **[Nivel de Archivo](#reglas-a-nivel-de-archivo)** y **[Nivel de Pull Request](#reglas-a-nivel-de-pull-request)**. Ambos niveles soportan variables, referencias a archivos y funciones MCP para construir reglas potentes y conscientes del contexto.
+Define reglas basadas en las necesidades exactas de tu equipo. En la pestaña **Review Rules**, haz clic en **New rule** (o **Write a rule** cuando la lista está vacía) para abrir el diálogo de la regla. Las Reglas de Revisión pueden aplicarse en dos niveles diferentes, elegidos con el campo **Execution mode**: **[Nivel de Archivo](#reglas-a-nivel-de-archivo)** (**Per file**) y **[Nivel de Pull Request](#reglas-a-nivel-de-pull-request)** (**Per PR**). Ambos niveles soportan variables, referencias a archivos y funciones MCP para construir reglas potentes y conscientes del contexto.
 
 #### Variables, Referencias a Archivos y Funciones MCP
 
@@ -67,7 +59,7 @@ Las variables representan los datos de contexto disponibles durante la ejecució
   - `pr_author` - Autor del Pull Request
   - `pr_number` - Número del Pull Request
 
-Usa estas variables en las instrucciones de tu regla para acceder a datos de contexto, y combínalas con funciones MCP para obtener información adicional o realizar análisis dinámicos.
+Usa estas variables en las instrucciones de tu regla para acceder a datos de contexto (el menú **Variables** del editor de **Instructions** inserta las que están disponibles para el modo de ejecución seleccionado), y combínalas con funciones MCP para obtener información adicional o realizar análisis dinámicos.
 
 **Referencias a Archivos:**
 
@@ -91,7 +83,7 @@ Referencia archivos directamente en las instrucciones de tu regla para comparar 
 
 **Funciones MCP:**
 
-Accede a las funciones MCP (Model Context Protocol) a través del menú desplegable `@MCP` en el editor de reglas para obtener datos y contexto adicionales. Puedes usar cualquier herramienta o servidor MCP conectado en la página de [Plugins](/es/how_to_use/code_review/plugins) de tu workspace.
+Las reglas pueden usar funciones MCP (Model Context Protocol) para obtener datos y contexto adicionales. Puedes usar cualquier herramienta o servidor MCP conectado en la página de [Plugins](/es/how_to_use/code_review/plugins) de tu workspace. El editor de reglas ya no tiene un selector de MCP.
 
 Las funciones disponibles incluyen:
 
@@ -127,9 +119,11 @@ Consulta la sección [Variables, Referencias a Archivos y Funciones MCP](#variab
 **Cómo Configurar:**
 
 - **Nombre de la regla**: Define claramente el propósito de la regla
-- **Rutas de archivos**: Limita las reglas a archivos o directorios específicos usando patrones glob
-- **Severidad**: Establece en Crítico, Alto, Medio o Bajo
-- **Instrucciones detalladas**: Usa `fileDiff`, referencia archivos con `@file`/`@repo` y llama a funciones MCP para componer reglas potentes con contexto enriquecido
+- **Execution mode**: **Per file** (el valor por defecto)
+- **Path**: Limita las reglas a archivos o directorios específicos usando patrones glob (déjalo vacío para aplicarla a todos los archivos)
+- **Instructions**: Usa `fileDiff`, referencia archivos con `@file`/`@repo` y llama a funciones MCP para componer reglas potentes con contexto enriquecido. Las reglas nuevas pueden empezar desde una plantilla con **Start with a popular template**
+- **Severity**: Establece en Critical, High (el valor por defecto), Medium o Low
+- **Advanced settings**: **Inheritable** (activado por defecto; consulta [Herencia de Reglas](/es/how_to_use/code_review/configs/rules_inheritance)) y **Code examples** (**Bad example** / **Good example**)
 
 **Ejemplo de Configuración:**
 
@@ -192,7 +186,7 @@ Consulta la sección [Variables, Referencias a Archivos y Funciones MCP](#variab
 
 **Cómo Configurar:**
 
-El proceso de creación es idéntico al de las reglas a nivel de archivo, pero debes seleccionar el alcance "Pull-request". Este contexto más amplio habilita el análisis de dependencias entre archivos y la calidad general del PR.
+El proceso de creación es idéntico al de las reglas a nivel de archivo, pero debes establecer **Execution mode** en **Per PR** (**Path** no aplica en este modo). Este contexto más amplio habilita el análisis de dependencias entre archivos y la calidad general del PR.
 
 **Ejemplos:**
 
@@ -240,9 +234,9 @@ Esta composición habilita reglas que entienden no solo los cambios de código, 
 
 Aprovecha las mejores prácticas probadas al instante:
 
-- Navega a Reglas de Descubrimiento en tu panel de Kodus.
-- Filtra reglas por severidad, lenguaje o etiquetas.
-- Importa y activa reglas con un solo clic.
+- En **Code review → Kody Rules** (pestaña **Review Rules**), haz clic en **Discovery** para abrir la biblioteca de reglas (**Rules Marketplace**). También puedes llegar desde **Browse the library** cuando la lista de reglas está vacía, o buscando **Rules library** en la paleta de comandos ⌘K.
+- Empieza por **Featured**, o cambia a **Browse** para buscar en el catálogo completo y filtrar reglas por **Severity**, **Language** o **Packs**.
+- Abre una regla y haz clic en **Add to my rules**, usando el selector de repositorios junto a él para elegir **Global** o los repositorios (y directorios) que deben recibir la regla.
 
 **Ejemplos:**
 
@@ -302,10 +296,10 @@ Cuando se crea o actualiza una memoria, Kody responde con una confirmación y pr
 
 También puedes crear memorias manualmente:
 
-1. Ve a **Configuración de Code Review** → **Repositorio** → **Kody Rules**
-2. Cambia a la pestaña **Memorias**
-3. Haz clic en **Agregar Memoria** para crear una nueva entrada
-4. Completa el contenido y el alcance de la memoria
+1. En la barra lateral, elige **Global** (o el repositorio / directorio) en el selector de alcance en la parte superior del grupo **Code review** y abre **Kody Rules**. La memoria se crea en el alcance que elijas aquí
+2. Cambia a la pestaña **Memories**
+3. Haz clic en **New memory** (o **Add a memory** cuando la lista está vacía)
+4. Completa **Memory name** e **Instructions** y haz clic en **Create memory**
 
 ### Alcances de las Memorias
 
@@ -315,20 +309,21 @@ Cada memoria tiene un alcance que determina dónde se aplica:
 |---------|-------------|---------|
 | **Directorio** | Se aplica a los archivos que coinciden con un patrón glob dentro del repositorio | `src/components/ui`, `src/**/*.ts` |
 | **Repositorio** | Se aplica en todo el repositorio | Todos los archivos del repo |
-| **Organización** | Se aplica en todos los repositorios de la organización | Todos los repos de la organización |
+| **Organización** (**Global** en el selector de alcance) | Se aplica en todos los repositorios de la organización | Todos los repos de la organización |
 
 ### Aprobación de Memorias Generadas por LLM
 
 Por defecto, las memorias generadas por IA se activan automáticamente. Puedes requerir aprobación manual antes de que entren en vigor:
 
-1. Ve a **Configuración de Code Review** → **Repositorio** → **Kody Rules** → pestaña **Memorias**
-2. Habilita **Aprobación de memorias generadas por LLM**
+1. Ve a **Code review → Kody Rules** en el alcance que quieras (Global, un repositorio o un directorio)
+2. Haz clic en **Configuration** para abrir el panel lateral
+3. Habilita **Kody knowledge approval**
 
 Cuando está habilitado:
-- Las memorias generadas por IA entran en un **estado pendiente** y no están activas hasta que se aprueben
-- Aparece un badge de notificación mostrando el número de memorias pendientes
-- Haz clic en **Memorias Pendientes** para revisar, aprobar, descartar o convertir elementos pendientes
-- Tanto las nuevas creaciones de memorias como las actualizaciones de memorias existentes pasan por el flujo de aprobación
+- Las reglas y memorias generadas por IA entran en un **estado pendiente** y no están activas hasta que se aprueben
+- Un badge en las pestañas **Review Rules** y **Memories** muestra el número de elementos pendientes
+- Los elementos pendientes aparecen en la sección **Pending review** en la parte superior de la página, donde los apruebas o descartas (consulta [Elementos pendientes](#elementos-pendientes) más abajo)
+- Tanto las nuevas creaciones como las actualizaciones de reglas/memorias existentes pasan por el flujo de aprobación
 
 También puedes configurar esto en `kodus-config.yml`:
 
@@ -337,17 +332,14 @@ kodyKnowledgeApproval:
     enabled: true
 ```
 
-### Revisión de Memorias Pendientes
+### Elementos pendientes
 
-El modal de Memorias Pendientes muestra dos categorías:
+La sección **Pending review** ("Rules and memories awaiting approval.") lista juntas las reglas y memorias pendientes, cada una marcada como **Rule**, **Memory** o **Update**:
 
-- **Nuevas Memorias**: Memorias generadas por IA en espera de aprobación
-- **Actualizaciones de Memorias**: Cambios propuestos a memorias existentes
+- **Nuevas reglas y memorias**: Elementos generados por IA en espera de aprobación. Elige **Approve** para activar el elemento o **Discard** para rechazarlo.
+- **Actualizaciones**: Cambios propuestos a una regla o memoria existente, mostrados como un diff. Elige **Update existing** para aplicar el cambio, **Create new instead** para conservar el original y agregar la propuesta como un elemento separado, o **Discard** para rechazarla.
 
-Para cada elemento pendiente, puedes:
-- **Aplicar**: Activar la memoria o aplicar la actualización
-- **Descartar**: Rechazar la memoria o actualización
-- **Convertir a Regla de Revisión**: Transformar una memoria en una Regla de Revisión estándar
+Selecciona varios elementos y usa **Bulk actions** (**Approve N**, **Create as new (N)**, **Discard N**) para gestionarlos de una vez.
 
 ## Próximos Pasos
 

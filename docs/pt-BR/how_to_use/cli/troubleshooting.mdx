@@ -29,7 +29,7 @@ kodus review --verbose    # ou qualquer comando com --verbose
 
   <Accordion title="AUTH_REQUIRED ou 401 Unauthorized">
     - Execute `kodus auth status` para ver o modo atual.
-    - Se estiver usando uma chave de equipe, verifique se ainda está ativa em <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>.
+    - Se estiver usando uma chave de equipe, verifique se o **Status** dela ainda é **Active** em **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>).
     - Se estiver usando login pessoal, tente `kodus auth login` novamente — o token de refresh pode ter expirado.
     - Para CI, confirme que `KODUS_TOKEN` (ou `KODUS_TEAM_KEY`) está definido no ambiente em que o pipeline é executado.
     - Se self-hosted, confirme que `KODUS_API_URL` aponta para a instância correta.
@@ -89,7 +89,7 @@ kodus review --verbose    # ou qualquer comando com --verbose
   </Accordion>
 
   <Accordion title="Limite de dispositivos atingido">
-    Instâncias self-hosted podem impor limites de dispositivos por organização. Peça ao seu administrador para aumentar o limite ou remover dispositivos não utilizados do painel.
+    Instâncias self-hosted podem impor limites de dispositivos por organização. O web app não tem uma lista de dispositivos para limpar, então peça ao seu administrador para aumentar o limite (a configuração `CLI_DEVICE_LIMIT` da API; `0`, o padrão, significa sem limite).
   </Accordion>
 </AccordionGroup>
 

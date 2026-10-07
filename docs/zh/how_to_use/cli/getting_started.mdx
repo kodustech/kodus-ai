@@ -53,10 +53,12 @@ description: "安装 Kodus CLI，完成认证，并运行您的第一次审查�
         kodus auth login
         ```
 
+        CLI 会在浏览器中打开 **Authorize Kodus CLI** 页面（如有提示，请登录 Kodus）。核对 **Device**、**Mode** 和 **Expires** 信息，点击 **Authorize CLI**，然后返回终端。
+
         令牌保存在 `~/.kodus/credentials.json`，并自动刷新。
       </Tab>
       <Tab title="团队（共享密钥）">
-        在 <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> 生成团队密钥并应用：
+        组织 Owner 在侧边栏的 **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）下生成团队密钥。然后应用它：
 
         ```bash
         kodus auth team-key --key kodus_xxxxx

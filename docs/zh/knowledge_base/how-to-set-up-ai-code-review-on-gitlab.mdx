@@ -8,20 +8,20 @@ Kodus 通过 OAuth 和 webhooks 与 GitLab 集成。配置完成后，合并请�
 ## 步骤
 
 1. **创建帐户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/zh/how_to_deploy/deploy_kodus/generic_vm)
-2. **连接 GitLab** — 在设置过程中通过 OAuth 授权
-3. **配置 webhooks** — 按照引导设置启用合并请求事件
-4. **选择项目** — 选择 Kodus 应审查的 GitLab 项目
+2. **连接 GitLab** — 在入门引导的 **Connect your Git tool** 步骤中，点击 **Install Gitlab app** 通过 OAuth 授权，或选择 **Connect via token**（之后也可以从侧边栏的 **Repositories** 进行连接）
+3. **选择项目** — 选择 Kodus 应审查的 GitLab 项目
+4. **Webhooks** — 保存选择时，Kodus 会自动注册合并请求 webhook。如果没有注册（例如在某些自托管安装中），请按照 [GitLab Webhooks](/zh/how_to_deploy/platforms/gitlab/gitlab_webhook) 指南手动添加
 5. **打开合并请求** — Kodus 自动审查
 
 ## 您获得什么
 
 - 每个 MR 自动审查
 - 直接在合并请求中发布的评论
-- 可自定义的规则和建议控制
+- 可自定义的规则、审查类别和最低严重性阈值
 - 根据关联任务的业务逻辑验证
 
 ## 自定义配置
 
-在代码库根目录放置 `kodus-config.yml` 以自定义每个项目的行为。
+在代码库根目录放置 `kodus-config.yml` 以自定义每个项目的行为。该文件会在该项目开启 **kodus Config File Overrides Web Preferences**（**Code review → General**）后覆盖 Web 设置。
 
 完整设置指南，请参阅 [GitLab OAuth](/zh/how_to_deploy/platforms/gitlab/gitlab_oauth) 和 [GitLab Webhooks](/zh/how_to_deploy/platforms/gitlab/gitlab_webhook)。

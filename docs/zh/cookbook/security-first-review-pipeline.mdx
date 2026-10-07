@@ -27,7 +27,7 @@ reviewOptions:
 
 ```
 名称：禁止原始 SQL 查询
-范围：文件
+执行模式：Per file
 路径：**/*.ts, **/*.js, **/*.py
 严重性：严重
 说明：
@@ -43,7 +43,7 @@ reviewOptions:
 
 ```
 名称：禁止硬编码密钥或凭据
-范围：文件
+执行模式：Per file
 路径：**/*
 严重性：严重
 说明：
@@ -59,7 +59,7 @@ reviewOptions:
 
 ```
 名称：不得跳过认证中间件
-范围：拉取请求
+执行模式：Per PR
 严重性：严重
 说明：
   检查 pr_files_diff 中是否有任何处理用户数据但没有认证中间件的路由或控制器。
@@ -74,7 +74,7 @@ reviewOptions:
 
 ```
 名称：禁止未经清理的 dangerouslySetInnerHTML
-范围：文件
+执行模式：Per file
 路径：**/*.tsx, **/*.jsx
 严重性：严重
 说明：
@@ -106,7 +106,7 @@ internal paths, or database details to the client.
 
 对于安全规则，您希望关键发现能够阻断：
 
-1. 在 PR 工作流设置中启用**请求更改**，使 Kody 在发现严重问题时请求更改
+1. 在 **Code review → General** 中，开启 **Enable changing status of Review to 'Request Changes'**，使 Kody 在发现严重问题时请求更改
 2. 将安全规则设置为**严重**级别，使它们始终高于任何严重性过滤器
 3. 不要设置低的 `maxSuggestions` 限制 — 安全发现永远不应被抑制
 
@@ -116,7 +116,7 @@ internal paths, or database details to the client.
 
 ```
 名称：禁止已知漏洞的依赖项
-范围：拉取请求
+执行模式：Per PR
 严重性：严重
 说明：
   如果 pr_files_diff 修改了 package.json、requirements.txt

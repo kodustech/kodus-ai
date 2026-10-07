@@ -7,19 +7,19 @@ Cursor、GitHub Copilot、Claude、またはその他のAIコーディングツ�
 
 ## 動作方法
 
-Kodusはリポジトリ内のルールファイルを検出し、Kodyルールとして同期することを提案します。サポートされているファイル形式には以下が含まれます：
+Kodusはリポジトリ内のルールファイルを検出し、Kodyルールとして同期します。サポートされているファイル形式には以下が含まれます：
 
 - `.cursorrules`（Cursor）
 - `.github/copilot-instructions.md`（GitHub Copilot）
-- `.claude` ファイル（Claude）
+- `CLAUDE.md`（Claude）
 - その他のAIツール設定ファイル
 
 ## セットアップ方法
 
-1. **コードレビュー設定** → **Kodyルール** に移動します
-2. Kodusがリポジトリ内の互換性のあるルールファイルを自動検出します
-3. 検出されたルールを確認して、インポートしたいものを選択します
-4. インポートされたルールはKodyルールとして追加され、コードレビュー中に適用されます
+1. サイドバーの **Code review** グループ上部にあるスコープピッカーでリポジトリを選択し、**Kody Rules** を開いて **Configuration** をクリックします
+2. **Auto-sync rules from repo** をオンにします。初回は、すぐにリポジトリをスキャンするか（**Sync now**）、**Skip initial scan** するかを尋ねられます
+3. Kodusは見つかったルールファイルをKodyルール（オリジン **Auto-sync**）としてインポートし、以降は同期を維持します
+4. インポートされたルールはすぐにコードレビュー中に適用されます。先にレビューしたい場合は、同じ **Configuration** シートで **Kody knowledge approval** をオンにします。インポートされたルールは **Approve** または **Discard** するまで **Pending review** セクションで待機します
 
 ## なぜ重要か
 

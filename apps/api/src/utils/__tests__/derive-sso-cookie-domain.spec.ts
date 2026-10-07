@@ -35,15 +35,15 @@ describe('deriveSsoCookieDomain', () => {
         });
     });
 
-    describe('self-hosted topology (Dmitry)', () => {
-        it('derives .web.scorpion.co for deeply nested hosts under shared parent', () => {
+    describe('self-hosted topology (customer)', () => {
+        it('derives .web.acme.co for deeply nested hosts under shared parent', () => {
             expect(
                 deriveSsoCookieDomain({
-                    apiHost: 'kodus-api-dev.web.scorpion.co',
-                    frontendUrl: 'https://kodus-dev.web.scorpion.co',
+                    apiHost: 'kodus-api-dev.web.acme.co',
+                    frontendUrl: 'https://kodus-dev.web.acme.co',
                     nodeEnv: 'production',
                 }),
-            ).toBe('.web.scorpion.co');
+            ).toBe('.web.acme.co');
         });
 
         it('handles 4+ label hosts', () => {

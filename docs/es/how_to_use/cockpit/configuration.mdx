@@ -7,7 +7,8 @@ No todos los equipos quieren todas las métricas visibles. Cockpit permite que u
 pestañas enteras o gráficos individuales para **toda la organización** — útil cuando una métrica
 es ruidosa para tu flujo, o cuando no quieres números por desarrollador a la vista.
 
-Ve a **Organization → Cockpit Configuration** (`/organization/cockpit`).
+En la barra lateral, abre **Organization → Cockpit visibility** (`/organization/cockpit`). La página se titula
+**Cockpit Configuration**; haz clic en **Save settings** para aplicar tus cambios.
 
 <Info>
   Este es un ajuste **de la organización**, no una preferencia por usuario. Desactivar una
@@ -16,7 +17,8 @@ Ve a **Organization → Cockpit Configuration** (`/organization/cockpit`).
 
 ## Pestañas
 
-Cockpit se divide en dos pestañas, y cada una puede ocultarse:
+Cockpit tiene dos pestañas de métricas, y cada una puede ocultarse (la pestaña **Issues** junto a ellas
+no se controla aquí):
 
 | Pestaña | Qué contiene |
 | --- | --- |
@@ -30,18 +32,18 @@ Cockpit se divide en dos pestañas, y cada una puede ocultarse:
 Ocultar la pestaña Productivity también oculta todo lo que hay dentro, así que los toggles
 individuales de abajo solo importan mientras esa pestaña esté activa.
 
-## Métricas de resumen
+## Tarjetas de resumen
 
 Las tarjetas en la parte superior de la pestaña Productivity:
 
 | Métrica | Qué muestra |
 | --- | --- |
 | **Deploy Frequency** | Con qué frecuencia el equipo despliega a producción |
-| **PR Cycle Time** | Tiempo medio desde la creación del PR hasta el merge |
+| **PR Cycle Time** | Tiempo desde la creación del PR hasta el merge (percentil 75) |
 | **Bug Ratio** | Porcentaje de PRs que son correcciones de bugs |
 | **PR Size** | Tamaño medio de los pull requests |
 
-## Gráficos detallados
+## Gráficos de detalle
 
 Los gráficos debajo de las tarjetas de resumen:
 

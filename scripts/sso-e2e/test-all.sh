@@ -5,7 +5,7 @@
 #   1. Unit tests for the cookie-domain derivation (16 cases)
 #   2. Controller integration tests with the real wiring (12 cases)
 #   3. Smoke test of the prod web image in two host shapes
-#      simultaneously (SaaS + Dmitry-style self-hosted)
+#      simultaneously (SaaS + customer-style self-hosted)
 #   4. (--e2e only) Full SAML round-trip via Keycloak + Caddy + browser
 #
 # Layers 1-3 are CI-safe (no network beyond local docker, no manual
@@ -127,7 +127,7 @@ docker run -d --rm --name sso-smoke-cloud -p 33010:3000 \
     kodus-web:test >/dev/null
 
 docker run -d --rm --name sso-smoke-selfhosted -p 33011:3000 \
-    -e WEB_HOSTNAME_API=kodus-api-dev.web.scorpion.co \
+    -e WEB_HOSTNAME_API=kodus-api-dev.web.acme.co \
     -e WEB_NODE_ENV=production \
     -e RELEASE_VERSION=smoke-selfhosted \
     kodus-web:test >/dev/null
@@ -172,10 +172,10 @@ else
     failures=$((failures + 1))
 fi
 
-if [ "${self_url}" = "https://kodus-api-dev.web.scorpion.co" ]; then
-    ok "self-hosted shape resolves to https://kodus-api-dev.web.scorpion.co"
+if [ "${self_url}" = "https://kodus-api-dev.web.acme.co" ]; then
+    ok "self-hosted shape resolves to https://kodus-api-dev.web.acme.co"
 else
-    fail "self-hosted shape: expected https://kodus-api-dev.web.scorpion.co, got '${self_url}'"
+    fail "self-hosted shape: expected https://kodus-api-dev.web.acme.co, got '${self_url}'"
     failures=$((failures + 1))
 fi
 

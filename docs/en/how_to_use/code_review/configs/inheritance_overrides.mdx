@@ -29,23 +29,30 @@ Overrides are per field. You can override one field and inherit everything else.
 
 Once overridden, a field stops following the parent and uses its local value instead.
 
+## In the app
+
+- **Switching levels:** the scope picker at the top of the sidebar's **Code review** group lists **Global** ("applies to every repository"), then each repository that has its own configuration, with its directories indented beneath. Switching scope keeps you on the same page (General, What to review, Kody Rules, What Kody writes).
+- **Adding a level:** in the scope picker, choose **Add repository configuration**. The **Create repository settings** dialog asks you to **Select the target repository** and, optionally, **Select the target directories**; click **Create settings**. See [Directory-Level Settings](/en/how_to_use/code_review/configs/directory_level).
+- **Seeing overrides:** a numeric pill next to a scope or page in the sidebar counts the settings overridden at that level ("N settings overridden at this level"). On the page, each overridden field shows an **Overridden** badge; its undo button returns the field to inheritance.
+- **Removing a level:** the **⋯** menu next to the scope picker has **Delete configuration** (and **Edit directories** for a directory scope).
+
 ## Examples
 
 <Tabs>
   <Tab title="Global change propagates">
-    You change **Severity thresholds** at Global.
+    You change **Minimum severity to post** (on **What to review**) at Global.
     
     All repositories and directories without an override update automatically. Overridden ones stay unchanged.
   </Tab>
 
   <Tab title="Repository override">
-    In Repository X, you override **Review start message**.
+    In Repository X, you override the **Review starts** message (on **What Kody writes → Comments during the review**).
     
     Directories within Repository X now inherit from Repository X (unless they have their own override).
   </Tab>
 
   <Tab title="Return to inheritance">
-    In Repository Y, you remove the override for **Active categories**.
+    In Repository Y, you remove the override for the category switches on **What to review**.
     
     The field follows Global again and receives future Global changes.
   </Tab>

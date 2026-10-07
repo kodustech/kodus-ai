@@ -360,8 +360,8 @@ export class KodyRulesValidationService {
             // rule's `inheritance.include` is `[]`, which the matcher
             // below reads as "inherit everywhere" — and so a rule
             // scoped to one directory would silently apply in every
-            // sibling directory of the same repo (reported by
-            // quintoandar/backend-services on rule b207a89c).
+            // sibling directory of the same repo (customer-reported
+            // on rule b207a89c).
             //
             // A directory-scoped rule (`rule.directoryId` set) must NOT
             // leak into a different directory unless that directory is

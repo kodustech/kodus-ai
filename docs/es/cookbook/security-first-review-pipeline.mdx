@@ -27,8 +27,8 @@ Esto te da las verificaciones de seguridad integradas de Kodus. Las reglas a con
 
 ```
 Name: No raw SQL queries
-Scope: File
-Paths: **/*.ts, **/*.js, **/*.py
+Execution mode: Per file
+Path: **/*.ts, **/*.js, **/*.py
 Severity: Critical
 Instructions:
   Flag any use of string concatenation or template literals
@@ -43,8 +43,8 @@ Instructions:
 
 ```
 Name: No hardcoded secrets or credentials
-Scope: File
-Paths: **/*
+Execution mode: Per file
+Path: **/*
 Severity: Critical
 Instructions:
   Flag any string that looks like an API key, password,
@@ -61,7 +61,7 @@ Instructions:
 
 ```
 Name: Auth middleware must not be skipped
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   Check pr_files_diff for any route or controller that
@@ -78,8 +78,8 @@ Instructions:
 
 ```
 Name: No dangerouslySetInnerHTML without sanitization
-Scope: File
-Paths: **/*.tsx, **/*.jsx
+Execution mode: Per file
+Path: **/*.tsx, **/*.jsx
 Severity: Critical
 Instructions:
   Flag any use of dangerouslySetInnerHTML in fileDiff.
@@ -111,7 +111,7 @@ internal paths, or database details to the client.
 
 Para las reglas de seguridad, querrás que los hallazgos críticos sean bloqueantes:
 
-1. Habilita **Solicitar cambios** en la configuración de flujo de trabajo de PR para que Kody solicite cambios cuando se encuentren problemas críticos
+1. En **Code review → General**, activa **Enable changing status of Review to 'Request Changes'** para que Kody solicite cambios cuando se encuentren problemas críticos
 2. Configura las reglas de seguridad en severidad **Crítica** para que siempre aparezcan por encima de cualquier filtro de severidad
 3. NO establezcas un límite bajo en `maxSuggestions` — los hallazgos de seguridad nunca deben suprimirse
 
@@ -121,7 +121,7 @@ Si usas plugins MCP, puedes verificar dependencias:
 
 ```
 Name: No known vulnerable dependencies
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   If pr_files_diff modifies package.json, requirements.txt,

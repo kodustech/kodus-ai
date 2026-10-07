@@ -83,7 +83,7 @@ const isNotApproved =
 
 ### Web アプリで
 
-**Code Review Settings → _対象リポジトリ_ → Linked Repositories** を開き、一覧からリポジトリを選んで（接続済みのものだけが表示されます）保存します。各リンクには任意の項目が 2 つあります（下記）。
+サイドバーで、**Code review** グループ上部のスコープピッカーで対象リポジトリを選択し（一覧にない場合は、先に **Add repository configuration** でその設定を作成します）、**Code review → Linked repositories** を開きます（このページはリポジトリスコープにのみ存在します）。**Add repository** をクリックし、**Add linked repository** ダイアログでリポジトリを選んで（接続済みのものだけが表示されます）、**Save settings** をクリックします。各リンクには任意の項目が 2 つ、**Instructions · optional** と **Branch / ref pin · optional** があります（下記）。
 
 ### `kodus-config.yml` で
 
@@ -99,7 +99,7 @@ linkedRepositories:
 - `repository`（必須）— 組織に接続されているリポジトリのフルネーム（`owner/repo`）。
 - `instructions`、`ref` — Web アプリの項目と同じ意味（下記）。
 
-ファイルと Web 設定の関係は通常の[設定ファイルのルール](/ja/how_to_use/code_review/configs/general#設定の優先度)に従います。ファイルは、そのリポジトリで `kodusConfigFileOverridesWebPreferences` が有効なとき（**Settings → Code Review → 対象リポジトリ → General**）にのみ読まれ、リポジトリの**デフォルトブランチ**から読まれ、ファイルの `linkedRepositories` リストはそのリポジトリの Web 側リストを**置き換え**ます（リストはマージされません。ファイルの `linkedRepositories: []` は機能をオフにします）。プランの要件は、リンクをどこで宣言しても同様に適用されます。
+ファイルと Web 設定の関係は通常の[設定ファイルのルール](/ja/how_to_use/code_review/configs/general#設定の優先度)に従います。ファイルは、そのリポジトリで `kodusConfigFileOverridesWebPreferences` が有効なとき（リポジトリスコープの **Code review → General** にある **kodus Config File Overrides Web Preferences**）にのみ読まれ、リポジトリの**デフォルトブランチ**から読まれ、ファイルの `linkedRepositories` リストはそのリポジトリの Web 側リストを**置き換え**ます（リストはマージされません。ファイルの `linkedRepositories: []` は機能をオフにします）。プランの要件は、リンクをどこで宣言しても同様に適用されます。
 
 ### Instructions（指示）
 

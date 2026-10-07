@@ -5,7 +5,7 @@ description: "自动检测和导入您现有的流行 AI 编码工具的规则�
 
 Kodus 可以自动同步和导入您现有的 IDE 规则文件,以使用您团队已建立的编码标准和偏好增强 Kody 的代码审查。
 
-<Frame caption="在设置中启用从代码库自动同步规则">
+<Frame caption="Kody Rules 的 Configuration 面板（仓库范围）中的 Auto-sync rules from repo">
   <img src="/images/sync-rules.png" />
 </Frame>
 
@@ -61,8 +61,8 @@ Kodus 自动检测和导入以下规则文件模式:
 ## 工作原理
 
 ### 初始设置
-1. **启用自动同步**:在设置中切换"从代码库自动同步规则"选项
-2. **首次同步模态框**:将出现一个模态框,询问您是否要首次同步
+1. **启用自动同步**:在侧边栏 **Code review** 分组顶部的范围选择器中选择该代码库,打开 **Kody Rules**,点击 **Configuration**,并开启 **Auto-sync rules from repo**
+2. **首次同步对话框**:一个对话框(**Sync repository rules now?**)会询问您是否要首次同步。选择 **Sync now**,或选择 **Skip initial scan** 等待下一次同步
 3. **代码库扫描**:当您确认时,Kodus 会扫描整个代码库以查找支持的规则文件
 4. **规则生成**:LLM 处理找到的文件并自动创建相应的 Kody 规则。例外:`.kody/rules/**` 和 `rules/**/*.md` 模板文件会被**逐字**导入 —— 不经过 LLM 转换 —— 你写下的指令、示例和标识符会被原样保留。如果这类文件不符合模板(缺少或无效的 frontmatter,或没有 `title`),则回退到 LLM 路径
 
@@ -112,4 +112,4 @@ docker logs kodus_api 2>&1 | grep "kody-rules-eval"
 
 ## 规则数量上限
 
-**没有有效许可证**运行的自托管实例(Community Edition)每次审查最多评估 **10 条规则**(按最早创建优先)。已授权的自托管实例和云端没有此限制。如果在未授权的实例上第 10 条之后的规则不触发,原因就是这个上限。
+使用云端 **Free** 套餐(或订阅已取消或过期)的组织,以及**没有有效许可证**运行的自托管实例(Community Edition),每次审查最多评估 **10 条启用的规则**(按最早创建优先)。超出上限的规则会以 **Locked** 状态保留在列表中,并在每个 PR 上被跳过;**Code review → Kody Rules** 上的横幅会显示有多少条被跳过。付费云端套餐和已授权的自托管实例没有此限制。如果第 10 条之后的规则不触发,原因就是这个上限。

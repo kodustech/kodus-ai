@@ -141,6 +141,6 @@ Webhook URL 必须到达 webhooks 服务，而不是前端登录页。只有反�
 
 保持 **Redirect on update** 开启。安装或修改仓库访问范围后，完成通过 **Setup URL** 返回 Kodus 的浏览器流程。成功的 `ping` 或被忽略的 `installation` 事件不会创建 Kodus 集成。
 
-在 Kodus 的 Git Settings 中确认目标仓库已连接。然后创建测试 PR，同时检查 GitHub 投递响应和 Kodus webhooks/worker 日志。若未连接，请检查仓库授权范围、新权限是否批准、Setup URL 和反向代理路由。
+在 Kodus 中，打开侧边栏的 **Repositories**（以前称为 **Git Settings**），确认目标仓库已列出。然后创建测试 PR，同时检查 GitHub 投递响应和 Kodus webhooks/worker 日志。若未连接，请检查仓库授权范围、新权限是否批准、Setup URL 和反向代理路由。
 
 [GitHub 注册参考](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app).

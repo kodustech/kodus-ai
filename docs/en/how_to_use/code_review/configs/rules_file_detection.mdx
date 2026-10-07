@@ -5,7 +5,7 @@ description: "Automatically detect and import your existing rule files from popu
 
 Kodus can automatically sync and import your existing IDE rule files to enhance Kody's code review with your team's established coding standards and preferences.
 
-<Frame caption="Enable Auto-sync rules from repo in your settings">
+<Frame caption="Auto-sync rules from repo in the Kody Rules Configuration sheet (repository scope)">
   <img src="/images/sync-rules.png" />
 </Frame>
 
@@ -61,8 +61,8 @@ Kodus automatically detects and imports the following rule file patterns:
 ## How It Works
 
 ### Initial Setup
-1. **Enable Auto-sync**: Toggle the "Auto-sync rules from repo" option in your settings
-2. **First Sync Modal**: A modal will appear asking if you want to sync for the first time
+1. **Enable Auto-sync**: In the sidebar, pick the repository in the scope picker at the top of the **Code review** group, open **Kody Rules**, click **Configuration**, and turn on **Auto-sync rules from repo**
+2. **First Sync Dialog**: A dialog (**Sync repository rules now?**) asks if you want to sync for the first time. Choose **Sync now**, or **Skip initial scan** to wait for the next sync
 3. **Repository Scan**: When you confirm, Kodus scans your entire repository for supported rule files
 4. **Rule Generation**: An LLM processes the found files and automatically creates corresponding Kody Rules. Exception: `.kody/rules/**` and `rules/**/*.md` template files are imported **verbatim** — no LLM conversion — so your instructions, examples and identifiers are preserved exactly as authored. If one of those files doesn't follow the template (missing/invalid frontmatter, or no `title`), it falls back to the LLM path.
 
@@ -114,4 +114,4 @@ If a rule shows as active in the UI but never appears in `[kody-rules-eval]` for
 
 ## Rule limits
 
-Self-hosted instances running **without a valid license** (Community Edition) evaluate at most **10 rules** per review (oldest first). Licensed self-hosted and cloud instances have no such limit. If rules beyond the 10th silently don't fire on an unlicensed instance, this limit is why.
+Organizations on the cloud **Free** plan (or whose subscription was canceled or expired) and self-hosted instances running **without a valid license** (Community Edition) evaluate at most **10 active rules** per review (oldest first). Rules beyond the cap stay in the list as **Locked** and are skipped on every PR; a banner on **Code review → Kody Rules** says how many are skipped. Paid cloud plans and licensed self-hosted instances have no such limit. If rules beyond the 10th don't fire, this limit is why.

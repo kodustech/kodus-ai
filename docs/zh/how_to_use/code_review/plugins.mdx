@@ -52,16 +52,22 @@ Kody 将通过插件获取引用的规范，并确认实现是否与记录的行
 
 Kody 只能看到您为每个工作区启用的工具。安装对您的工作流程重要的插件，并保持其他所有内容私密。
 
+要安装插件，请在侧边栏中打开 **Plugins**，然后从网格中选择一个插件。完成身份验证（通过应用的 OAuth 流程登录，或输入 API 令牌后点击 **Connect**），在 **Selected tools** 下选择 Kody 可以使用的工具，然后点击 **Install plugin**。已安装的插件会显示 **Installed**；再次打开它即可 **Update Tools** 或 **Reset Authentication**。
+
+<Note>
+  在 Free 套餐（以及未获得许可的自托管版本）中，Kody 一次最多运行 3 个已安装的插件；Plugins 页面上的横幅会列出被跳过的插件。默认的 Kodus MCP 不计入该限制。当您的代码提供商是 Azure Repos 或 Bitbucket Data Center 时，无法安装问题跟踪类插件。
+</Note>
+
 ## 自定义插件
 
 当您需要超出策划目录的功能时，引入您自己的 MCP 服务器。
 
-1. 在工作区内打开插件目录，然后点击 **Add Custom Plugin**。
+1. 在侧边栏中打开 **Plugins**，然后在 **Add Custom Plugin** 卡片上点击 **Add Plugin**。
 2. 提供端点详细信息：
-   - **插件名称**（必需）和可选的 **描述**，以帮助团队成员理解集成。
+   - **Plugin Name**（必需）和可选的 **Description**，以帮助团队成员理解集成。
    - 可选的 **Logo URL**，用于在目录中显示可识别的图标。
-   - 托管您的服务器的 MCP **URL** 以及预期的 **协议**（HTTP 或 WebSocket）。
-   - 任何所需的 **授权**方法或用于身份验证的自定义标头。
+   - 托管您的服务器的 MCP **URL** 以及预期的 **Protocol**（HTTP 或 SSE）。
+   - **Authorization** 方法（None、Bearer Token、Basic Auth、API Key 或 OAuth 2.0）以及任何 **Custom Headers**。
 3. 点击 **Create Plugin** 以立即使其在当前工作区内可供 Kody 使用。
 
 自定义插件遵循与策划集成相同的权限模型：只有安装了插件的工作区才能调用它，并且 Kody 永远不会访问您未明确配置的端点。

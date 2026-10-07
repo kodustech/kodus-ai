@@ -6,15 +6,19 @@ description: "Faça o Kody escrever descrições de pull request concisas e acio
 O recurso de Resumo de PR de Kody permite automatizar a criação de descrições de pull request concisas e acionáveis.
 Este guia de configuração explica como adaptar o recurso ao fluxo de trabalho e preferências da sua equipe.
 
+Na barra lateral, abra **Code review → What Kody writes**; essas configurações ficam na seção **PR summary**.
+A prévia ao vivo da página (**Show preview** / **Hide preview**) mostra como o resumo
+fica em um pull request de exemplo.
+
 ## Habilitando Resumos Automáticos
 
 Habilite ou desabilite a geração automática de resumos de pull request:
 
-Alterne a opção Habilitar Geração Automática de Resumo.
+Alterne **Write a summary on every pull request**.
 
 Quando habilitado, Kody gerará resumos para cada pull request, garantindo consistência e economizando tempo.
 
-## Comportamento para Descrições Existentes
+## Quando o PR já tem uma descrição
 
 Controle como Kody interage com descrições de pull request existentes. Você pode escolher entre três modos:
 
@@ -30,13 +34,25 @@ Anexa o resumo gerado ao final da descrição existente.
 
 Combina os insights gerados por Kody com a descrição atual, destacando apenas o que é novo ou relevante.
 
-## Instruções Personalizadas
+## Quando chegam novos commits
+
+Controle o que acontece com o resumo de Kody quando novos commits são enviados depois que o PR é aberto:
+
+- **Do nothing** (padrão) — o resumo fica como está.
+- **Concatenate new summary** — um novo resumo é adicionado ao resumo existente de Kody.
+- **Replace Kody's summary** — o resumo existente de Kody é substituído por um novo.
+
+## Instruções do resumo
 
 Ajuste como Kody gera resumos fornecendo diretrizes específicas:
 
-Adicione instruções diretamente no campo de texto Instruções Personalizadas.
+Adicione instruções no campo opcional **Summary instructions** — no que o resumo deve focar
+ou o que deve deixar de fora. Os chips de **Examples** inserem instruções prontas.
 
 **Exemplos:**
 
 * "Foque nas alterações de segurança e nos impactos de performance."
 * "Resuma de forma concisa, destacando as APIs públicas modificadas."
+
+Clique em **Try on a real PR** para pré-visualizar o resumo que essas configurações produzem em um dos seus pull
+requests.

@@ -175,7 +175,7 @@ describe('sharded kody-rules — T2 reference-inline (#1449)', () => {
  * path reads rules raw (no UI enrichment), so `externalReferences` is NOT on the
  * rule and `sourcePath` is null. The sharded path only inlined `sourcePath`, so
  * the referenced file never reached the shard and the model saw the bare
- * "@file:X" marker — the root cause of the recall miss (capim rule 4902…, and
+ * "@file:X" marker — the root cause of the recall miss (customer rule 4902…, and
  * proven in runtime with a `@file:CLAUDE.md` rule).
  *
  * `inlineLoadedReferences` takes the loader's resolved map (uuid -> refs WITH

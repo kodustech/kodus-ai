@@ -11,23 +11,24 @@ Once connected, Kodus automatically reviews every pull request. It analyzes code
 
 ### Supported platforms
 
-- **GitHub** — via GitHub App
-- **GitLab** — via OAuth + webhooks
-- **Bitbucket** — via webhooks
-- **Azure DevOps** — via webhooks
+- **GitHub** — via GitHub App (or a personal access token)
+- **GitLab** — via OAuth (or a personal access token)
+- **Bitbucket** — via API token
+- **Azure DevOps** (Azure Repos) — via personal access token
+- **Forgejo** — via personal access token
 
 ### What gets analyzed
 
-By default, Kodus checks for:
+By default, Kodus checks the categories you can switch on or off in **Code review → What to review**, plus your own rules:
 - Security issues (SQL injection, XSS, hardcoded secrets)
 - Performance problems (N+1 queries, missing indexes)
-- Error handling gaps
-- Potential bugs (null pointers, resource leaks)
-- Code style and maintainability
-- Your custom Kody Rules
+- Potential bugs (null pointers, resource leaks, error handling gaps)
 - Business logic compliance (validates against linked task requirements)
+- Your custom Kody Rules (use them for code style and team conventions)
 
 ### Review cadence options
+
+Set the cadence in **Code review → General** under **Enable Automated Code Review** → **Review Cadence**.
 
 | Mode | Behavior |
 |------|----------|
@@ -38,7 +39,7 @@ By default, Kodus checks for:
 ## Getting started
 
 1. Create a workspace at [kodus.io](https://kodus.io) or [self-host Kodus](/en/how_to_deploy/deploy_kodus/generic_vm)
-2. Connect your Git provider (GitHub, GitLab, Bitbucket, or Azure DevOps)
+2. Connect your Git provider (GitHub, GitLab, Bitbucket, Azure DevOps, or Forgejo)
 3. Select which repositories to monitor
 4. Open a PR — Kodus reviews it automatically
 

@@ -53,10 +53,12 @@ description: "Kodus CLI をインストールし、認証し、最初のレビ�
         kodus auth login
         ```
 
+        CLI がブラウザで **Authorize Kodus CLI** ページを開きます（求められたら Kodus にサインインしてください）。**Device**、**Mode**、**Expires** の詳細を確認し、**Authorize CLI** をクリックしてからターミナルに戻ります。
+
         トークンは `~/.kodus/credentials.json` に保存され、自動的に更新されます。
       </Tab>
       <Tab title="チーム（共有キー）">
-        <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> でチームキーを生成して適用:
+        組織のオーナーが、サイドバーの **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）でチームキーを生成します。それを適用:
 
         ```bash
         kodus auth team-key --key kodus_xxxxx

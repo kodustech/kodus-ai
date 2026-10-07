@@ -6,7 +6,7 @@ description: "通过 PR 评论或 CLI 使用一次性的评审指令，将 Kody 
 **评审指令**让你告诉 Kody 在单次评审中应把最深入的分析集中在哪里。你无需修改任何配置，只需在触发评审时附上一条简短说明——例如"聚焦于认证和会话逻辑"——Kody 便会把最严格的分析用在匹配的改动代码上。
 
 <Note>
-  指令是**临时的**：仅对该次评审运行生效。它不会保存到你的设置中，也不会影响后续评审。若要永久改变 Kody 的行为，请改用 [Custom Prompts](/zh/how_to_use/code_review/configs/custom_prompts) 或 [Kody Rules](/zh/how_to_use/code_review/configs/kody_rules)。
+  指令是**临时的**：仅对该次评审运行生效。它不会保存到你的设置中，也不会影响后续评审。若要永久改变 Kody 的行为，请改用类别指令和 Kody 的个性设置（[Instructions & Personality](/zh/how_to_use/code_review/configs/custom_prompts)，以前称为 Custom Prompts）或 [Kody Rules](/zh/how_to_use/code_review/configs/kody_rules)。
 </Note>
 
 ## 何时使用
@@ -131,7 +131,7 @@ Heavy mode 是一个 **alpha** 功能。它只对我们显式开通的组织生�
   </Accordion>
   <Accordion title="较弱的示例">
     - `@kody review 请仔细一点` —— 没有可优先的区域。
-    - `@kody review 只评论文件 X` —— 指令不是过滤器；请用[忽略路径](/zh/how_to_use/code_review/configs/general)来限定文件。
+    - `@kody review 只评论文件 X` —— 指令不是过滤器；请用 [Ignored files](/zh/how_to_use/code_review/configs/general) 来限定文件。
   </Accordion>
 </AccordionGroup>
 

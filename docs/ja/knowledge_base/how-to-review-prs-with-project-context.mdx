@@ -28,13 +28,15 @@ description: "Kodyにプロジェクトドキュメント、ハンドブック�
 使用していることを検証します。
 ```
 
-### カスタムプロンプト
+### カテゴリの指示（旧カスタムプロンプト）
 
 Kodyがすべてのレビューに含めるプロジェクト固有の指示を追加します：
 
-1. **コードレビュー設定** → **カスタムプロンプト** に移動します
-2. アーキテクチャの説明、チームガイドライン、ドメイン知識などのコンテキストを追加します
+1. サイドバーから **Code review → What to review** を開きます
+2. **Bug**、**Performance**、または **Security** カテゴリの **Instructions** を編集し、アーキテクチャの説明、チームガイドライン、ドメイン知識などのコンテキストを追加します
 3. Kodyはすべてのコードレビュー分析にこれを含めます
+
+Kodyの提案の書き方（トーン、長さ）を変更するには、**Code review → What Kody writes** の **Kody's personality** を使用します。
 
 ### MCPプラグイン
 
@@ -50,6 +52,6 @@ Kodyにリッチなコンテキストへのアクセスを提供するために�
 1. **メモリ**でアーキテクチャルールを定義します：`@kody remember: このサービスでCQRSパターンに従います`
 2. ドキュメントを参照する**レビュールール**を作成します：`@file:docs/architecture.md`
 3. **Jira**を接続してKodyがPRをタスク要件に対して検証するようにします
-4. ドメイン固有の知識のために**カスタムプロンプト**を追加します
+4. ドメイン固有の知識のために **What to review** でカテゴリの **Instructions** を追加します
 
-詳細については、[カスタムプロンプト](/ja/how_to_use/code_review/configs/custom_prompts)と[プラグイン](/ja/how_to_use/code_review/plugins)を参照してください。
+詳細については、[カテゴリの指示（旧カスタムプロンプト）](/ja/how_to_use/code_review/configs/custom_prompts)と[プラグイン](/ja/how_to_use/code_review/plugins)を参照してください。

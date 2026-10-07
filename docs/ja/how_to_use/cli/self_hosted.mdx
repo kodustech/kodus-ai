@@ -55,7 +55,7 @@ description: "Kodus CLI を自己ホスト型 Kodus インスタンスに接続�
   <Step title="認証">
     <Tabs>
       <Tab title="チームキー（推奨）">
-        セルフホスト型 Kodus ダッシュボードからチームキーを生成して設定:
+        セルフホスト型 Kodus の Web アプリの **Organization → CLI keys** でチームキーを生成して設定:
 
         ```bash
         kodus auth team-key --key kodus_xxxxx
@@ -74,7 +74,7 @@ description: "Kodus CLI を自己ホスト型 Kodus インスタンスに接続�
         kodus auth login
         ```
 
-        セルフホスト型インスタンスに登録されたメールとパスワードを入力します。トークンは制限されたパーミッション（600）で `~/.kodus/credentials.json` にローカル保存されます。
+        CLI がセルフホスト型 Web アプリの **Authorize Kodus CLI** ページを開きます。インスタンスに登録されたアカウントでサインインし、**Authorize CLI** をクリックします。非インタラクティブにログインする場合は、代わりに `--email` と `--password` を渡します（[`auth login`](/ja/how_to_use/cli/commands#auth-login) を参照）。トークンは制限されたパーミッション（600）で `~/.kodus/credentials.json` にローカル保存されます。
       </Tab>
       <Tab title="CI/CD トークン">
         個人アカウントからトークンを生成し、パイプラインで使用:
@@ -234,7 +234,7 @@ KODUS_API_URL=https://kodus-api.yourcompany.com \
 
   <Accordion title="認証失敗（401）">
     - `kodus auth status` で現在の認証状態を確認
-    - チームキーを使用している場合は、セルフホスト型ダッシュボードで有効であることを確認
+    - チームキーを使用している場合は、セルフホスト型 Web アプリの **Organization → CLI keys** でまだ **Active** であることを確認
     - 個人ログインを使用している場合、トークンは1時間後に期限切れになります — CLI は自動更新しますが、リフレッシュトークンも期限切れになった場合は再ログインが必要な場合があります
     - `KODUS_API_URL` が正しいインスタンスを向いていることを確認
   </Accordion>
@@ -247,6 +247,6 @@ KODUS_API_URL=https://kodus-api.yourcompany.com \
   </Accordion>
 
   <Accordion title="デバイス制限に達しました">
-    セルフホスト型インスタンスは組織ごとにデバイス制限を強制する場合があります。制限を増やすか、ダッシュボードから古いデバイスを削除するよう管理者に連絡してください。
+    セルフホスト型インスタンスは組織ごとにデバイス制限を強制する場合があります。Web アプリには整理できるデバイス一覧がないため、制限を増やすよう管理者に連絡してください（API の `CLI_DEVICE_LIMIT` 設定。デフォルトの `0` は無制限を意味します）。
   </Accordion>
 </AccordionGroup>

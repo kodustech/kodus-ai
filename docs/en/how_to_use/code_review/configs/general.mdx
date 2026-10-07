@@ -1,7 +1,10 @@
 ---
 title: "General"
-description: "The core review settings — cadence, PR workflow, skip conditions, and analysis types — plus the full kodus-config.yml reference."
+description: "The core review settings on Code review → General — cadence, PR workflow, and skip conditions — plus the full kodus-config.yml reference."
 ---
+
+In the sidebar, open **Code review → General** (page title **General settings**). Review categories
+and the severity threshold are not here any more — they live on **Code review → What to review**.
 
 ## Core Settings
 
@@ -19,9 +22,12 @@ repository instead of the web UI.
   is `false`, which means Kody never reads `kodus-config.yml` — committing the file alone does
   nothing.
 
-  Turn it on first in **Settings → Code Review → the repository → General**, or set
-  `kodusConfigFileOverridesWebPreferences: true` at the repository (or directory) level in the
-  web UI. Only then does the file take effect.
+  Turn it on first: pick the repository (or directory) in the scope picker at the top of the
+  **Code review** group in the sidebar, open **Code review → General**, and enable **kodus Config
+  File Overrides Web Preferences** (`kodusConfigFileOverridesWebPreferences`). The toggle only
+  exists at repository and directory scope. Only then does the file take effect — the sidebar then
+  shows a **kodus-config.yml applied**, **kodus-config.yml not found** or **kodus-config.yml
+  unavailable** badge under the scope picker.
 </Warning>
 
 Once enabled, the file is merged on top of your web settings, so you only need to declare the
@@ -54,28 +60,36 @@ ignorePaths:
     - 'package.json'
     - '.env'
     - '**/*.json'
+    # ...abbreviated: the shipped default lists several hundred more patterns
 ignoredTitleKeywords: []
 baseBranches: []
 enableCommittableSuggestions: true
-byokModel: '' # empty = inherit the model from your BYOK settings
+byokModel: '' # empty = inherit (directory -> repository -> the main model on AI providers)
 
-# Teams / Enterprise only. Sibling repos the agent may consult during review.
+# linked repositories — Teams / Enterprise only. Sibling repos the agent may consult during review.
 # Soft cap of 3; empty = feature off.
 linkedRepositories: []
 
-# review categories
+# what to review: categories
 reviewOptions:
     bug: true
     performance: true
     security: true
     business_logic: true
 
-# suggestion control
+# what to review: deterministic checks (opt-in, beta)
+deterministicEvidence:
+    ciChecks: false # read the CI results your own pipeline already produced
+    tools: # an enabled tool still skips when your CI already runs an equivalent
+        secrets: false # credential scanning over the changed files
+        dependencies: false # known CVEs in dependencies this PR adds or bumps
+
+# what to review: severity threshold
 suggestionControl:
     applyFiltersToKodyRules: false
     severityLevelFilter: 'medium' # low | medium | high | critical
 
-# PR summary
+# what Kody writes: PR summary
 summary:
     generatePRSummary: true
     behaviourForNewCommits: 'none'
@@ -89,7 +103,7 @@ kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:
     enabled: false
 
-# custom messages
+# what Kody writes: comments during the review + comment visibility
 customMessages:
     globalSettings:
         hideComments: false # GitHub only
@@ -117,6 +131,7 @@ customMessages:
 ### Automated Review
 
 Kody can review PRs automatically when opened, or only when you comment `@kody start-review`.
+This is the **Enable Automated Code Review** toggle.
 
 <Info>
   This affects the **initial review** only. For subsequent commits, see Review Cadence below.
@@ -124,7 +139,8 @@ Kody can review PRs automatically when opened, or only when you comment `@kody s
 
 #### Review Cadence
 
-How Kody handles reviews on subsequent commits:
+Shown under **Enable Automated Code Review** when it is on. How Kody handles reviews on subsequent
+commits:
 
 <Tabs>
   <Tab title="Automatic">
@@ -134,7 +150,7 @@ How Kody handles reviews on subsequent commits:
   <Tab title="Auto-pause">
     Pause reviews during rapid consecutive pushes (e.g., 3 pushes in 15 minutes). Prevents spam during active coding.
     
-    Defaults: 3 pushes / 15 minutes
+    Defaults: 3 pushes / 15 minutes (**Pushes to trigger pause** / **Time window (minutes)**)
   </Tab>
   
   <Tab title="Manual">
@@ -145,20 +161,27 @@ How Kody handles reviews on subsequent commits:
 ### PR Workflow
 
 #### Auto-approve PRs
-Kody approves PRs when no issues are found.
+**Enable Pull Request Approval** — Kody approves PRs when no issues are found.
 
-**Platforms:** GitHub, GitLab, Bitbucket
+**Platforms:** GitHub, GitLab, Bitbucket, Azure Repos, Forgejo
 
 #### Request Changes
-Kody requests changes when finding critical issues.
+**Enable changing status of Review to 'Request Changes'** — Kody requests changes when finding
+critical issues.
 
-**Platforms:** GitHub, Bitbucket
+**Platforms:** GitHub, Bitbucket, Azure Repos, Forgejo (the toggle is hidden when GitLab is your
+only connected platform)
 
 ### Skip Conditions
 
-**Ignored Files:** Use glob patterns (e.g., `**/*.js`), one per line. Default: `yarn.lock`, `package-lock.json`, `package.json`, `.env`, `**/*.json`
+**Ignored files:** Glob patterns (e.g., `**/*.js`) for files Kody skips. The field shows a few
+patterns as chips; click **Edit** to open the **Ignored files** modal, where each new pattern is
+checked for valid glob syntax and the **Test a file** box tells you whether a path would be
+ignored (and by which pattern) or reviewed. **Apply** only updates the field — nothing is saved
+until you click **Save settings**. Default: `yarn.lock`, `package-lock.json`, `package.json`,
+`.env`, `**/*.json`, plus a long list of build, binary and IDE files.
 
-**Ignored Titles:** Skip PRs with specific keywords (case-insensitive, max 100 chars)
+**Ignore title keywords:** Skip PRs with specific keywords (case-insensitive, max 100 chars)
 
 **Base Branches:** Restricts *which* base branches get reviewed.
 
@@ -182,13 +205,24 @@ Kody requests changes when finding critical issues.
   characters, may only use `a-z A-Z 0-9 / * - _ ! = :`, and `**` is not allowed.
 </Info>
 
-**Draft PRs:** `runOnDraft` is `true` by default, so drafts are reviewed. Set it to `false` to
-skip them until the PR is marked ready.
+**Draft PRs:** **Enable Running on Draft Pull Requests** (`runOnDraft`) is on by default, so
+drafts are reviewed. Turn it off to skip them until the PR is marked ready.
 
-## Analysis Types
+### Other settings on this page
 
-Kody reviews across four categories. Enable or disable each one under **Analysis Types**, or via
-`reviewOptions` in `kodus-config.yml`.
+- **Show Status Feedback** — Kody shows status feedback (emoji reaction or comment) when a review
+  is skipped or blocked.
+- **Enable committable suggestions** (Alpha, GitHub only) — suggestions that can be applied
+  directly as commits.
+- **Code review model** (repository and directory scope only, shown once an AI provider is
+  configured) — the model this scope reviews with; it inherits by default (`byokModel`).
+- **Kody Language** (Global only) — the language Kody uses in code review responses.
+
+## Review categories (formerly Analysis Types)
+
+Kody reviews across four categories. Categories are no longer on **General**: turn each one on or
+off with its switch on **Code review → What to review**, or via `reviewOptions` in
+`kodus-config.yml`.
 
 - **Bug** — logic errors, race conditions, null dereferences, edge cases, and incorrect behavior.
 - **Security** — vulnerabilities, injection, auth issues, data exposure, and secrets.

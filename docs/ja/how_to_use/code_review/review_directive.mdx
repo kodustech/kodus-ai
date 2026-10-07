@@ -6,7 +6,7 @@ description: "PR コメントまたは CLI から、単発のレビューディ�
 **レビューディレクティブ**を使うと、その 1 回のレビューで Kody がどこを最も深く分析すべきかを指示できます。設定を変更する代わりに、レビューを起動するときに短い指示を添えます — 例えば「認証とセッションのロジックに集中して」— すると Kody は該当する変更コードに最も厳しい分析を集中させます。
 
 <Note>
-  ディレクティブは**一時的**です。その 1 回のレビュー実行にのみ適用され、設定には保存されず、今後のレビューには影響しません。Kody の挙動を恒久的に変えたい場合は、[Custom Prompts](/ja/how_to_use/code_review/configs/custom_prompts) または [Kody Rules](/ja/how_to_use/code_review/configs/kody_rules) を使ってください。
+  ディレクティブは**一時的**です。その 1 回のレビュー実行にのみ適用され、設定には保存されず、今後のレビューには影響しません。Kody の挙動を恒久的に変えたい場合は、カテゴリの指示と Kody のパーソナリティ（[指示とパーソナリティ](/ja/how_to_use/code_review/configs/custom_prompts)、旧 Custom Prompts）または [Kody Rules](/ja/how_to_use/code_review/configs/kody_rules) を使ってください。
 </Note>
 
 ## いつ使うか
@@ -134,7 +134,7 @@ Heavy mode は**アルファ**機能です。明示的に有効化した組織�
   </Accordion>
   <Accordion title="弱い例">
     - `@kody review しっかり見て` — 優先すべき領域がありません。
-    - `@kody review ファイル X だけコメントして` — ディレクティブはフィルターではありません。ファイルを絞るには[無視パス](/ja/how_to_use/code_review/configs/general)を使ってください。
+    - `@kody review ファイル X だけコメントして` — ディレクティブはフィルターではありません。ファイルを絞るには [Ignored files](/ja/how_to_use/code_review/configs/general) を使ってください。
   </Accordion>
 </AccordionGroup>
 

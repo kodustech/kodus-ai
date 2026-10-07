@@ -8,7 +8,7 @@ Configurar o Kodus no GitHub leva poucos minutos. Uma vez conectado, cada pull r
 ## Passos
 
 1. **Crie uma conta** em [kodus.io](https://kodus.io) ou [hospede o Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
-2. **Conecte o GitHub** — instale o GitHub App do Kodus quando solicitado durante a configuração
+2. **Conecte o GitHub** — na etapa **Connect your Git tool** do onboarding, clique em **Install Github app** (você também pode conectar depois em **Repositories** na barra lateral)
 3. **Selecione os repositórios** — escolha quais repositórios o Kodus deve revisar
 4. **Abra um PR** — o Kodus o revisa automaticamente e posta comentários
 
@@ -16,15 +16,15 @@ Configurar o Kodus no GitHub leva poucos minutos. Uma vez conectado, cada pull r
 
 - Revisões automatizadas em cada PR (ou sob demanda com `@kody start-review`)
 - Comentários postados diretamente no PR com sugestões de código
-- Regras personalizáveis, filtros de severidade e limites de sugestões
+- Regras personalizáveis, categorias de revisão e um limite mínimo de severidade
 - Validação de lógica de negócio contra tarefas vinculadas
 
 ## Configuração personalizada
 
-Coloque um `kodus-config.yml` na raiz do seu repositório para personalizar o comportamento por repositório. O arquivo substitui as configurações da interface automaticamente.
+Coloque um `kodus-config.yml` na raiz do seu repositório para personalizar o comportamento por repositório. O arquivo substitui as configurações da interface quando **kodus Config File Overrides Web Preferences** está ativado para esse repositório (**Code review → General**).
 
 ## Usando um Personal Access Token
 
-Para repositórios privados ou organizações com permissões mais rígidas, pode ser necessário configurar um Personal Access Token (PAT) do GitHub.
+Para repositórios privados ou organizações com permissões mais rígidas, pode ser necessário configurar um Personal Access Token (PAT) do GitHub. Escolha **Connect via token** no onboarding (ou a aba **Token** ao conectar o GitHub em **Repositories**). As revisões passam a ser postadas pela conta do dono do token, e GitHub Checks/status do PR não ficam disponíveis.
 
 Para o guia completo de configuração, consulte [Início Rápido](/pt-BR/how_to_use/quickstart) e [Configuração do GitHub App](/pt-BR/how_to_deploy/platforms/github/github_app).

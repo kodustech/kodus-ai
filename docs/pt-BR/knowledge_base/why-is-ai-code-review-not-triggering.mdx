@@ -8,8 +8,8 @@ Se o Kodus não está revisando seus PRs, verifique essas causas comuns:
 ## 1. A revisão automatizada está desabilitada
 
 Verifique se as revisões automatizadas estão habilitadas:
-- Vá em **Configurações de Revisão de Código** → **Geral**
-- Verifique se a **Revisão Automatizada** está ativada
+- Vá em **Code review → General**
+- Verifique se **Enable Automated Code Review** está ativado
 - Ou verifique em `kodus-config.yml`:
 
 ```yaml
@@ -33,11 +33,11 @@ ignoredTitleKeywords:
   - "WIP"
 ```
 
-Verifique sua configuração `ignoredTitleKeywords`.
+Verifique **Ignore title keywords** em **Code review → General** (ou `ignoredTitleKeywords` no `kodus-config.yml`).
 
 ## 4. A branch base não está sendo monitorada
 
-Por padrão, o Kodus revisa PRs destinados à branch padrão. Se seu PR tem como destino uma branch diferente, adicione-a em `baseBranches`:
+Por padrão, o Kodus revisa PRs destinados à branch padrão. Se seu PR tem como destino uma branch diferente, adicione-a em **Base Branches** em **Code review → General**, ou em `baseBranches` no `kodus-config.yml`:
 
 ```yaml
 baseBranches:
@@ -47,11 +47,11 @@ baseBranches:
 
 ## 5. A cadência de revisão está definida como manual
 
-Se a cadência de revisão está definida como **Manual**, o Kodus só revisa quando você comenta `@kody start-review`.
+Se **Review Cadence** (em **Code review → General**, dentro de **Enable Automated Code Review**) está definida como **Manual**, o Kodus só revisa quando você comenta `@kody start-review`.
 
 ## 6. A pausa automática está ativa
 
-Se você fez vários pushes rapidamente, a pausa automática pode ter sido acionada. Aguarde o período de resfriamento ou comente `@kody start-review` para acionar manualmente.
+Se você fez vários pushes rapidamente, a pausa automática pode ter sido acionada e o Kody postou um comentário "Auto-paused" no PR. O PR permanece pausado até você comentar `@kody start-review`.
 
 ## Ainda não está funcionando?
 

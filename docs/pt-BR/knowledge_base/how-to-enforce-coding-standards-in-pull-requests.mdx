@@ -16,7 +16,7 @@ O Kodus permite que você defina **Regras do Kody** — instruções personaliza
 
 Você pode criar uma regra em nível de arquivo como:
 
-- **Regra**: "Componentes React devem usar nomes de arquivo em PascalCase"
+- **Rule name**: "Componentes React devem usar nomes de arquivo em PascalCase"
 - **Caminho**: `src/components/**/*.tsx`
 - **Severidade**: Alta
 - **Instruções**: "Sinalize qualquer arquivo de componente que não siga a nomenclatura PascalCase."
@@ -25,23 +25,23 @@ Você pode criar uma regra em nível de arquivo como:
 
 Uma regra em nível de PR pode validar preocupações entre arquivos:
 
-- **Regra**: "A camada de domínio não deve importar da infraestrutura"
-- **Escopo**: Pull Request
+- **Rule name**: "A camada de domínio não deve importar da infraestrutura"
+- **Execution mode**: Per PR
 - **Instruções**: "Verifique `pr_files_diff` para qualquer declaração de importação em `src/domain/` que referencie `src/infrastructure/`. Isso viola nossa arquitetura hexagonal."
 
 ## Outras abordagens
 
 Você também pode aplicar padrões:
 
-- **Importando da Biblioteca de Regras** — navegue por regras pré-construídas para segurança, performance e estilo
+- **Importando da Biblioteca de Regras** — clique em **Discovery** na página de Kody Rules para navegar por regras pré-construídas para segurança, performance e estilo
 - **Sincronizando regras de IDE** — importe automaticamente regras do Cursor, Copilot, Claude e outras ferramentas de IA
-- **Regras de repositório** — defina regras em arquivos markdown diretamente no seu repositório (`kodus/rules/`)
+- **Regras de repositório** — defina regras em arquivos markdown diretamente no seu repositório (`.kody/rules/`)
 - **Gerando regras automaticamente** — deixe o Kody analisar 3 meses de histórico de revisões e sugerir regras baseadas nos padrões do seu time
 
 ## Como começar
 
-1. Vá em **Configurações de Revisão de Código** → **Regras do Kody**
-2. Clique em **Adicionar Regra** e defina seu padrão
+1. Selecione **Global** (ou um repositório / diretório) no seletor de escopo no topo do grupo **Code review** na barra lateral e abra **Kody Rules**
+2. Clique em **New rule** e defina seu padrão
 3. Configure o caminho, severidade e instruções detalhadas
 4. O Kody vai aplicá-la em cada PR futuro
 

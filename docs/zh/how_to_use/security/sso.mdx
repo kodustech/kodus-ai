@@ -11,12 +11,13 @@ description: "启用单点登录(SSO)以安全高效地访问 Kodus。"
 
 <Steps>
     <Step title="访问 SSO 设置">
-        导航到您的组织设置
-        [app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)
+        在侧边栏中打开 **Organization → SSO**
+        ([app.kodus.io/organization/sso](https://app.kodus.io/organization/sso))。
+        SSO 在 Enterprise 套餐中提供(试用期间也可用);在其他套餐中,该页面显示锁定的预览。
     </Step>
 
     <Step title="填写您的 IdP 配置">
-        填写您的 IdP 设置,例如其发行者 ID、其 URL 和签名证书。这些可以手动填写,也可以通过提供 IdP 的元数据 URL 或元数据 XML 文件来填写。
+        在 **SAML SSO Configuration** 下,填写您的 IdP 设置:**IDP Issuer**、**SSO URL** 和 **X.509 Certificate**。这些可以手动填写,也可以通过提供 IdP 的 **Metadata URL (optional)**(然后点击 **Fetch**)或元数据 XML 文件(**Upload Metadata XML File**)来填写。
 
         <Info>
             这些值通常可以在 IdP 的文档或管理控制台中找到。
@@ -24,7 +25,7 @@ description: "启用单点登录(SSO)以安全高效地访问 Kodus。"
     </Step>
 
     <Step title="在 IdP 中将 Kodus 配置为 SP">
-        通过提供我们的实体 ID(默认为 `kodus-orchestrator`)和 SSO 设置页面中找到的组织回调 URL,在 IdP 中将 Kodus 配置为 SP。
+        通过提供我们的实体 ID(**Service Provider Entity ID**,默认为 `kodus-orchestrator`)和您组织的 **Callback URL**(两者都显示在 SSO 设置页面上),在 IdP 中将 Kodus 配置为 SP。
 
         确保名称 ID 格式设置为电子邮件。
 
@@ -33,8 +34,12 @@ description: "启用单点登录(SSO)以安全高效地访问 Kodus。"
         </Warning>
     </Step>
 
-    <Step title="启用并测试 SSO">
-        在 Kodus 中启用 SSO 并通过注销然后重新登录来测试配置。当尝试使用与 IdP 关联的电子邮件域登录时,您将可以选择通过 SSO 登录。
+    <Step title="验证您的域名">
+        在 **Allowed Domains** 下添加您的电子邮件域名,并对每个域名点击 **Verify**。在 **Verify Enterprise Domain** 中,输入该域名下的一个电子邮件地址以接收验证链接(自托管实例会立即完成验证)。每个域名都必须显示 **Verified** 后才能启用 SSO。
+    </Step>
+
+    <Step title="测试并启用 SSO">
+        点击 **Test connection** 并在您的 IdP 完成一次登录。测试成功后,打开 **Enable SAML SSO** 并点击 **Save settings**。当尝试使用与 IdP 关联的电子邮件域登录时,您将看到 **Continue with SSO**。
     </Step>
 
 </Steps>

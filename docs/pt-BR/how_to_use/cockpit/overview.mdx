@@ -8,7 +8,7 @@ description: "Análises e métricas abrangentes para o desempenho da equipe de e
 O Cockpit Analytics fornece insights abrangentes sobre o desempenho da sua equipe de engenharia por meio de métricas-chave que medem produtividade, qualidade de código e eficiência de entrega. Essas métricas ajudam a identificar áreas de melhoria e acompanhar o progresso ao longo do tempo.
 
 <Warning>
-  O Cockpit exige um plano pago: **Teams ou Enterprise na cloud**, ou **self-hosted Enterprise licenciado**. Self-hosted sem licença (Community) e planos free BYOK não incluem. No self-hosted Enterprise também é preciso rodar o [Analytics Worker](/pt-BR/how_to_deploy/deploy_kodus/analytics_worker).
+  O Cockpit exige um plano pago: **Teams ou Enterprise na cloud** (trials incluídos), ou **self-hosted Enterprise licenciado**. Self-hosted sem licença (Community) e planos free BYOK não incluem: o item **Cockpit** continua na barra lateral com um cadeado e abre uma prévia desfocada **Unlock the Cockpit** com um botão **See plans** (**Activate a license** no self-hosted). No self-hosted Enterprise também é preciso rodar o [Analytics Worker](/pt-BR/how_to_deploy/deploy_kodus/analytics_worker).
 </Warning>
 
 <Frame caption="Monitore o desempenho da sua equipe com análises em tempo real.">
@@ -18,20 +18,23 @@ O Cockpit Analytics fornece insights abrangentes sobre o desempenho da sua equip
 ## Principais Recursos
 
 - Dados atualizados a cada 30 minutos por padrão (`ANALYTICS_INGESTION_CRON`)
-- Teams/Enterprise na cloud, ou self-hosted Enterprise licenciado
+- Teams/Enterprise na cloud (incluindo trials), ou self-hosted Enterprise licenciado
 - Cálculo de métricas alimentado por IA
 - Mais de 8 métricas DORA e personalizadas
 
-## As duas abas
+## As abas
 
-O cockpit é dividido em duas abas:
+O cockpit é dividido em duas abas de métricas, seguidas de uma aba **Issues**:
 
-- **Kodus Review** — o quanto as revisões do Kodus são eficazes: taxa de implementação, calibração de severidade, feedback negativo e a saúde das suas Kody Rules. É sobre o próprio Kodus, e é onde você toma ação. Veja [Kodus Review](/pt-BR/how_to_use/cockpit/kodus_review).
+- **Kodus Review** (aberta por padrão) — o quanto as revisões do Kodus são eficazes: taxa de implementação, calibração de severidade, feedback negativo e a saúde das suas Kody Rules. É sobre o próprio Kodus, e é onde você toma ação. Veja [Kodus Review](/pt-BR/how_to_use/cockpit/kodus_review).
 - **Productivity** — métricas gerais de entrega: frequência de deploy, lead time, tempo de ciclo de PR, tamanho de PR e atividade dos desenvolvedores.
+- **Issues** — abre a lista de [Issues](/pt-BR/how_to_use/issues/overview), com a contagem de issues abertas ao lado do nome da aba.
+
+No topo da página você escolhe um repositório (**All repositories** por padrão) e um intervalo de datas (**Last 15 days** por padrão; presets **Last week**, **Last 15 days**, **Last month**, **Last 3 months** ou datas personalizadas). Não há filtro por desenvolvedor. O botão de link (**Copy link to this view**) copia uma URL que reabre a mesma aba, repositório e intervalo.
 
 <Note>
-  Owners podem esconder abas inteiras ou métricas individuais para toda a organização — veja
-  [Configuração do Cockpit](/pt-BR/how_to_use/cockpit/configuration).
+  Owners podem esconder abas inteiras ou métricas individuais para toda a organização em
+  **Organization → Cockpit visibility** — veja [Configuração do Cockpit](/pt-BR/how_to_use/cockpit/configuration).
 </Note>
 
 ## Categorias de Métricas Principais
@@ -45,11 +48,11 @@ O cockpit é dividido em duas abas:
 
 ## Como Funciona o Matching de Desenvolvedores
 
-O Cockpit rastreia desenvolvedores usando o **nome de usuário do commit Git**. Isso pode diferir de:
+Os gráficos por desenvolvedor do Cockpit (**PRs Merged By Developer**, **Team Activity**) atribuem cada pull request ao **nome de usuário do autor no seu provedor Git**. Isso pode diferir de:
 - Nome de exibição do GitHub/GitLab
 - Endereço de e-mail
 - Conta de workspace do Kodus
 
 <Tip>
-  Se você ver discrepâncias nas métricas dos desenvolvedores, verifique se os nomes de usuário de commit são consistentes na configuração Git da sua equipe.
+  Se você ver discrepâncias nas métricas dos desenvolvedores, verifique se a mesma pessoa abre pull requests a partir de mais de uma conta do provedor Git.
 </Tip>

@@ -36,7 +36,7 @@ Pick one per machine. The CLI auto-detects what's available.
 
 - **Trial** — no auth. 5 reviews per day. Good for "try it once".
 - **Personal login** (`kodus auth login`) — an individual account. Tokens refresh automatically.
-- **Team key** (`kodus auth team-key --key kodus_xxxxx`) — one shared key for a team, generated in the dashboard. Recommended for AI agents and anywhere you don't want interactive logins.
+- **Team key** (`kodus auth team-key --key kodus_xxxxx`) — one shared key for a team, generated in the web app under **Organization → CLI keys**. Recommended for AI agents and anywhere you don't want interactive logins.
 - **CI/CD token** (`kodus auth token`) — a long-lived token for pipelines. Generated from a logged-in machine, used via `KODUS_TOKEN`.
 
 See [Getting Started](getting_started) for the full decision tree.
@@ -57,7 +57,7 @@ Rule
 
 Rules layer on top of the general Kodus review — the AI uses them as additional criteria, not replacements.
 
-Manage rules from the dashboard or from the CLI with `kodus rules create|update|view`. The CLI is useful when you want rules in version control (generate them from a script, check into a repo, re-apply on provisioning).
+Manage rules from the web app (**Code review → Kody Rules**) or from the CLI with `kodus rules create|update|view`. The CLI is useful when you want rules in version control (generate them from a script, check into a repo, re-apply on provisioning).
 
 ## Repository Settings
 

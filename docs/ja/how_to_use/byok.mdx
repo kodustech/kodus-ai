@@ -15,7 +15,7 @@ BYOK（Bring Your Own Key）は、**すべてのプランで Kodus が LLM を�
 
 ## BYOK の仕組み
 
-BYOK は**プロバイダーファースト**です：プロバイダーを一度接続し、使いたいモデルをそれに追加し、それらのモデルを Kody のタスクにルーティングします。`/byok` 画面には3つのタブがあります：
+BYOK は**プロバイダーファースト**です：プロバイダーを一度接続し、使いたいモデルをそれに追加し、それらのモデルを Kody のタスクにルーティングします。アプリでは **AI providers** ページ（サイドバー → **AI providers**、旧 **BYOK** ページ）にあり、3つのタブがあります：
 
 <CardGroup cols={3}>
   <Card title="Providers" icon="box">
@@ -25,41 +25,41 @@ BYOK は**プロバイダーファースト**です：プロバイダーを一�
     各タスクを実行するモデルを選択します — すべてのタスク向けの1つのデフォルト、任意のフォールバック、エージェントごとのオーバーライド。
   </Card>
   <Card title="Budget" icon="wallet">
-    接続したモデル全体にわたる任意の月次支出上限を設定します。
+    任意の月次予算を設定し、予算に近づくと支出アラートを受け取ります（アラートのみ — レビューは継続して実行されます）。
   </Card>
 </CardGroup>
 
 <Info>
-  **編集できるユーザー。** BYOKページは **Owner 専用**です — キーの接続・テスト・削除には **Owner** ロールが必要です。他のロール(Billing Manager、Repo Admin、Contributor)は `/byok` にアクセスできません。[ワークスペースのロール](/ja/how_to_use/workspace_roles)を参照してください。
+  **編集できるユーザー。** **AI providers** ページは **Owner 専用**です — キーの接続・テスト・削除には **Owner** ロールが必要です。他のロール(Billing Manager、Repo Admin、Contributor)は `/byok` にアクセスできません。[ワークスペースのロール](/ja/how_to_use/workspace_roles)を参照してください。
 </Info>
 
 ## プロバイダーを接続する
 
 <Steps>
-  <Step title="BYOK 設定を開く">
-    [app.kodus.io/byok](https://app.kodus.io/byok) にアクセスします。新しいワークスペースでは **Connect your first provider** が表示されます。
+  <Step title="AI providers を開く">
+    サイドバーで **AI providers**（[app.kodus.io/byok](https://app.kodus.io/byok)）を開きます。新しいワークスペースでは **Connect your first provider** が表示されます。
   </Step>
 
   <Step title="プロバイダーを選択">
     プロバイダーのグリッドは2つに分かれています：
 
-    - **Providers** — APIキーだけで接続できるファーストクラスのプロバイダー（OpenAI、Anthropic、Google AI Studio、OpenRouter、Novita…）。
-    - **Custom** — 独自のエンドポイントを指定したり任意のモデルを実行したりするプロバイダー：**OpenAI-compatible**、**Anthropic-compatible**、**Google Vertex AI**、**Amazon Bedrock**。これらには *Custom endpoint* のヒントが付いています。
+    - **Providers** — APIキーだけで接続できるファーストクラスのプロバイダー（OpenAI、Anthropic、Google、OpenRouter、Novita、Moonshot、Z.ai…）。
+    - **Custom** — 独自のエンドポイントを指定したり任意のモデルを実行したりするプロバイダー：**OpenAI-compatible**、**Anthropic-compatible**、**Google Vertex AI**、**Amazon Bedrock**、**Azure OpenAI**。カスタムエンドポイントには *Custom endpoint* のヒントが付いています。
 
     すでに接続済みのプロバイダーには **Connected · N models** と表示されます。
   </Step>
 
   <Step title="モデルを追加">
-    プロバイダーを選ぶと、その **Add a model** フォームが開きます。APIキーを一度貼り付けると（その後そのプロバイダーに追加する各モデルで再利用されます）、モデルを選択します：
+    プロバイダーを選ぶと、そのモデル追加フォーム（**Add a … model**）が開きます。APIキーを一度貼り付けると（その後そのプロバイダーに追加する各モデルで再利用されます）、モデルを選択します：
 
     - Kodus がプロバイダーのモデルをリスト化できる場合、ドロップダウンが表示されます。
     - そうでない場合（カスタムエンドポイント、セルフホスト、またはプラットフォームキーが未設定の場合）、正確なモデル ID を入力します。
 
-    カスタムエンドポイント（OpenAI-compatible / Anthropic-compatible）では、まず **base URL** も求められます。
+    カスタムエンドポイント（OpenAI-compatible / Anthropic-compatible）では、まず **Base URL** も求められます。
   </Step>
 
   <Step title="Advanced settings を調整（任意）">
-    **Advanced settings** の下：thinking/reasoning、temperature、最大出力トークン、最大入力トークン、最大同時リクエスト数。デフォルト値はほとんどのプロバイダーで適切です — モデルごとに Kodus がロックまたは非表示にするフィールドについては [Reasoning](#reasoning--拡張思考) と [Temperature](#temperature) を参照してください。
+    **Advanced (optional)** カードで **Advanced settings** を展開します：**Thinking / Reasoning**、**Temperature**、**Max output tokens**、**Max input tokens**、**Max concurrent requests**。デフォルト値はほとんどのプロバイダーで適切です — モデルごとに Kodus がロックまたは非表示にするフィールドについては [Reasoning](#reasoning--拡張思考) と [Temperature](#temperature) を参照してください。
   </Step>
 
   <Step title="テストして保存">
@@ -108,7 +108,7 @@ BYOK は**プロバイダーファースト**です：プロバイダーを一�
   </Step>
 </Steps>
 
-**Save routing** をクリックして保存します。**Reset agents to default** は、すべてのエージェントごとのオーバーライドをデフォルトに戻し、フォールバックをクリアします（デフォルトモデル自体は保持されます）。下部の読み取り専用の **Per repository** パネルは、Code Review Settings で設定されたリポジトリごとのモデルオーバーライドを反映します。
+**Save routing** をクリックして保存します。**Reset agents to default** は、すべてのエージェントごとのオーバーライドをデフォルトに戻し、フォールバックをクリアします（デフォルトモデル自体は保持されます）。下部の読み取り専用の **Per repository** パネルは、リポジトリごと（またはディレクトリごと）のモデルオーバーライドを反映します。これらは、スコープピッカーでリポジトリまたはディレクトリを選択した状態で **Code review → General → Code review model** から設定します。
 
 <Note>
   接続済みのモデルが1つの場合、ルーティングはスキップされます — すべてのタスクがそのモデルを使用します。ルーティングを意味のあるものにするには、2つ目のモデルを接続してください。
@@ -251,11 +251,11 @@ Moonshot と Z.ai はどちらも、ペイパートークンの Developer API �
     </Accordion>
   </Tab>
 
-  <Tab title="OpenAI Compatible">
+  <Tab title="OpenAI-compatible">
     **おすすめの用途:** 特化プロバイダー（Moonshot、Z.ai、Fireworks、Together、Groq、DeepSeek）またはセルフホストエンドポイント。
 
     **設定方法:**
-    1. 接続フローで、プロバイダーとして **OpenAI Compatible**（Custom の下）を選択します。
+    1. 接続フローで、プロバイダーとして **OpenAI-compatible**（Custom の下）を選択します。
     2. ベース URL を入力します（例：`https://api.moonshot.ai/v1`、`https://api.z.ai/api/paas/v4/`、`https://api.fireworks.ai/inference/v1`）。
     3. キーとモデル ID を提供します。
 
@@ -294,7 +294,7 @@ Moonshot と Z.ai はどちらも、ペイパートークンの Developer API �
 
 ## Reasoning / 拡張思考
 
-**Add a model** フォームでは、**Advanced settings** の下に **Thinking** トグル（Off / Low / Medium / High / Custom）が表示されます。利用可能なオプションは、モデルが実際にできることを反映しています：
+モデル追加フォームでは、**Advanced settings** の下に **Thinking / Reasoning** トグル（Off / Low / Medium / High / Custom）が表示されます。利用可能なオプションは、モデルが実際にできることを反映しています：
 
 - reasoning できないモデルは注記付きで **Off** に固定されます。
 - 特定のレベルでのみ reasoning するモデル（例：GPT-5 の medium/high）は、無効なものを無効化します。
@@ -318,7 +318,7 @@ Low / Medium / High を選択すると、Kodus はそのレベルを各プロバ
 
 ### カスタム JSON オーバーライド
 
-Thinking トグルで **Custom** を選択すると JSON テキストエリアが表示されます。プロバイダーオプションを直接貼り付けてください — **Kodus がアクティブなプロバイダーの名前空間の下に自動でラップします**。Vercel AI SDK のルーティングルールを知る必要はありません。
+**Thinking / Reasoning** トグルで **Custom** を選択すると JSON テキストエリアが表示されます。プロバイダーオプションを直接貼り付けてください — **Kodus がアクティブなプロバイダーの名前空間の下に自動でラップします**。Vercel AI SDK のルーティングルールを知る必要はありません。
 
 以下の場合に使用します：
 
@@ -502,7 +502,7 @@ BYOK プロバイダーが **OpenRouter** の場合、Advanced settings パネ�
 
 ### 上級者向け：生の JSON オーバーライド
 
-`order` と `allow_fallbacks` 以外のフィールド（例：`ignore`、`data_collection`、`require_parameters`）が必要な場合は、Advanced settings で **Thinking** を **Custom** に切り替え、完全なルーティングペイロードを貼り付けます — 任意の reasoning 設定と並んで `providerOptions` にマージされます：
+`order` と `allow_fallbacks` 以外のフィールド（例：`ignore`、`data_collection`、`require_parameters`）が必要な場合は、Advanced settings で **Thinking / Reasoning** を **Custom** に切り替え、完全なルーティングペイロードを貼り付けます — 任意の reasoning 設定と並んで `providerOptions` にマージされます：
 
 ```json
 {
@@ -520,7 +520,7 @@ BYOK プロバイダーが **OpenRouter** の場合、Advanced settings パネ�
 
 ## 同時実行数とレート制限
 
-`maxConcurrentRequests` フィールド（**Advanced settings** の下）は、Kodus がプロバイダーに並行して送信するインフライトリクエストの数を制限します。ほとんどの場合、デフォルトで問題ありません — ただし、厳密な同時実行上限があるサブスクリプションプランでは明示的に設定する必要があります。
+`maxConcurrentRequests` フィールド（**Max concurrent requests**、**Advanced settings** の下）は、Kodus がプロバイダーに並行して送信するインフライトリクエストの数を制限します。ほとんどの場合、デフォルトで問題ありません — ただし、厳密な同時実行上限があるサブスクリプションプランでは明示的に設定する必要があります。
 
 ### 設定する値
 
@@ -565,7 +565,7 @@ BYOK プロバイダーが **OpenRouter** の場合、Advanced settings パネ�
     Kodus 用の別の APIキーを作成します。使用状況の監査とキーのローテーションが容易になります。
   </Card>
   <Card title="定期的なローテーション" icon="arrows-rotate">
-    定期的にキーをローテーションし、BYOK 設定で更新します。
+    定期的にキーをローテーションし、**AI providers** ページの **Edit provider** で更新します。
   </Card>
   <Card title="使用状況の監視" icon="chart-bar">
     異常なパターンがないか、プロバイダーのダッシュボードを確認します。
@@ -611,13 +611,13 @@ BYOK プロバイダーが **OpenRouter** の場合、Advanced settings パネ�
   </Accordion>
 
   <Accordion title="セルフホスト環境変数が表示されない">
-    - Kodus が `.env`（セルフホスト Fixed Mode）で設定されている場合、BYOK 画面はアクティブなプロバイダー/モデルを表示する青い情報バナーを表示します — セキュリティのためキーは決して表示されません。
+    - Kodus が `.env`（セルフホスト Fixed Mode）で設定されている場合、**AI providers** ページには、そこでモデルが接続されていない間、アクティブなプロバイダー/モデルを示す情報バナーが表示されます — セキュリティのためキーは決して表示されません。
     - モデルを接続して保存すると、`.env` の設定がオーバーライドされます。
   </Accordion>
 
   <Accordion title="予想外の高コスト">
-    - Reasoning はトークンを追加します。コストが急増している場合、**Thinking** を Medium から Low に下げるか、重いタスクを **Per agent** で安価なモデルにルーティングしてください。
-    - プロバイダーのダッシュボードでモデルごとの内訳を確認し、**Budget** タブで上限を設定します。
+    - Reasoning はトークンを追加します。コストが急増している場合、**Thinking / Reasoning** を Medium から Low に下げるか、重いタスクを **Per agent** で安価なモデルにルーティングしてください。
+    - プロバイダーのダッシュボードでモデルごとの内訳を確認し、**Budget** タブで支出アラート付きの月次予算を設定します（アラートのみ — ハードな上限はプロバイダー側で設定してください）。
   </Accordion>
 </AccordionGroup>
 
@@ -645,6 +645,6 @@ BYOK プロバイダーが **OpenRouter** の場合、Advanced settings パネ�
   </Accordion>
 
   <Accordion title="セルフホスト LLM（例：Ollama、vLLM）を使用できますか？">
-    はい — **OpenAI Compatible** プロバイダー（Custom の下）を介して使用できます。エンドポイントのベース URL、公開しているモデル ID、およびプレースホルダーの APIキーを入力します（ほとんどのセルフホストランタイムはキーヘッダーを無視しますが、依然として必要です）。
+    はい — **OpenAI-compatible** プロバイダー（Custom の下）を介して使用できます。エンドポイントのベース URL、公開しているモデル ID、およびプレースホルダーの APIキーを入力します（ほとんどのセルフホストランタイムはキーヘッダーを無視しますが、依然として必要です）。
   </Accordion>
 </AccordionGroup>

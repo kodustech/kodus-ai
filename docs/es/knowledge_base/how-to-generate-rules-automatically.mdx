@@ -7,22 +7,21 @@ Escribir reglas de revisión de código desde cero puede ser tedioso. Kodus pued
 
 ## Cómo funciona
 
-1. Ve a **Configuración de Revisión de Código** → **Kody Rules**
-2. Haz clic en **Generar Kody Rules**
-3. Kodus escanea 3 meses de historial de revisiones de código en tu repositorio
+1. Selecciona el repositorio en el selector de alcance en la parte superior del grupo **Code review** de la barra lateral, abre **Kody Rules** y haz clic en **Configuration**
+2. Activa **Generate from past reviews**
+3. Kodus escanea los PRs cerrados de los últimos 3 meses en tu repositorio
 4. Identifica patrones de feedback recurrentes y preferencias de codificación
-5. Genera sugerencias de reglas adaptadas a tu equipo
+5. Genera reglas adaptadas a tu equipo, que aparecen en la página de Kody Rules con el origen **Kody-generated**
 
 ## Qué sucede después
 
-- Revisa las sugerencias generadas — aún no están activas
-- Importa las reglas que se ajusten a las necesidades de tu equipo
-- Personalízalas si es necesario antes de activarlas
-- Solo las reglas importadas se aplican durante las revisiones de código
+- Por defecto, las reglas generadas quedan activas de inmediato y se aplican durante las revisiones de código
+- Para revisarlas antes de que se apliquen, activa **Kody knowledge approval** en la misma hoja de **Configuration**: las nuevas reglas esperarán entonces en la sección **Pending review** hasta que las apruebes (**Approve**) o descartes (**Discard**)
+- Edita, pausa o elimina cualquier regla generada como cualquier otra Kody Rule
 
 ## Aprendizaje continuo
 
-Después de la configuración inicial, Kodus genera nuevas sugerencias de reglas **semanalmente** a medida que evoluciona el estilo de codificación de tu equipo. Revísalas regularmente para nuevas sugerencias.
+Después de la configuración inicial, Kodus genera nuevas reglas **semanalmente** a medida que evoluciona el estilo de codificación de tu equipo. Vuelve a revisar regularmente para ver las nuevas reglas.
 
 ## Requisitos
 

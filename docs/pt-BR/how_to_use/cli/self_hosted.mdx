@@ -55,7 +55,7 @@ Se você estiver executando o Kodus na sua própria infraestrutura, o CLI funcio
   <Step title="Autenticar">
     <Tabs>
       <Tab title="Chave de Equipe (Recomendado)">
-        Gere uma chave de equipe no painel do Kodus self-hosted e configure-a:
+        Gere uma chave de equipe no web app do seu Kodus self-hosted em **Organization → CLI keys** e configure-a:
 
         ```bash
         kodus auth team-key --key kodus_xxxxx
@@ -74,7 +74,7 @@ Se você estiver executando o Kodus na sua própria infraestrutura, o CLI funcio
         kodus auth login
         ```
 
-        Insira o e-mail e a senha registrados na sua instância self-hosted. Os tokens são armazenados localmente em `~/.kodus/credentials.json` com permissões restritas (600).
+        O CLI abre a página **Authorize Kodus CLI** do web app self-hosted. Faça login com a conta registrada na sua instância e clique em **Authorize CLI**. Para um login não interativo, passe `--email` e `--password` (veja [`auth login`](/pt-BR/how_to_use/cli/commands#auth-login)). Os tokens são armazenados localmente em `~/.kodus/credentials.json` com permissões restritas (600).
       </Tab>
       <Tab title="Token CI/CD">
         Gere um token a partir de uma conta pessoal e use-o nos pipelines:
@@ -234,7 +234,7 @@ Isso instala o CLI, configura a chave de equipe e implanta skills de revisão no
 
   <Accordion title="Falha de autenticação (401)">
     - Execute `kodus auth status` para verificar seu estado de autenticação atual
-    - Se estiver usando uma chave de equipe, verifique se ela ainda é válida no painel self-hosted
+    - Se estiver usando uma chave de equipe, verifique se ela ainda está **Active** em **Organization → CLI keys** no web app self-hosted
     - Se estiver usando login pessoal, os tokens expiram após 1 hora — o CLI atualiza automaticamente, mas pode ser necessário fazer login novamente se o token de refresh também tiver expirado
     - Certifique-se de que `KODUS_API_URL` aponta para a instância correta
   </Accordion>
@@ -247,6 +247,6 @@ Isso instala o CLI, configura a chave de equipe e implanta skills de revisão no
   </Accordion>
 
   <Accordion title="Limite de dispositivos atingido">
-    Sua instância self-hosted pode impor limites de dispositivos por organização. Entre em contato com seu administrador para aumentar o limite ou remover dispositivos antigos do painel.
+    Sua instância self-hosted pode impor limites de dispositivos por organização. O web app não tem uma lista de dispositivos para limpar, então entre em contato com seu administrador para aumentar o limite (a configuração `CLI_DEVICE_LIMIT` da API; `0`, o padrão, significa sem limite).
   </Accordion>
 </AccordionGroup>

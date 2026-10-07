@@ -15,7 +15,7 @@ Use it when you want:
 ## How It Works
 
 1. Choose one repository to hold your centralized config. It has to be one of the repositories selected in Kodus.
-2. Enable Centralized Config in the UI and point it at that repository.
+2. Enable Centralized Config in the UI (**Code review → General** at Global scope → **Configure centralized config**) and point it at that repository.
 3. Pick an **initial sync mode**:
    - `pr` — Kodus opens the initialization PR with your current effective settings and rules.
    - `manual` — Kodus generates the files; your team downloads and opens the PR.
@@ -120,24 +120,26 @@ See [Kody Rules Overview](/en/how_to_use/code_review/configs/kody_rules) for the
 
 ## UI Workflow
 
-From **Settings → Code Review → General**:
+In the sidebar, pick **Global** in the scope picker at the top of the **Code review** group, then
+open **Code review → General**:
 
-1. Open **Centralized Config**.
-2. Enable Centralized Config.
-3. Select the source repository.
+1. Click **Configure centralized config** in the page header (opens the **Centralized Config**
+   dialog).
+2. Turn on **Enable centralized config**.
+3. Select the source repository (**Selected repository**).
 4. Pick the **Initial Sync Method**:
    - Automatic (Create PR now)
    - Manual (Sync later)
-5. Save and confirm status.
+5. Click **Initialize** (or **Save Changes**) and confirm the status.
 
 ## Web UI Behavior When Enabled
 
 When Centralized Config is enabled, the source of truth for configuration is the centralized repository. The web UI reflects this:
 
-- **Repository, directory and global code review settings** become read-only in the web UI. Edit them by opening a PR on the centralized repository.
-- **Kody Rules and PR Messages** remain editable in the web UI. Saving an edit does not mutate the rule directly — Kodus opens a pull request on the centralized repository with the proposed change. Once the PR is merged, the change becomes active.
+- **Global, repository and directory code review settings** (General, What to review, What Kody writes, Linked repositories) stay editable in the web UI, but saving does not apply the change directly. Each page shows a banner — "Centralized config is enabled. Changes on this page are proposed through pull requests in the `<repo>` repository and applied after merge." — with **View active pull request** when one is open, and **Save settings** proposes the change as a pull request on the centralized repository. Once the PR is merged, the change becomes active. You can also edit the files in the centralized repository directly.
+- **Kody Rules** work the same way. Saving an edit does not mutate the rule directly — Kodus opens a pull request on the centralized repository with the proposed change. Once the PR is merged, the change becomes active.
 
-This preserves the "everything is reviewed and versioned" guarantee while keeping the visual editing experience for rules and messages.
+This preserves the "everything is reviewed and versioned" guarantee while keeping the visual editing experience for settings, rules and messages.
 
 ### UI rules and repo rules coexist
 

@@ -5,14 +5,14 @@ description: "AIコードレビューを調整して、最も関連性の高い�
 
 優先度の低い提案が多すぎると、開発者はコードレビューのフィードバックを完全に無視してしまう可能性があります。重要なことを表示し、重要でないことは表示しないようにレビューを調整することが重要です。
 
-## レビューフィルター
+## 重大度のしきい値
 
 Kodus は、どの検出結果を実際に投稿するかをフィルタリングします：
 
-- **最小重大度** — 指定したしきい値以上のサジェストのみ表示（デフォルト：Medium）
-- **Kody Rules にフィルターを適用** — デフォルトはオフで、チーム独自のルールは常に表示されます
+- **Minimum severity to post** — 指定したしきい値以上のサジェストのみ投稿（デフォルト：Medium）。Kody はより低い重大度の問題も検出しますが、それらにはコメントしません。
+- **Apply the threshold to Kody Rules** — デフォルトはオフで、チーム独自のルールは常に表示されます
 
-**Code Review Settings** → **Review filters**、または `kodus-config.yml` で設定します：
+サイドバーの **Code review → What to review**（旧 **Review filters**）、または `kodus-config.yml` で設定します：
 
 ```yaml
 suggestionControl:
@@ -20,9 +20,11 @@ suggestionControl:
   applyFiltersToKodyRules: false
 ```
 
+このページの `kodus-config.yml` のスニペットは、**Code review → General**（リポジトリまたはディレクトリのスコープ）で **kodus Config File Overrides Web Preferences** がオンになっている場合にのみ、そのリポジトリで有効になります。
+
 ## ファイルとパスを無視する
 
-ノイズを生成するファイルをスキップします（ロックファイル、生成されたコード、設定ファイル）：
+ノイズを生成するファイルをスキップします（ロックファイル、生成されたコード、設定ファイル）。**Code review → General** の **Ignored files** に追加するか、`kodus-config.yml` で設定します：
 
 ```yaml
 ignorePaths:
@@ -34,7 +36,7 @@ ignorePaths:
 
 ## タイトルによってPRをスキップする
 
-レビューが不要なPRをスキップします（リリース、バージョンバンプ）：
+レビューが不要なPRをスキップします（リリース、バージョンバンプ）。**Code review → General** の **Ignore title keywords** にキーワードを追加するか、`kodus-config.yml` で設定します：
 
 ```yaml
 ignoredTitleKeywords:
@@ -45,7 +47,7 @@ ignoredTitleKeywords:
 
 ## 分析カテゴリの切り替え
 
-不要なレビューカテゴリ全体を無効にします：
+**Code review → What to review** の **Bug**、**Performance**、**Security**、**Business Logic** のスイッチ、または `kodus-config.yml` で、不要なレビューカテゴリ全体を無効にします：
 
 ```yaml
 reviewOptions:
@@ -57,6 +59,6 @@ reviewOptions:
 
 ## レビューの頻度
 
-アクティブな開発中のスパムを防ぐために**自動一時停止**を使用します — Kodusは連続した急速なプッシュを検出したときにレビューを一時停止します（デフォルト：15分以内に3回のプッシュ）。
+アクティブな開発中のスパムを防ぐために**自動一時停止**（**Code review → General** → **Enable Automated Code Review** → **Review Cadence**）を使用します — Kodusは連続した急速なプッシュを検出したときにレビューを一時停止します（デフォルト：15分以内に3回のプッシュ）。
 
-詳細については、[一般設定](/ja/how_to_use/code_review/configs/general)と[提案コントロール](/ja/how_to_use/code_review/configs/suggestion_control)を参照してください。
+詳細については、[一般設定](/ja/how_to_use/code_review/configs/general)と[重大度のしきい値](/ja/how_to_use/code_review/configs/suggestion_control)を参照してください。

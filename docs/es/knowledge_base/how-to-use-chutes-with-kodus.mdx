@@ -56,26 +56,25 @@ Consulta la lista en vivo y los precios actuales en [llm.chutes.ai/v1/models](ht
 
 ### Opción 1 — BYOK en Kodus Cloud (recomendado)
 
-1. En la interfaz web de Kodus, abre **Configuración → BYOK** ([app.kodus.io/byok](https://app.kodus.io/byok)).
-2. Chutes no está en el catálogo curado — haz clic en **Configure manually** al final de la lista de modelos. Usa `?slot=fallback` en la URL si estás configurando un respaldo en lugar del modelo principal.
-3. Completa el asistente:
+1. En la barra lateral, abre **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok)).
+2. Chutes no tiene un mosaico dedicado — en la pestaña **Providers**, elige **OpenAI-compatible** en **Custom**. Qué modelo se ejecuta por defecto y cuál es el respaldo se define después en la pestaña **Routing**.
+3. Completa el formulario:
 
    | Campo | Valor |
    | --- | --- |
-   | **Proveedor** | `OpenAI Compatible` |
-   | **URL base** | `https://llm.chutes.ai/v1` |
-   | **Modelo** | por ejemplo, `deepseek-ai/DeepSeek-V3-0324-TEE` |
-   | **Clave de API** | tu clave de API de Chutes |
-   | **Máx. de solicitudes concurrentes** | `3–5` es un inicio seguro; auméntalo si no alcanzas el cap (en configuración avanzada) |
+   | **Base URL** | `https://llm.chutes.ai/v1` |
+   | **Model** | por ejemplo, `deepseek-ai/DeepSeek-V3-0324-TEE` |
+   | **API key** | tu clave de API de Chutes |
+   | **Max concurrent requests** | `3–5` es un inicio seguro; auméntalo si no alcanzas el cap (en configuración avanzada) |
 
 4. Haz clic en **Test & save**. Kodus verifica el endpoint y persiste la configuración si tiene éxito.
 
 <Tip>
-  El cap 5× se calcula a partir de los precios por token. Los modelos frontier costosos consumen el cap más rápido que los pequeños — si quieres maximizar las revisiones por dólar, combina Chutes con un modelo más barato (variantes pequeñas de Llama o Qwen) para PRs rutinarios y reserva los modelos frontier para revisiones complejas mediante una regla de Kody o un perfil BYOK separado.
+  El cap 5× se calcula a partir de los precios por token. Los modelos frontier costosos consumen el cap más rápido que los pequeños — si quieres maximizar las revisiones por dólar, combina Chutes con un modelo más barato (variantes pequeñas de Llama o Qwen) para PRs rutinarios y reserva los modelos frontier para revisiones complejas mediante un override por agente en la pestaña **Routing** o un **Code review model** por repositorio (**Code review → General**).
 </Tip>
 
 <Note>
-  Dado que Chutes se ejecuta en cómputo descentralizado, la latencia de arranque en frío y la latencia de cola varían más que en proveedores dedicados. Configura una clave de OpenAI o Anthropic como **Respaldo** para que Kodus pueda conmutar cuando un nodo sea lento o se alcance el cap mensual.
+  Dado que Chutes se ejecuta en cómputo descentralizado, la latencia de arranque en frío y la latencia de cola varían más que en proveedores dedicados. Define un modelo de OpenAI o Anthropic como **Fallback (optional)** en la pestaña **Routing** para que Kodus pueda conmutar cuando un nodo sea lento o se alcance el cap mensual.
 </Note>
 
 ### Opción 2 — Alojamiento autónomo (variables de entorno)
@@ -120,7 +119,7 @@ Elige Synthetic en su lugar si quieres una suscripción plana más simple sin c�
   <Accordion title="Cap mensual 5× alcanzado">
     - Verifica el uso actual en el panel de Chutes.
     - Cambia temporalmente a un modelo más barato para extender el cap, o actualiza el nivel.
-    - Configura un proveedor BYOK de `Respaldo` para que las revisiones sigan funcionando mientras estás en el cap.
+    - Define un modelo **Fallback (optional)** en la pestaña **Routing** para que las revisiones sigan funcionando mientras estás en el cap.
   </Accordion>
 
   <Accordion title="Errores 401 / de autenticación">
@@ -134,7 +133,7 @@ Elige Synthetic en su lugar si quieres una suscripción plana más simple sin c�
 
   <Accordion title="Latencia lenta o inconsistente">
     - Chutes se ejecuta en cómputo descentralizado, por lo que la latencia de cola es mayor que en nubes dedicadas.
-    - Para revisiones sensibles a la latencia, prefiere proveedores dedicados; reserva Chutes para revisiones nocturnas o por lotes, o configura un proveedor rápido como `Principal` y Chutes como `Respaldo`.
+    - Para revisiones sensibles a la latencia, prefiere proveedores dedicados; reserva Chutes para revisiones nocturnas o por lotes, o define un proveedor rápido como **Model for all tasks** y Chutes como **Fallback (optional)** en **Routing**.
   </Accordion>
 
   <Accordion title="Errores de conexión">

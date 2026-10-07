@@ -17,8 +17,11 @@ Todo gráfico e tabela respeita os filtros globais de **repositório** e **inter
 | --- | --- |
 | **Implementation rate** | % das sugestões enviadas que o time implementou no período |
 | **Suggestions sent** | Quantas sugestões o Kodus entregou (como comentários de PR) no período |
-| **Negative vote rate** | Parcela das reações que foram 👎, com a tendência em relação ao período anterior |
-| **Criticals ignored in merged PRs** | Sugestões críticas deixadas sem implementação em PRs que já foram mergeados — a lista de riscos acionáveis |
+| **PRs processed** | Pull requests que o Kodus processou no período, com a variação em relação ao período anterior (exibido quando há dados de execuções de revisão) |
+| **Negative vote rate** | Parcela das reações que foram 👎, com a tendência em relação ao período anterior. Com menos de 10 reações, mostra as contagens brutas em vez de uma taxa |
+| **Critical suggestions not yet addressed** | Sugestões críticas deixadas sem implementação em PRs que já foram mergeados — a lista de riscos acionáveis. Clicar nele leva a **Implementation rate by category**, para ver quais temas são ignorados |
+
+Quando há dados de execuções de revisão, um gráfico **Review processing outcomes** vem depois dos cartões: a composição semanal das execuções de revisão que tiveram sucesso, deram erro ou foram puladas.
 
 ## Implementation rate
 
@@ -73,7 +76,7 @@ O status é calculado por regra, nesta ordem de prioridade:
 | --- | --- | --- |
 | **Stale** (Obsoleta) | Nenhum gatilho no período | Avalie se a regra ainda é necessária |
 | **Low data** (Poucos dados) | Disparou, mas poucas vezes (menos de 5) para julgar | Aguarde mais dados |
-| **Noisy** (Ruidosa) | O time ativamente vota contra (≥ 3 👎 e mais 👎 que 👍) | A regra está descalibrada — reescreva ou ajuste o escopo (ex.: excluir testes) |
+| **Noisy** (Ruidosa) | O time ativamente vota contra (≥ 3 👎, mais 👎 que 👍 e pelo menos um 👎 a cada 10 disparos) | A regra está descalibrada — reescreva ou ajuste o escopo (ex.: excluir testes) |
 | **Ignored** (Ignorada) | Dispara muito, mas quase nada é implementado (≤ 20%) | Questione sua relevância — o time se importa com ela? |
 | **Healthy** (Saudável) | Todo o resto | Nenhuma ação |
 
@@ -81,6 +84,6 @@ O status é calculado por regra, nesta ordem de prioridade:
 
 ## Explorador de sugestões
 
-Todo detalhamento — a barra de uma categoria, a linha de uma regra, o cartão "criticals ignored" — abre o **explorador de sugestões**: uma lista filtrável e paginada das sugestões reais por trás do número.
+Todo detalhamento — a barra de uma categoria (de implementação ou de feedback negativo) ou a linha de uma regra — abre o **explorador de sugestões** (a página **Suggestions**, breadcrumb **Cockpit › Suggestions**): uma lista filtrável e paginada das sugestões reais por trás do número, no intervalo de datas do Cockpit.
 
-Filtros: repositório, categoria, severidade, status de implementação, Kody Rule e busca por texto livre. Cada linha expande para mostrar o código existente vs. o sugerido e um link para o comentário do PR.
+Filtros: repositório, categoria, severidade, status de implementação, Kody Rule e busca por texto livre. Clicar em uma linha abre um painel lateral com o código existente vs. o sugerido e um botão **Open in PR review** que leva à sugestão na página de revisão do pull request no Kodus.

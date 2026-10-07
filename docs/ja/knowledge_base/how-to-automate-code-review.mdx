@@ -11,23 +11,24 @@ description: "GitHub、GitLab、Bitbucket、Azure DevOps全体のすべてのプ
 
 ### サポートされているプラットフォーム
 
-- **GitHub** — GitHub Appを通じて
-- **GitLab** — OAuth + Webhookを通じて
-- **Bitbucket** — Webhookを通じて
-- **Azure DevOps** — Webhookを通じて
+- **GitHub** — GitHub App（またはパーソナルアクセストークン）を通じて
+- **GitLab** — OAuth（またはパーソナルアクセストークン）を通じて
+- **Bitbucket** — APIトークンを通じて
+- **Azure DevOps**（Azure Repos）— パーソナルアクセストークンを通じて
+- **Forgejo** — パーソナルアクセストークンを通じて
 
 ### 分析される内容
 
-デフォルトでは、Kodusは以下を確認します：
+デフォルトでは、Kodusは **Code review → What to review** でオン/オフを切り替えられるカテゴリと、独自のルールを確認します：
 - セキュリティ問題（SQLインジェクション、XSS、ハードコードされた秘密情報）
 - パフォーマンスの問題（N+1クエリ、インデックスの不足）
-- エラー処理のギャップ
-- 潜在的なバグ（nullポインタ、リソースリーク）
-- コードスタイルと保守性
-- カスタムKodyルール
+- 潜在的なバグ（nullポインタ、リソースリーク、エラー処理のギャップ）
 - ビジネスロジックへの準拠（リンクされたタスク要件に対して検証）
+- カスタムKodyルール（コードスタイルやチームの規約に使用します）
 
 ### レビューの頻度オプション
+
+頻度は **Code review → General** の **Enable Automated Code Review** → **Review Cadence** で設定します。
 
 | モード | 動作 |
 |------|----------|
@@ -38,7 +39,7 @@ description: "GitHub、GitLab、Bitbucket、Azure DevOps全体のすべてのプ
 ## はじめに
 
 1. [kodus.io](https://kodus.io)でワークスペースを作成するか、[Kodusをセルフホスト](/ja/how_to_deploy/deploy_kodus/generic_vm)します
-2. Gitプロバイダーを接続します（GitHub、GitLab、Bitbucket、またはAzure DevOps）
+2. Gitプロバイダーを接続します（GitHub、GitLab、Bitbucket、Azure DevOps、またはForgejo）
 3. 監視するリポジトリを選択します
 4. PRをオープンします — Kodusが自動的にレビューします
 

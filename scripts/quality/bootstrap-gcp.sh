@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# T0 of docs/quality-signals-plan.md: the GCP side of quality.signals.
+# The GCP side of quality.signals (contract: docs/quality-signals.md).
 # Idempotent: every step checks before it creates. Needs gcloud authed as an
 # owner of kody-408918 and gh authed with repo scope on kodustech/kodus-ai.
 #

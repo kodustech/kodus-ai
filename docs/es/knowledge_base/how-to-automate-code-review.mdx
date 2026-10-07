@@ -11,23 +11,24 @@ Una vez conectado, Kodus revisa automáticamente cada pull request. Analiza el c
 
 ### Plataformas compatibles
 
-- **GitHub** — mediante la aplicación de GitHub
-- **GitLab** — mediante OAuth + webhooks
-- **Bitbucket** — mediante webhooks
-- **Azure DevOps** — mediante webhooks
+- **GitHub** — mediante la aplicación de GitHub (o un token de acceso personal)
+- **GitLab** — mediante OAuth (o un token de acceso personal)
+- **Bitbucket** — mediante token de API
+- **Azure DevOps** (Azure Repos) — mediante token de acceso personal
+- **Forgejo** — mediante token de acceso personal
 
 ### Qué se analiza
 
-Por defecto, Kodus verifica:
+Por defecto, Kodus verifica las categorías que puedes activar o desactivar en **Code review → What to review**, además de tus propias reglas:
 - Problemas de seguridad (inyección SQL, XSS, secretos codificados de forma fija)
 - Problemas de rendimiento (consultas N+1, índices faltantes)
-- Brechas en el manejo de errores
-- Errores potenciales (punteros nulos, fugas de recursos)
-- Estilo de código y mantenibilidad
-- Tus Kody Rules personalizadas
+- Errores potenciales (punteros nulos, fugas de recursos, brechas en el manejo de errores)
 - Cumplimiento de lógica de negocio (valida contra los requisitos de la tarea vinculada)
+- Tus Kody Rules personalizadas (úsalas para el estilo de código y las convenciones del equipo)
 
 ### Opciones de cadencia de revisión
+
+Define la cadencia en **Code review → General**, en **Enable Automated Code Review** → **Review Cadence**.
 
 | Modo | Comportamiento |
 |------|----------------|
@@ -38,7 +39,7 @@ Por defecto, Kodus verifica:
 ## Primeros pasos
 
 1. Crea un espacio de trabajo en [kodus.io](https://kodus.io) o [aloja Kodus tú mismo](/es/how_to_deploy/deploy_kodus/generic_vm)
-2. Conecta tu proveedor de Git (GitHub, GitLab, Bitbucket o Azure DevOps)
+2. Conecta tu proveedor de Git (GitHub, GitLab, Bitbucket, Azure DevOps o Forgejo)
 3. Selecciona qué repositorios monitorear
 4. Abre un PR — Kodus lo revisa automáticamente
 

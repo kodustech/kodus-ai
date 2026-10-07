@@ -55,7 +55,7 @@ If you're running Kodus on your own infrastructure, the CLI works the same way â
   <Step title="Authenticate">
     <Tabs>
       <Tab title="Team Key (Recommended)">
-        Generate a team key from your self-hosted Kodus dashboard and configure it:
+        Generate a team key in your self-hosted Kodus web app under **Organization â†’ CLI keys** and configure it:
 
         ```bash
         kodus auth team-key --key kodus_xxxxx
@@ -74,7 +74,7 @@ If you're running Kodus on your own infrastructure, the CLI works the same way â
         kodus auth login
         ```
 
-        Enter the email and password registered on your self-hosted instance. Tokens are stored locally in `~/.kodus/credentials.json` with restricted permissions (600).
+        The CLI opens the **Authorize Kodus CLI** page of your self-hosted web app. Sign in with the account registered on your instance, then click **Authorize CLI**. For a non-interactive login, pass `--email` and `--password` instead (see [`auth login`](/en/how_to_use/cli/commands#auth-login)). Tokens are stored locally in `~/.kodus/credentials.json` with restricted permissions (600).
       </Tab>
       <Tab title="CI/CD Token">
         Generate a token from a personal account, then use it in pipelines:
@@ -234,7 +234,7 @@ This installs the CLI, configures the team key, and deploys review skills to det
 
   <Accordion title="Authentication failed (401)">
     - Run `kodus auth status` to check your current auth state
-    - If using a team key, verify it's valid on your self-hosted dashboard
+    - If using a team key, verify it's still **Active** under **Organization â†’ CLI keys** in your self-hosted web app
     - If using personal login, tokens expire after 1 hour â€” the CLI auto-refreshes, but you may need to re-login if the refresh token is also expired
     - Make sure `KODUS_API_URL` points to the correct instance
   </Accordion>
@@ -247,6 +247,6 @@ This installs the CLI, configures the team key, and deploys review skills to det
   </Accordion>
 
   <Accordion title="Device limit reached">
-    Your self-hosted instance may enforce device limits per organization. Contact your admin to increase the limit or remove old devices from the dashboard.
+    Your self-hosted instance may enforce device limits per organization. The web app has no device list to clean up, so contact your admin to increase the limit (the API's `CLI_DEVICE_LIMIT` setting; `0`, the default, means no limit).
   </Accordion>
 </AccordionGroup>

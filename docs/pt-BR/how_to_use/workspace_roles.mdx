@@ -52,21 +52,23 @@ Aqui está um detalhamento do que cada função pode fazer, com base na matriz d
 
 ## Gerenciando Membros do Workspace
 
+Os membros do workspace são gerenciados na aba **Workspace members** de **Organization → Subscription** — não existe uma página de membros separada. Apenas **Owners** podem convidar membros, alterar funções ou remover membros.
+
 ### Adicionando Novos Membros
 
-1. Navegue até a seção **Membros** do seu workspace
-2. Clique no botão **"Convidar membro"**
-3. Insira o endereço de e-mail do membro
-4. Selecione a função adequada para o novo membro
-5. Envie o convite
+1. Na barra lateral, abra **Organization → Subscription** e escolha a aba **Workspace members**
+2. Clique em **Invite member**
+3. Em **Workspace member invitation**, digite o e-mail do membro e clique em **Add to invite list** (repita para mais pessoas)
+4. Clique em **Send invites**
+5. Os membros convidados entram como **Contributor**; altere a função deles depois (veja abaixo)
 
 ### Auto-Join para Membros do Workspace
 
 Habilite o auto-join para permitir que usuários com domínios de e-mail correspondentes entrem no seu workspace automaticamente.
 
 **Como habilitar:**
-1. Vá para [Configurações da Organização](https://app.kodus.io/organization/general)
-2. Habilite o auto-join para sua organização
+1. Vá para **Organization → General** ([app.kodus.io/organization/general](https://app.kodus.io/organization/general))
+2. Em **Auto Join**, ative **Enable Auto Join**, informe seu domínio e salve
 3. Atualmente funciona apenas com o domínio de e-mail da sua conta registrada
 4. Precisa de um domínio diferente? Entre em contato conosco na comunidade
 
@@ -78,18 +80,22 @@ Habilite o auto-join para permitir que usuários com domínios de e-mail corresp
 
 ### Alterando Funções de Membros
 
-1. Vá para a seção **Membros** do seu workspace
+1. Vá para **Organization → Subscription → Workspace members**
 2. Encontre o membro cuja função deseja alterar
-3. Clique no dropdown de função atual
-4. Selecione a nova função das opções disponíveis
+3. Abra o seletor na coluna **Role** dele
+4. Selecione a nova função (**Owner**, **Billing Manager**, **Repo Admin** ou **Contributor**)
 5. A alteração entra em vigor imediatamente
+
+Para um **Repository Admin**, atribua os repositórios que ele pode editar com o botão **+** ao lado da função, que abre **Assign repositories**.
 
 ### Removendo Membros
 
-1. Na seção **Membros**, localize o membro a ser removido
-2. Clique no menu **"Ações"** (três pontos)
-3. Selecione **"Remover do workspace"**
-4. Confirme a remoção no diálogo
+1. Em **Organization → Subscription → Workspace members**, localize o membro a ser removido
+2. Abra o menu **Actions** (três pontos) na linha dele
+3. Selecione **Delete**
+4. Confirme com **Remove** no diálogo
+
+O mesmo menu tem **Approve** para membros marcados como **Needs approval** e **Copy invite link** para compartilhar novamente o link de convite de um membro.
 
 ## Considerações de Segurança
 
@@ -103,7 +109,7 @@ Habilite o auto-join para permitir que usuários com domínios de e-mail corresp
 <AccordionGroup>
   <Accordion title="Não consigo convidar novos membros para o workspace">
     **Soluções:**
-    - Verifique se você tem a função de Owner ou Repository Admin
+    - Verifique se você tem a função de Owner — apenas Owners podem convidar membros
     - Verifique se o seu workspace atingiu algum limite do sistema
     - Certifique-se de que você tem as permissões corretas na sua conta
   </Accordion>
@@ -111,7 +117,7 @@ Habilite o auto-join para permitir que usuários com domínios de e-mail corresp
   <Accordion title="Um membro não consegue editar configurações de revisão de código">
     **Soluções:**
     - Confirme que o membro tem a função Repository Admin ou Owner para o repositório específico
-    - Verifique se o membro tem permissões "own" para o repositório que deseja editar
+    - Para um Repository Admin, verifique se o repositório está atribuído a ele (**Assign repositories** na coluna **Role** de **Workspace members**)
     - Verifique se a atribuição de função do membro está correta
   </Accordion>
 
