@@ -116,7 +116,9 @@ function setup(inbox: any = fakeInbox()) {
             }),
             release: jest.fn().mockResolvedValue(undefined),
         } as any,
-        { findByNumberAndRepositoryId: jest.fn().mockResolvedValue(null) } as any,
+        {
+            findByNumberAndRepositoryId: jest.fn().mockResolvedValue(null),
+        } as any,
         inbox,
     );
 
@@ -167,11 +169,8 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
     ])(
         'answers once when 4 deliveries of the same note %s',
         async (_, deliverFourTimes) => {
-            const {
-                useCase,
-                conversationAgentUseCase,
-                codeManagementService,
-            } = setup();
+            const { useCase, conversationAgentUseCase, codeManagementService } =
+                setup();
 
             await deliverFourTimes(() => useCase.execute(delivery()));
 
@@ -223,8 +222,12 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
     });
 
     it('lets a resend answer once the missing integration is set up', async () => {
-        const { useCase, codeManagementService, conversationAgentUseCase, inbox } =
-            setup();
+        const {
+            useCase,
+            codeManagementService,
+            conversationAgentUseCase,
+            inbox,
+        } = setup();
         codeManagementService.findTeamAndOrganizationIdByConfigKey.mockResolvedValueOnce(
             null,
         );
@@ -371,7 +374,10 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
         await useCase.execute({
             event: 'issue_comment',
             platformType: PlatformType.FORGEJO,
-            payload: { action: 'created', comment: { id: 1, body: '@kody hi' } },
+            payload: {
+                action: 'created',
+                comment: { id: 1, body: '@kody hi' },
+            },
         } as any);
 
         expect(inbox.claim).not.toHaveBeenCalled();

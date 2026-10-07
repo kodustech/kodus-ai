@@ -1,4 +1,7 @@
-import type { ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import type {
+    ContextLayer,
+    ContextPack,
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -339,6 +342,26 @@ export type ImplementedSuggestionsToAnalyze = {
     existingCode: string;
 };
 
+/**
+ * Business Logic settings as stored. Primitives and arrays only, so the
+ * settings form tracks the level (global, repository, directory) per field.
+ */
+export type BusinessLogicConfig = {
+    /** `auto`, or the integration id of the connected plugin to read tasks from. */
+    taskSource?: string;
+    /** For a custom plugin: the tool that reads one task by its id. */
+    taskSourceTool?: string;
+    criteriaLocation?: 'auto' | 'heading' | 'field';
+    /** The heading the criteria sit under, when `criteriaLocation` is `heading`. */
+    criteriaHeading?: string;
+    /** The field the criteria live in, when `criteriaLocation` is `field`. */
+    criteriaField?: string;
+    failOn?: Array<'missing' | 'partial' | 'not_in_task'>;
+    teamGuidance?: string;
+    commentWhenMet?: boolean;
+    recheckOnPush?: boolean;
+};
+
 export type CodeReviewConfig = {
     ignorePaths: string[];
     reviewMode?: 'fast' | 'normal' | 'deep';
@@ -346,6 +369,9 @@ export type CodeReviewConfig = {
      *  review (CLI `--heavy` / PR `@kody review --heavy`). Off by default. */
     heavy?: boolean;
     reviewOptions: ReviewOptions;
+
+    /** How the PR is checked against the task it references (Business Logic). */
+    businessLogic?: BusinessLogicConfig;
 
     /**
      * Deterministic evidence sources. Off by default: reading a customer's CI

@@ -1,5 +1,71 @@
 [
   {
+    "key": "businessLogic.controller.ts#intent",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/intent",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#readTools",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/task-sources/:integrationId/tools",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#runs",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/runs",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#status",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/status",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#taskSources",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/task-sources",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#tryRead",
+    "httpMethod": "POST",
+    "urlPath": "/business-logic/try",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "cli-reviews.controller.ts#detail",
     "httpMethod": "GET",
     "urlPath": "/cli-reviews/:executionUuid",

@@ -1,19 +1,26 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
     Collapsible,
     CollapsibleContent,
     CollapsibleIndicator,
     CollapsibleTrigger,
 } from "@components/ui/collapsible";
+import { Link } from "@components/ui/link";
 import { Switch } from "@components/ui/switch";
+import { useBusinessLogicStatus } from "@services/business-logic/hooks";
+import type { BusinessLogicStatus } from "@services/business-logic/types";
 import { getMCPPlugins } from "@services/mcp-manager/fetch";
 import { MCPServiceUnavailableError } from "@services/mcp-manager/utils";
 import { useGetCodeReviewLabels } from "@services/parameters/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
-import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
+import {
+    useCodeReviewRouteParams,
+    useCurrentConfigLevel,
+} from "src/app/(app)/settings/_hooks";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
 
 import { OverrideIndicatorForm } from "../../../_components/override";
@@ -72,6 +79,59 @@ const InstructionsChip = ({
     );
 };
 
+/**
+ * What the Business Logic row says under its description: where tasks come
+ * from and how it went, or why it stopped (UC-06, UC-07).
+ */
+const BusinessLogicSummary = ({
+    status,
+    hasTaskMcp,
+    configureHref,
+}: {
+    status?: BusinessLogicStatus;
+    hasTaskMcp: boolean;
+    configureHref: string;
+}) => {
+    if (!hasTaskMcp) {
+        return (
+            <p className="text-warning text-xs">
+                No task tracker is connected, so nothing is checked.{" "}
+                <Link href="/settings/plugins">Connect one in Plugins</Link>
+            </p>
+        );
+    }
+    if (status?.state === "paused" && status.paused) {
+        return (
+            <p className="text-warning text-xs">
+                Paused. {status.paused.tracker} hasn&apos;t answered since{" "}
+                {new Date(status.paused.since).toLocaleString()};{" "}
+                {status.paused.uncheckedPullRequests} PRs weren&apos;t checked.{" "}
+                <Link href="/settings/plugins">
+                    Reconnect {status.paused.tracker}
+                </Link>{" "}
+                · <Link href={configureHref}>Configure</Link>
+            </p>
+        );
+    }
+    return (
+        <p className="text-text-secondary text-xs">
+            {status?.lastTaskRead
+                ? `Reading tasks from ${status.lastTaskRead.tracker} · ${status.stats.pullRequestsChecked} PRs checked in the last 30 days`
+                : "Waiting for the first pull request that references a task"}
+            {status?.pointsElsewhere && (
+                <>
+                    {" "}
+                    · {status.pointsElsewhere.pullRequests} PRs referenced
+                    GitHub issues no connected tracker reads; they were skipped
+                    without a comment.{" "}
+                    <Link href="/settings/plugins">Connect Git Issues</Link>
+                </>
+            )}{" "}
+            · <Link href={configureHref}>Configure</Link>
+        </p>
+    );
+};
+
 const CategoryRow = ({
     type,
     name,
@@ -82,6 +142,7 @@ const CategoryRow = ({
     showMcpWarning,
     promptDefault,
     canEdit,
+    summary,
 }: {
     type: string;
     name: string;
@@ -92,6 +153,7 @@ const CategoryRow = ({
     showMcpWarning: boolean;
     promptDefault?: string;
     canEdit: boolean;
+    summary?: ReactNode;
 }) => {
     const promptKey = promptCategoryOf(type);
     const fieldName = promptKey
@@ -128,6 +190,7 @@ const CategoryRow = ({
                         )}
                     </div>
                     <p className="text-text-secondary text-xs">{description}</p>
+                    {enabled && summary}
                 </div>
 
                 {/* Instructions live on the row they belong to. Hidden while
@@ -194,6 +257,16 @@ export const CategoryList = ({
             ?.business_logic?.value,
     );
     const { data: labels = [], isLoading } = useGetCodeReviewLabels("v2");
+    const { teamId } = useSelectedTeamId();
+    const { repositoryId, directoryId } = useCodeReviewRouteParams();
+    const { data: businessLogicStatus } = useBusinessLogicStatus({
+        teamId,
+        repositoryId,
+        enabled: businessLogicEnabled,
+    });
+    const configureHref = `/settings/code-review/${repositoryId}/business-logic${
+        directoryId ? `?directoryId=${directoryId}` : ""
+    }`;
 
     // Same gating as the General page: only look up MCP plugins when the
     // business-logic category is on, since that is the only row it affects.
@@ -283,11 +356,17 @@ export const CategoryList = ({
                                     onToggle={(value) =>
                                         setEnabled(label.type, value)
                                     }
-                                    showMcpWarning={
+                                    // The summary below says it, with a link.
+                                    showMcpWarning={false}
+                                    summary={
                                         label.type === "business_logic" &&
-                                        enabled &&
-                                        isMCPFetched &&
-                                        !hasTaskMcp
+                                        isMCPFetched ? (
+                                            <BusinessLogicSummary
+                                                status={businessLogicStatus}
+                                                hasTaskMcp={hasTaskMcp}
+                                                configureHref={configureHref}
+                                            />
+                                        ) : undefined
                                     }
                                     promptDefault={
                                         promptCategoryOf(label.type)

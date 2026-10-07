@@ -1147,6 +1147,18 @@ reviewOptions:
     security: true
     business_logic: true
 
+# business logic: checks each PR against the task it references
+businessLogic:
+    taskSource: 'auto' # auto = every connected tracker; or the integration id of one plugin
+    taskSourceTool: '' # custom plugin only: the tool that reads one task by its id
+    criteriaLocation: 'auto' # auto | heading | field
+    criteriaHeading: '' # when criteriaLocation is heading
+    criteriaField: '' # when criteriaLocation is field (e.g. a Jira custom field)
+    failOn: ['missing'] # missing | partial | not_in_task; CHECK MANUALLY never fails
+    teamGuidance: '' # added to what Kody follows (max 2000)
+    commentWhenMet: false # off: a PR that meets its task gets only the green check
+    recheckOnPush: false # off: checked on the first review; @kody -v business-logic re-checks
+
 # deterministic evidence (opt-in)
 deterministicEvidence:
     ciChecks: false # read the CI results your own pipeline already produced

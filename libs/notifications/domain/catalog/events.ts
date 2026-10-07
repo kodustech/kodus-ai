@@ -55,6 +55,9 @@ export enum NotificationEvent {
     // ── Kody Rules (continued) ─────────────────────────────────
     RULE_FILE_REFERENCES_INVALID = 'rule.file_references_invalid',
 
+    // ── Business Logic ─────────────────────────────────────────
+    BUSINESS_LOGIC_SOURCE_UNAVAILABLE = 'business_logic.source_unavailable',
+
     // ── Security (future — critical) ───────────────────────────
     // SECURITY_API_KEY_LEAKED = 'security.api_key_leaked',
 }
@@ -185,6 +188,16 @@ export interface NotificationPayloadMap {
         trialEndsAt: string;
         daysRemaining: number;
         upgradeUrl?: string;
+    };
+
+    // ── Business Logic ─────────────────────────────────────────
+
+    [NotificationEvent.BUSINESS_LOGIC_SOURCE_UNAVAILABLE]: {
+        /** The task tracker that stopped answering. */
+        tracker: string;
+        /** What it answered, when it answered anything. */
+        error?: string;
+        repositoryId?: string;
     };
 
     // ── BYOK ───────────────────────────────────────────────────

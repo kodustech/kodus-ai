@@ -8,6 +8,7 @@ import {
     IsObject,
     IsOptional,
     IsString,
+    MaxLength,
     ValidateNested,
 } from 'class-validator';
 
@@ -400,6 +401,46 @@ class DeterministicEvidenceDto {
     tools?: DeterministicEvidenceToolsDto;
 }
 
+class BusinessLogicDto {
+    @IsOptional()
+    @IsString()
+    taskSource?: string;
+
+    @IsOptional()
+    @IsString()
+    taskSourceTool?: string;
+
+    @IsOptional()
+    @IsIn(['auto', 'heading', 'field'])
+    criteriaLocation?: 'auto' | 'heading' | 'field';
+
+    @IsOptional()
+    @IsString()
+    criteriaHeading?: string;
+
+    @IsOptional()
+    @IsString()
+    criteriaField?: string;
+
+    @IsOptional()
+    @IsArray()
+    @IsIn(['missing', 'partial', 'not_in_task'], { each: true })
+    failOn?: Array<'missing' | 'partial' | 'not_in_task'>;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(2000)
+    teamGuidance?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    commentWhenMet?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    recheckOnPush?: boolean;
+}
+
 class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsString()
@@ -507,6 +548,11 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @Type(() => DeterministicEvidenceDto)
     @ApiPropertyOptional({ type: DeterministicEvidenceDto })
     deterministicEvidence?: DeterministicEvidenceDto;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BusinessLogicDto)
+    businessLogic?: BusinessLogicDto;
 
     @IsOptional()
     @IsEnum(CodeReviewVersion)

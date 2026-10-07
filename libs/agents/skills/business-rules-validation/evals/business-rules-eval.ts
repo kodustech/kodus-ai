@@ -26,9 +26,9 @@ import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import {
     applyBusinessRulesVerdict,
     BusinessRulesVerifier,
-} from '@libs/agents/infrastructure/services/agents/business-rules-validation/business-rules-verifier';
-import { parseBusinessRulesValidationResult } from '@libs/agents/infrastructure/services/agents/business-rules-validation/validation-result.parser';
-import type { ValidationResult } from '@libs/agents/infrastructure/services/agents/business-rules-validation/types';
+} from '@libs/agents/business-validation/judge/business-rules-verifier';
+import { parseBusinessRulesValidationResult } from '@libs/agents/business-validation/judge/validation-result.parser';
+import type { ValidationResult } from '@libs/agents/business-validation/judge/validation.types';
 
 import {
     runSkillEval,

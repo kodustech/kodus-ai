@@ -60,7 +60,7 @@ describe('SkillLoaderService', () => {
         );
     });
 
-    it('loads business-rules instructions that omit empty verification sections and include task reference details', () => {
+    it('loads business-rules instructions that ask for one verdict per requirement', () => {
         const service = new SkillLoaderService();
 
         const instructions = service.loadInstructions(
@@ -68,10 +68,10 @@ describe('SkillLoaderService', () => {
         );
 
         expect(instructions).toContain(
-            'If no task requirements were verified from the diff, omit the "Requirements Verified" section entirely.',
+            'One entry per requirement, in the order the task lists them',
         );
         expect(instructions).toContain(
-            'Include a short task reference near the top of the summary when task id, title, or link is available.',
+            'A low-confidence gap is shown as CHECK MANUALLY, not MISSING.',
         );
     });
 

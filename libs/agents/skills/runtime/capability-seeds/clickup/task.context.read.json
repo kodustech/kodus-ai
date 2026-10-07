@@ -1,8 +1,0 @@
-{
-    "providerType": "clickup",
-    "capability": "task.context.read",
-    "tools": [
-        "CLICKUP_GET_TASK",
-        "CLICKUP_GET_TASKS"
-    ]
-}

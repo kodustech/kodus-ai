@@ -140,106 +140,48 @@ When task reference details are available:
 
 ## Output Format
 
-Return a single JSON object. Do not include any text outside the JSON.
+Submit the result by calling the `submitValidation` tool exactly once. If you cannot call tools, answer with the same object as a single JSON object and no text outside it.
 
 ```json
 {
-  "needsMoreInfo": boolean,
-  "mode": "full_analysis | limitation_response",
-  "reason": "analysis_ready | task_context_missing | task_context_weak | pr_diff_missing",
-  "taskContextStatus": "missing | weak | usable",
-  "prDiffStatus": "missing | usable",
-  "confidence": "low | medium | high",
-  "missingInfo": "Legacy compatibility field — optional",
-  "summary": "Markdown response for both analysis and limitation outcomes"
+  "needsMoreInfo": false,
+  "requirements": [
+    {
+      "requirement": "quoted from the task",
+      "source": "AC #1",
+      "state": "met | partial | missing | check_manually",
+      "kind": "behavior | visual | flow",
+      "topic": "empty_and_error_states | permissions | default_values | validation | audit_and_logging | data_and_persistence | notifications | ui_and_copy | integrations | performance | other",
+      "evidence": [{ "file": "src/settings/density.ts", "line": 14 }],
+      "note": "what the diff does or lacks, in USER LANGUAGE",
+      "action": "for partial or missing: the change to make, in USER LANGUAGE",
+      "confidence": "high | medium | low"
+    }
+  ],
+  "outOfScope": [
+    { "change": "what the diff changes that the task doesn't ask for", "evidence": [{ "file": "...", "line": 88 }], "action": "revert it, or reference the task that asks for it" }
+  ],
+  "scopeMismatch": false,
+  "confidence": "high | medium | low",
+  "summary": "one sentence on the result, in USER LANGUAGE"
 }
 ```
 
+Kodus renders the PR comment, the check and the CLI output from `requirements` and `outOfScope`; write nothing else for people to read.
+
+- One entry per requirement, in the order the task lists them: every acceptance criterion, then any requirement of FULL_TASK_CONTEXT the criteria leave out.
+- `met`: the diff implements it. Give the `evidence` that shows it.
+- `partial`: the diff implements part of it. Say in `note` which part is missing.
+- `missing`: no evidence in this PR diff. Say so in `note`; never claim how the rest of the system behaves.
+- `check_manually`: a requirement about how something looks or flows (set `kind` to `visual` or `flow`), or one the diff can't show either way. It never fails the PR.
+- `confidence: low` when you are guessing. A low-confidence gap is shown as CHECK MANUALLY, not MISSING.
+- `outOfScope`: changes the task doesn't ask for. Leave out refactors, tests and wiring that serve a requirement.
+- `scopeMismatch: true` only when the whole diff works on a different domain than the task.
+- `requirement` is quoted from the task in its own language; `note`, `action`, `change` and `summary` are in USER LANGUAGE. Enum values stay in English.
+
 ### When `needsMoreInfo = true`
 
-Set:
-
-- `mode = "limitation_response"`
-- `confidence = "low"`
-- `summary` to a user-friendly explanation explaining what is needed
-
-`missingInfo` may mirror `summary` for backward compatibility.
-
-- Why the task context is insufficient
-- What specific information would enable the validation
-- How the user can provide it (e.g., link a Jira ticket, add acceptance criteria)
-
-Use this structure in `summary`:
-
-```
-## 🤔 Need Task Information
-
-[Main message explaining what's needed]
-
-### 🔍 What I need to validate:
-- [bullet points]
-
-### 💡 Examples of how to provide it:
-- [practical examples]
-
-### ⚠️ Important:
-[Final note]
-```
-
-### When `needsMoreInfo = false`
-
-Set:
-
-- `mode = "full_analysis"`
-- `reason = "analysis_ready"`
-- `taskContextStatus = "usable"`
-- `prDiffStatus = "usable"`
-
-Set `summary` to a complete markdown validation report using this structure:
-
-```
-## Business Rules Validation
-
-**Task:** [task id and title when available]
-**Task Link:** [task link when available]
-
-**Status:** Issues Found / Compliant
-**Confidence:** high | medium | low
-
-### Findings
-
-#### MUST_FIX: [finding title]
-**Requirement:** "[exact quote from task context that establishes this requirement]" (AC #N or source)
-**Missing in code:** [what is absent or wrong in this PR diff — reference file:line when possible]
-**Suggested action:** [concrete implementation action]
-
-#### SUGGESTION: [finding title]
-**Requirement:** "[exact quote from task context]" (AC #N or source)
-**Missing in code:** [what is partially covered or risky in this PR diff]
-**Suggested action:** [concrete improvement]
-
-#### INFO: [finding title]
-**Requirement:** "[exact quote from task context]" (AC #N or source)
-**Observation:** [non-blocking observation]
-**Suggested action:** [optional follow-up]
-
-### Requirements Verified
-For each acceptance criterion checked, briefly state what code satisfies it:
-- AC #1: "[requirement]" → Implemented in `file:line` — [brief explanation]
-- AC #2: "[requirement]" → Implemented in `file:line` — [brief explanation]
-
----
-*Analysis performed by Kodus AI Business Rules Validator*
-```
-
-Additional output rules:
-
-- Include a short task reference near the top of the summary when task id, title, or link is available.
-- If no task requirements were verified from the diff, omit the "Requirements Verified" section entirely.
-- If you do not see the implementation in the diff, say `No evidence in this PR diff...`
-- If the PR seems unrelated to the task, call out a `scope mismatch` explicitly
-- Do not write statements like `the system still uses X` unless the diff itself shows that behavior
-- Prefer `This PR diff does not show changes in the area required by the task` over unsupported architecture claims
+Only when the task, read in full, still says nothing the code can be checked against. Set `missingInfo` to what is missing and how to add it, in USER LANGUAGE, and `confidence` to `low`. Leave `requirements` empty.
 
 ## Language
 
