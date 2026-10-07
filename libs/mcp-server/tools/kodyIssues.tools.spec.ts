@@ -73,3 +73,30 @@ describe('KodyIssuesTools organization scope', () => {
         },
     );
 });
+
+describe('KodyIssuesTools listKodyIssues', () => {
+    const issuesService = { findByFilters: jest.fn(async () => []) };
+    const tools = new KodyIssuesTools(issuesService as any, {} as any);
+
+    beforeEach(() => jest.clearAllMocks());
+
+    it('filters by the stored field repository.name, not repositoryName', async () => {
+        await tools.listKodyIssues().execute({
+            organizationId: 'org-1',
+            repositoryName: 'kodus-ai',
+        });
+
+        expect(issuesService.findByFilters).toHaveBeenCalledWith({
+            'organizationId': 'org-1',
+            'repository.name': 'kodus-ai',
+        });
+    });
+
+    it('omits the repository filter when no repositoryName is given', async () => {
+        await tools.listKodyIssues().execute({ organizationId: 'org-1' });
+
+        expect(issuesService.findByFilters).toHaveBeenCalledWith({
+            organizationId: 'org-1',
+        });
+    });
+});
