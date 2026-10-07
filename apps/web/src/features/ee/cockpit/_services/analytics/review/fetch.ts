@@ -44,6 +44,7 @@ export type IgnoredCriticalsHighlight = {
 };
 
 export type RepositoryHealthRow = {
+    repositoryId: string | null;
     repository: string;
     prsReviewed: number;
     suggestionsSent: number;
