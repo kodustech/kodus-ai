@@ -138,8 +138,8 @@ describe('TokenUsageRepository._tuRows row cap (by-review)', () => {
             '$match',
             '$group',
             '$group',
-            '$sort',
-            '$limit',
+            '$setWindowFields',
+            '$match',
             '$unwind',
             '$replaceRoot',
             '$project',
@@ -150,11 +150,17 @@ describe('TokenUsageRepository._tuRows row cap (by-review)', () => {
             review: '$_id.review',
             pr: '$_id.pr',
         });
-        // Stable cut: ties on bucketTotal are broken by the bucket key.
-        expect(pipeline[3]).toEqual({ $sort: { bucketTotal: -1, _id: 1 } });
-        // One distinct threshold → a bucket expands to at most 2 rows, so
-        // 4000 buckets keep the returned rows within the 8000-row cap.
-        expect(pipeline[4]).toEqual({ $limit: 4000 });
+        // Stable order (ties broken by the bucket key) and a running row count
+        // that keeps whole buckets until the 8000-row cap is reached.
+        expect(pipeline[3].$setWindowFields.sortBy).toEqual({
+            bucketTotal: -1,
+            _id: 1,
+        });
+        expect(pipeline[3].$setWindowFields.output.rowsSoFar).toEqual({
+            $sum: '$bucketRows',
+            window: { documents: ['unbounded', 'current'] },
+        });
+        expect(pipeline[4]).toEqual({ $match: { rowsSoFar: { $lte: 8000 } } });
         expect(option).toHaveBeenCalledWith({
             maxTimeMS: 50_000,
             allowDiskUse: true,

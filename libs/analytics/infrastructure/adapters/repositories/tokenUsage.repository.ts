@@ -351,16 +351,12 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         // thousands of rows. It selects WHOLE logical buckets (model + the
         // caller's group keys): a bucket is split into one row per input
         // bracket, and capping raw rows could keep some of a bucket's brackets
-        // and drop the rest, under-reporting its total. Each bucket expands to
-        // at most `distinct.length + 1` rows, so the bucket limit is sized to
-        // keep the returned rows <= maxRows. Sorted by bucket total desc with
-        // the bucket key as tiebreaker (a stable cut), so the top consumers
-        // (all the frontend charts/table show) survive intact.
+        // and drop the rest, under-reporting its total. Buckets are taken in
+        // bucket-total order (bucket key as tiebreaker, a stable cut) while
+        // their running row count stays <= maxRows, so the payload bound holds
+        // and as many buckets survive as the rows allow — the top consumers
+        // (all the frontend charts/table show) intact.
         if (maxRows > 0) {
-            const bucketLimit = Math.max(
-                1,
-                Math.floor(maxRows / (distinct.length + 1)),
-            );
             const bucketId: Record<string, string> = { model: '$_id.model' };
             for (const key of Object.keys(groupById)) {
                 bucketId[key] = `$_id.${key}`;
@@ -372,11 +368,22 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                     $group: {
                         _id: bucketId,
                         bucketTotal: { $sum: '$total' },
+                        bucketRows: { $sum: 1 },
                         rows: { $push: '$$ROOT' },
                     },
                 },
-                { $sort: { bucketTotal: -1, _id: 1 } },
-                { $limit: bucketLimit },
+                {
+                    $setWindowFields: {
+                        sortBy: { bucketTotal: -1, _id: 1 },
+                        output: {
+                            rowsSoFar: {
+                                $sum: '$bucketRows',
+                                window: { documents: ['unbounded', 'current'] },
+                            },
+                        },
+                    },
+                },
+                { $match: { rowsSoFar: { $lte: maxRows } } },
                 { $unwind: '$rows' },
                 { $replaceRoot: { newRoot: '$rows' } },
             );
