@@ -2575,12 +2575,29 @@ ${reviewOptions}
                 },
             });
 
+            // Which platform the PR lives on decides whether the raw marker may
+            // be added: Bitbucket escapes raw HTML, so the comment body skips
+            // it there. The caller knows it — the pipeline context carries the
+            // PR's OWN platform — and that is authoritative: resolving it from
+            // the org/team integration returns a single row (findOne by
+            // organization/team/category/status), so a team with more than one
+            // code-management integration can resolve the wrong platform, which
+            // re-appends the raw marker on Bitbucket (the regression this gate
+            // fixes) or drops it on the platforms that need it (#2055 review).
+            // The integration lookup stays as the fallback for a caller that
+            // cannot supply the value.
+            const resolvedPlatformType =
+                platformType ??
+                (await this.codeManagementService.getTypeIntegration(
+                    organizationAndTeamData,
+                ));
+
             const commentResults = [];
 
             for (const suggestion of prLevelSuggestions) {
                 try {
                     // Use standardized formatting method
-                    const commentBody =
+                    let commentBody =
                         await this.codeManagementService.formatReviewCommentBody(
                             {
                                 suggestion,
@@ -2591,8 +2608,33 @@ ${reviewOptions}
                                 organizationAndTeamData,
                                 suggestionCopyPrompt,
                             },
-                            undefined,
+                            // The authoritative platform, same as the marker
+                            // gate below: the dispatcher resolves it from the
+                            // org/team integration when it is omitted, and that
+                            // lookup returns a single row — a Bitbucket PR
+                            // formatted by the GitHub adapter loses the
+                            // visible chip and gets GitHub's `<details>`
+                            // markup, which Bitbucket renders as text
+                            // (#2055 review).
+                            resolvedPlatformType,
                         );
+
+                    // PR-level comments carry the same recognition marker as
+                    // inline review comments and the "Code Review Completed"
+                    // comment, so webhook consumers can tell them apart. The
+                    // inline marker lives in the interaction footer, which is
+                    // intentionally omitted here (includeFooter: false), so it
+                    // is appended to the body directly (#2050). Bitbucket
+                    // escapes raw HTML and already injects a visible
+                    // "kody|code-review" chip in the header, so the raw marker
+                    // is skipped there.
+                    if (
+                        commentBody &&
+                        resolvedPlatformType !== PlatformType.BITBUCKET &&
+                        !commentBody.includes('<!-- kody-codereview -->')
+                    ) {
+                        commentBody = `${commentBody}\n\n<!-- kody-codereview -->\n&#8203;`;
+                    }
 
                     // Create general comment
                     const createdComment =
