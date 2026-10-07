@@ -1,9 +1,25 @@
 import { resolveKodyLearningSettings } from './kody-rules/kody-learning-settings';
-import { buildDefaultGlobalCodeReviewConfig } from './validateCodeReviewConfigFile';
+import {
+    buildDefaultGlobalCodeReviewConfig,
+    buildNewTeamGlobalCodeReviewConfig,
+} from './validateCodeReviewConfigFile';
 
 describe('buildDefaultGlobalCodeReviewConfig', () => {
-    it('starts a new team with learning from past reviews off', () => {
+    it('stores no learning value, so a team created by a self-heal keeps the shipped default (on)', () => {
         const config = buildDefaultGlobalCodeReviewConfig();
+
+        expect(config.configs).toEqual({});
+        expect(config.repositories).toEqual([]);
+        expect(
+            resolveKodyLearningSettings(config, 'any-repo')
+                .kodyRulesGeneratorEnabled,
+        ).toBe(true);
+    });
+});
+
+describe('buildNewTeamGlobalCodeReviewConfig', () => {
+    it('starts a brand-new team with learning from past reviews off', () => {
+        const config = buildNewTeamGlobalCodeReviewConfig();
 
         expect(config.configs).toEqual({ kodyRulesGeneratorEnabled: false });
         expect(config.repositories).toEqual([]);
@@ -14,10 +30,10 @@ describe('buildDefaultGlobalCodeReviewConfig', () => {
     });
 
     it('returns a fresh object each time', () => {
-        const first = buildDefaultGlobalCodeReviewConfig();
+        const first = buildNewTeamGlobalCodeReviewConfig();
         first.configs.kodyRulesGeneratorEnabled = true;
 
-        expect(buildDefaultGlobalCodeReviewConfig().configs).toEqual({
+        expect(buildNewTeamGlobalCodeReviewConfig().configs).toEqual({
             kodyRulesGeneratorEnabled: false,
         });
     });

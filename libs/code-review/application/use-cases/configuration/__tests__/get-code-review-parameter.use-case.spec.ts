@@ -50,7 +50,7 @@ describe('GetCodeReviewParameterUseCase — get-or-create', () => {
                 id: 'global',
                 name: 'Global',
                 isSelected: true,
-                configs: { kodyRulesGeneratorEnabled: false },
+                configs: {},
                 repositories: [],
             },
         );

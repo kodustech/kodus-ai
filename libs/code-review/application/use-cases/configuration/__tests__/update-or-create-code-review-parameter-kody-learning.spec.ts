@@ -268,7 +268,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — generator seed trigger', 
     });
 });
 
-describe('UpdateOrCreateCodeReviewParameterUseCase — new team config', () => {
+describe('UpdateOrCreateCodeReviewParameterUseCase — first save for a team without a config row', () => {
     const buildWithoutConfig = () => {
         const createOrUpdateParametersUseCase = {
             execute: jest.fn().mockResolvedValue(true),
@@ -326,23 +326,25 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — new team config', () => {
             skipAuthorization: true,
         } as any);
 
-    it('starts learning from past reviews off when the first save does not set it', async () => {
+    // Such a team predates the row created at team creation, so it keeps the
+    // shipped default instead of the new-team "off".
+    it('leaves learning at the default when the save does not set it', async () => {
         const { useCase, savedGlobalConfigs } = buildWithoutConfig();
 
         await save(useCase, { runOnDraft: false });
 
-        expect(savedGlobalConfigs()).toEqual(
-            expect.objectContaining({ kodyRulesGeneratorEnabled: false }),
+        expect(savedGlobalConfigs()).not.toHaveProperty(
+            'kodyRulesGeneratorEnabled',
         );
     });
 
-    it('keeps "on" when the first save opts in', async () => {
+    it('stores "off" when the save turns learning off', async () => {
         const { useCase, savedGlobalConfigs } = buildWithoutConfig();
 
-        await save(useCase, { kodyRulesGeneratorEnabled: true });
+        await save(useCase, { kodyRulesGeneratorEnabled: false });
 
-        expect(savedGlobalConfigs()).not.toHaveProperty(
-            'kodyRulesGeneratorEnabled',
+        expect(savedGlobalConfigs()).toEqual(
+            expect.objectContaining({ kodyRulesGeneratorEnabled: false }),
         );
     });
 });

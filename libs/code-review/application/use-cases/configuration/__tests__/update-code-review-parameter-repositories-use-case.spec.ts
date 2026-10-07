@@ -130,7 +130,7 @@ describe('UpdateCodeReviewParameterRepositoriesUseCase', () => {
                 id: 'global',
                 name: 'Global',
                 isSelected: true,
-                configs: { kodyRulesGeneratorEnabled: false },
+                configs: {},
                 repositories: [],
             },
             { organizationId: 'org-1', teamId: 'team-1' },

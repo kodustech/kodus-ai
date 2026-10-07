@@ -98,23 +98,32 @@ export function getDefaultKodusConfigFile(): Omit<KodusConfigFile, 'version'> {
  * Builds the default global `code_review_config` row for a brand-new team.
  *
  * Mirrors what UpdateOrCreateCodeReviewParameterUseCase.createNewGlobalConfig
- * persists for the empty-input case: a delta over the shipped defaults with no
+ * persists for the empty-input case: an empty delta over the shipped defaults
+ * (so every setting resolves to its default at merge time) with no
  * repositories attached yet. Kept as a pure builder so it can be reused by the
  * backend guarantees (team creation, review-time self-heal, repository sync)
  * without duplicating the shape or drifting from the default config.
- *
- * The delta holds what a new team starts with that differs from the shipped
- * defaults. Learning from past reviews ships on, so teams created before it
- * became opt-in keep it, but a new team starts with it off until onboarding
- * (or Settings) turns it on.
  */
 export function buildDefaultGlobalCodeReviewConfig(): CodeReviewParameter {
     return {
         id: 'global',
         name: 'Global',
         isSelected: true,
-        configs: { kodyRulesGeneratorEnabled: false },
+        configs: {},
         repositories: [],
+    };
+}
+
+/**
+ * The row written at team creation. Learning from past reviews ships on, so
+ * teams that predate it being opt-in keep it, including when a self-heal
+ * creates their missing row from the builder above. A team created now
+ * starts with it off until onboarding (or Settings) turns it on.
+ */
+export function buildNewTeamGlobalCodeReviewConfig(): CodeReviewParameter {
+    return {
+        ...buildDefaultGlobalCodeReviewConfig(),
+        configs: { kodyRulesGeneratorEnabled: false },
     };
 }
 
