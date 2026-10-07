@@ -1,5 +1,5 @@
 import * as http from 'http';
-import { startHealthProbe } from './health-probe';
+import { getLastHealthProbe, startHealthProbe } from './health-probe';
 
 /**
  * Fetches GET /health from the probe HTTP server and parses the response.
@@ -343,5 +343,66 @@ describe('startHealthProbe', () => {
         });
 
         expect(statusCode).toBe(404);
+    });
+
+    describe('failure logging', () => {
+        it('logs every failing probe with its status and details', async () => {
+            const logger = { warn: jest.fn() };
+            server = startHealthProbe({
+                port: 0,
+                appContext: makeAppContext({ managedConnection: { isConnected: () => true }, _consumers: {}, managedChannels: {} }),
+                requireAmqp: true,
+                requiredChannels: ['channel-code-review'],
+                startupGraceMs: 0,
+                logger,
+            });
+            await waitListening(server);
+
+            const res = await getHealth(server);
+
+            expect(res.statusCode).toBe(503);
+            expect(logger.warn).toHaveBeenCalledTimes(1);
+            expect(logger.warn.mock.calls[0][0]).toMatchObject({
+                message: 'Health probe failing: consumer_missing',
+                metadata: {
+                    status: 'consumer_missing',
+                    missing: ['channel-code-review'],
+                },
+            });
+        });
+
+        it('does not log a healthy probe', async () => {
+            const logger = { warn: jest.fn() };
+            server = startHealthProbe({
+                port: 0,
+                appContext: makeAppContext(undefined),
+                requireAmqp: false,
+                logger,
+            });
+            await waitListening(server);
+
+            await getHealth(server);
+
+            expect(logger.warn).not.toHaveBeenCalled();
+        });
+
+        it('records when the probe last answered and with what status', async () => {
+            server = startHealthProbe({
+                port: 0,
+                appContext: makeAppContext({ managedConnection: { isConnected: () => false } }),
+                requireAmqp: true,
+                logger: { warn: jest.fn() },
+            });
+            await waitListening(server);
+            const before = Date.now();
+
+            await getHealth(server);
+
+            expect(getLastHealthProbe()).toMatchObject({
+                ok: false,
+                status: 'amqp_disconnected',
+            });
+            expect(getLastHealthProbe()!.at).toBeGreaterThanOrEqual(before);
+        });
     });
 });
