@@ -29,23 +29,30 @@ Kodus の設定は 3 つのレベルで機能します：**グローバル**、*
 
 一度オーバーライドされると、フィールドは親に従うのをやめて代わりにローカル値を使用します。
 
+## アプリでの操作
+
+- **レベルの切り替え：** サイドバーの **Code review** グループ上部にあるスコープピッカーには、**Global**（"applies to every repository"）、続いて独自の設定を持つ各リポジトリが、そのディレクトリをインデントした形で一覧表示されます。スコープを切り替えても同じページ（General、What to review、Kody Rules、What Kody writes）にとどまります。
+- **レベルの追加：** スコープピッカーで **Add repository configuration** を選択します。**Create repository settings** ダイアログで **Select the target repository** と、必要に応じて **Select the target directories** を指定し、**Create settings** をクリックします。[ディレクトリレベルの設定](/ja/how_to_use/code_review/configs/directory_level)を参照してください。
+- **オーバーライドの確認：** サイドバーのスコープやページの横にある数値のピルは、そのレベルでオーバーライドされた設定の数を示します（"N settings overridden at this level"）。ページ上では、オーバーライドされた各フィールドに **Overridden** バッジが表示され、その元に戻すボタンでフィールドを継承に戻せます。
+- **レベルの削除：** スコープピッカーの横にある **⋯** メニューに **Delete configuration**（ディレクトリスコープでは **Edit directories** も）があります。
+
 ## 例
 
 <Tabs>
   <Tab title="グローバルの変更が伝播する">
-    グローバルで**重大度しきい値**を変更します。
+    グローバルで **Minimum severity to post**（**What to review** 上）を変更します。
     
     オーバーライドのないすべてのリポジトリとディレクトリが自動的に更新されます。オーバーライドされたものは変わりません。
   </Tab>
 
   <Tab title="リポジトリのオーバーライド">
-    リポジトリ X で**レビュー開始メッセージ**をオーバーライドします。
+    リポジトリ X で **Review starts** メッセージ（**What Kody writes → Comments during the review** 上）をオーバーライドします。
     
     リポジトリ X 内のディレクトリはリポジトリ X から継承するようになります（独自のオーバーライドがない限り）。
   </Tab>
 
   <Tab title="継承に戻す">
-    リポジトリ Y で**アクティブなカテゴリ**のオーバーライドを削除します。
+    リポジトリ Y で、**What to review** のカテゴリスイッチのオーバーライドを削除します。
     
     フィールドは再びグローバルに従い、将来のグローバルの変更を受け取ります。
   </Tab>

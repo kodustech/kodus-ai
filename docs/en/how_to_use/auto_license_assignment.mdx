@@ -11,13 +11,13 @@ When enabled, Kodus monitors pull request activity in your repositories.
 
 -   **Automatic Assignment:** If a user creates more than one pull request, Kodus checks if there are available license slots in your organization.
     -   If a slot is available, the user is automatically assigned a license and their PRs will be reviewed.
-    -   If no slots are available, Kodus will react to the pull request with a thumbs down emoji (👎) for Github or a padlock emoji (🔒) for Gitlab to indicate that the review could not be performed due to a lack of licenses.
+    -   If no slots are available, Kodus will react to the pull request with a thumbs down emoji (👎) for Github or a padlock emoji (🔒) for Gitlab to indicate that the review could not be performed due to a lack of licenses (only when **Show Status Feedback** is on in **Code review → General**).
 
 ## Ignored Users
 
-You can configure a list of **Ignored Users**. These users will be excluded from the auto-assignment process.
+You can configure a list of **Ignored Users**. These users will be excluded from the auto-assignment process. The list is set on the **Repositories** page, **PR author filters** tab, with **Exclude PR authors** (or, the other way around, **Only these PR authors**).
 
--   **No Reviews:** Pull requests created by ignored users will not be reviewed by Kodus.
+-   **No Reviews:** Pull requests created by ignored users will not be reviewed by Kodus — unless that user holds a license, which overrides the filter.
 -   **No Reactions:** Kodus will not react to their PRs, even if they exceed the PR limit. It will be as if Kodus ignored the PR entirely.
 
 This is useful for bots, service accounts, or specific team members who do not require code reviews.
@@ -26,8 +26,10 @@ This is useful for bots, service accounts, or specific team members who do not r
 
 To enable and configure Auto License Assignment:
 
-1. Go to your **Code Review Settings**.
-2. Navigate to the **Subscription** tab.
-3. Locate the **Auto-assign licenses** section.
-    - Use the toggle to enable or disable the feature.
-    - If enabled, you can select users to add to the **Ignored Users** list.
+1. In the sidebar, open **Organization → Subscription**.
+2. Stay on the **PR licenses** tab.
+3. Turn **Auto-assign licenses** on or off.
+    - **Release seats automatically** (same card) frees a license a few days (7 by default) after a member leaves your git organization.
+    - To exclude users, use **Repositories → PR author filters** (see [Ignored Users](#ignored-users)).
+
+These toggles appear only with an active paid plan or a licensed self-hosted instance, and only to members who can manage seats (Owners).

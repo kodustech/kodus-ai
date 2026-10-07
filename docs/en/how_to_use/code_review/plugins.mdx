@@ -53,16 +53,22 @@ Kody will fetch the referenced specification through the plugin and confirm whet
 
 Kody only sees the tools you enable for each workspace. Install the plugins that matter to your workflow and keep everything else private.
 
+To install one, open **Plugins** in the sidebar and pick a plugin from the grid. Authenticate (sign in through the app's OAuth flow, or click **Connect** after entering an API token), choose the tools Kody may use under **Selected tools**, and click **Install plugin**. An installed plugin shows **Installed**; open it again to **Update Tools** or **Reset Authentication**.
+
+<Note>
+  On the Free plan (and unlicensed self-hosted), Kody runs up to 3 installed plugins at a time; a banner on the Plugins page names the ones it skips. The default Kodus MCP doesn't count toward that limit. Issue-tracker plugins can't be installed when your code provider is Azure Repos or Bitbucket Data Center.
+</Note>
+
 ## Custom Plugins
 
 Bring your own MCP servers when you need capabilities beyond the curated catalog.
 
-1. Open the plugin catalog inside your workspace and click **Add Custom Plugin**.
+1. Open **Plugins** in the sidebar and, on the **Add Custom Plugin** card, click **Add Plugin**.
 2. Provide the endpoint details:
    - **Plugin Name** (required) and optional **Description** to help teammates understand the integration.
    - Optional **Logo URL** for a recognizable icon in the catalog.
-   - The MCP **URL** that hosts your server along with the expected **Protocol** (HTTP or WebSocket).
-   - Any required **Authorization** method or custom headers for authentication.
+   - The MCP **URL** that hosts your server along with the expected **Protocol** (HTTP or SSE).
+   - The **Authorization** method (None, Bearer Token, Basic Auth, API Key, or OAuth 2.0) and any **Custom Headers**.
 3. Click **Create Plugin** to instantly make it available to Kody within the current workspace.
 
 Custom plugins follow the same permissions model as curated integrations: only workspaces where the plugin is installed can invoke it, and Kody never accesses endpoints you do not explicitly configure.

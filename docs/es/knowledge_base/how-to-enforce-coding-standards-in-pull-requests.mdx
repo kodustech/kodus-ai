@@ -16,7 +16,7 @@ Kodus te permite definir **Kody Rules** — instrucciones personalizadas que se 
 
 Puedes crear una regla a nivel de archivo como:
 
-- **Regla**: "Los componentes de React deben usar nombres de archivo en PascalCase"
+- **Rule name**: "Los componentes de React deben usar nombres de archivo en PascalCase"
 - **Ruta**: `src/components/**/*.tsx`
 - **Severidad**: Alta
 - **Instrucciones**: "Marcar cualquier archivo de componente que no siga la nomenclatura PascalCase."
@@ -25,23 +25,23 @@ Puedes crear una regla a nivel de archivo como:
 
 Una regla a nivel de PR puede validar aspectos que involucran múltiples archivos:
 
-- **Regla**: "La capa de dominio no debe importar de la infraestructura"
-- **Alcance**: Pull Request
+- **Rule name**: "La capa de dominio no debe importar de la infraestructura"
+- **Execution mode**: Per PR
 - **Instrucciones**: "Verificar en `pr_files_diff` si hay alguna sentencia de importación en `src/domain/` que haga referencia a `src/infrastructure/`. Esto viola nuestra arquitectura hexagonal."
 
 ## Otros enfoques
 
 También puedes aplicar estándares mediante:
 
-- **Importar desde la Biblioteca de Reglas** — navega por reglas prediseñadas para seguridad, rendimiento y estilo
+- **Importar desde la Biblioteca de Reglas** — haz clic en **Discovery** en la página de Kody Rules para navegar por reglas prediseñadas para seguridad, rendimiento y estilo
 - **Sincronizar reglas del IDE** — importa automáticamente reglas desde Cursor, Copilot, Claude y otras herramientas de IA
-- **Reglas de repositorio** — define reglas en archivos markdown directamente en tu repositorio (`kodus/rules/`)
+- **Reglas de repositorio** — define reglas en archivos markdown directamente en tu repositorio (`.kody/rules/`)
 - **Generación automática de reglas** — deja que Kody analice 3 meses de historial de revisiones y sugiera reglas basadas en los patrones de tu equipo
 
 ## Primeros pasos
 
-1. Ve a **Configuración de Revisión de Código** → **Kody Rules**
-2. Haz clic en **Agregar Regla** y define tu estándar
+1. Selecciona **Global** (o un repositorio / directorio) en el selector de alcance en la parte superior del grupo **Code review** de la barra lateral y luego abre **Kody Rules**
+2. Haz clic en **New rule** y define tu estándar
 3. Establece la ruta, la severidad y las instrucciones detalladas
 4. Kody lo aplicará en cada PR futuro
 

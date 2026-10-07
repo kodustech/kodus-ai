@@ -41,7 +41,7 @@ New endpoints default to authenticated + authorized, never public.
 
 ```
 名称：数据变更必须有审计日志
-范围：文件
+执行模式：Per file
 路径：src/services/**/*.ts, src/repositories/**/*.ts
 严重性：严重
 说明：
@@ -55,7 +55,7 @@ New endpoints default to authenticated + authorized, never public.
 
 ```
 名称：用户数据需要软删除
-范围：文件
+执行模式：Per file
 路径：src/**/*.ts
 严重性：严重
 说明：
@@ -71,7 +71,7 @@ New endpoints default to authenticated + authorized, never public.
 
 ```
 名称：日志或错误响应中禁止 PII
-范围：文件
+执行模式：Per file
 路径：src/**/*.ts
 严重性：严重
 说明：
@@ -84,7 +84,7 @@ New endpoints default to authenticated + authorized, never public.
 
 ```
 名称：PII 字段必须使用加密助手
-范围：文件
+执行模式：Per file
 路径：src/entities/**/*.ts, src/models/**/*.ts
 严重性：严重
 说明：
@@ -97,7 +97,7 @@ New endpoints default to authenticated + authorized, never public.
 
 ```
 名称：新端点必须有认证守卫
-范围：拉取请求
+执行模式：Per PR
 严重性：严重
 说明：
   检查 pr_files_diff 中的新路由定义或控制器方法。
@@ -113,7 +113,7 @@ New endpoints default to authenticated + authorized, never public.
 
 ```
 名称：合规影响评估
-范围：拉取请求
+执行模式：Per PR
 严重性：高
 说明：
   如果 pr_files_diff 涉及 src/entities/、src/models/
@@ -126,9 +126,9 @@ New endpoints default to authenticated + authorized, never public.
 
 ## 步骤 6 — 配置执行
 
-1. 启用**请求更改**使合规违规阻止合并
+1. 在 **Code review → General** 中，开启 **Enable changing status of Review to 'Request Changes'**，使合规违规阻止合并
 2. 将所有合规规则设置为**严重**级别
-3. 使用规则继承在组织中所有代码库应用合规规则
+3. 使用规则继承在组织中所有代码库应用合规规则 — 创建规则时在范围选择器中选择 **Global**
 
 ## 检查清单
 
@@ -138,7 +138,7 @@ New endpoints default to authenticated + authorized, never public.
 - [ ] 加密规则覆盖实体/模型定义
 - [ ] 访问控制规则覆盖所有新端点
 - [ ] 为严重发现启用请求更改
-- [ ] 规则设置在组织级别以保持一致性
+- [ ] 规则设置在 **Global** 范围（组织范围）以保持一致性
 - [ ] 测试 PR 验证规则正确触发
 
 有关配置规则的更多信息，请参阅 [Kody 规则](/zh/how_to_use/code_review/configs/kody_rules)。

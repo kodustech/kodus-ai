@@ -27,8 +27,8 @@ reviewOptions:
 
 ```
 Name: 生のSQLクエリは禁止
-Scope: File
-Paths: **/*.ts, **/*.js, **/*.py
+Execution mode: Per file
+Path: **/*.ts, **/*.js, **/*.py
 Severity: Critical
 Instructions:
   SQLクエリを構築するために文字列連結またはテンプレートリテラルを
@@ -43,8 +43,8 @@ Instructions:
 
 ```
 Name: ハードコードされたシークレットまたは認証情報は禁止
-Scope: File
-Paths: **/*
+Execution mode: Per file
+Path: **/*
 Severity: Critical
 Instructions:
   fileDiffでAPIキー、パスワード、トークン、またはシークレットのような
@@ -61,7 +61,7 @@ Instructions:
 
 ```
 Name: 認証ミドルウェアをスキップしてはならない
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   pr_files_diffで認証ミドルウェアなしでユーザーデータを
@@ -78,8 +78,8 @@ Instructions:
 
 ```
 Name: サニタイズなしのdangerouslySetInnerHTMLは禁止
-Scope: File
-Paths: **/*.tsx, **/*.jsx
+Execution mode: Per file
+Path: **/*.tsx, **/*.jsx
 Severity: Critical
 Instructions:
   fileDiffでdangerouslySetInnerHTMLの使用にフラグを立てる。
@@ -111,7 +111,7 @@ HTTPSのみを使用し、レート制限を含める必要がある。
 
 セキュリティルールでは、重大な結果をブロックする設定が必要です：
 
-1. PRワークフロー設定で **変更をリクエスト** を有効にして、重大な問題が見つかったときにKodyが変更をリクエストするようにする
+1. **Code review → General** で **Enable changing status of Review to 'Request Changes'** をオンにして、重大な問題が見つかったときにKodyが変更をリクエストするようにする
 2. セキュリティルールを **重大** 重要度に設定して、重要度フィルターの上に常に表示されるようにする
 3. `maxSuggestions` を低い値に設定しない — セキュリティの結果は抑制されるべきではない
 
@@ -121,7 +121,7 @@ MCPプラグインを使用している場合は、依存関係を確認でき�
 
 ```
 Name: 既知の脆弱性のある依存関係は禁止
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   pr_files_diffがpackage.json、requirements.txt、または

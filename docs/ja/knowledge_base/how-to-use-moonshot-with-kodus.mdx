@@ -6,7 +6,7 @@ icon: "moon"
 
 ## Moonshot の動作方法
 
-Moonshot AI は **Kimi** ファミリーのモデル（K2、K2.5、K2.6、K2.6 Coding）を公開しています。Kimi は長コンテキストのコード理解とエージェントワークフローに特に強く、API は完全に OpenAI 互換です — Kodus は `OpenAI Compatible` プロバイダー（または BYOK のキュレートされた **Kimi K2.6 Coding** カードを介して直接）を通じて通信します。
+Moonshot AI は **Kimi** ファミリーのモデル（K2、K2.5、K2.6、K2.6 Coding）を公開しています。Kimi は長コンテキストのコード理解とエージェントワークフローに特に強く、API は完全に OpenAI 互換です — Kodus は **OpenAI-compatible** プロバイダーを通じて通信できます。Kodus には専用の **Moonshot** プロバイダーもあり、Moonshot の Anthropic 互換エンドポイント（`https://api.moonshot.ai/anthropic`）経由で接続します。
 
 Moonshot は同じモデルファミリーに **2つのパス**を提供しており、それぞれ独自のエンドポイントがあります：
 
@@ -69,35 +69,27 @@ Developer API エンドポイント：`https://api.moonshot.ai/v1`（国際）�
 
 ## Kodus で Moonshot を設定する
 
-主なフローは Kodus Cloud での BYOK です — キュレートされた **Kimi K2.6 Coding** カードがエンドポイントの切り替えを処理します。プロセスレベルでプロバイダーを固定することを好むセルフホストユーザーは、代わりに環境変数を使用できます。
+主なフローは Kodus Cloud の **AI providers** ページです。プロセスレベルでプロバイダーを固定することを好むセルフホストユーザーは、代わりに環境変数を使用できます。
 
-### オプション1 — Kodus Cloud での BYOK（推奨）
+### オプション1 — Kodus Cloud の Moonshot プロバイダー（Developer API に推奨）
 
 <Steps>
-  <Step title="BYOK を開き Kimi K2.6 Coding を選択">
-    [app.kodus.io/byok](https://app.kodus.io/byok) にアクセスし、メインモデルセクションの **Kimi K2.6 Coding** カードをクリックします。
+  <Step title="AI providers を開き Moonshot を選択">
+    サイドバーで **AI providers** を開きます（[app.kodus.io/byok](https://app.kodus.io/byok)）。**Providers** タブで **Moonshot** タイルをクリックします（**Connect your first provider** の下、またはすでにプロバイダーを接続している場合は **Add another provider** の下）。
   </Step>
 
-  <Step title="プランを選択">
-    カードは **Plan** セレクターとともに展開します。以下を選択します：
-    - **Developer API** — キーが [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) からの場合
-    - **Kimi Code Plan** — キーが [kimi.com/code](https://www.kimi.com/code) サブスクリプションからの場合
-
-    ベース URL と "Get a key" リンクは自動的に更新されます。
-  </Step>
-
-  <Step title="APIキーを貼り付ける">
-    キーのみ。Kimi Code Plan ユーザーの場合、Kodus は Advanced settings に `maxConcurrentRequests=30` を事前入力します（文書化された上限と一致）。
+  <Step title="APIキーを貼り付けてモデルを選択">
+    [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) の Developer API キーを **API key** カードに貼り付けます。すると **Model** ピッカーが Moonshot のモデルを読み込みます — いずれか（例：`kimi-k2.6`）を選ぶか、**Type model manually** を選択します。Kodus は `https://api.moonshot.ai/anthropic` エンドポイントを自動で入力します。このタイルにはプランセレクターもベース URL フィールドもないため、Kimi Code Plan のキー（または中国プラットフォーム）には下記のオプション2を使用してください。
   </Step>
 
   <Step title="Test & save">
-    **Test & save** をクリックします。Kodus は安価なメタデータ呼び出しでエンドポイントをプローブし、成功時に設定を保存します。401 はキーが選択したプランのエンドポイントと一致しないことを意味します。
+    **Test & save** をクリックします。Kodus は接続をテストし、成功時に設定を保存します。401 はキーがエンドポイントと一致しないことを意味します。
   </Step>
 </Steps>
 
 ### Reasoning のチューニング（任意）
 
-Kimi K2.6 Coding では Reasoning はデフォルトで ON です — キュレートされたカードは **Thinking: Medium** を事前入力し、これは OpenAI 互換プロバイダーでは `thinking: { type: "enabled" }` を生成します。一般的な2つのオーバーライド：
+**Thinking / Reasoning** は **Advanced (optional)** の下にあります。Kimi では、Off 以外のレベルはすべて `thinking: { type: "enabled" }` を生成します。オーバーライドするには、**Thinking / Reasoning** を **Custom** に切り替えて、次のいずれかを貼り付けます：
 
 - 小さな PR でより高速/安価なレビューのために **thinking を無効化**：
 
@@ -116,29 +108,28 @@ Kimi K2.6 Coding では Reasoning はデフォルトで ON です — キュレ�
   ```
 
 <Note>
-  名前空間のラップは不要です — Kodus が送信前に `openaiCompatible`（アクティブなプロバイダー）で自動ラップします。詳しくは [main BYOK doc → Custom JSON override](/ja/how_to_use/byok#カスタム-json-オーバーライド) を参照してください。
+  名前空間のラップは不要です — Kodus が送信前にオプションをアクティブなプロバイダーの名前空間でラップします。詳しくは [main BYOK doc → Custom JSON override](/ja/how_to_use/byok#カスタム-json-オーバーライド) を参照してください。
 </Note>
 
 ### 同時実行数のチューニング
 
-- **Kimi Code Plan**：事前入力された `maxConcurrentRequests=30`（文書化された上限）を維持します。それ以上にすると 429 を返します。
+- **Kimi Code Plan**：**Max concurrent requests**（**Advanced (optional)** の下）を `30`（文書化された上限）に設定します。それ以上にすると 429 を返します。
 - **Developer API**：空のまま開始（制限なし）。実際の制限はリチャージティアとスケールします — Tier 1（約$10 リチャージ）は約50 concurrent を許可；Tier 5（約$3000）は約1000 を許可。レビュー時に 429 が発生した場合は明示的に下げてください。
 
 <Note>
-  Kimi を**メイン**として設定し、OpenAI または Anthropic キーを**フォールバック**として保持します — Moonshot が 429 または 402 を返した場合、Kodus は自動的にフェイルオーバーします。
+  **Routing** タブで Kimi を **Model for all tasks** に、OpenAI または Anthropic のモデルを **Fallback (optional)** に設定します — Moonshot が 429 または 402 を返した場合、Kodus は自動的にフェイルオーバーします。
 </Note>
 
-### オプション2 — 手動設定
+### オプション2 — OpenAI 互換エンドポイント
 
-キュレートされたカタログにない Kimi バリアント（例：`kimi-k2.5` または `kimi-k2-0905`）が必要な場合、カタログ下部の **Configure manually** をクリックして以下を入力します：
+Kimi Code Plan、中国プラットフォーム、または Moonshot の OpenAI 互換エンドポイントを使う場合は、**AI providers** を開き、**Providers** タブの **Custom** の下にある **OpenAI-compatible** を選択して以下を入力します：
 
 | フィールド | 値 |
 | --- | --- |
-| **プロバイダー** | `OpenAI Compatible` |
 | **ベース URL** | `https://api.moonshot.ai/v1`（Developer API）<br />`https://api.kimi.com/coding/v1`（Kimi Code Plan）<br />`https://api.moonshot.cn/v1`（中国本土のみ） |
 | **モデル** | `kimi-k2.6`、`kimi-k2.6`、`kimi-k2.5`、`kimi-k2-0905`、`kimi-k2` |
-| **APIキー** | Moonshot または Kimi Code キー（上記のベース URL と一致） |
-| **Max Concurrent Requests** | Kimi Code Plan では `30`；Developer API では空のまま（リチャージティアとスケール） |
+| **API key** | Moonshot または Kimi Code キー（上記のベース URL と一致） |
+| **Max concurrent requests**（**Advanced (optional)** の下） | Kimi Code Plan では `30`；Developer API では空のまま（リチャージティアとスケール） |
 
 ### オプション3 — セルフホスト（環境変数）
 
@@ -152,7 +143,7 @@ API_OPEN_AI_API_KEY="your-moonshot-or-kimi-code-api-key"
 ```
 
 <Note>
-  このパスは意図的に BYOK を無効にしているセルフホスト Kodus インストールにのみ必要です。セルフホストインスタンスで BYOK が有効な場合は、**オプション1**を優先してください — キュレートされたカードがエンドポイントのロジックを処理します。
+  このパスは意図的に BYOK を無効にしているセルフホスト Kodus インストールにのみ必要です。セルフホストインスタンスで BYOK が有効な場合は、**オプション1**または**オプション2**を優先してください — **AI providers** ページはクラウドと同じように動作します。
 </Note>
 
 `.env` を編集後、API とワーカーコンテナを再起動して統合を確認します：
@@ -176,7 +167,7 @@ docker-compose logs api worker | grep -iE "moonshot|kimi"
     - Kimi Code Plan キーは `api.kimi.com/coding/v1` に対してのみ動作します。
     - `platform.moonshot.ai` からの Developer API キーは `api.moonshot.ai/v1` に対してのみ動作します。
     - `platform.moonshot.cn` からの Developer API キーは `api.moonshot.cn/v1` に対してのみ動作します。
-    - キュレートされたカードでは、**Plan** セレクターがキーの出所と一致することを確認してください。
+    - **Moonshot** タイルは常に `https://api.moonshot.ai/anthropic` を使用するため、`platform.moonshot.ai` のキーが必要です。Kimi Code Plan または `platform.moonshot.cn` のキーは、対応する **Base URL** を指定して **OpenAI-compatible** 経由で接続してください。
   </Accordion>
 
   <Accordion title="残高不足">

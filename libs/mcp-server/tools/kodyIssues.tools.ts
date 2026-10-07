@@ -251,7 +251,16 @@ export class KodyIssuesTools {
                 data: z.array(z.looseObject({})),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
-                const issues = await this.issuesService.findByFilters(args);
+                // The input says `repositoryName`; documents store it as
+                // `repository.name`. Passing args straight through matched
+                // nothing and forced a collection scan on every call.
+                const { repositoryName, ...rest } = args;
+                const issues = await this.issuesService.findByFilters({
+                    ...rest,
+                    ...(repositoryName && {
+                        'repository.name': repositoryName,
+                    }),
+                } as Partial<IIssue>);
                 return {
                     success: true,
                     count: issues.length,

@@ -47,7 +47,7 @@ description: "生成 Kody 读取代码库并发布审查评论所需的 Azure De
 
 ## 将令牌添加到 Kody
 
-生成令牌后,将其粘贴到 Kody 自动化设置屏幕中。当您尝试启用自动化时,配置模态框将自动打开。
+生成令牌后,将其粘贴到 Kodus 中:在入门引导期间(**Connect your Git tool** → **Azure Repos** 标签页 → **Connect via token**),或之后在侧边栏的 **Repositories** → **Connect a provider** → **Azure Repos** 中。填写 **Organization name** 和 **Personal Access Token**,然后点击 **Validate and save**。
 
 ## 故障排查:Kody 没有在 Azure DevOps 中审查 PR
 
@@ -57,7 +57,7 @@ description: "生成 Kody 读取代码库并发布审查评论所需的 Azure De
 
 在 Azure DevOps 中打开 PAT,确认[生成 PAT](#生成-pat个人访问令牌) 下列出的每个范围都已启用。最常被遗漏的是 **Code:读和写** — 没有**写**权限,Kody 可以读取您的代码库但无法发布审查评论,所以审查"静默运行"。
 
-如果 PAT 在某个范围添加之前就已创建,Azure DevOps 不会追加添加该范围。请使用完整的范围列表创建新的 PAT,并在 Kody 自动化设置中更新它。
+如果 PAT 在某个范围添加之前就已创建,Azure DevOps 不会追加添加该范围。请使用完整的范围列表创建新的 PAT,并用它重新连接(**Repositories** → 提供商卡片上的 **Reset** → **Just reset the integration**,然后使用新令牌再次连接 Azure Repos)。
 
 ### 2. 检查用户的项目权限
 

@@ -4,7 +4,7 @@ description: "使用结构化的 markdown 文件直接在代码库中创建自�
 ---
 
 <Info>
-代码库规则使用与 IDE 规则文件检测相同的自动同步机制。在设置中启用"从代码库自动同步规则"以激活这两个功能。请参阅<a href="/zh/how_to_use/code_review/configs/rules_file_detection">规则文件检测</a>进行设置。
+代码库规则使用与 IDE 规则文件检测相同的自动同步机制。启用 **Auto-sync rules from repo**(在代码库范围下 **Code review → Kody Rules** 的 **Configuration** 中)以激活这两个功能。请参阅<a href="/zh/how_to_use/code_review/configs/rules_file_detection">规则文件检测</a>进行设置。
 </Info>
 
 ## 如何使用
@@ -13,7 +13,7 @@ description: "使用结构化的 markdown 文件直接在代码库中创建自�
 ### 同步
 - **自动检测**:启用后自动检测和同步代码库规则
 - **手动同步**:在任何规则文件中添加 `@kody-sync` 以单独同步(即使禁用自动同步也有效)
-- **Web 应用程序**:同步的规则显示在您的 Kodus web 应用程序仪表板中
+- **Web 应用程序**:同步的规则显示在该代码库的 **Code review → Kody Rules** 页面上,来源标记为 **Auto-sync**
 - **实时更新**:当拉取请求关闭时同步规则文件的更改
 
 ## 文件位置
@@ -156,7 +156,7 @@ enabled: true
 要使用代码库规则,您有两个选项:
 
 ### 选项 1:启用自动同步(推荐)
-1. **启用规则文件检测**:在设置中切换"从代码库自动同步规则"
+1. **启用规则文件检测**:在 **Code review** 范围选择器中选择该代码库,打开 **Kody Rules → Configuration**,并开启 **Auto-sync rules from repo**
 2. **创建规则文件**:将 `.md` 文件放在 `.kody/rules/**` 或 `rules/**` 目录中
 3. **自动同步**:当 PR 关闭时所有规则文件同步
 

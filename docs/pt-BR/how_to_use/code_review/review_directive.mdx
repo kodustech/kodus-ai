@@ -6,7 +6,7 @@ description: "Direcione a atenção da Kody para uma área específica do pull r
 Uma **diretiva de revisão** permite dizer à Kody onde concentrar a análise mais profunda em uma revisão específica. Em vez de mudar qualquer configuração, você anexa uma instrução curta ao acionar a revisão — por exemplo, "foque na lógica de auth e sessão" — e a Kody gasta a análise mais rigorosa no código alterado que corresponde a isso.
 
 <Note>
-  Uma diretiva é **efêmera**: vale apenas para aquela execução de revisão. Ela não é salva nas suas configurações e não afeta revisões futuras. Para mudar o comportamento da Kody de forma permanente, use [Custom Prompts](/pt-BR/how_to_use/code_review/configs/custom_prompts) ou [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules).
+  Uma diretiva é **efêmera**: vale apenas para aquela execução de revisão. Ela não é salva nas suas configurações e não afeta revisões futuras. Para mudar o comportamento da Kody de forma permanente, use as instruções de categoria e a personalidade de Kody ([Instruções e Personalidade](/pt-BR/how_to_use/code_review/configs/custom_prompts), antigos Custom Prompts) ou [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules).
 </Note>
 
 ## Quando Usar
@@ -134,7 +134,7 @@ para [support@kodus.io](mailto:support@kodus.io) com o nome da sua organização
   </Accordion>
   <Accordion title="Exemplos fracos">
     - `@kody review por favor seja minucioso` — não há área para priorizar.
-    - `@kody review comente só no arquivo X` — uma diretiva não é filtro; use [caminhos ignorados](/pt-BR/how_to_use/code_review/configs/general) para restringir arquivos.
+    - `@kody review comente só no arquivo X` — uma diretiva não é filtro; use [Ignored files](/pt-BR/how_to_use/code_review/configs/general) para restringir arquivos.
   </Accordion>
 </AccordionGroup>
 

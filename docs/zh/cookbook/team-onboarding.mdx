@@ -12,7 +12,7 @@ icon: "users-gear"
 
 1. 在 [kodus.io](https://kodus.io) 注册或访问自托管实例
 2. 为团队创建新工作区
-3. 连接 Git 提供商（GitHub、GitLab、Bitbucket 或 Azure DevOps）
+3. 连接 Git 提供商（GitHub、GitLab、Bitbucket、Azure Repos 或 Forgejo）
 4. 选择要监控的代码库
 
 ## 步骤 2 — 设置审查基线
@@ -34,15 +34,15 @@ suggestionControl:
 automatedReviewActive: true
 ```
 
-这为您提供合理建议限制的自动审查。根据反馈在一周后调整。
+这为您提供具有合理严重性阈值的自动审查。根据反馈在一周后调整。
 
 ## 步骤 3 — 从 IDE 工具导入现有规则
 
 如果团队已经使用 Cursor、Copilot 或 Claude 规则：
 
-1. 前往**代码审查设置** → **Kody 规则**
+1. 在侧边栏中，通过 **Code review** 分组顶部的范围选择器选择代码库，打开 **Kody Rules**，点击 **Configuration**，并开启 **Auto-sync rules from repo**
 2. Kodus 检测 `.cursorrules`、`.github/copilot-instructions.md` 和 `.claude` 文件
-3. 导入对代码审查有意义的规则
+3. 审查导入的规则，保留对代码审查有意义的规则
 
 这避免了从头重写规则。
 
@@ -82,7 +82,7 @@ No direct DB access from services or controllers.
 
 ```
 名称：生产代码中禁止 console.log
-范围：文件
+执行模式：Per file
 路径：src/**/*.ts
 严重性：高
 说明：标记 fileDiff 中的任何 console.log、console.warn 或 console.error。
@@ -91,7 +91,7 @@ No direct DB access from services or controllers.
 
 ```
 名称：禁止硬编码 API URL
-范围：文件
+执行模式：Per file
 路径：src/**/*.ts
 严重性：严重
 说明：标记 fileDiff 中任何看起来像 API 端点的硬编码 URL（http:// 或 https://）。
@@ -100,7 +100,7 @@ URL 必须来自环境变量或配置文件。
 
 ## 步骤 6 — 连接任务管理（可选但推荐）
 
-在**设置** → **插件**中连接 Jira、Linear、Notion 或 ClickUp 以启用业务逻辑验证。这让 Kodus 检查 PR 是否实现了任务描述的内容。
+在 **Plugins**（位于侧边栏）中连接 Jira、Linear、Notion 或 ClickUp 以启用业务逻辑验证。这让 Kodus 检查 PR 是否实现了任务描述的内容。
 
 ## 步骤 7 — 运行试点 PR
 
@@ -115,16 +115,16 @@ URL 必须来自环境变量或配置文件。
 
 一周审查后，与团队确认：
 
-- 建议太多？→ 提高 `severityLevelFilter` 或降低 `maxSuggestions`
+- 建议太多？→ 在 **Code review → What to review** 中提高 **Minimum severity to post**（即 `kodus-config.yml` 中的 `severityLevelFilter`）
 - 规则太嘈杂？→ 缩小文件路径或添加排除
 - 遗漏重要模式？→ 添加新规则或记忆
-- 想要自动生成规则？→ 点击**生成 Kody 规则**从审查历史中获取建议
+- 想要自动生成规则？→ 在范围选择器中选择代码库，打开 **Code review → Kody Rules**，点击 **Configuration**，并开启 **Generate from past reviews**，从审查历史中获取建议
 
 ## 提示
 
 - 第一天不要过度添加规则 — 从小处开始逐步增长
 - 让团队在正式化为规则之前通过对话自然地教 Kody
 - 前几个 PR 使用 `@kody start-review` 让团队看到 Kodus 的实际效果
-- 如果想审查 Kody 学到的内容，启用 LLM 生成记忆审批
+- 如果想审查 Kody 学到的内容，开启 **Kody knowledge approval**（**Code review → Kody Rules → Configuration**）
 
 完整设置指南，请参阅[快速开始](/zh/how_to_use/quickstart)。

@@ -15,13 +15,13 @@ description: "接続済みリポジトリを組織全体の Kody Rules のソー
 - 任意のリポジトリのコードレビュー時に、これらのグローバルルールがそのリポジトリ自身のルールと併せて適用されます（[継承](/ja/how_to_use/code_review/configs/rules_inheritance) に従います）。
 
 <Info>
-グローバルソースとして使えるのは、git 設定で既に接続済みのリポジトリだけです。これにより接続済みリポジトリの信頼できる情報源が 1 つに保たれ、下記の Pull Request トリガーによってインポート済みルールが最新に保たれます。
+グローバルソースとして使えるのは、**Repositories** ページで既に接続済みのリポジトリだけです。これにより接続済みリポジトリの信頼できる情報源が 1 つに保たれ、下記の Pull Request トリガーによってインポート済みルールが最新に保たれます。
 </Info>
 
 ## セットアップ
 
-1. **Settings → Code Review → Kody Rules** を開き、**global** ビューに切り替えます。
-2. **Configuration** タブで **Global rule sources** を探します。
+1. サイドバーで、**Code review** グループ上部のスコープピッカーで **Global** を選択し、**Kody Rules** を開きます。
+2. **Configuration** をクリックしてサイドシートを開き、**Global rule sources** を探します。
 3. リポジトリピッカーをクリックし、接続済みリポジトリを 1 つ以上選択します。
 4. **Import selected** をクリックします。
 

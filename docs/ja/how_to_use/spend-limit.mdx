@@ -21,15 +21,15 @@ description: "BYOK モデルの支出が月次の上限に近づいたら通知�
 
 ## 設定方法
 
-リミットは BYOK 画面の、Main と Fallback のモデルの下にあります。
+リミットは **AI providers** ページの **Budget** タブ（**Budget & alerts** セクション）にあります。
 
 <Steps>
-  <Step title="BYOK 設定を開く">
-    [app.kodus.io/byok](https://app.kodus.io/byok) を開き、**Monthly spend limit** までスクロールします。（このセクションは BYOK モデルを 1 つ以上設定すると表示されます。）
+  <Step title="Budget タブを開く">
+    サイドバーで **AI providers** を開き、**Budget** タブを選択します（[app.kodus.io/byok?tab=budget](https://app.kodus.io/byok?tab=budget)）。（設定は、自分のキーで接続したモデルが 1 つ以上あると表示されます。それまでは、タブに **Go to Providers** への案内が表示されます。）
   </Step>
 
   <Step title="モデルの価格を確認する">
-    設定済みの各モデルには、トークン単価 — **input、output、cache read、cache write** — が **$ / 1M tokens** で表示されます。**Catalog** バッジは Kodus が価格を自動取得したことを、**Manual** バッジはあなたが自分で入力したことを意味します。
+    **Adjust model prices** を展開します。設定済みの各モデルには、トークン単価 — **Input、Output、Cache read、Cache write** — が **$ / 1M tokens** で表示されます。**Catalog** バッジは Kodus が価格を自動取得したことを、**Manual** バッジはあなたが自分で入力したことを意味します。
   </Step>
 
   <Step title="価格のないモデルを修正する">
@@ -37,7 +37,7 @@ description: "BYOK モデルの支出が月次の上限に近づいたら通知�
   </Step>
 
   <Step title="月次リミットを設定して有効化する">
-    上限を米ドルで入力し、**Enable spend alerts** をオンにして **Save spend limit** をクリックします。
+    **Monthly limit (US$)** に金額を入力し、**Enable spend alerts** をオンにして **Save budget & alerts** をクリックします。タブには **Projected this month** も表示され、**Open Costs** から **Organization → Token usage** の詳細な内訳に移動できます。
   </Step>
 </Steps>
 
@@ -79,7 +79,7 @@ description: "BYOK モデルの支出が月次の上限に近づいたら通知�
 
 ## 精度について
 
-支出は**見積り**です。レビューが使用したトークンと、BYOK 画面に表示されているトークン単価から算出されるため、プロバイダーの請求書と 1 セント単位で一致することはありません。
+支出は**見積り**です。レビューが使用したトークンと、**Budget** タブに表示されているトークン単価から算出されるため、プロバイダーの請求書と 1 セント単位で一致することはありません。
 
 <CardGroup cols={2}>
   <Card title="価格を正確に保つ" icon="tags">
@@ -102,7 +102,7 @@ description: "BYOK モデルの支出が月次の上限に近づいたら通知�
   </Accordion>
 
   <Accordion title="何が支出に計上されますか？">
-    **BYOK** モデルのトークン使用量のみで、BYOK 画面に表示されている現在のレートで算定されます。Kodus がホストするモデルは計上されません。
+    **BYOK** モデルのトークン使用量のみで、**Budget** タブに表示されている現在のレートで算定されます。Kodus がホストするモデルは計上されません。
   </Accordion>
 
   <Accordion title="支出はいつリセットされますか？">
@@ -112,7 +112,7 @@ description: "BYOK モデルの支出が月次の上限に近づいたら通知�
   <Accordion title="月の途中でモデルを切り替えました — 支出は跳ね上がりますか？">
     いいえ。支出は**モデルごと**に追跡され、各モデルのトークンは*そのモデルの*レートで算定されます。モデル A に \$50 使ってからモデル B に切り替えても、モデル A の使用量は \$50 のままです — B に切り替えても A のトークンが B のレートで再算定されることはありません。合計は、その後 B が使った分だけ増えます。
 
-    すでに発生した使用量が再算定されるのは、**同じモデルの価格**が変わったときだけです — 価格カタログがそのモデルのレートを更新したとき、または BYOK 画面で手動価格を編集したときに、そのモデルの月初来の使用量が新しいレートで再計算されます（固定スナップショットはありません）。
+    すでに発生した使用量が再算定されるのは、**同じモデルの価格**が変わったときだけです — 価格カタログがそのモデルのレートを更新したとき、または **Adjust model prices** で手動価格を編集したときに、そのモデルの月初来の使用量が新しいレートで再計算されます（固定スナップショットはありません）。
   </Accordion>
 
   <Accordion title="なぜリミットを有効化できないのですか？">

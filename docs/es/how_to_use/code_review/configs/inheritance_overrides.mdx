@@ -29,23 +29,30 @@ Los overrides son por campo. Puedes anular un campo y heredar todo lo demás.
 
 Una vez que se anula, un campo deja de seguir al padre y usa su valor local en su lugar.
 
+## En la app
+
+- **Cambiar de nivel:** el selector de alcance en la parte superior del grupo **Code review** de la barra lateral lista **Global** ("applies to every repository"), luego cada repositorio que tiene su propia configuración, con sus directorios con sangría debajo. Cambiar de alcance te mantiene en la misma página (General, What to review, Kody Rules, What Kody writes).
+- **Agregar un nivel:** en el selector de alcance, elige **Add repository configuration**. El diálogo **Create repository settings** te pide **Select the target repository** y, opcionalmente, **Select the target directories**; haz clic en **Create settings**. Consulta [Configuración a Nivel de Directorio](/es/how_to_use/code_review/configs/directory_level).
+- **Ver overrides:** una píldora numérica junto a un alcance o una página en la barra lateral cuenta los ajustes anulados en ese nivel ("N settings overridden at this level"). En la página, cada campo anulado muestra un distintivo **Overridden**; su botón de deshacer devuelve el campo a la herencia.
+- **Eliminar un nivel:** el menú **⋯** junto al selector de alcance tiene **Delete configuration** (y **Edit directories** para un alcance de directorio).
+
 ## Ejemplos
 
 <Tabs>
   <Tab title="El cambio Global se propaga">
-    Cambias los **Umbrales de severidad** en Global.
+    Cambias **Minimum severity to post** (en **What to review**) en Global.
     
     Todos los repositorios y directorios sin un override se actualizan automáticamente. Los que tienen override permanecen sin cambios.
   </Tab>
 
   <Tab title="Override en Repositorio">
-    En el Repositorio X, anulas el **Mensaje de inicio de revisión**.
+    En el Repositorio X, anulas el mensaje **Review starts** (en **What Kody writes → Comments during the review**).
     
     Los directorios dentro del Repositorio X ahora heredan de él (a menos que tengan su propio override).
   </Tab>
 
   <Tab title="Volver a la herencia">
-    En el Repositorio Y, eliminas el override para **Categorías activas**.
+    En el Repositorio Y, eliminas el override de los interruptores de categoría en **What to review**.
     
     El campo sigue a Global nuevamente y recibe futuros cambios globales.
   </Tab>

@@ -8,20 +8,20 @@ Kodus se integra con GitLab mediante OAuth y webhooks. Una vez configurado, los 
 ## Pasos
 
 1. **Crea una cuenta** en [kodus.io](https://kodus.io) o [aloja Kodus tú mismo](/es/how_to_deploy/deploy_kodus/generic_vm)
-2. **Conecta GitLab** — autoriza mediante OAuth durante la configuración
-3. **Configura webhooks** — sigue la configuración guiada para habilitar los eventos de merge request
-4. **Selecciona proyectos** — elige qué proyectos de GitLab debe revisar Kodus
+2. **Conecta GitLab** — en el paso **Connect your Git tool** del onboarding, haz clic en **Install Gitlab app** para autorizar mediante OAuth, o en **Connect via token** (también puedes conectarlo más tarde desde **Repositories** en la barra lateral)
+3. **Selecciona proyectos** — elige qué proyectos de GitLab debe revisar Kodus
+4. **Webhooks** — Kodus registra automáticamente el webhook de merge request cuando guardas la selección. Si eso no ocurrió (por ejemplo, en algunas instalaciones self-hosted), agrégalo manualmente con la guía de [Webhooks de GitLab](/es/how_to_deploy/platforms/gitlab/gitlab_webhook)
 5. **Abre un merge request** — Kodus lo revisa automáticamente
 
 ## Qué obtienes
 
 - Revisiones automatizadas en cada MR
 - Comentarios publicados directamente en el merge request
-- Reglas y controles de sugerencias personalizables
+- Reglas personalizables, categorías de revisión y un umbral de severidad mínima
 - Validación de lógica de negocio contra tareas vinculadas
 
 ## Configuración personalizada
 
-Coloca un archivo `kodus-config.yml` en la raíz de tu repositorio para personalizar el comportamiento por proyecto.
+Coloca un archivo `kodus-config.yml` en la raíz de tu repositorio para personalizar el comportamiento por proyecto. El archivo anula la configuración de la web una vez que **kodus Config File Overrides Web Preferences** está activado para ese proyecto (**Code review → General**).
 
 Para la guía de configuración completa, consulta [OAuth de GitLab](/es/how_to_deploy/platforms/gitlab/gitlab_oauth) y [Webhooks de GitLab](/es/how_to_deploy/platforms/gitlab/gitlab_webhook).

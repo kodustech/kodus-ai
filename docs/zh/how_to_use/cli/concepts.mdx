@@ -36,7 +36,7 @@ description: "充分利用 Kodus CLI 所需的心智模型。"
 
 - **试用** — 无需认证。每日 5 次审查，适合"先试一下"。
 - **个人登录**（`kodus auth login`） — 个人账户，令牌自动刷新。
-- **团队密钥**（`kodus auth team-key --key kodus_xxxxx`） — 团队共享的密钥，在仪表板生成。推荐用于 AI 代理和任何不希望交互式登录的场景。
+- **团队密钥**（`kodus auth team-key --key kodus_xxxxx`） — 团队共享的密钥，在 Web 应用的 **Organization → CLI keys** 下生成。推荐用于 AI 代理和任何不希望交互式登录的场景。
 - **CI/CD 令牌**（`kodus auth token`） — 长效令牌，在已登录机器上生成，通过 `KODUS_TOKEN` 使用。
 
 完整决策树见 [快速开始](getting_started)。
@@ -57,7 +57,7 @@ Rule
 
 规则叠加在通用 Kodus 审查之上 — AI 将其作为额外判据，而不是替代通用检查。
 
-可从仪表板或 CLI 通过 `kodus rules create|update|view` 管理规则。当您希望规则在版本控制中（脚本生成、入库、配置时重新应用）时，CLI 会非常有用。
+可从 Web 应用（**Code review → Kody Rules**）或 CLI 通过 `kodus rules create|update|view` 管理规则。当您希望规则在版本控制中（脚本生成、入库、配置时重新应用）时，CLI 会非常有用。
 
 ## 仓库设置
 

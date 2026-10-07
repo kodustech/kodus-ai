@@ -8,7 +8,7 @@ Setting up Kodus on GitHub takes a few minutes. Once connected, every pull reque
 ## Steps
 
 1. **Create an account** at [kodus.io](https://kodus.io) or [self-host Kodus](/en/how_to_deploy/deploy_kodus/generic_vm)
-2. **Connect GitHub** — install the Kodus GitHub App when prompted during setup
+2. **Connect GitHub** — in the **Connect your Git tool** step of onboarding, click **Install Github app** (you can also connect later from **Repositories** in the sidebar)
 3. **Select repositories** — choose which repositories Kodus should review
 4. **Open a PR** — Kodus reviews it automatically and posts comments
 
@@ -16,15 +16,15 @@ Setting up Kodus on GitHub takes a few minutes. Once connected, every pull reque
 
 - Automated reviews on every PR (or on-demand with `@kody start-review`)
 - Comments posted directly in the PR with code suggestions
-- Customizable rules, severity filters, and suggestion limits
+- Customizable rules, review categories, and a minimum severity threshold
 - Business logic validation against linked tasks
 
 ## Custom configuration
 
-Drop a `kodus-config.yml` in your repo root to customize behavior per repository. The file overrides web settings automatically.
+Drop a `kodus-config.yml` in your repo root to customize behavior per repository. The file overrides web settings once **kodus Config File Overrides Web Preferences** is on for that repository (**Code review → General**).
 
 ## Using a Personal Access Token
 
-For private repositories or organizations with stricter permissions, you may need to configure a GitHub Personal Access Token (PAT).
+For private repositories or organizations with stricter permissions, you may need to configure a GitHub Personal Access Token (PAT). Choose **Connect via token** in onboarding (or the **Token** tab when connecting GitHub on **Repositories**). Reviews are then posted from the token owner's account, and GitHub Checks/PR status aren't available.
 
 For the full setup guide, see [Quickstart](/en/how_to_use/quickstart) and [GitHub App setup](/en/how_to_deploy/platforms/github/github_app).

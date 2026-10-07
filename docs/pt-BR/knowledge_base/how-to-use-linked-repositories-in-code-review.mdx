@@ -24,14 +24,13 @@ Se nenhum vínculo estiver configurado, o recurso fica totalmente desligado (cus
 
 Repositórios vinculados são **por repositório**, não globais. A relação é direcional: vínculos em `frontend` valem só ao revisar PRs em `frontend`.
 
-1. Abra **Configurações de Revisão de Código**.
-2. Selecione um **repositório específico** (não Global).
-3. Abra a página **Linked Repositories** no menu desse repositório.
-4. Adicione repos irmãos já conectados à sua organização.
-5. Opcionalmente defina:
-   - **Instructions** — dica em texto livre para o Kody (ex.: “API REST que este frontend consome”).
-   - **Ref** — pin opcional de branch/tag. Deixe vazio para usar a cascata automática de refs (abaixo).
-6. Salve.
+1. No seletor de escopo no topo do grupo **Code review** na barra lateral, escolha um **repositório específico** (não Global).
+2. Abra **Linked repositories** (só aparece no escopo de repositório).
+3. Clique em **Add repository** e escolha repos irmãos já conectados à sua organização.
+4. Opcionalmente defina:
+   - **Instructions · optional** — dica em texto livre para o Kody (ex.: “API REST que este frontend consome”).
+   - **Branch / ref pin · optional** — pin de branch/tag. Deixe vazio para usar a cascata automática de refs (abaixo).
+5. Clique em **Save settings**.
 
 Você pode vincular no máximo **3** repositórios. Só repos já conectados à mesma organização são aceitos.
 
@@ -131,5 +130,5 @@ Prefira vínculos **estreitos e direcionais** (o consumidor aponta para o produt
 ## Guias relacionados
 
 - [Como compartilhar padrões de codificação entre repositórios](/pt-BR/knowledge_base/how-to-share-standards-across-repositories) — regras e herança no nível da org (não contexto de código)
-- [Como revisar PRs com contexto específico do projeto](/pt-BR/knowledge_base/how-to-review-prs-with-project-context) — memórias, referências a arquivos, custom prompts, MCP
+- [Como revisar PRs com contexto específico do projeto](/pt-BR/knowledge_base/how-to-review-prs-with-project-context) — memórias, referências a arquivos, instruções de categoria, MCP
 - [Como reduzir ruído na revisão de código](/pt-BR/knowledge_base/how-to-reduce-code-review-noise) — manter reviews focadas ao adicionar mais contexto

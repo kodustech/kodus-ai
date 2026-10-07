@@ -69,4 +69,28 @@ describe('a 404 that is about routing, not about the model id', () => {
 
         expect(friendlyMessage).toMatch(/route/i);
     });
+
+    it('marks the refusal so every surface words it the same way', () => {
+        expect(classifyLLMError(routing404(), 'open_router').routingRefusal).toBe(
+            true,
+        );
+        expect(
+            classifyLLMError(missingModel404(), 'open_router').routingRefusal,
+        ).toBeUndefined();
+    });
+
+    it('marks it when the sentence only lives on the cause', () => {
+        // A RetryError-style wrapper: the extracted provider sample can miss
+        // this, so the dashboard has to get the verdict, not re-derive it.
+        const wrapped = Object.assign(new Error('Not Found'), {
+            status: 404,
+            cause: new Error(
+                'No allowed providers are available for the selected model.',
+            ),
+        });
+
+        expect(classifyLLMError(wrapped, 'open_router').routingRefusal).toBe(
+            true,
+        );
+    });
 });

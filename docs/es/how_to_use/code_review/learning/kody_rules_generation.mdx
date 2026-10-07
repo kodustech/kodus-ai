@@ -12,60 +12,51 @@ description: "Kody puede generar automáticamente reglas personalizadas analizan
 - **Generación Automática**: Kody analiza tu historial de revisiones para crear nuevas reglas
 - **Basado en Datos**: Usa 3 meses de datos de revisión para obtener insights inteligentes
 - **Sugerencias Inteligentes**: Genera reglas basadas en patrones reales del equipo
-- **Importación Manual Requerida**: Las reglas generadas deben revisarse e importarse manualmente para que tengan efecto
+- **Aprobación Opcional**: Las reglas generadas están activas por defecto; activa **Kody knowledge approval** para revisar cada una antes de que tenga efecto
 - **Aprendizaje Continuo**: Actualizaciones semanales de reglas a medida que tu equipo evoluciona
 
-<iframe
-  width="100%"
-  height="400"
-  src="https://www.youtube.com/embed/e1SOwOEVZB4?si=RJ7gKGaLgtJ1CRKt"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  referrerpolicy="strict-origin-when-cross-origin"
-></iframe>
+<Frame caption="Generate from past reviews y Kody knowledge approval en el panel Configuration de Kody Rules">
+  <img src="/images/sync-rules.png" alt="Kody Rules Configuration sheet" />
+</Frame>
 
 ## Cómo Funciona
 
-### 1. Acceder a la Generación de Reglas
+### 1. Activar la Generación de Reglas
 
-Navega a la configuración de tu repositorio:
+La generación de reglas se configura por repositorio:
 
-1. Ve a **Configuración de Code Review** → **Repositorio** → **Kody Rules**
-2. Busca el botón **"Generar Kody Rules"**
-3. Haz clic para iniciar el proceso de generación automática
+1. En la barra lateral, elige el repositorio en el selector de alcance en la parte superior del grupo **Code review** y luego abre **Kody Rules**
+2. Haz clic en **Configuration** para abrir el panel lateral
+3. Activa **Generate from past reviews**
+4. Opcionalmente, usa el selector de revisores debajo del interruptor (**Learning from all reviewers** por defecto) para excluir a los desarrolladores de cuyos comentarios de revisión Kody no debe aprender
 
 ### 2. Proceso de Análisis
 
-Cuando haces clic en "Generar Kody Rules", Kody:
+La primera vez que activas **Generate from past reviews** para un repositorio, Kody:
 
-- **Escanea el Historial de Revisiones**: Analiza los últimos 3 meses de revisiones de código en tu repositorio
+- **Escanea el Historial de Revisiones**: Analiza los PRs cerrados de los últimos 3 meses en tu repositorio
 - **Identifica Patrones**: Descubre temas comunes de feedback y preferencias de codificación
 - **Extrae Estándares**: Convierte patrones de revisión en reglas accionables
-- **Genera Sugerencias**: Crea sugerencias de reglas personalizadas adaptadas al estilo de tu equipo
+- **Genera Reglas**: Crea reglas personalizadas adaptadas al estilo de tu equipo
+
+Esto puede tardar unos minutos. Luego, las reglas generadas aparecen en la página **Kody Rules** del repositorio.
 
 ### 3. Revisar las Reglas Generadas
 
-Una vez que el análisis esté completo:
+Las reglas generadas se listan con el origen **Kody-generated** (usa **Filters → Origin → Kody-generated** para ver solo esas). Abre cualquiera de ellas para editarla, pausarla o eliminarla como cualquier otra regla.
 
-1. Aparecerá un botón **"Ver Nuevas Reglas"**
-2. Haz clic para revisar las sugerencias de reglas generadas
-3. Navega por las reglas propuestas y sus explicaciones
-4. **Importante**: Las reglas aún no están activas — son solo sugerencias en este punto
-
-### 4. Importar Reglas (Requerido para la Activación)
+### 4. Aprobar Reglas Antes de que Tengan Efecto
 
 <Warning>
-  **Paso Crítico**: Las reglas generadas NO tendrán efecto hasta que las
-  importes manualmente.
+  Por defecto, las reglas generadas están **activas en cuanto se crean** y se
+  aplican en la siguiente revisión de código.
 </Warning>
 
-Para activar las reglas:
+Para revisar las reglas generadas antes de que tengan efecto, activa **Kody knowledge approval** en el mismo panel **Configuration**. Con la aprobación activada:
 
-- **Elige Selectivamente**: Importa solo las reglas que coincidan con las necesidades de tu equipo
-- **Personaliza**: Modifica las reglas antes de importarlas si es necesario
-- **Aplica**: Agrega las reglas seleccionadas a tu conjunto de reglas activas
-- **Activación**: Solo las reglas importadas se aplicarán durante las revisiones de código
+- **Revisión Pendiente**: Las nuevas reglas generadas llegan a la sección **Pending review** en la parte superior de la página de Kody Rules en lugar de aplicarse
+- **Elige Selectivamente**: Usa **Approve** en las reglas que coincidan con las necesidades de tu equipo y **Discard** en el resto
+- **Activación**: Solo las reglas aprobadas se aplican durante las revisiones de código
 
 ## Aprendizaje Continuo
 
@@ -74,7 +65,7 @@ Después de la configuración inicial, Kody mantiene un ciclo de aprendizaje con
 - **Actualizaciones Semanales**: Kody genera nuevas sugerencias de reglas cada semana
 - **Estándares en Evolución**: Las sugerencias de reglas se adaptan a medida que evoluciona el estilo de codificación de tu equipo
 - **Precisión Refinada**: Las sugerencias se vuelven más precisas con el tiempo
-- **Revisiones Regulares**: Nuevas sugerencias de reglas aparecen para tu revisión semanalmente
+- **Revisiones Regulares**: Nuevas reglas aparecen semanalmente (en **Pending review** cuando la aprobación está activada)
 
 ## Requisitos
 

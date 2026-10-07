@@ -41,8 +41,8 @@ New endpoints default to authenticated + authorized, never public.
 
 ```
 Name: Data mutations must have audit logging
-Scope: File
-Paths: src/services/**/*.ts, src/repositories/**/*.ts
+Execution mode: Per file
+Path: src/services/**/*.ts, src/repositories/**/*.ts
 Severity: Critical
 Instructions:
   If fileDiff contains create, update, or delete operations
@@ -57,8 +57,8 @@ Instructions:
 
 ```
 Name: Soft delete required for user data
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: Critical
 Instructions:
   Flag any hard delete (DELETE FROM, .delete(), .destroy())
@@ -73,8 +73,8 @@ Instructions:
 
 ```
 Name: No PII in logs or error responses
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: Critical
 Instructions:
   Check fileDiff for logging statements (logger.*, console.*)
@@ -87,8 +87,8 @@ Instructions:
 
 ```
 Name: PII fields must use encryption helpers
-Scope: File
-Paths: src/entities/**/*.ts, src/models/**/*.ts
+Execution mode: Per file
+Path: src/entities/**/*.ts, src/models/**/*.ts
 Severity: Critical
 Instructions:
   If fileDiff adds or modifies entity/model fields that contain
@@ -101,7 +101,7 @@ Instructions:
 
 ```
 Name: New endpoints must have auth guards
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   Check pr_files_diff for new route definitions or controller
@@ -118,7 +118,7 @@ Instructions:
 
 ```
 Name: Compliance impact assessment
-Scope: Pull Request
+Execution mode: Per PR
 Severity: High
 Instructions:
   If pr_files_diff touches any file in src/entities/,
@@ -132,9 +132,9 @@ Instructions:
 
 ## Step 6 — Configure for enforcement
 
-1. Enable **Request Changes** so compliance violations block merge
+1. In **Code review → General**, turn on **Enable changing status of Review to 'Request Changes'** so compliance violations block merge
 2. Set all compliance rules to **Critical** severity
-3. Use rule inheritance to apply compliance rules across all repos in the organization
+3. Use rule inheritance to apply compliance rules across all repos in the organization — create them with **Global** selected in the scope picker
 
 ## Checklist
 
@@ -144,7 +144,7 @@ Instructions:
 - [ ] Encryption rule covers entity/model definitions
 - [ ] Access control rule covers all new endpoints
 - [ ] Request Changes enabled for critical findings
-- [ ] Rules are set at organization level for consistency
+- [ ] Rules are set at the **Global** scope (organization-wide) for consistency
 - [ ] A test PR verified the rules fire correctly
 
 For more on configuring rules, see [Kody Rules](/en/how_to_use/code_review/configs/kody_rules).

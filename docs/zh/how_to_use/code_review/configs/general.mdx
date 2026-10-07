@@ -1,7 +1,10 @@
 ---
 title: "通用设置"
-description: "审查的核心设置 —— 节奏、PR 工作流、跳过条件和分析类型 —— 以及 kodus-config.yml 的完整参考。"
+description: "Code review → General 上的审查核心设置 —— 节奏、PR 工作流和跳过条件 —— 以及 kodus-config.yml 的完整参考。"
 ---
+
+在侧边栏中打开 **Code review → General**(页面标题为 **General settings**)。审查类别和严重程度阈值已不在此页 ——
+它们位于 **Code review → What to review**。
 
 ## 核心设置
 
@@ -17,8 +20,11 @@ description: "审查的核心设置 —— 节奏、PR 工作流、跳过条件�
   **在你主动开启之前，该文件会被忽略。** `kodusConfigFileOverridesWebPreferences` 默认为
   `false`，这意味着 Kody 根本不会读取 `kodus-config.yml` —— 仅仅提交文件不会产生任何效果。
 
-  请先在 **Settings → Code Review → 对应代码库 → General** 中开启，或在网页界面的代码库
-  （或目录）级别设置 `kodusConfigFileOverridesWebPreferences: true`。之后该文件才会生效。
+  请先开启:在侧边栏 **Code review** 分组顶部的范围选择器中选择该代码库(或目录),打开
+  **Code review → General**,并启用 **kodus Config File Overrides Web Preferences**
+  (`kodusConfigFileOverridesWebPreferences`)。该开关只存在于代码库和目录范围。之后该文件才会生效 ——
+  届时侧边栏会在范围选择器下方显示 **kodus-config.yml applied**、**kodus-config.yml not found** 或
+  **kodus-config.yml unavailable** 徽标。
 </Warning>
 
 开启后，该文件会合并到你的网页设置之上，因此你只需声明想要修改的键 —— 未声明的项会保留网页中的值。
@@ -49,28 +55,36 @@ ignorePaths:
     - 'package.json'
     - '.env'
     - '**/*.json'
+    # ...已省略:随产品发布的默认值还列出了数百条其他模式
 ignoredTitleKeywords: []
 baseBranches: []
 enableCommittableSuggestions: true
-byokModel: '' # 留空 = 继承 BYOK 设置中的模型
+byokModel: '' # 留空 = 继承(目录 -> 代码库 -> AI providers 中的主模型)
 
-# 仅 Teams / Enterprise。审查时代理可以查阅的关联代码库。
+# 关联代码库 —— 仅 Teams / Enterprise。审查时代理可以查阅的关联代码库。
 # 建议上限为 3；留空 = 关闭该功能。
 linkedRepositories: []
 
-# 审查类别
+# what to review:类别
 reviewOptions:
     bug: true
     performance: true
     security: true
     business_logic: true
 
-# 建议控制
+# what to review:确定性检查(需主动开启,beta)
+deterministicEvidence:
+    ciChecks: false # 读取你自己的流水线已经产出的 CI 结果
+    tools: # 即使已启用,当你的 CI 已运行等效工具时也会跳过
+        secrets: false # 对变更文件进行凭据扫描
+        dependencies: false # 此 PR 新增或升级的依赖中的已知 CVE
+
+# what to review:严重程度阈值
 suggestionControl:
     applyFiltersToKodyRules: false
     severityLevelFilter: 'medium' # low | medium | high | critical
 
-# PR 摘要
+# what Kody writes:PR 摘要
 summary:
     generatePRSummary: true
     behaviourForNewCommits: 'none'
@@ -84,7 +98,7 @@ kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:
     enabled: false
 
-# 自定义消息
+# what Kody writes:审查过程中的评论 + 评论可见性
 customMessages:
     globalSettings:
         hideComments: false # 仅 GitHub
@@ -111,6 +125,7 @@ customMessages:
 ### 自动审查
 
 Kody 可以在 PR 打开时自动审查,或仅在您评论 `@kody start-review` 时审查。
+这就是 **Enable Automated Code Review** 开关。
 
 <Info>
   这仅影响**初始审查**。对于后续提交,请参阅下面的审查节奏。
@@ -118,7 +133,7 @@ Kody 可以在 PR 打开时自动审查,或仅在您评论 `@kody start-review` 
 
 #### 审查节奏
 
-Kody 如何处理后续提交的审查:
+在 **Enable Automated Code Review** 开启时显示于其下方。Kody 如何处理后续提交的审查:
 
 <Tabs>
   <Tab title="自动">
@@ -128,7 +143,7 @@ Kody 如何处理后续提交的审查:
   <Tab title="自动暂停">
     在快速连续推送期间暂停审查(例如,15 分钟内 3 次推送)。防止在活跃编码期间产生垃圾信息。
 
-    默认值:3 次推送 / 15 分钟
+    默认值:3 次推送 / 15 分钟(**Pushes to trigger pause** / **Time window (minutes)**)
   </Tab>
 
   <Tab title="手动">
@@ -139,20 +154,24 @@ Kody 如何处理后续提交的审查:
 ### PR 工作流
 
 #### 自动批准 PR
-当未发现问题时,Kody 会批准 PR。
+**Enable Pull Request Approval** —— 当未发现问题时,Kody 会批准 PR。
 
-**平台:** GitHub, GitLab, Bitbucket
+**平台:** GitHub, GitLab, Bitbucket, Azure Repos, Forgejo
 
 #### 请求更改
-当发现严重问题时,Kody 会请求更改。
+**Enable changing status of Review to 'Request Changes'** —— 当发现严重问题时,Kody 会请求更改。
 
-**平台:** GitHub, Bitbucket
+**平台:** GitHub, Bitbucket, Azure Repos, Forgejo(当 GitLab 是你唯一连接的平台时,该开关会被隐藏)
 
 ### 跳过条件
 
-**忽略的文件:** 使用 glob 模式(例如 `**/*.js`),每行一个。默认:`yarn.lock`, `package-lock.json`, `package.json`, `.env`, `**/*.json`
+**Ignored files:** Kody 跳过的文件的 glob 模式(例如 `**/*.js`)。该字段会以标签形式显示部分模式;
+点击 **Edit** 打开 **Ignored files** 弹窗,其中每个新模式都会校验 glob 语法是否有效,**Test a file**
+输入框会告诉你某个路径会被忽略(以及由哪个模式忽略)还是会被审查。**Apply** 只会更新该字段 ——
+在你点击 **Save settings** 之前不会保存任何内容。默认:`yarn.lock`, `package-lock.json`, `package.json`,
+`.env`, `**/*.json`,以及一长串构建、二进制和 IDE 文件。
 
-**忽略的标题:** 跳过包含特定关键字的 PR(不区分大小写,最多 100 个字符)
+**Ignore title keywords:** 跳过包含特定关键字的 PR(不区分大小写,最多 100 个字符)
 
 **基础分支:** 限定*哪些*目标分支会被审查。
 
@@ -175,13 +194,21 @@ Kody 如何处理后续提交的审查:
   `a-z A-Z 0-9 / * - _ ! = :`,且不允许使用 `**`。
 </Info>
 
-**草稿 PR:** `runOnDraft` 默认为 `true`,因此草稿也会被审查。设为 `false` 可跳过它们,
-直到 PR 被标记为 ready。
+**草稿 PR:** **Enable Running on Draft Pull Requests**(`runOnDraft`)默认开启,因此草稿也会被审查。
+关闭它可跳过草稿,直到 PR 被标记为 ready。
 
-## 分析类型
+### 此页面上的其他设置
 
-Kody 从四个类别进行审查。你可以在 **Analysis Types** 中,或通过 `kodus-config.yml` 的
-`reviewOptions` 逐项启用或禁用。
+- **Show Status Feedback** —— 当审查被跳过或被阻止时,Kody 会显示状态反馈(表情回应或评论)。
+- **Enable committable suggestions**(Alpha,仅 GitHub)—— 可直接作为提交应用的建议。
+- **Code review model**(仅代码库和目录范围,配置 AI 提供商后显示)—— 该范围用于审查的模型;
+  默认继承(`byokModel`)。
+- **Kody Language**(仅 Global)—— Kody 在代码审查回复中使用的语言。
+
+## 审查类别(原 Analysis Types)
+
+Kody 从四个类别进行审查。类别已不在 **General** 中:在 **Code review → What to review** 上通过各自的
+开关启用或禁用每个类别,或通过 `kodus-config.yml` 的 `reviewOptions` 设置。
 
 - **Bug** —— 逻辑错误、竞态条件、空指针解引用、边界情况和错误行为。
 - **Security** —— 漏洞、注入、认证问题、数据泄露和密钥。

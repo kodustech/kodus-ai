@@ -5,7 +5,7 @@ description: "Detecte e importe automaticamente seus arquivos de regras existent
 
 Kodus pode sincronizar e importar automaticamente seus arquivos de regras da IDE existentes para aprimorar o code review de Kody com os padrões e preferências de codificação estabelecidos pela sua equipe.
 
-<Frame caption="Habilite Sincronizar automaticamente regras do repositório nas suas configurações">
+<Frame caption="Auto-sync rules from repo no painel Configuration do Kody Rules (escopo de repositório)">
   <img src="/images/sync-rules.png" />
 </Frame>
 
@@ -61,8 +61,8 @@ Kodus detecta e importa automaticamente os seguintes padrões de arquivos de reg
 ## Como Funciona
 
 ### Configuração Inicial
-1. **Habilitar Sincronização Automática**: Alterne a opção "Sincronizar automaticamente regras do repositório" nas suas configurações
-2. **Modal de Primeira Sincronização**: Um modal aparecerá perguntando se você deseja sincronizar pela primeira vez
+1. **Habilitar Sincronização Automática**: Na barra lateral, escolha o repositório no seletor de escopo no topo do grupo **Code review**, abra **Kody Rules**, clique em **Configuration** e ative **Auto-sync rules from repo**
+2. **Diálogo de Primeira Sincronização**: Um diálogo (**Sync repository rules now?**) pergunta se você deseja sincronizar pela primeira vez. Escolha **Sync now**, ou **Skip initial scan** para aguardar a próxima sincronização
 3. **Varredura do Repositório**: Quando você confirmar, Kodus varre todo o seu repositório em busca de arquivos de regras suportados
 4. **Geração de Regras**: Um LLM processa os arquivos encontrados e cria automaticamente as Kody Rules correspondentes. Exceção: arquivos de template `.kody/rules/**` e `rules/**/*.md` são importados **verbatim** — sem conversão por LLM — preservando instruções, exemplos e identificadores exatamente como escritos. Se um desses arquivos não seguir o template (frontmatter ausente/inválido, ou sem `title`), ele volta para o caminho do LLM.
 
@@ -117,4 +117,4 @@ Se uma regra aparece como ativa na UI mas nunca aparece em `[kody-rules-eval]` p
 
 ## Limites de regras
 
-Instâncias self-hosted rodando **sem licença válida** (Community Edition) avaliam no máximo **10 regras** por review (as mais antigas primeiro). Instâncias self-hosted licenciadas e cloud não têm esse limite. Se regras além da 10ª silenciosamente não disparam numa instância sem licença, esse limite é o motivo.
+Organizações no plano **Free** da cloud (ou cuja assinatura foi cancelada ou expirou) e instâncias self-hosted rodando **sem licença válida** (Community Edition) avaliam no máximo **10 regras ativas** por review (as mais antigas primeiro). Regras além do limite continuam na lista como **Locked** e são puladas em todo PR; um banner em **Code review → Kody Rules** informa quantas estão sendo puladas. Planos pagos da cloud e instâncias self-hosted licenciadas não têm esse limite. Se regras além da 10ª não disparam, esse limite é o motivo.

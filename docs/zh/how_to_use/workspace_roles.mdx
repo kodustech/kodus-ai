@@ -50,21 +50,23 @@ Kodus 工作区支持**基于角色的访问控制(RBAC)**,允许您管理组织
 
 ## 管理工作区成员
 
+工作区成员在 **Organization → Subscription** 的 **Workspace members** 标签页中管理——没有单独的成员页面。只有**所有者**可以邀请成员、更改角色或删除成员。
+
 ### 添加新成员
 
-1. 导航到您的工作区**成员**部分
-2. 点击**"邀请成员"**按钮
-3. 输入成员的电子邮件地址
-4. 为新成员选择适当的角色
-5. 发送邀请
+1. 在侧边栏中打开 **Organization → Subscription**,然后选择 **Workspace members** 标签页
+2. 点击 **Invite member**
+3. 在 **Workspace member invitation** 中,输入成员的电子邮件并点击 **Add to invite list**(如需邀请更多人,请重复此操作)
+4. 点击 **Send invites**
+5. 受邀成员以 **Contributor** 身份加入;之后可更改其角色(见下文)
 
 ### 工作区成员的自动加入
 
 启用自动加入以允许具有匹配电子邮件域的用户自动加入您的工作区。
 
 **如何启用:**
-1. 转到[组织设置](https://app.kodus.io/organization/general)
-2. 为您的组织启用自动加入
+1. 转到 **Organization → General**([app.kodus.io/organization/general](https://app.kodus.io/organization/general))
+2. 在 **Auto Join** 下,打开 **Enable Auto Join**,输入您的域名并保存
 3. 目前仅适用于您注册的账户电子邮件域
 4. 需要不同的域?在社区中联系我们
 
@@ -76,18 +78,22 @@ Kodus 工作区支持**基于角色的访问控制(RBAC)**,允许您管理组织
 
 ### 更改成员角色
 
-1. 转到工作区中的**成员**部分
+1. 转到 **Organization → Subscription → Workspace members**
 2. 找到您要更改角色的成员
-3. 点击他们当前的角色下拉菜单
-4. 从可用选项中选择新角色
+3. 打开其 **Role** 列中的选择框
+4. 选择新角色(**Owner**、**Billing Manager**、**Repo Admin** 或 **Contributor**)
 5. 更改立即生效
+
+对于**代码库管理员**,请使用其角色旁边的 **+** 按钮分配他们可以编辑的代码库,该按钮会打开 **Assign repositories**。
 
 ### 删除成员
 
-1. 在**成员**部分,找到要删除的成员
-2. 点击**"操作"**菜单(三个点)
-3. 选择**"从工作区删除"**
-4. 在对话框中确认删除
+1. 在 **Organization → Subscription → Workspace members** 中,找到要删除的成员
+2. 打开其所在行的 **Actions** 菜单(三个点)
+3. 选择 **Delete**
+4. 在对话框中点击 **Remove** 确认
+
+同一菜单中还有 **Approve**(用于标记为 **Needs approval** 的成员)和 **Copy invite link**(用于再次分享成员的邀请链接)。
 
 ## 安全考虑
 
@@ -101,7 +107,7 @@ Kodus 工作区支持**基于角色的访问控制(RBAC)**,允许您管理组织
 <AccordionGroup>
   <Accordion title="我无法邀请新成员到工作区">
     **解决方案:**
-    - 验证您拥有所有者或代码库管理员角色
+    - 验证您拥有所有者角色——只有所有者可以邀请成员
     - 检查您的工作区是否已达到任何系统限制
     - 确保您在账户中拥有正确的权限
   </Accordion>
@@ -109,7 +115,7 @@ Kodus 工作区支持**基于角色的访问控制(RBAC)**,允许您管理组织
   <Accordion title="成员无法编辑代码审查配置">
     **解决方案:**
     - 确认成员对特定代码库拥有代码库管理员或所有者角色
-    - 检查成员是否对他们想要编辑的代码库具有"自己的"权限
+    - 对于代码库管理员,检查该代码库是否已分配给他们(**Workspace members** 的 **Role** 列中的 **Assign repositories**)
     - 验证成员的角色分配是否正确
   </Accordion>
 

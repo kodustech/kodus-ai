@@ -28,7 +28,7 @@ Há duas formas de impedir que uma regra seja herdada:
 
 ### 1) Marcar uma regra como não herdável (no momento da criação)
 
-Ao criar uma regra em qualquer nível (Global, Repositório ou Diretório), você pode marcá-la como "não herdável".
+Ao criar uma regra em qualquer nível (Global, Repositório ou Diretório), você pode marcá-la como "não herdável": no diálogo da regra, abra **Advanced settings** e desative **Inheritable** (ele vem ativado por padrão).
 
 Efeito:
 - A regra se aplica apenas no nível onde foi criada.
@@ -38,7 +38,7 @@ Use isso quando uma regra é intencionalmente específica para um escopo particu
 
 ### 2) Excluir uma regra pai de um nível filho
 
-A partir de uma configuração filha (Repositório ou Diretório), você pode excluir explicitamente uma regra que de outra forma seria herdada do pai.
+A partir de uma configuração filha (Repositório ou Diretório), você pode excluir explicitamente uma regra que de outra forma seria herdada do pai: em **Code review → Kody Rules** nesse escopo, abra a regra herdada e ative **Override and disable for this scope**. A regra passa a aparecer como **Disabled** nesse nível.
 
 Efeito:
 - A regra não é aplicada naquele nível filho exato.

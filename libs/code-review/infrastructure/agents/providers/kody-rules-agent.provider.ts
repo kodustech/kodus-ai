@@ -261,7 +261,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // templating, so a PR-scope kody-rules finding's
             // suggestionContent ships in raw English regardless of the
             // org's configured language — the exact bug reported on
-            // Starian's GitLab MR !16111 (file-scope findings get a second
+            // a customer GitLab MR (file-scope findings get a second
             // chance via formatSuggestionContent downstream; PR-scope ones
             // do not — see kody-rules-sharded.judge.ts's ShardedJudgeInput
             // doc comment).

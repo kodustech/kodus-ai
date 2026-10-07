@@ -7,19 +7,19 @@ If you already have rules defined in Cursor, GitHub Copilot, Claude, or other AI
 
 ## How it works
 
-Kodus detects rule files in your repository and offers to sync them as Kody Rules. Supported file formats include:
+Kodus detects rule files in your repository and syncs them as Kody Rules. Supported file formats include:
 
 - `.cursorrules` (Cursor)
 - `.github/copilot-instructions.md` (GitHub Copilot)
-- `.claude` files (Claude)
+- `CLAUDE.md` (Claude)
 - Other AI tool configuration files
 
 ## Setting it up
 
-1. Go to **Code Review Settings** → **Kody Rules**
-2. Kodus automatically detects compatible rule files in your repository
-3. Review the detected rules and import the ones you want
-4. Imported rules are added as Kody Rules and enforced during code review
+1. Pick the repository in the scope picker at the top of the **Code review** group in the sidebar, open **Kody Rules**, and click **Configuration**
+2. Turn on **Auto-sync rules from repo**. The first time, Kodus asks whether to scan the repository right away (**Sync now**) or **Skip initial scan**
+3. Kodus imports the rule files it finds as Kody Rules (origin **Auto-sync**) and keeps them in sync from then on
+4. Imported rules are enforced during code review right away. To review them first, turn on **Kody knowledge approval** in the same **Configuration** sheet: imported rules then wait in the **Pending review** section until you **Approve** or **Discard** them
 
 ## Why this matters
 

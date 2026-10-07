@@ -1,7 +1,10 @@
 ---
 title: "Geral"
-description: "As configurações centrais da revisão — cadência, fluxo de PR, condições de pulo e tipos de análise — mais a referência completa do kodus-config.yml."
+description: "As configurações centrais da revisão em Code review → General — cadência, fluxo de PR e condições de pulo — mais a referência completa do kodus-config.yml."
 ---
+
+Na barra lateral, abra **Code review → General** (título da página **General settings**). As categorias
+de revisão e o limite de severidade não ficam mais aqui — eles estão em **Code review → What to review**.
 
 ## Configurações Principais
 
@@ -19,9 +22,12 @@ repositório, em vez de usar a interface web.
   `kodusConfigFileOverridesWebPreferences` é `false`, ou seja, o Kody nunca lê o
   `kodus-config.yml` — só fazer commit do arquivo não surte efeito nenhum.
 
-  Habilite primeiro em **Settings → Code Review → o repositório → General**, ou defina
-  `kodusConfigFileOverridesWebPreferences: true` no nível de repositório (ou diretório) pela
-  interface web. Só então o arquivo passa a valer.
+  Habilite primeiro: escolha o repositório (ou diretório) no seletor de escopo no topo do grupo
+  **Code review** na barra lateral, abra **Code review → General** e ative **kodus Config
+  File Overrides Web Preferences** (`kodusConfigFileOverridesWebPreferences`). O toggle só
+  existe nos escopos de repositório e diretório. Só então o arquivo passa a valer — a barra lateral
+  passa a mostrar um badge **kodus-config.yml applied**, **kodus-config.yml not found** ou
+  **kodus-config.yml unavailable** abaixo do seletor de escopo.
 </Warning>
 
 Uma vez habilitado, o arquivo é mesclado por cima das configurações web: você só precisa
@@ -55,28 +61,36 @@ ignorePaths:
     - 'package.json'
     - '.env'
     - '**/*.json'
+    # ...abreviado: o padrão que vem configurado lista várias centenas de padrões a mais
 ignoredTitleKeywords: []
 baseBranches: []
 enableCommittableSuggestions: true
-byokModel: '' # vazio = herda o modelo das suas configurações de BYOK
+byokModel: '' # vazio = herda (diretório -> repositório -> o modelo principal em AI providers)
 
-# Apenas Teams / Enterprise. Repositórios irmãos que o agente pode consultar na revisão.
+# repositórios vinculados — apenas Teams / Enterprise. Repositórios irmãos que o agente pode consultar na revisão.
 # Limite recomendado de 3; vazio = recurso desligado.
 linkedRepositories: []
 
-# categorias de revisão
+# o que revisar: categorias
 reviewOptions:
     bug: true
     performance: true
     security: true
     business_logic: true
 
-# controle de sugestões
+# o que revisar: verificações determinísticas (opt-in, beta)
+deterministicEvidence:
+    ciChecks: false # lê os resultados de CI que seu próprio pipeline já produziu
+    tools: # uma ferramenta habilitada ainda é pulada quando seu CI já roda uma equivalente
+        secrets: false # varredura de credenciais nos arquivos alterados
+        dependencies: false # CVEs conhecidas em dependências que este PR adiciona ou atualiza
+
+# o que revisar: limite de severidade
 suggestionControl:
     applyFiltersToKodyRules: false
     severityLevelFilter: 'medium' # low | medium | high | critical
 
-# resumo do PR
+# o que o Kody escreve: resumo do PR
 summary:
     generatePRSummary: true
     behaviourForNewCommits: 'none'
@@ -90,7 +104,7 @@ kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:
     enabled: false
 
-# mensagens customizadas
+# o que o Kody escreve: comentários durante a revisão + visibilidade dos comentários
 customMessages:
     globalSettings:
         hideComments: false # apenas GitHub
@@ -118,6 +132,7 @@ customMessages:
 ### Revisão Automatizada
 
 Kody pode revisar PRs automaticamente quando abertos, ou apenas quando você comentar `@kody start-review`.
+Este é o toggle **Enable Automated Code Review**.
 
 <Info>
   Isso afeta apenas a **revisão inicial**. Para commits subsequentes, veja Cadência de Revisão abaixo.
@@ -125,7 +140,8 @@ Kody pode revisar PRs automaticamente quando abertos, ou apenas quando você com
 
 #### Cadência de Revisão
 
-Como Kody lida com revisões em commits subsequentes:
+Exibida abaixo de **Enable Automated Code Review** quando ele está ativado. Como Kody lida com revisões
+em commits subsequentes:
 
 <Tabs>
   <Tab title="Automático">
@@ -135,7 +151,7 @@ Como Kody lida com revisões em commits subsequentes:
   <Tab title="Auto-pause">
     Pausa as revisões durante pushes consecutivos rápidos (ex.: 3 pushes em 15 minutos). Evita spam durante codificação ativa.
     
-    Padrões: 3 pushes / 15 minutos
+    Padrões: 3 pushes / 15 minutos (**Pushes to trigger pause** / **Time window (minutes)**)
   </Tab>
   
   <Tab title="Manual">
@@ -146,20 +162,27 @@ Como Kody lida com revisões em commits subsequentes:
 ### Fluxo do PR
 
 #### Auto-aprovar PRs
-Kody aprova PRs quando nenhum problema é encontrado.
+**Enable Pull Request Approval** — Kody aprova PRs quando nenhum problema é encontrado.
 
-**Plataformas:** GitHub, GitLab, Bitbucket
+**Plataformas:** GitHub, GitLab, Bitbucket, Azure Repos, Forgejo
 
 #### Solicitar Alterações
-Kody solicita alterações ao encontrar problemas críticos.
+**Enable changing status of Review to 'Request Changes'** — Kody solicita alterações ao encontrar
+problemas críticos.
 
-**Plataformas:** GitHub, Bitbucket
+**Plataformas:** GitHub, Bitbucket, Azure Repos, Forgejo (o toggle fica oculto quando o GitLab é sua
+única plataforma conectada)
 
 ### Condições de Pulo
 
-**Arquivos Ignorados:** Use padrões glob (ex.: `**/*.js`), um por linha. Padrão: `yarn.lock`, `package-lock.json`, `package.json`, `.env`, `**/*.json`
+**Ignored files:** Padrões glob (ex.: `**/*.js`) para arquivos que o Kody pula. O campo mostra alguns
+padrões como chips; clique em **Edit** para abrir o modal **Ignored files**, onde cada novo padrão é
+validado quanto à sintaxe glob e a caixa **Test a file** informa se um caminho seria
+ignorado (e por qual padrão) ou revisado. **Apply** só atualiza o campo — nada é salvo
+até você clicar em **Save settings**. Padrão: `yarn.lock`, `package-lock.json`, `package.json`,
+`.env`, `**/*.json`, mais uma longa lista de arquivos de build, binários e de IDE.
 
-**Títulos Ignorados:** Pule PRs com palavras-chave específicas (sem distinção de maiúsculas/minúsculas, máx. 100 caracteres)
+**Ignore title keywords:** Pule PRs com palavras-chave específicas (sem distinção de maiúsculas/minúsculas, máx. 100 caracteres)
 
 **Branches Base:** Restringe *quais* branches de destino são revisadas.
 
@@ -183,13 +206,24 @@ Kody solicita alterações ao encontrar problemas críticos.
   caracteres, só pode usar `a-z A-Z 0-9 / * - _ ! = :`, e `**` não é permitido.
 </Info>
 
-**PRs em rascunho:** `runOnDraft` é `true` por padrão, então rascunhos são revisados. Defina
-como `false` para pular esses PRs até serem marcados como prontos.
+**PRs em rascunho:** **Enable Running on Draft Pull Requests** (`runOnDraft`) vem ativado por padrão,
+então rascunhos são revisados. Desative-o para pular esses PRs até serem marcados como prontos.
 
-## Tipos de Análise
+### Outras configurações desta página
 
-O Kody revisa em quatro categorias. Habilite ou desabilite cada uma em **Analysis Types**, ou
-pelo `reviewOptions` no `kodus-config.yml`.
+- **Show Status Feedback** — o Kody mostra um feedback de status (reação com emoji ou comentário) quando uma revisão
+  é pulada ou bloqueada.
+- **Enable committable suggestions** (Alpha, apenas GitHub) — sugestões que podem ser aplicadas
+  diretamente como commits.
+- **Code review model** (apenas nos escopos de repositório e diretório, exibido quando há um provedor de IA
+  configurado) — o modelo com que este escopo revisa; por padrão, ele é herdado (`byokModel`).
+- **Kody Language** (apenas Global) — o idioma que o Kody usa nas respostas de code review.
+
+## Categorias de revisão (antigos Analysis Types)
+
+O Kody revisa em quatro categorias. As categorias não ficam mais em **General**: ative ou desative cada uma
+com o switch dela em **Code review → What to review**, ou pelo `reviewOptions` no
+`kodus-config.yml`.
 
 - **Bug** — erros de lógica, race conditions, null dereferences, edge cases e comportamento incorreto.
 - **Security** — vulnerabilidades, injeção, problemas de autenticação, exposição de dados e secrets.

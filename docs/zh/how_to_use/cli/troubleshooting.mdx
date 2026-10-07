@@ -29,7 +29,7 @@ kodus review --verbose    # 或在任意命令上加 --verbose
 
   <Accordion title="AUTH_REQUIRED 或 401 Unauthorized">
     - 运行 `kodus auth status` 查看当前模式。
-    - 若使用团队密钥，在 <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> 核对密钥是否仍有效。
+    - 若使用团队密钥，在 **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）下核对其 **Status** 是否仍为 **Active**。
     - 若使用个人登录，再次运行 `kodus auth login` — 刷新令牌可能已过期。
     - 对于 CI，确认流水线运行环境中设置了 `KODUS_TOKEN`（或 `KODUS_TEAM_KEY`）。
     - 若为自托管，确认 `KODUS_API_URL` 指向正确实例。
@@ -89,7 +89,7 @@ kodus review --verbose    # 或在任意命令上加 --verbose
   </Accordion>
 
   <Accordion title="达到设备数上限">
-    自托管实例可按组织强制设备数上限。请联系管理员提高上限或在仪表板中移除旧设备。
+    自托管实例可按组织强制设备数上限。Web 应用中没有可供清理的设备列表，因此请联系管理员提高上限（API 的 `CLI_DEVICE_LIMIT` 设置；默认值 `0` 表示不限制）。
   </Accordion>
 </AccordionGroup>
 

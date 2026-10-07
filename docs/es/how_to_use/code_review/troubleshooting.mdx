@@ -31,9 +31,9 @@ Si estás conectado mediante un token, asegúrate de verificar estos puntos:
 
 ### Problemas de Configuración
 
-- **Revisiones Automatizadas**: Asegúrate de que las revisiones automatizadas estén habilitadas en tu [Configuración Global](https://app.kodus.io/settings/code-review/global/general). Si están deshabilitadas, inicia las revisiones manualmente con `@kody start-review`.
-- **Tipos de Revisión**: Asegúrate de que al menos un tipo de revisión esté seleccionado para que Kody proporcione sugerencias. [Configurar tipos de revisión](https://app.kodus.io/settings/code-review/global/general).
-- **Revisiones de Ramas**: Por defecto, Kody revisa los PRs mergeados en la rama predeterminada. Para incluir ramas adicionales, [actualiza tu configuración](https://app.kodus.io/settings/code-review/global/general).
+- **Revisiones Automatizadas**: Asegúrate de que **Enable Automated Code Review** esté activado en **Code review → General** en el alcance Global ([abrir](https://app.kodus.io/settings/code-review/global/general)). Si están deshabilitadas, inicia las revisiones manualmente con `@kody start-review`.
+- **Categorías de Revisión**: Asegúrate de que al menos una categoría (Bug, Performance, Security, Business Logic) esté activada para que Kody proporcione sugerencias, y revisa **Minimum severity to post**. Ambas opciones están en **Code review → What to review** ([abrir](https://app.kodus.io/settings/code-review/global/review-scope)).
+- **Revisiones de Ramas**: Por defecto, Kody revisa los PRs mergeados en la rama predeterminada. Para incluir ramas adicionales, actualiza **Base Branches** en **Code review → General** ([abrir](https://app.kodus.io/settings/code-review/global/general)).
 - **PRs Grandes**: Ten en cuenta que los PRs con un alto número de cambios pueden tardar más en procesarse.
 
 ---
@@ -49,10 +49,11 @@ Kodus usa un sistema de configuración jerárquico. Así es como funciona:
 
 1. **Verificar la Configuración Global**: Revisa y confirma que la configuración global sea correcta. [Acceder a la Configuración Global](https://app.kodus.io/settings/code-review/global/general).
 2. **Verificar la Configuración del Repositorio**:
-   - Navega a la sección **Por Repositorios** en tu configuración.
+   - Abre el selector de alcance en la parte superior del grupo **Code review** en la barra lateral. Los repositorios (y directorios) con su propia configuración aparecen debajo de **Global**.
    - Confirma si hay configuraciones personalizadas para el repositorio en cuestión.
+   - Comprueba también que el repositorio esté seleccionado para revisión en la página **Repositories** (barra lateral → **Repositories**).
 3. **Alinear o Limpiar Configuraciones**:
-   - Para aplicar la configuración global, limpia cualquier configuración específica del repositorio.
+   - Para aplicar la configuración global, limpia cualquier configuración específica del repositorio (el menú **⋯** del repositorio en el selector de alcance → **Delete configuration**).
    - Alternativamente, ajusta la configuración específica del repositorio para satisfacer tus necesidades.
 
 #### Síntomas Comunes
@@ -68,7 +69,7 @@ Revisa esta lista de verificación rápida:
 
 1. ¿El PR contiene cambios de código revisables (no solo documentación o imágenes)? Kody puede omitir si no hay nada relevante para analizar.
 2. ¿La rama está en alcance? Por defecto, solo se revisan los PRs que apuntan a la rama predeterminada, a menos que se configuren ramas base adicionales.
-3. **PRs Grandes:** Kody revisa PRs con hasta 2.000 **archivos revisables** (después de aplicar los patrones de ignorado). Ejemplo: PR con 2.500 archivos totales pero 600 son archivos `.lock` → Kody revisa los 1.900 archivos restantes ✅
+3. **PRs Grandes:** Kody revisa PRs con hasta 2.000 **archivos revisables** (después de aplicar **Ignored files**). Ejemplo: PR con 2.500 archivos totales pero 600 son archivos `.lock` → Kody revisa los 1.900 archivos restantes ✅
 4. Modo: Si las revisiones automatizadas están deshabilitadas, actívalas manualmente con `@kody start-review`.
 5. Cadencia de push: Si usas auto-pausa, espera el tiempo de enfriamiento o solicita una revisión manual.
 6. Overrides del repositorio: Los ajustes específicos del repositorio pueden anular los globales. Límpialos o alinealos según sea necesario.

@@ -7,19 +7,19 @@ description: "将现有 AI 编码工具规则同步到 Kodus，使相同的标�
 
 ## 工作原理
 
-Kodus 检测代码库中的规则文件并提供同步为 Kody 规则的选项。支持的文件格式包括：
+Kodus 检测代码库中的规则文件并将其同步为 Kody 规则。支持的文件格式包括：
 
 - `.cursorrules`（Cursor）
 - `.github/copilot-instructions.md`（GitHub Copilot）
-- `.claude` 文件（Claude）
+- `CLAUDE.md`（Claude）
 - 其他 AI 工具配置文件
 
 ## 设置
 
-1. 前往**代码审查设置** → **Kody 规则**
-2. Kodus 自动检测代码库中兼容的规则文件
-3. 审查检测到的规则并导入您想要的规则
-4. 导入的规则作为 Kody 规则添加，在代码审查期间执行
+1. 在侧边栏 **Code review** 分组顶部的范围选择器中选择代码库，打开 **Kody Rules**，然后点击 **Configuration**
+2. 开启 **Auto-sync rules from repo**。首次开启时，Kodus 会询问是立即扫描代码库（**Sync now**）还是 **Skip initial scan**
+3. Kodus 将找到的规则文件导入为 Kody 规则（来源为 **Auto-sync**），并从此保持同步
+4. 导入的规则会立即在代码审查期间执行。如果想先审查，请在同一个 **Configuration** 面板中开启 **Kody knowledge approval**：导入的规则随后会在 **Pending review** 部分等待，直到您 **Approve** 或 **Discard** 它们
 
 ## 为什么这很重要
 

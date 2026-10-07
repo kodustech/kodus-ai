@@ -25,7 +25,9 @@ import {
     attachClassification,
     classifyLLMError,
     LlmErrorCategory,
+    type ClassifiedErrorInfo,
 } from '@libs/llm/error-classifier';
+import { extractProviderMessage } from '@libs/llm/review-error-diagnostics';
 import { createLogger } from '@libs/core/log/logger';
 import {
     MAX_REFUSAL_RETRIES,
@@ -90,7 +92,11 @@ export interface WrapByokModelOptions {
     reporter?: (input: {
         organizationId?: string;
         provider: string;
+        /** The provider's own sentence when it gave one, else `err.message`. */
         errorMessage: string;
+        category?: LlmErrorCategory;
+        httpStatus?: number;
+        routingRefusal?: boolean;
     }) => void;
 }
 
@@ -150,8 +156,9 @@ export function wrapByokModel(
                     } catch (err) {
                         // Classify (so downstream can read the canonical category)
                         // and report — never let the reporter mask the LLM error.
+                        let classified: ClassifiedErrorInfo | undefined;
                         if (err && typeof err === 'object') {
-                            const classified = classifyLLMError(
+                            classified = classifyLLMError(
                                 err,
                                 opts.provider,
                             );
@@ -186,10 +193,17 @@ export function wrapByokModel(
                                     opts.provider ??
                                     opts.byokConfig?.provider ??
                                     'unknown',
+                                // For an AI SDK `APICallError` the message
+                                // only restates the status ("Provider returned
+                                // error"); the cause is in the body (#1871).
                                 errorMessage:
-                                    err instanceof Error
+                                    extractProviderMessage(err) ??
+                                    (err instanceof Error
                                         ? err.message
-                                        : String(err ?? 'unknown'),
+                                        : String(err ?? 'unknown')),
+                                category: classified?.category,
+                                httpStatus: classified?.httpStatus,
+                                routingRefusal: classified?.routingRefusal,
                             });
                         } catch {
                             /* reporter failures must not surface */

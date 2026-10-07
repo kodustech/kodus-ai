@@ -28,13 +28,15 @@ Instruções: Valide que os novos endpoints seguem os padrões em
 definidas em @file:src/shared/base-controller.ts.
 ```
 
-### Prompts personalizados
+### Instruções de categoria (antes Custom Prompts)
 
 Adicione instruções específicas do projeto que o Kody inclui em cada revisão:
 
-1. Vá em **Configurações de Revisão de Código** → **Prompts Personalizados**
-2. Adicione contexto como descrições de arquitetura, diretrizes do time ou conhecimento de domínio
+1. Na barra lateral, abra **Code review → What to review**
+2. Edite as **Instructions** da categoria **Bug**, **Performance** ou **Security** com contexto como descrições de arquitetura, diretrizes do time ou conhecimento de domínio
 3. O Kody inclui isso em cada análise de revisão de código
+
+Para mudar como o Kody redige suas sugestões (tom, tamanho), use **Kody's personality** em **Code review → What Kody writes**.
 
 ### Plugins MCP
 
@@ -50,6 +52,6 @@ Conecte ferramentas externas para dar ao Kody acesso a um contexto mais rico:
 1. Defina regras de arquitetura via **Memórias**: `@kody remember: seguimos o padrão CQRS neste serviço`
 2. Crie **Regras de Revisão** que referenciam seus documentos: `@file:docs/architecture.md`
 3. Conecte o **Jira** para que o Kody valide PRs contra os requisitos das tarefas
-4. Adicione **Prompts Personalizados** para conhecimento específico de domínio
+4. Adicione **Instructions** de categoria em **What to review** para conhecimento específico de domínio
 
-Para detalhes, consulte [Prompts Personalizados](/pt-BR/how_to_use/code_review/configs/custom_prompts) e [Plugins](/pt-BR/how_to_use/code_review/plugins).
+Para detalhes, consulte [Instruções de categoria (antes Custom Prompts)](/pt-BR/how_to_use/code_review/configs/custom_prompts) e [Plugins](/pt-BR/how_to_use/code_review/plugins).

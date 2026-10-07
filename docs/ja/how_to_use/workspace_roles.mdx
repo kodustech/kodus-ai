@@ -52,21 +52,23 @@ Kodus ワークスペースは**ロールベースのアクセス制御（RBAC�
 
 ## ワークスペースメンバーの管理
 
+ワークスペースのメンバーは **Organization → Subscription** の **Workspace members** タブで管理します — 別のメンバーページはありません。メンバーの招待、ロールの変更、削除ができるのは **Owner** のみです。
+
 ### 新しいメンバーの追加
 
-1. ワークスペースの**メンバー**セクションに移動
-2. **「メンバーを招待」**ボタンをクリック
-3. メンバーのメールアドレスを入力
-4. 新しいメンバーに適切なロールを選択
-5. 招待を送信
+1. サイドバーで **Organization → Subscription** を開き、**Workspace members** タブを選択
+2. **Invite member** をクリック
+3. **Workspace member invitation** でメンバーのメールアドレスを入力し、**Add to invite list** をクリック（複数人の場合は繰り返す）
+4. **Send invites** をクリック
+5. 招待されたメンバーは **Contributor** として参加します。ロールは後から変更してください（下記参照）
 
 ### ワークスペースメンバーの自動参加
 
 一致するメールドメインを持つユーザーがワークスペースに自動的に参加できるように自動参加を有効にします。
 
 **有効化の方法:**
-1. [組織設定](https://app.kodus.io/organization/general) に移動
-2. 組織の自動参加を有効化
+1. **Organization → General**（[app.kodus.io/organization/general](https://app.kodus.io/organization/general)）に移動
+2. **Auto Join** で **Enable Auto Join** をオンにし、ドメインを入力して保存
 3. 現在は登録済みアカウントのメールドメインのみで機能
 4. 異なるドメインが必要ですか? コミュニティでお問い合わせください
 
@@ -78,18 +80,22 @@ Kodus ワークスペースは**ロールベースのアクセス制御（RBAC�
 
 ### メンバーロールの変更
 
-1. ワークスペースの**メンバー**セクションに移動
+1. **Organization → Subscription → Workspace members** に移動
 2. ロールを変更するメンバーを見つける
-3. 現在のロールのドロップダウンをクリック
-4. 利用可能なオプションから新しいロールを選択
+3. **Role** 列のセレクトを開く
+4. 新しいロール（**Owner**、**Billing Manager**、**Repo Admin**、**Contributor**）を選択
 5. 変更は即座に有効になります
+
+**Repository Admin** の場合は、ロールの横にある **+** ボタンで編集できるリポジトリを割り当てます。**Assign repositories** が開きます。
 
 ### メンバーの削除
 
-1. **メンバー**セクションで削除するメンバーを見つける
-2. **「アクション」**メニュー（3点）をクリック
-3. **「ワークスペースから削除」**を選択
-4. ダイアログで削除を確認
+1. **Organization → Subscription → Workspace members** で削除するメンバーを見つける
+2. その行の **Actions** メニュー（3点）を開く
+3. **Delete** を選択
+4. ダイアログで **Remove** をクリックして確認
+
+同じメニューには、**Needs approval** と表示されたメンバー向けの **Approve** と、メンバーの招待リンクを再度共有するための **Copy invite link** もあります。
 
 ## セキュリティに関する考慮事項
 
@@ -103,7 +109,7 @@ Kodus ワークスペースは**ロールベースのアクセス制御（RBAC�
 <AccordionGroup>
   <Accordion title="ワークスペースに新しいメンバーを招待できません">
     **解決方法:**
-    - Owner または Repository Admin ロールがあることを確認
+    - Owner ロールがあることを確認 — メンバーを招待できるのは Owner のみです
     - ワークスペースがシステムの制限に達していないかを確認
     - アカウントに正しい権限があることを確認
   </Accordion>
@@ -111,7 +117,7 @@ Kodus ワークスペースは**ロールベースのアクセス制御（RBAC�
   <Accordion title="メンバーがコードレビュー設定を編集できません">
     **解決方法:**
     - メンバーが特定のリポジトリに対して Repository Admin または Owner ロールを持っていることを確認
-    - メンバーが編集したいリポジトリに対して「own」権限を持っているかを確認
+    - Repository Admin の場合は、そのリポジトリが割り当てられていることを確認（**Workspace members** の **Role** 列にある **Assign repositories**）
     - メンバーのロール割り当てが正しいことを確認
   </Accordion>
 

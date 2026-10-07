@@ -11,11 +11,13 @@ description: "Kodus への安全で効率的なアクセスのためにシング
 
 <Steps>
     <Step title="SSO 設定にアクセス">
-        [app.kodus.io/organization/sso](https://app.kodus.io/organization/sso) の組織設定に移動します
+        サイドバーで **Organization → SSO**
+        （[app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)）を開きます。
+        SSO は Enterprise プラン（およびトライアル中）で利用できます。その他のプランでは、ページにロックされたプレビューが表示されます。
     </Step>
 
     <Step title="IdP の設定を入力">
-        Issuer ID、URL、署名証明書などの IdP の設定を入力します。これらは手動で入力するか、IdP のメタデータ URL またはメタデータ XML ファイルを提供することで入力できます。
+        **SAML SSO Configuration** で、IdP の設定（**IDP Issuer**、**SSO URL**、**X.509 Certificate**）を入力します。これらは手動で入力するか、IdP の **Metadata URL (optional)**（その後 **Fetch**）またはメタデータ XML ファイル（**Upload Metadata XML File**）を提供することで入力できます。
 
         <Info>
             これらの値は通常、IdP のドキュメントまたは管理コンソールで確認できます。
@@ -23,7 +25,7 @@ description: "Kodus への安全で効率的なアクセスのためにシング
     </Step>
 
     <Step title="IdP で Kodus を SP として設定">
-        エンティティ ID（デフォルトは `kodus-orchestrator`）と SSO 設定ページで確認できる組織のコールバック URL を提供することで、IdP で Kodus を SP として設定します。
+        エンティティ ID（**Service Provider Entity ID**、デフォルトは `kodus-orchestrator`）と組織の **Callback URL**（どちらも SSO 設定ページに表示されます）を提供することで、IdP で Kodus を SP として設定します。
 
         名前 ID フォーマットがメールに設定されていることを確認してください。
 
@@ -32,8 +34,12 @@ description: "Kodus への安全で効率的なアクセスのためにシング
         </Warning>
     </Step>
 
-    <Step title="SSO を有効にしてテスト">
-        Kodus で SSO を有効にし、ログアウトして再度ログインすることで設定をテストします。IdP に関連付けられたメールドメインでログインしようとすると、SSO 経由でログインするオプションが表示されます。
+    <Step title="ドメインを検証">
+        **Allowed Domains** にメールドメインを追加し、それぞれで **Verify** をクリックします。**Verify Enterprise Domain** で、そのドメインのメールアドレスを入力すると検証リンクが届きます（セルフホストインスタンスでは即座に検証されます）。SSO を有効にするには、各ドメインが **Verified** と表示されている必要があります。
+    </Step>
+
+    <Step title="SSO をテストして有効化">
+        **Test connection** をクリックし、IdP でのログインを完了します。テストが成功したら、**Enable SAML SSO** をオンにして **Save settings** をクリックします。IdP に関連付けられたメールドメインでログインしようとすると、**Continue with SSO** が表示されます。
     </Step>
 
 </Steps>

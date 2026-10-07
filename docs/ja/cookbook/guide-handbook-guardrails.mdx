@@ -18,7 +18,7 @@ icon: "shield-check"
 
 ## 事前確認チェックリスト
 
-- **コードレビュー設定 → Kodyルール** を編集する権限がある。
+- **Code review → Kody Rules** を編集する権限がある。
 - ポリシーパックがリポジトリ内に存在する（例：`docs/engineering-standards.md`）。別のパスにある場合は適宜調整してください。Notion、Confluence、またはGoogle Docsにある場合は、リモートMCPエンドポイントを通じて公開する計画を立ててください。
 - どのトピックをファイルレベル（コントローラー、設定）とPRレベル（フィーチャーフラグ、ロールアウトの説明、アーキテクチャ）で評価すべきかを把握している。
 
@@ -77,7 +77,7 @@ icon: "shield-check"
 
 ## フェーズ3 – セクションをKodyルールに変換する
 
-**コードレビュー設定 → Kodyルール** を開き、各ポリシーセクションを適切なスコープにマッピングします。
+サイドバーから **Code review → Kody Rules** を開き、各ポリシーセクションを適切な実行モードとパスにマッピングします。
 
 | ポリシーセクション      | ルールタイプ   | スコープの例                           | 重要度   |
 | ---------------------- | ------------- | --------------------------------- | -------- |
@@ -90,8 +90,8 @@ icon: "shield-check"
 
 ```
 Name: 新しいエンドポイントにトレースフィールドを適用する
-Scope: File
-Paths: web/apps/**/controllers/**/*.ts
+Execution mode: Per file
+Path: web/apps/**/controllers/**/*.ts
 Severity: High
 Instructions:
   fileDiffを @file:docs/engineering-standards.md の「アーキテクチャ → 新しいエンドポイント」と比較する。
@@ -103,7 +103,7 @@ Instructions:
 
 ```
 Name: リスクの高い変更にはフィーチャーフラグが必要
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   pr_files_diffs で主要な機能を追加するルート/サービス/ドメインファイルをスキャンする。

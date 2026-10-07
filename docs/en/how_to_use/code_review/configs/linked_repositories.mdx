@@ -83,7 +83,7 @@ The first two are the feature working as designed. To confirm a link is wired co
 
 ### In the web app
 
-Go to **Code Review Settings → _your repository_ → Linked Repositories**, pick a repository from the list (only connected repos appear), and save. Each link has two optional fields, described below.
+In the sidebar, pick your repository in the scope picker at the top of the **Code review** group (if it isn't listed, create its settings first with **Add repository configuration**), then open **Code review → Linked repositories** (the page only exists at repository scope). Click **Add repository**, pick a repository in the **Add linked repository** dialog (only connected repos appear), and click **Save settings**. Each link has two optional fields, **Instructions · optional** and **Branch / ref pin · optional**, described below.
 
 ### In `kodus-config.yml`
 
@@ -99,7 +99,7 @@ linkedRepositories:
 - `repository` (required) — full name of a repository connected to the organization (`owner/repo`).
 - `instructions`, `ref` — same meaning as the fields in the web app (below).
 
-How the file interacts with the web settings follows the normal [config-file rules](/en/how_to_use/code_review/configs/general#config-priority): the file is only read when `kodusConfigFileOverridesWebPreferences` is enabled for the repository (**Settings → Code Review → the repository → General**), it is read from the repository's **default branch**, and the file's `linkedRepositories` list **replaces** the web list for that repository (the lists are not merged; `linkedRepositories: []` in the file turns the feature off). The plan requirement applies regardless of where the links are declared.
+How the file interacts with the web settings follows the normal [config-file rules](/en/how_to_use/code_review/configs/general#config-priority): the file is only read when `kodusConfigFileOverridesWebPreferences` is enabled for the repository (**kodus Config File Overrides Web Preferences** on **Code review → General** at repository scope), it is read from the repository's **default branch**, and the file's `linkedRepositories` list **replaces** the web list for that repository (the lists are not merged; `linkedRepositories: []` in the file turns the feature off). The plan requirement applies regardless of where the links are declared.
 
 ### Instructions
 

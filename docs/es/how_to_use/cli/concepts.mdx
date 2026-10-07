@@ -36,7 +36,7 @@ Elige uno por máquina. El CLI detecta automáticamente lo que está disponible.
 
 - **Prueba** — sin autenticación. 5 revisiones por día. Bueno para "probarlo una vez".
 - **Inicio de sesión personal** (`kodus auth login`) — una cuenta individual. Los tokens se actualizan automáticamente.
-- **Clave de equipo** (`kodus auth team-key --key kodus_xxxxx`) — una clave compartida para un equipo, generada en el panel. Recomendada para agentes de IA y en cualquier lugar donde no quieras inicios de sesión interactivos.
+- **Clave de equipo** (`kodus auth team-key --key kodus_xxxxx`) — una clave compartida para un equipo, generada en la aplicación web en **Organization → CLI keys**. Recomendada para agentes de IA y en cualquier lugar donde no quieras inicios de sesión interactivos.
 - **Token de CI/CD** (`kodus auth token`) — un token de larga duración para pipelines. Generado desde una máquina con sesión iniciada, usado mediante `KODUS_TOKEN`.
 
 Consulta [Primeros Pasos](getting_started) para el árbol de decisiones completo.
@@ -57,7 +57,7 @@ Regla
 
 Las reglas se añaden sobre la revisión general de Kodus: la IA las usa como criterios adicionales, no como sustitutos.
 
-Gestiona las reglas desde el panel o desde el CLI con `kodus rules create|update|view`. El CLI es útil cuando quieres reglas bajo control de versiones (generarlas desde un script, incorporarlas a un repo, reaplicarlas en el aprovisionamiento).
+Gestiona las reglas desde la aplicación web (**Code review → Kody Rules**) o desde el CLI con `kodus rules create|update|view`. El CLI es útil cuando quieres reglas bajo control de versiones (generarlas desde un script, incorporarlas a un repo, reaplicarlas en el aprovisionamiento).
 
 ## Configuración del Repositorio
 

@@ -29,7 +29,7 @@ kodus review --verbose    # o cualquier comando con --verbose
 
   <Accordion title="AUTH_REQUIRED o 401 Unauthorized">
     - Ejecuta `kodus auth status` para ver el modo actual.
-    - Si usas una clave de equipo, verifica que siga activa en <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>.
+    - Si usas una clave de equipo, verifica que su **Status** siga siendo **Active** en **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>).
     - Si usas inicio de sesión personal, intenta `kodus auth login` de nuevo: el token de actualización puede haber expirado.
     - Para CI, confirma que `KODUS_TOKEN` (o `KODUS_TEAM_KEY`) esté configurado en el entorno donde se ejecuta el pipeline.
     - Si es auto-alojado, confirma que `KODUS_API_URL` apunte a la instancia correcta.
@@ -89,7 +89,7 @@ kodus review --verbose    # o cualquier comando con --verbose
   </Accordion>
 
   <Accordion title="Límite de dispositivos alcanzado">
-    Las instancias auto-alojadas pueden aplicar límites de dispositivos por organización. Pide a tu administrador que aumente el límite o elimine dispositivos no utilizados del panel.
+    Las instancias auto-alojadas pueden aplicar límites de dispositivos por organización. La aplicación web no tiene una lista de dispositivos para limpiar, así que pide a tu administrador que aumente el límite (la configuración `CLI_DEVICE_LIMIT` de la API; `0`, el valor por defecto, significa sin límite).
   </Accordion>
 </AccordionGroup>
 

@@ -41,8 +41,8 @@ New endpoints default to authenticated + authorized, never public.
 
 ```
 Name: Data mutations must have audit logging
-Scope: File
-Paths: src/services/**/*.ts, src/repositories/**/*.ts
+Execution mode: Per file
+Path: src/services/**/*.ts, src/repositories/**/*.ts
 Severity: Critical
 Instructions:
   If fileDiff contains create, update, or delete operations
@@ -57,8 +57,8 @@ Instructions:
 
 ```
 Name: Soft delete required for user data
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: Critical
 Instructions:
   Flag any hard delete (DELETE FROM, .delete(), .destroy())
@@ -73,8 +73,8 @@ Instructions:
 
 ```
 Name: No PII in logs or error responses
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: Critical
 Instructions:
   Check fileDiff for logging statements (logger.*, console.*)
@@ -87,8 +87,8 @@ Instructions:
 
 ```
 Name: PII fields must use encryption helpers
-Scope: File
-Paths: src/entities/**/*.ts, src/models/**/*.ts
+Execution mode: Per file
+Path: src/entities/**/*.ts, src/models/**/*.ts
 Severity: Critical
 Instructions:
   If fileDiff adds or modifies entity/model fields that contain
@@ -101,7 +101,7 @@ Instructions:
 
 ```
 Name: New endpoints must have auth guards
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   Check pr_files_diff for new route definitions or controller
@@ -118,7 +118,7 @@ Instructions:
 
 ```
 Name: Compliance impact assessment
-Scope: Pull Request
+Execution mode: Per PR
 Severity: High
 Instructions:
   If pr_files_diff touches any file in src/entities/,
@@ -132,9 +132,9 @@ Instructions:
 
 ## Paso 6 — Configura para la aplicación
 
-1. Habilita **Solicitar cambios** para que las infracciones de cumplimiento bloqueen el merge
+1. En **Code review → General**, activa **Enable changing status of Review to 'Request Changes'** para que las infracciones de cumplimiento bloqueen el merge
 2. Configura todas las reglas de cumplimiento en severidad **Crítica**
-3. Usa la herencia de reglas para aplicar las reglas de cumplimiento en todos los repositorios de la organización
+3. Usa la herencia de reglas para aplicar las reglas de cumplimiento en todos los repositorios de la organización — créalas con **Global** seleccionado en el selector de alcance
 
 ## Lista de verificación
 
@@ -144,7 +144,7 @@ Instructions:
 - [ ] La regla de cifrado cubre las definiciones de entidades y modelos
 - [ ] La regla de control de acceso cubre todos los nuevos endpoints
 - [ ] Solicitar cambios habilitado para hallazgos críticos
-- [ ] Las reglas están configuradas a nivel de organización para consistencia
+- [ ] Las reglas están configuradas en el alcance **Global** (para toda la organización) para consistencia
 - [ ] Un PR de prueba verificó que las reglas se activan correctamente
 
 Para más información sobre la configuración de reglas, consulta [Kody Rules](/es/how_to_use/code_review/configs/kody_rules).

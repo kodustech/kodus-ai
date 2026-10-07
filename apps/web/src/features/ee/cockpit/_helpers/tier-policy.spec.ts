@@ -61,7 +61,7 @@ describe("isCockpitTierAllowed (web mirror)", () => {
         ).toBe(false);
     });
 
-    it("licensed self-hosted + Enterprise → allowed (Dmitry case)", () => {
+    it("licensed self-hosted + Enterprise → allowed (customer case)", () => {
         for (const plan of enterprisePlans) {
             expect(
                 isCockpitTierAllowed({

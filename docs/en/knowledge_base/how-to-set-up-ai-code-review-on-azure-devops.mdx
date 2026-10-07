@@ -8,21 +8,21 @@ Kodus integrates with Azure DevOps via webhooks. Once configured, every pull req
 ## Steps
 
 1. **Create an account** at [kodus.io](https://kodus.io) or [self-host Kodus](/en/how_to_deploy/deploy_kodus/generic_vm)
-2. **Connect Azure DevOps** — authorize during setup and configure your Personal Access Token
-3. **Configure webhooks** — follow the guided setup to enable pull request events
-4. **Select repositories** — choose which Azure DevOps repositories Kodus should review
+2. **Connect Azure DevOps** — in the **Connect your Git tool** step of onboarding, open the **Azure Repos** tab, click **Connect via token**, and enter your Azure Repos organization name and Personal Access Token (you can also connect later from **Repositories** in the sidebar)
+3. **Select repositories** — choose which Azure DevOps repositories Kodus should review
+4. **Webhooks** — Kodus creates the pull request service hooks automatically when you save the selection. If that didn't happen (typically on self-hosted installs), register them manually with the [Azure DevOps Webhooks](/en/how_to_deploy/platforms/azure_devops/azdevops_webhook) guide
 5. **Open a pull request** — Kodus reviews it automatically
 
 ## What you get
 
 - Automated reviews on every PR
 - Comments posted directly in the pull request
-- Customizable rules and suggestion controls
+- Customizable rules, review categories, and a minimum severity threshold
 - Business logic validation against linked work items
 
 ## Custom configuration
 
-Drop a `kodus-config.yml` in your repo root to customize behavior per repository. The file overrides web settings automatically.
+Drop a `kodus-config.yml` in your repo root to customize behavior per repository. The file overrides web settings once **kodus Config File Overrides Web Preferences** is on for that repository (**Code review → General**).
 
 ## Using a Personal Access Token
 

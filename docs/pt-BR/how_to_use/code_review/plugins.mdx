@@ -53,16 +53,22 @@ Kody buscará a especificação referenciada pelo plugin e confirmará se a impl
 
 Kody vê apenas as ferramentas que você habilita para cada workspace. Instale os plugins que importam para o seu fluxo de trabalho e mantenha todo o resto privado.
 
+Para instalar um, abra **Plugins** na barra lateral e escolha um plugin na grade. Autentique-se (faça login pelo fluxo OAuth do app, ou clique em **Connect** depois de informar um token de API), escolha as ferramentas que Kody pode usar em **Selected tools** e clique em **Install plugin**. Um plugin instalado mostra **Installed**; abra-o novamente para usar **Update Tools** ou **Reset Authentication**.
+
+<Note>
+  No plano Free (e no self-hosted sem licença), Kody executa até 3 plugins instalados por vez; um banner na página Plugins indica quais ele pula. O Kodus MCP padrão não conta para esse limite. Plugins de issue tracker não podem ser instalados quando seu provedor de código é Azure Repos ou Bitbucket Data Center.
+</Note>
+
 ## Plugins Personalizados
 
 Traga seus próprios servidores MCP quando precisar de capacidades além do catálogo curado.
 
-1. Abra o catálogo de plugins dentro do seu workspace e clique em **Adicionar Plugin Personalizado**.
+1. Abra **Plugins** na barra lateral e, no card **Add Custom Plugin**, clique em **Add Plugin**.
 2. Forneça os detalhes do endpoint:
    - **Nome do Plugin** (obrigatório) e **Descrição** opcional para ajudar os colegas de equipe a entender a integração.
    - **URL do Logo** opcional para um ícone reconhecível no catálogo.
-   - A **URL** MCP que hospeda seu servidor junto com o **Protocolo** esperado (HTTP ou WebSocket).
-   - Qualquer método de **Autorização** necessário ou cabeçalhos personalizados para autenticação.
+   - A **URL** MCP que hospeda seu servidor junto com o **Protocol** esperado (HTTP ou SSE).
+   - O método de **Authorization** (None, Bearer Token, Basic Auth, API Key ou OAuth 2.0) e quaisquer **Custom Headers**.
 3. Clique em **Criar Plugin** para torná-lo imediatamente disponível para Kody no workspace atual.
 
 Os plugins personalizados seguem o mesmo modelo de permissões das integrações curadas: apenas os workspaces onde o plugin está instalado podem invocá-lo, e Kody nunca acessa endpoints que você não configurou explicitamente.

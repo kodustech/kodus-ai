@@ -35,7 +35,7 @@ describe('ResyncRulesFromIdeUseCase', () => {
                 {
                     id: 'repo-1',
                     name: 'backend-services',
-                    fullName: 'quintoandar/backend-services',
+                    fullName: 'acme/backend-services',
                     selected: true,
                     default_branch: 'main',
                 },

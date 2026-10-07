@@ -8,8 +8,8 @@ KodusがPRをレビューしていない場合は、以下の一般的な原因�
 ## 1. 自動レビューが無効になっている
 
 自動レビューが有効になっていることを確認します：
-- **コードレビュー設定** → **一般** に移動します
-- **自動レビュー**がオンになっていることを確認します
+- **Code review → General** に移動します
+- **Enable Automated Code Review** がオンになっていることを確認します
 - または `kodus-config.yml` で確認します：
 
 ```yaml
@@ -33,11 +33,11 @@ ignoredTitleKeywords:
   - "WIP"
 ```
 
-`ignoredTitleKeywords` 設定を確認してください。
+**Code review → General** の **Ignore title keywords**（または `kodus-config.yml` の `ignoredTitleKeywords`）を確認してください。
 
 ## 4. ベースブランチが監視されていない
 
-デフォルトでは、KodusはデフォルトブランチをターゲットとするPRをレビューします。PRが別のブランチをターゲットにしている場合は、`baseBranches` に追加します：
+デフォルトでは、KodusはデフォルトブランチをターゲットとするPRをレビューします。PRが別のブランチをターゲットにしている場合は、**Code review → General** の **Base Branches**、または `kodus-config.yml` の `baseBranches` に追加します：
 
 ```yaml
 baseBranches:
@@ -47,11 +47,11 @@ baseBranches:
 
 ## 5. レビューの頻度が手動に設定されている
 
-レビューの頻度が**手動**に設定されている場合、Kodusは `@kody start-review` とコメントしたときのみレビューします。
+**Review Cadence**（**Code review → General** の **Enable Automated Code Review** の下）が **Manual** に設定されている場合、Kodusは `@kody start-review` とコメントしたときのみレビューします。
 
 ## 6. 自動一時停止がアクティブになっている
 
-複数回素早くプッシュした場合、自動一時停止が発動している可能性があります。クールダウン期間が終わるまで待つか、`@kody start-review` とコメントして手動でトリガーします。
+複数回素早くプッシュした場合、自動一時停止が発動し、KodyがPRに「Auto-paused」コメントを投稿している可能性があります。`@kody start-review` とコメントするまで、PRは一時停止されたままです。
 
 ## まだ動作しない場合
 

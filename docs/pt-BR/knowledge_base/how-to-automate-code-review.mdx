@@ -11,23 +11,24 @@ Uma vez conectado, o Kodus revisa automaticamente cada pull request. Ele analisa
 
 ### Plataformas suportadas
 
-- **GitHub** — via GitHub App
-- **GitLab** — via OAuth + webhooks
-- **Bitbucket** — via webhooks
-- **Azure DevOps** — via webhooks
+- **GitHub** — via GitHub App (ou um personal access token)
+- **GitLab** — via OAuth (ou um personal access token)
+- **Bitbucket** — via API token
+- **Azure DevOps** (Azure Repos) — via personal access token
+- **Forgejo** — via personal access token
 
 ### O que é analisado
 
-Por padrão, o Kodus verifica:
+Por padrão, o Kodus verifica as categorias que você pode ativar ou desativar em **Code review → What to review**, além das suas próprias regras:
 - Problemas de segurança (SQL injection, XSS, segredos hardcoded)
 - Problemas de performance (queries N+1, índices ausentes)
-- Lacunas no tratamento de erros
-- Bugs em potencial (ponteiros nulos, vazamentos de recursos)
-- Estilo de código e manutenibilidade
-- Suas Regras do Kody personalizadas
+- Bugs em potencial (ponteiros nulos, vazamentos de recursos, lacunas no tratamento de erros)
 - Conformidade com lógica de negócio (valida contra os requisitos da tarefa vinculada)
+- Suas Regras do Kody personalizadas (use-as para estilo de código e convenções do time)
 
 ### Opções de cadência de revisão
+
+Defina a cadência em **Code review → General**, em **Enable Automated Code Review** → **Review Cadence**.
 
 | Modo | Comportamento |
 |------|---------------|
@@ -38,7 +39,7 @@ Por padrão, o Kodus verifica:
 ## Como começar
 
 1. Crie um workspace em [kodus.io](https://kodus.io) ou [hospede o Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
-2. Conecte seu provedor Git (GitHub, GitLab, Bitbucket ou Azure DevOps)
+2. Conecte seu provedor Git (GitHub, GitLab, Bitbucket, Azure DevOps ou Forgejo)
 3. Selecione quais repositórios monitorar
 4. Abra um PR — o Kodus o revisa automaticamente
 

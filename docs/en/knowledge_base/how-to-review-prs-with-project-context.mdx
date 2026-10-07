@@ -28,13 +28,15 @@ in @file:docs/api-conventions.md and use the base classes
 defined in @file:src/shared/base-controller.ts.
 ```
 
-### Custom prompts
+### Category instructions (formerly Custom Prompts)
 
 Add project-specific instructions that Kody includes in every review:
 
-1. Go to **Code Review Settings** → **Custom Prompts**
-2. Add context like architecture descriptions, team guidelines, or domain knowledge
+1. In the sidebar, open **Code review → What to review**
+2. Edit the **Instructions** of the **Bug**, **Performance**, or **Security** category with context like architecture descriptions, team guidelines, or domain knowledge
 3. Kody includes this in every code review analysis
+
+To change how Kody phrases its suggestions (tone, length), use **Kody's personality** in **Code review → What Kody writes**.
 
 ### MCP plugins
 
@@ -50,6 +52,6 @@ Connect external tools to give Kody access to richer context:
 1. Define architecture rules via **Memories**: `@kody remember: we follow CQRS pattern in this service`
 2. Create **Review Rules** that reference your docs: `@file:docs/architecture.md`
 3. Connect **Jira** so Kody validates PRs against task requirements
-4. Add **Custom Prompts** for domain-specific knowledge
+4. Add category **Instructions** in **What to review** for domain-specific knowledge
 
-For details, see [Custom Prompts](/en/how_to_use/code_review/configs/custom_prompts) and [Plugins](/en/how_to_use/code_review/plugins).
+For details, see [Category instructions (formerly Custom Prompts)](/en/how_to_use/code_review/configs/custom_prompts) and [Plugins](/en/how_to_use/code_review/plugins).

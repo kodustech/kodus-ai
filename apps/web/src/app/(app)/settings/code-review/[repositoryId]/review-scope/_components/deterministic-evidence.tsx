@@ -146,7 +146,7 @@ export const DeterministicEvidence = () => {
                         which a personal access token cannot read — on a token
                         connection Kody sees only commit statuses, which most
                         repositories never publish. If your checks run on
-                        Actions, install the app from Settings → Git or this
+                        Actions, install the app from Repositories or this
                         setting will have nothing to read.
                     </AlertDescription>
                 </Alert>

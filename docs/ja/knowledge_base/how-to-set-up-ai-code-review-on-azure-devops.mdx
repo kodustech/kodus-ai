@@ -8,21 +8,21 @@ KodusはWebhookを通じてAzure DevOpsと統合します。設定されると�
 ## 手順
 
 1. [kodus.io](https://kodus.io)で**アカウントを作成**するか、[Kodusをセルフホスト](/ja/how_to_deploy/deploy_kodus/generic_vm)します
-2. **Azure DevOpsに接続** — セットアップ中に認証し、個人アクセストークンを設定します
-3. **Webhookを設定** — ガイド付きセットアップに従ってプルリクエストイベントを有効にします
-4. **リポジトリを選択** — Kodusがレビューすべきリポジトリを選択します
+2. **Azure DevOpsに接続** — オンボーディングの **Connect your Git tool** ステップで **Azure Repos** タブを開き、**Connect via token** をクリックして、Azure Reposの組織名と個人アクセストークンを入力します（後からサイドバーの **Repositories** から接続することもできます）
+3. **リポジトリを選択** — Kodusがレビューすべきリポジトリを選択します
+4. **Webhook** — 選択を保存すると、Kodusがプルリクエストのサービスフックを自動的に作成します。作成されなかった場合（主にセルフホスト環境）は、[Azure DevOps Webhook](/ja/how_to_deploy/platforms/azure_devops/azdevops_webhook) ガイドに従って手動で登録してください
 5. **プルリクエストをオープン** — Kodusが自動的にレビューします
 
 ## 得られるもの
 
 - すべてのPRでの自動レビュー
 - プルリクエスト内に直接投稿されるコメント
-- カスタマイズ可能なルールと提案コントロール
+- カスタマイズ可能なルール、レビューカテゴリ、最小重要度のしきい値
 - リンクされた作業項目に対するビジネスロジック検証
 
 ## カスタム設定
 
-リポジトリごとの動作をカスタマイズするには、リポジトリルートに `kodus-config.yml` を配置します。ファイルはウェブ設定を自動的にオーバーライドします。
+リポジトリごとの動作をカスタマイズするには、リポジトリルートに `kodus-config.yml` を配置します。そのリポジトリで **kodus Config File Overrides Web Preferences** がオンになっている場合（**Code review → General**）、ファイルはウェブ設定をオーバーライドします。
 
 ## 個人アクセストークンの使用
 

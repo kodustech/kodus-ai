@@ -18,7 +18,7 @@ Siga o fluxo e qualquer repositório pode evoluir de "PDF do handbook" para "pac
 
 ## Checklist de pré-voo
 
-- Você tem permissão para editar **Configurações de Code Review → Kody Rules**.
+- Você tem permissão para editar **Code review → Kody Rules**.
 - O pacote de políticas está no repositório (ex.: `docs/engineering-standards.md`). Se o seu estiver em outro caminho, ajuste conforme necessário. Se estiver no Notion, Confluence ou Google Docs, planeje expô-lo por meio de um endpoint MCP remoto.
 - Você sabe quais tópicos devem ser avaliados no nível de arquivo (controllers, configs) versus no nível de PR (feature flags, narrativas de rollout, arquitetura).
 
@@ -77,7 +77,7 @@ Sinalize apenas código que claramente viola esses bullets. Se a seção estiver
 
 ## Fase 3 – Traduza seções em Kody Rules
 
-Abra **Configurações de Code Review → Kody Rules** e mapeie cada seção de política para o escopo adequado.
+Na barra lateral, abra **Code review → Kody Rules** e mapeie cada seção de política para o modo de execução e o caminho adequados.
 
 | Seção da política      | Tipo de regra | Exemplo de escopo                     | Severidade |
 | ---------------------- | ------------- | ------------------------------------- | ---------- |
@@ -90,8 +90,8 @@ Abra **Configurações de Code Review → Kody Rules** e mapeie cada seção de 
 
 ```
 Name: Enforce tracing fields on new endpoints
-Scope: File
-Paths: web/apps/**/controllers/**/*.ts
+Execution mode: Per file
+Path: web/apps/**/controllers/**/*.ts
 Severity: High
 Instructions:
   Compare fileDiff with Architecture → New endpoints in @file:docs/engineering-standards.md.
@@ -103,7 +103,7 @@ Instructions:
 
 ```
 Name: Require feature flags for risky changes
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   Scan pr_files_diff for routes/services/domain files that add major functionality.

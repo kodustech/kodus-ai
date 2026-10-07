@@ -1,29 +1,31 @@
 ---
 title: "PR Cycle Time"
-description: "Measure the time from first commit to production deployment"
+description: "Measure how long pull requests stay open, from opened to closed"
 ---
 
 ## What is PR Cycle Time
 
-PR Cycle Time measures the total time from when a developer first commits code until that code is successfully merged into the default branch. This metric represents the end-to-end delivery speed of your development process.
+PR Cycle Time measures how long a pull request stays open: from when it is opened until it is closed. This metric represents the review-and-merge speed of your development process.
+
+In the Cockpit, it's the **PR Cycle Time (p75)** card and the **PR Cycle Time** chart on the **Productivity** tab.
 
 ## How We Calculate It
 
-We automatically track the time between your first commit and when that code gets merged into the default branch (main/master). Since merges to main typically represent when code is ready for production, this gives us a good measure of your development cycle time.
+We automatically track the time between when each pull request is opened and when it is closed. We start from the PR's open date rather than its first commit, because rebased branches can carry old commits that would inflate the number. For the time spent before the PR is opened, see [Lead Time Breakdown](/en/how_to_use/cockpit/metrics/lead_time_breakdown).
 
 **What We Track:**
-- Time from first commit to PR merge
-- The complete development cycle
+- Time from PR opened to PR closed
+- PRs closed in the selected date range
 - How long code takes to be integrated
 
 **What We Don't Count:**
-- Time spent planning or designing (before first commit)
+- Time spent planning, designing, or coding before the PR is opened
 - Time after merge (deployment, user adoption, etc.)
 - Failed or abandoned changes
 
 **How It's Calculated:**
 ```
-PR Cycle Time = (PR Merge Time) - (First Commit Time)
+PR Cycle Time = (PR Closed Time) - (PR Opened Time)
 ```
 
 We use the 75th percentile (P75) to show you the typical cycle time, filtering out unusually long outliers that could skew your understanding of normal performance.

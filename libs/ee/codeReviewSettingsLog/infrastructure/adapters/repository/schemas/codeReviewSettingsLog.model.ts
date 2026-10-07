@@ -49,3 +49,11 @@ export class CodeReviewSettingsLogModel extends CoreDocument {
 export const CodeReviewSettingsLogSchema = SchemaFactory.createForClass(
     CodeReviewSettingsLogModel,
 );
+
+// The activity log reads `find({ organizationId, ... }).sort({ createdAt: -1 })`
+// (CodeReviewSettingsLogRepository.find). Without this the collection had only
+// `_id`, so every read was a full collection scan plus an in-memory sort.
+CodeReviewSettingsLogSchema.index(
+    { organizationId: 1, createdAt: -1 },
+    { name: 'idx_org_createdAt', background: true },
+);

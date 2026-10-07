@@ -5,14 +5,14 @@ description: "Fine-tune your AI code review to surface only the most relevant su
 
 Too many low-priority suggestions can make developers ignore code review feedback entirely. The key is to tune the review so it surfaces what matters and stays quiet on what doesn't.
 
-## Review filters
+## Severity threshold
 
 Kodus filters which findings actually get posted:
 
-- **Minimum severity** — only show suggestions at or above a threshold (default: Medium)
-- **Apply filters to Kody Rules** — off by default, so your team's own rules always surface
+- **Minimum severity to post** — only post suggestions at or above a threshold (default: Medium). Kody still finds lower-severity issues; it just does not comment on them.
+- **Apply the threshold to Kody Rules** — off by default, so your team's own rules always surface
 
-Configure these in **Code Review Settings** → **Review filters**, or in `kodus-config.yml`:
+Configure these in the sidebar under **Code review → What to review** (formerly **Review filters**), or in `kodus-config.yml`:
 
 ```yaml
 suggestionControl:
@@ -20,9 +20,11 @@ suggestionControl:
   applyFiltersToKodyRules: false
 ```
 
+The `kodus-config.yml` snippets on this page only take effect for a repository when **kodus Config File Overrides Web Preferences** is on in **Code review → General** (repository or directory scope).
+
 ## Ignore files and paths
 
-Skip files that generate noise (lock files, generated code, configs):
+Skip files that generate noise (lock files, generated code, configs). Add them under **Ignored files** in **Code review → General**, or in `kodus-config.yml`:
 
 ```yaml
 ignorePaths:
@@ -34,7 +36,7 @@ ignorePaths:
 
 ## Skip PRs by title
 
-Skip PRs that don't need review (releases, version bumps):
+Skip PRs that don't need review (releases, version bumps). Add keywords under **Ignore title keywords** in **Code review → General**, or in `kodus-config.yml`:
 
 ```yaml
 ignoredTitleKeywords:
@@ -45,7 +47,7 @@ ignoredTitleKeywords:
 
 ## Toggle analysis categories
 
-Disable entire review categories you don't need:
+Disable entire review categories you don't need with the **Bug**, **Performance**, **Security**, and **Business Logic** switches in **Code review → What to review**, or in `kodus-config.yml`:
 
 ```yaml
 reviewOptions:
@@ -57,6 +59,6 @@ reviewOptions:
 
 ## Review cadence
 
-Use **Auto-pause** to prevent spam during active development — Kodus pauses reviews when it detects rapid consecutive pushes (default: 3 pushes in 15 minutes).
+Use **Auto-pause** (**Code review → General** → **Enable Automated Code Review** → **Review Cadence**) to prevent spam during active development — Kodus pauses reviews when it detects rapid consecutive pushes (default: 3 pushes in 15 minutes).
 
-For details, see [General Configuration](/en/how_to_use/code_review/configs/general) and [Suggestion Control](/en/how_to_use/code_review/configs/suggestion_control).
+For details, see [General Configuration](/en/how_to_use/code_review/configs/general) and [Severity threshold](/en/how_to_use/code_review/configs/suggestion_control).

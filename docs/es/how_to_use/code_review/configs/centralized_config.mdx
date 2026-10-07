@@ -15,7 +15,7 @@ La Configuración Centralizada te permite mantener cada ajuste de code review y 
 ## Cómo Funciona
 
 1. Elige un repositorio para almacenar tu configuración centralizada. Debe ser uno de los repositorios seleccionados en Kodus.
-2. Habilita la Configuración Centralizada en la UI y apúntala a ese repositorio.
+2. Habilita la Configuración Centralizada en la UI (**Code review → General** en el alcance Global → **Configure centralized config**) y apúntala a ese repositorio.
 3. Elige un **modo de sincronización inicial**:
    - `pr` — Kodus abre el PR de inicialización con tu configuración efectiva actual y las reglas.
    - `manual` — Kodus genera los archivos; tu equipo los descarga y abre el PR.
@@ -120,24 +120,26 @@ Consulta [Descripción General de Kody Rules](/es/how_to_use/code_review/configs
 
 ## Flujo de Trabajo en la UI
 
-Desde **Configuración → Code Review → General**:
+En la barra lateral, elige **Global** en el selector de alcance en la parte superior del grupo **Code review** y luego
+abre **Code review → General**:
 
-1. Abre **Configuración Centralizada**.
-2. Habilita la Configuración Centralizada.
-3. Selecciona el repositorio fuente.
+1. Haz clic en **Configure centralized config** en el encabezado de la página (abre el diálogo
+   **Centralized Config**).
+2. Activa **Enable centralized config**.
+3. Selecciona el repositorio fuente (**Selected repository**).
 4. Elige el **Método de Sincronización Inicial**:
    - Automático (Crear PR ahora)
    - Manual (Sincronizar más tarde)
-5. Guarda y confirma el estado.
+5. Haz clic en **Initialize** (o **Save Changes**) y confirma el estado.
 
 ## Comportamiento de la Interfaz Web Cuando Está Habilitada
 
 Cuando la Configuración Centralizada está habilitada, la fuente de verdad para la configuración es el repositorio centralizado. La interfaz web refleja esto:
 
-- **Los ajustes de code review de repositorio, directorio y globales** se vuelven de solo lectura en la interfaz web. Edítalos abriendo un PR en el repositorio centralizado.
-- **Las Kody Rules y los Mensajes de PR** permanecen editables en la interfaz web. Guardar una edición no muta la regla directamente — Kodus abre un pull request en el repositorio centralizado con el cambio propuesto. Una vez que el PR es mergeado, el cambio se activa.
+- **Los ajustes de code review globales, de repositorio y de directorio** (General, What to review, What Kody writes, Linked repositories) siguen siendo editables en la interfaz web, pero guardar no aplica el cambio directamente. Cada página muestra un banner — "Centralized config is enabled. Changes on this page are proposed through pull requests in the `<repo>` repository and applied after merge." — con **View active pull request** cuando hay uno abierto, y **Save settings** propone el cambio como un pull request en el repositorio centralizado. Una vez que el PR es mergeado, el cambio se activa. También puedes editar los archivos directamente en el repositorio centralizado.
+- **Las Kody Rules** funcionan de la misma forma. Guardar una edición no muta la regla directamente — Kodus abre un pull request en el repositorio centralizado con el cambio propuesto. Una vez que el PR es mergeado, el cambio se activa.
 
-Esto preserva la garantía de "todo está revisado y versionado" mientras mantiene la experiencia de edición visual para reglas y mensajes.
+Esto preserva la garantía de "todo está revisado y versionado" mientras mantiene la experiencia de edición visual para ajustes, reglas y mensajes.
 
 ### Las reglas de la UI y las reglas del repo coexisten
 
