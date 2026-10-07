@@ -9,13 +9,44 @@
  *
  * Override with MONGO_QUERY_MAX_TIME_MS (milliseconds) without a code change.
  */
-const DEFAULT_MONGO_QUERY_MAX_TIME_MS = 50_000;
+import { createLogger } from '@libs/core/log/logger';
 
-function resolveMaxTimeMs(raw: string | undefined): number {
+const DEFAULT_MONGO_QUERY_MAX_TIME_MS = 50_000;
+/** Above this an override is a typo, not intent: it would disable the cap. */
+const MAX_MONGO_QUERY_MAX_TIME_MS = 10 * 60_000;
+
+type WarnFn = (args: {
+    message: string;
+    context: string;
+    metadata: Record<string, unknown>;
+}) => void;
+
+function resolveMaxTimeMs(
+    raw: string | undefined,
+    warn: WarnFn = (args) => createLogger('MongoQueryTimeout').warn(args),
+): number {
+    if (raw === undefined || raw.trim() === '') {
+        return DEFAULT_MONGO_QUERY_MAX_TIME_MS;
+    }
     const parsed = Number(raw);
-    return Number.isInteger(parsed) && parsed > 0
-        ? parsed
-        : DEFAULT_MONGO_QUERY_MAX_TIME_MS;
+    if (
+        Number.isInteger(parsed) &&
+        parsed >= 1 &&
+        parsed <= MAX_MONGO_QUERY_MAX_TIME_MS
+    ) {
+        return parsed;
+    }
+    warn({
+        message:
+            'Ignoring MONGO_QUERY_MAX_TIME_MS outside [1, max]; using the default',
+        context: 'MongoQueryTimeout',
+        metadata: {
+            configured: raw,
+            max: MAX_MONGO_QUERY_MAX_TIME_MS,
+            default: DEFAULT_MONGO_QUERY_MAX_TIME_MS,
+        },
+    });
+    return DEFAULT_MONGO_QUERY_MAX_TIME_MS;
 }
 
 export const MONGO_QUERY_MAX_TIME_MS = resolveMaxTimeMs(
@@ -28,4 +59,8 @@ export function isMongoQueryTimeout(error: unknown): boolean {
     return e?.code === 50 || e?.codeName === 'MaxTimeMSExpired';
 }
 
-export const __test__ = { resolveMaxTimeMs, DEFAULT_MONGO_QUERY_MAX_TIME_MS };
+export const __test__ = {
+    resolveMaxTimeMs,
+    DEFAULT_MONGO_QUERY_MAX_TIME_MS,
+    MAX_MONGO_QUERY_MAX_TIME_MS,
+};

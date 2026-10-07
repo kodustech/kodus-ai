@@ -347,11 +347,33 @@ export class TokenUsageRepository implements ITokenUsageRepository {
             },
         ];
         // Safety valve for unbounded dimensions (by-review): keep the heaviest
-        // rows and cap the payload so a huge window can't ship tens of
-        // thousands of rows. Sorted by total desc, so the top consumers (all
-        // the frontend charts/table show) survive intact.
+        // buckets and cap the payload so a huge window can't ship tens of
+        // thousands of rows. The cap counts LOGICAL buckets (model + the
+        // caller's group keys), not raw rows: a bucket is split into one row
+        // per input bracket, and capping raw rows could keep some of a
+        // bucket's brackets and drop the rest, under-reporting its total.
+        // Sorted by bucket total desc, so the top consumers (all the frontend
+        // charts/table show) survive intact, with every bracket row.
         if (maxRows > 0) {
-            pipeline.push({ $sort: { total: -1 } }, { $limit: maxRows });
+            const bucketId: Record<string, string> = { model: '$_id.model' };
+            for (const key of Object.keys(groupById)) {
+                bucketId[key] = `$_id.${key}`;
+            }
+            pipeline.splice(
+                2,
+                0,
+                {
+                    $group: {
+                        _id: bucketId,
+                        bucketTotal: { $sum: '$total' },
+                        rows: { $push: '$$ROOT' },
+                    },
+                },
+                { $sort: { bucketTotal: -1 } },
+                { $limit: maxRows },
+                { $unwind: '$rows' },
+                { $replaceRoot: { newRoot: '$rows' } },
+            );
         }
         const rows = await this.observabilityTelemetryModel
             .aggregate<RawAggRow>(pipeline as any)

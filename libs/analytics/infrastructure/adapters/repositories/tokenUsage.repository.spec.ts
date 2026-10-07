@@ -105,3 +105,79 @@ describe('TokenUsageRepository tier brackets', () => {
         expect(rows.map((r: any) => r.tier)).toEqual([0, 0]);
     });
 });
+
+describe('TokenUsageRepository._tuRows row cap (by-review)', () => {
+    it('caps whole logical buckets, never a subset of a bucket’s bracket rows', async () => {
+        const exec = jest.fn().mockResolvedValue([]);
+        const option = jest.fn().mockReturnValue({ exec });
+        const aggregate = jest.fn().mockReturnValue({ option });
+        const repo = new TokenUsageRepository(
+            { aggregate } as any,
+            {} as any,
+        ) as any;
+
+        await repo._tuRows(
+            {
+                organizationId: 'org-A',
+                start: new Date('2026-01-01'),
+                end: new Date('2026-02-01'),
+                byok: true,
+            },
+            new Map([['gemini-3-pro', [200000]]]),
+            { review: '$correlationId', pr: '$attributes.prNumber' },
+            { review: '$_id.review' },
+            true,
+            {},
+            {},
+            8000,
+        );
+
+        const pipeline = aggregate.mock.calls[0][0];
+        const stages = pipeline.map((s: any) => Object.keys(s)[0]);
+        expect(stages).toEqual([
+            '$match',
+            '$group',
+            '$group',
+            '$sort',
+            '$limit',
+            '$unwind',
+            '$replaceRoot',
+            '$project',
+        ]);
+        // Bucket = model + the caller's group keys, WITHOUT the bracket/tier.
+        expect(pipeline[2].$group._id).toEqual({
+            model: '$_id.model',
+            review: '$_id.review',
+            pr: '$_id.pr',
+        });
+        expect(pipeline[3]).toEqual({ $sort: { bucketTotal: -1 } });
+        expect(pipeline[4]).toEqual({ $limit: 8000 });
+        expect(option).toHaveBeenCalledWith({ maxTimeMS: 50_000 });
+    });
+
+    it('adds no cap stages when maxRows is 0', async () => {
+        const exec = jest.fn().mockResolvedValue([]);
+        const aggregate = jest
+            .fn()
+            .mockReturnValue({ option: jest.fn().mockReturnValue({ exec }) });
+        const repo = new TokenUsageRepository(
+            { aggregate } as any,
+            {} as any,
+        ) as any;
+
+        await repo._tuRows(
+            {
+                organizationId: 'org-A',
+                start: new Date('2026-01-01'),
+                end: new Date('2026-02-01'),
+                byok: true,
+            },
+            new Map(),
+        );
+
+        const stages = aggregate.mock.calls[0][0].map(
+            (s: any) => Object.keys(s)[0],
+        );
+        expect(stages).toEqual(['$match', '$group', '$project']);
+    });
+});
