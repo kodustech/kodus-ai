@@ -114,6 +114,19 @@ export function buildDefaultGlobalCodeReviewConfig(): CodeReviewParameter {
     };
 }
 
+/**
+ * The row written at team creation. Learning from past reviews ships on, so
+ * teams that predate it being opt-in keep it, including when a self-heal
+ * creates their missing row from the builder above. A team created now
+ * starts with it off until onboarding (or Settings) turns it on.
+ */
+export function buildNewTeamGlobalCodeReviewConfig(): CodeReviewParameter {
+    return {
+        ...buildDefaultGlobalCodeReviewConfig(),
+        configs: { kodyRulesGeneratorEnabled: false },
+    };
+}
+
 function formatValidationErrors(errors: ErrorObject[]): string {
     return errors
         .map((error) => {

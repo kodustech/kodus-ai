@@ -68,6 +68,9 @@ Kodus detecta e importa automaticamente os seguintes padrões de arquivos de reg
 
 Cada arquivo importado produz **uma Kody Rule**. Se um arquivo contém várias diretrizes distintas, o LLM as mescla em uma única regra abrangente — divida a orientação em múltiplos arquivos quando quiser regras gerenciáveis de forma independente.
 
+### Padrão para toda a organização
+Configure "Sincronizar automaticamente regras do repositório" uma vez na configuração **Global** de Kody Rules e todo repositório que não definir o próprio valor passa a segui-la. A configuração própria de um repositório sempre prevalece. Ativar globalmente não executa a varredura inicial: cada repositório importa os arquivos de regras conforme eles mudam em Pull Requests mesclados.
+
 ### Sincronização Contínua
 - **Atualizações Automáticas**: A sincronização acontece automaticamente quando um Pull Request é fechado
 - **Alterações de Arquivo Detectadas**:

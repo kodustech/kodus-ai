@@ -25,6 +25,7 @@ import {
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { useConfig } from "@providers/ConfigProvider";
+import { OverrideIndicator } from "src/app/(app)/settings/code-review/_components/override";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
@@ -42,6 +43,11 @@ export const GenerateRulesOptions = () => {
     const config = useCodeReviewConfig();
     const { teamId } = useSelectedTeamId();
     const { repositoryId } = useCodeReviewRouteParams();
+    // At global level these toggles are the default every repository without
+    // its own value follows. A global flip runs no one-off work: the weekly
+    // cron backfills newly enabled generators, and rule files import as
+    // they change.
+    const isGlobal = repositoryId === "global";
     const { invalidateQueries, generateQueryKey } =
         useReactQueryInvalidateQueries();
     const syncStatus = useSuspenseKodyRulesCheckSyncStatus({
@@ -51,6 +57,7 @@ export const GenerateRulesOptions = () => {
     const canEdit = usePermission(
         Action.Update,
         ResourceType.CodeReviewSettings,
+        repositoryId,
     );
 
     const [
@@ -104,10 +111,25 @@ export const GenerateRulesOptions = () => {
 
             toast({ description: "Settings saved", variant: "success" });
 
+            // A global save starts nothing; repositories that follow it are
+            // picked up by the weekly run, which backfills 3 months.
+            if (isGlobal && newValue) {
+                toast({
+                    variant: "info",
+                    title: "Learning starts on the next weekly run",
+                    description:
+                        "Repositories that follow this setting get rules drafted from their last 3 months of closed PRs when Kody's weekly learning run comes around.",
+                });
+            }
+
             // First time this repo's generator is enabled, the backend seeds its
             // rules from the last 3 months of closed PRs (the weekly cron only
             // looks at the last week). Let the user know it's running.
-            if (syncStatus.kodyRulesGeneratorEnabledFirstTime && newValue) {
+            if (
+                !isGlobal &&
+                syncStatus.kodyRulesGeneratorEnabledFirstTime &&
+                newValue
+            ) {
                 toast({
                     variant: "info",
                     title: "We're analyzing your past PRs",
@@ -149,11 +171,15 @@ export const GenerateRulesOptions = () => {
                 if (newValue === false && repositoryId) {
                     const counts = await getImportedKodyRulesCount({
                         repositoryId,
+                        teamId,
                     });
 
                     if (counts.active > 0) {
                         const picked = await magicModal.show(() => (
-                            <DisableIdeSyncModal counts={counts} />
+                            <DisableIdeSyncModal
+                                counts={counts}
+                                isGlobal={isGlobal}
+                            />
                         ));
                         if (!picked) {
                             // User cancelled — do not flip the toggle.
@@ -235,7 +261,11 @@ export const GenerateRulesOptions = () => {
 
                 toast({ description: "Settings saved", variant: "success" });
 
-                if (syncStatus.ideRulesSyncEnabledFirstTime && newValue) {
+                if (
+                    !isGlobal &&
+                    syncStatus.ideRulesSyncEnabledFirstTime &&
+                    newValue
+                ) {
                     const response = await magicModal.show(() => (
                         <SyncFromIDEFilesFirstTimeModal />
                     ));
@@ -272,9 +302,25 @@ export const GenerateRulesOptions = () => {
                         <div className="flex items-center justify-between gap-20">
                             <Section.Root>
                                 <Section.Header>
-                                    <Section.Title>
-                                        Auto-sync rules from repo
-                                    </Section.Title>
+                                    <div className="flex items-center gap-2">
+                                        <Section.Title>
+                                            Auto-sync rules from repo
+                                        </Section.Title>
+                                        {config?.ideRulesSyncEnabled && (
+                                            <OverrideIndicator
+                                                initialState={
+                                                    config.ideRulesSyncEnabled
+                                                }
+                                                currentValue={
+                                                    config.ideRulesSyncEnabled
+                                                        .value
+                                                }
+                                                handleRevert={
+                                                    handleIDESyncToggle
+                                                }
+                                            />
+                                        )}
+                                    </div>
                                 </Section.Header>
 
                                 <Section.Content>
@@ -284,8 +330,20 @@ export const GenerateRulesOptions = () => {
                                         <InlineCode className="bg-card-lv1">
                                             (.cursorrules, CLAUDE.md, etc...)
                                         </InlineCode>{" "}
-                                        found in this repository and keep them
-                                        in sync.
+                                        {isGlobal ? (
+                                            <>
+                                                found in each repository as that
+                                                repository&apos;s rules, and
+                                                keep them in sync. This is the
+                                                default for every repository
+                                                that doesn&apos;t set its own.
+                                            </>
+                                        ) : (
+                                            <>
+                                                found in this repository and
+                                                keep them in sync.
+                                            </>
+                                        )}
                                     </Section.Description>
                                 </Section.Content>
                             </Section.Root>
@@ -319,14 +377,33 @@ export const GenerateRulesOptions = () => {
                         <div className="flex items-center justify-between gap-20">
                             <Section.Root>
                                 <Section.Header>
-                                    <Section.Title>
-                                        Generate from past reviews
-                                    </Section.Title>
+                                    <div className="flex items-center gap-2">
+                                        <Section.Title>
+                                            Generate from past reviews
+                                        </Section.Title>
+                                        {config?.kodyRulesGeneratorEnabled && (
+                                            <OverrideIndicator
+                                                initialState={
+                                                    config.kodyRulesGeneratorEnabled
+                                                }
+                                                currentValue={
+                                                    config
+                                                        .kodyRulesGeneratorEnabled
+                                                        .value
+                                                }
+                                                handleRevert={
+                                                    handleGenerateFromPastReviewsToggle
+                                                }
+                                            />
+                                        )}
+                                    </div>
                                 </Section.Header>
 
                                 <Section.Content className="text-text-secondary text-sm font-normal">
                                     Kody will analyse closed PRs and suggest
                                     rules automatically.
+                                    {isGlobal &&
+                                        " This is the default for every repository that doesn't set its own."}
                                 </Section.Content>
                             </Section.Root>
 

@@ -90,6 +90,7 @@ import {
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesType } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { GenerateInitialKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-initial-kody-rules.use-case';
 import {
     InvalidGroupPathError,
@@ -472,13 +473,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 }
             }
 
-            const previousIdeSyncEnabled =
-                !!repositoryId &&
-                codeReviewConfigs?.repositories?.find(
-                    (r) => r.id === repositoryId,
-                )?.configs?.ideRulesSyncEnabled === true;
-
-            const result = await this.handleConfigUpdate(
+            const { result, updatedConfig } = await this.handleConfigUpdate(
                 organizationAndTeamData,
                 codeReviewConfigs,
                 configValue,
@@ -490,50 +485,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 previousRulesFileNames,
             );
 
-            if (
-                previousIdeSyncEnabled &&
-                (configValue as any)?.ideRulesSyncEnabled === false
-            ) {
-                // The action picked in the toggle-off modal in the web UI.
-                // Defaulting to 'keep' here is deliberate: any caller that
-                // doesn't pass an explicit action gets the least destructive
-                // option, which avoids the silent-deletion regression.
-                const action: IdeSyncDisableAction =
-                    (configValue as any)?.ideSyncDisableAction ?? 'keep';
-
-                const event: IdeRulesSyncDisabledEvent = {
+            if (!directoryId) {
+                this.applyKodyLearningTransitions({
                     organizationAndTeamData,
-                    repositoryId: repositoryId!,
-                    action,
-                };
-                this.eventEmitter.emit(IDE_RULES_SYNC_DISABLED_EVENT, event);
-            }
-
-            // Enabling the Kody Rules generator for a repo seeds its rules from
-            // the last 3 months of PR reviews right away, instead of waiting for
-            // the weekly cron (which also backfills, but only on its next run).
-            // The seed is idempotent — it skips when past-review rules already
-            // exist — so re-saving an already-enabled repo is a no-op. Fired
-            // detached so it never blocks the settings save (issue #1506).
-            if (
-                !!repositoryId &&
-                configValue?.kodyRulesGeneratorEnabled === true
-            ) {
-                void this.generateInitialKodyRulesUseCase
-                    .execute({ organizationAndTeamData, repositoryId })
-                    .catch((error) => {
-                        this.logger.error({
-                            message:
-                                'Failed to start initial Kody Rules generation',
-                            context:
-                                UpdateOrCreateCodeReviewParameterUseCase.name,
-                            error:
-                                error instanceof Error
-                                    ? error
-                                    : new Error(String(error)),
-                            metadata: { organizationAndTeamData, repositoryId },
-                        });
-                    });
+                    previousConfig: codeReviewConfigs,
+                    updatedConfig,
+                    repositoryId,
+                    ideSyncDisableAction: (configValue as any)
+                        ?.ideSyncDisableAction,
+                    generatorEnabledInPayload:
+                        configValue?.kodyRulesGeneratorEnabled === true,
+                });
             }
 
             void this.telemetry.codeReviewSettingsUpdated({
@@ -901,7 +863,143 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             requestUser,
         });
 
-        return centralizedPr ?? true;
+        return {
+            result: centralizedPr ?? true,
+            updatedConfig: updatedCodeReviewConfigValue,
+        };
+    }
+
+    /**
+     * Learning settings resolve default → global → repository, so one save can
+     * change the effective value of many repositories (a global save) or of
+     * one that only inherited it (a repository save). Each repository whose
+     * IDE rules sync goes on→off gets the cleanup picked in the toggle-off
+     * modal. Turning the generator on in a repository save seeds that
+     * repository right away. After a global save, the weekly cron backfills.
+     */
+    private applyKodyLearningTransitions(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        previousConfig: CodeReviewParameter;
+        updatedConfig: CodeReviewParameter;
+        repositoryId?: string;
+        ideSyncDisableAction?: IdeSyncDisableAction;
+        generatorEnabledInPayload: boolean;
+    }) {
+        const {
+            organizationAndTeamData,
+            previousConfig,
+            updatedConfig,
+            repositoryId,
+        } = params;
+        const level = repositoryId
+            ? ConfigLevel.REPOSITORY
+            : ConfigLevel.GLOBAL;
+        const repositoryIds = repositoryId
+            ? [repositoryId]
+            : (updatedConfig?.repositories ?? []).map((repo) =>
+                  String(repo.id),
+              );
+
+        const resolveBefore =
+            createKodyLearningSettingsResolver(previousConfig);
+        const resolveAfter = createKodyLearningSettingsResolver(updatedConfig);
+        // Defaulting to 'keep' is deliberate: any caller that doesn't pass an
+        // explicit action gets the least destructive option, which avoids the
+        // silent-deletion regression.
+        const ideSyncDisableAction = params.ideSyncDisableAction ?? 'keep';
+        const ideSyncDisabledIds: string[] = [];
+
+        for (const id of repositoryIds) {
+            const before = resolveBefore(id);
+            const after = resolveAfter(id);
+
+            if (before.ideRulesSyncEnabled && !after.ideRulesSyncEnabled) {
+                this.logger.log({
+                    message: 'IDE rules sync turned off for repository',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                        action: ideSyncDisableAction,
+                    },
+                });
+                ideSyncDisabledIds.push(id);
+            } else if (
+                !before.ideRulesSyncEnabled &&
+                after.ideRulesSyncEnabled
+            ) {
+                this.logger.log({
+                    message: 'IDE rules sync turned on for repository',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                    },
+                });
+            }
+
+            if (
+                before.kodyRulesGeneratorEnabled !==
+                after.kodyRulesGeneratorEnabled
+            ) {
+                this.logger.log({
+                    message: `Kody Rules generator turned ${after.kodyRulesGeneratorEnabled ? 'on' : 'off'} for repository`,
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                        seedsNow:
+                            level === ConfigLevel.REPOSITORY &&
+                            after.kodyRulesGeneratorEnabled &&
+                            params.generatorEnabledInPayload,
+                    },
+                });
+            }
+
+            // Seeding is idempotent (it skips when past-review rules already
+            // exist), so re-saving an already-enabled repo is a no-op. Fired
+            // detached so it never blocks the settings save (issue #1506).
+            if (
+                level === ConfigLevel.REPOSITORY &&
+                after.kodyRulesGeneratorEnabled &&
+                params.generatorEnabledInPayload
+            ) {
+                this.seedInitialKodyRules(organizationAndTeamData, id);
+            }
+        }
+
+        // One cleanup for the whole save: the listener loads the org's rules
+        // once instead of once per repository.
+        if (ideSyncDisabledIds.length > 0) {
+            const event: IdeRulesSyncDisabledEvent = {
+                organizationAndTeamData,
+                repositoryIds: ideSyncDisabledIds,
+                action: ideSyncDisableAction,
+            };
+            this.eventEmitter.emit(IDE_RULES_SYNC_DISABLED_EVENT, event);
+        }
+    }
+
+    private seedInitialKodyRules(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+    ) {
+        void this.generateInitialKodyRulesUseCase
+            .execute({ organizationAndTeamData, repositoryId })
+            .catch((error) => {
+                this.logger.error({
+                    message: 'Failed to start initial Kody Rules generation',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    error:
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                    metadata: { organizationAndTeamData, repositoryId },
+                });
+            });
     }
 
     private async createCentralizedMutationIfEnabled(params: {

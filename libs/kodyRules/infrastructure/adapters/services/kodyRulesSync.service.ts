@@ -10,6 +10,10 @@ import {
     ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
+import {
+    createKodyLearningSettingsResolver,
+    resolveKodyLearningSettings,
+} from '@libs/common/utils/kody-rules/kody-learning-settings';
 import * as path from 'path';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -126,6 +130,13 @@ type SyncTarget = {
         defaultBranch?: string;
     };
     path?: string;
+};
+
+export type IdeSyncRuleCounts = {
+    active: number;
+    paused: number;
+    deleted: number;
+    pinned: number;
 };
 
 @Injectable()
@@ -1899,19 +1910,21 @@ export class KodyRulesSyncService {
                 organizationAndTeamData,
             );
 
-            // Must have repository context and repository-specific config
-            if (!repositoryId || !cfg?.configValue?.repositories) {
+            if (!repositoryId) {
                 return false;
             }
 
-            const repoConfig = cfg.configValue.repositories.find(
-                (repo: any) =>
-                    repo.id === repositoryId ||
-                    repo.id === repositoryId.toString(),
-            );
-
-            return repoConfig?.configs.ideRulesSyncEnabled === true;
-        } catch {
+            return resolveKodyLearningSettings(cfg?.configValue, repositoryId)
+                .ideRulesSyncEnabled;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve ideRulesSyncEnabled; treating IDE rules sync as off',
+                context: KodyRulesSyncService.name,
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+                metadata: { organizationAndTeamData, repositoryId },
+            });
             return false;
         }
     }
@@ -3105,18 +3118,20 @@ export class KodyRulesSyncService {
      */
     private async transitionIdeSyncRulesStatus(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repositoryId: string;
+        repositoryIds: string[];
         targetStatus: KodyRulesStatus;
         onlyFromStatus?: KodyRulesStatus[];
         excludePinned?: boolean;
     }): Promise<number> {
         const {
             organizationAndTeamData,
-            repositoryId,
             targetStatus,
             onlyFromStatus,
             excludePinned = true,
         } = params;
+        const repositoryIds = new Set(params.repositoryIds);
+        if (repositoryIds.size === 0) return 0;
+
         const entity = await this.kodyRulesService.findByOrganizationId(
             organizationAndTeamData.organizationId,
         );
@@ -3127,7 +3142,7 @@ export class KodyRulesSyncService {
         // with a `sourcePath`, so checking for null alone would sweep them
         // up erroneously.
         const ideSyncRules = entity.rules.filter((r: any) => {
-            if (r?.repositoryId !== repositoryId) return false;
+            if (!repositoryIds.has(r?.repositoryId)) return false;
             if (!isIdeRuleSource(r?.sourcePath)) return false;
             if (excludePinned && r?.pinnedSync === true) return false;
             if (onlyFromStatus && !onlyFromStatus.includes(r?.status)) {
@@ -3174,6 +3189,17 @@ export class KodyRulesSyncService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
     }): Promise<void> {
+        await this.purgeAllIdeSyncRulesForRepositories({
+            organizationAndTeamData: params.organizationAndTeamData,
+            repositoryIds: [params.repositoryId],
+        });
+    }
+
+    /** Same as above for several repositories, loading the org's rules once. */
+    async purgeAllIdeSyncRulesForRepositories(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds: string[];
+    }): Promise<void> {
         try {
             await this.transitionIdeSyncRulesStatus({
                 ...params,
@@ -3181,7 +3207,7 @@ export class KodyRulesSyncService {
             });
         } catch (error) {
             this.logger.error({
-                message: 'Failed to purge IDE sync rules for repository',
+                message: 'Failed to purge IDE sync rules for repositories',
                 context: KodyRulesSyncService.name,
                 error,
                 metadata: params,
@@ -3203,6 +3229,17 @@ export class KodyRulesSyncService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
     }): Promise<void> {
+        await this.pauseAllIdeSyncRulesForRepositories({
+            organizationAndTeamData: params.organizationAndTeamData,
+            repositoryIds: [params.repositoryId],
+        });
+    }
+
+    /** Same as above for several repositories, loading the org's rules once. */
+    async pauseAllIdeSyncRulesForRepositories(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds: string[];
+    }): Promise<void> {
         try {
             await this.transitionIdeSyncRulesStatus({
                 ...params,
@@ -3211,7 +3248,7 @@ export class KodyRulesSyncService {
             });
         } catch (error) {
             this.logger.error({
-                message: 'Failed to pause IDE sync rules for repository',
+                message: 'Failed to pause IDE sync rules for repositories',
                 context: KodyRulesSyncService.name,
                 error,
                 metadata: params,
@@ -3231,7 +3268,8 @@ export class KodyRulesSyncService {
     }): Promise<void> {
         try {
             await this.transitionIdeSyncRulesStatus({
-                ...params,
+                organizationAndTeamData: params.organizationAndTeamData,
+                repositoryIds: [params.repositoryId],
                 targetStatus: KodyRulesStatus.ACTIVE,
                 onlyFromStatus: [KodyRulesStatus.PAUSED],
             });
@@ -3259,21 +3297,58 @@ export class KodyRulesSyncService {
     async countIdeSyncRulesForRepository(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
-    }): Promise<{
-        active: number;
-        paused: number;
-        deleted: number;
-        pinned: number;
-    }> {
-        const { organizationAndTeamData, repositoryId } = params;
+    }): Promise<IdeSyncRuleCounts> {
+        return this.countIdeSyncRulesForRepositories({
+            organizationAndTeamData: params.organizationAndTeamData,
+            repositoryIds: [params.repositoryId],
+        });
+    }
+
+    /**
+     * Same counts, summed over the repositories that would stop syncing if the
+     * global IDE rules sync were turned off: those resolving to "on" without a
+     * value of their own. Drives the global toggle-off modal.
+     */
+    async countIdeSyncRulesInheritingGlobal(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<IdeSyncRuleCounts> {
+        const cfg = await this.parametersService.findByKey(
+            ParametersKey.CODE_REVIEW_CONFIG,
+            organizationAndTeamData,
+        );
+        const configValue = cfg?.configValue;
+        const resolveSettings = createKodyLearningSettingsResolver(configValue);
+
+        const repositoryIds = (configValue?.repositories ?? [])
+            .filter(
+                (repo) =>
+                    repo.configs?.ideRulesSyncEnabled === undefined &&
+                    resolveSettings(String(repo.id)).ideRulesSyncEnabled,
+            )
+            .map((repo) => String(repo.id));
+
+        return this.countIdeSyncRulesForRepositories({
+            organizationAndTeamData,
+            repositoryIds,
+        });
+    }
+
+    private async countIdeSyncRulesForRepositories(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds: string[];
+    }): Promise<IdeSyncRuleCounts> {
+        const { organizationAndTeamData } = params;
+        const repositoryIds = new Set(params.repositoryIds);
         const counts = { active: 0, paused: 0, deleted: 0, pinned: 0 };
+        if (repositoryIds.size === 0) return counts;
+
         const entity = await this.kodyRulesService.findByOrganizationId(
             organizationAndTeamData.organizationId,
         );
         if (!entity?.rules) return counts;
 
         for (const r of entity.rules as any[]) {
-            if (r?.repositoryId !== repositoryId) continue;
+            if (!repositoryIds.has(r?.repositoryId)) continue;
             if (!isIdeRuleSource(r?.sourcePath)) continue;
             if (r?.status === KodyRulesStatus.ACTIVE) counts.active += 1;
             else if (r?.status === KodyRulesStatus.PAUSED) counts.paused += 1;
