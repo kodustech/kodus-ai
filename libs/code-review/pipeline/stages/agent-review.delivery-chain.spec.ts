@@ -126,9 +126,9 @@ const buildStages = () => {
         createLineComments: jest.fn(
             async (...args: any[]) => {
                 const lineComments = args[3];
-                // arg 8 (index 7) is the reviewed commit the stage pins into
+                // arg 10 (index 9) is the reviewed commit the stage pins into
                 // the posting call — the context's pull request head sha.
-                posted.anchors.push(args[7]);
+                posted.anchors.push(args[9]);
                 posted.inline.push(...lineComments);
                 return {
                     lastAnalyzedCommit: { sha: 'head' },

@@ -1977,6 +1977,8 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
             'en-US',
             undefined,
             undefined,
+            undefined,
+            undefined,
             REVIEWED.sha,
         );
 
@@ -2036,6 +2038,8 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
             { name: 'repo', id: '1', language: 'ts' },
             lineComments,
             'en-US',
+            undefined,
+            undefined,
             undefined,
             undefined,
             REVIEWED.sha, // rewritten away by the force-push
