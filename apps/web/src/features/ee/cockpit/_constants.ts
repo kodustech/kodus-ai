@@ -5,6 +5,8 @@ export type TabValue = keyof typeof tabs;
 // versions inside the review tab.
 export const tabs = {
     "kodus-review": "Kodus Review",
+    // Pull requests checked against their task (Business Logic runs).
+    "intent": "Delivered as asked",
     "productivity": "Productivity",
 } satisfies Record<string, string>;
 

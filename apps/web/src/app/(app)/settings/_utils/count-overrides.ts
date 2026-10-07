@@ -19,6 +19,7 @@ const CODE_REVIEW_ROUTE_OVERRIDE_PATH_PREFIXES: Record<string, string[]> = {
         "enableCommittableSuggestions",
     ],
     "linked-repositories": ["linkedRepositories"],
+    "business-logic": ["businessLogic"],
     "custom-prompts": ["v2PromptOverrides"],
     // Tabs shell: "What to review" = categories + their prompts + filters.
     "review-scope": [

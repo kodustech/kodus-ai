@@ -228,6 +228,9 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         // the field and the UI save would never persist linked repos.
         "linkedRepositories",
         "deterministicEvidence",
+        // Business Logic settings (task source, criteria, what fails the
+        // check). Without it here the stripper would drop every edit.
+        "businessLogic",
     ];
 
     expectedKeys.forEach((key) => {
