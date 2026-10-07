@@ -231,10 +231,10 @@ export class AiSdkAgentRunner implements AgentRunner {
             }
         };
 
-        // PR/team for cost attribution: the code-review finder opts these in via
-        // `runtimeContext`; other callers hand over raw `telemetryMetadata`.
+        // PR/team/repo for cost attribution: the code-review finder opts these in
+        // via `runtimeContext`; other callers hand over raw `telemetryMetadata`.
         const runMeta = (input.runtimeContext ?? input.telemetryMetadata) as
-            | { pullRequestId?: number; teamId?: string }
+            | { pullRequestId?: number; teamId?: string; repositoryId?: string }
             | undefined;
 
         try {
@@ -256,11 +256,13 @@ export class AiSdkAgentRunner implements AgentRunner {
                     agentName: spec.agentName ?? spec.id,
                     ...(spec.phase ? { phase: spec.phase } : {}),
                     source: 'harness',
-                    // Per-PR / per-team cost attribution. organizationId reaches
-                    // the span via LLM.run's own param above, but prNumber/teamId
-                    // ride the cost attrs — without threading them the biggest
-                    // spans (the agent loop) record prNumber undefined, so per-PR
-                    // cost in the dashboard misses the finder/verify entirely.
+                    // Per-PR / per-team / per-repo cost attribution. organizationId
+                    // reaches the span via LLM.run's own param above, but
+                    // prNumber/teamId/repositoryId ride the cost attrs — without
+                    // threading them the biggest spans (the agent loop) record
+                    // prNumber/repositoryId undefined, so per-PR cost in the
+                    // dashboard misses the finder/verify entirely, and the Token
+                    // Usage repository filter can't scope by repo at all (#1882).
                     // The code-review finder opts these values in through
                     // `runtimeContext` (via toAiSdkTelemetryArgs); other callers
                     // pass raw `telemetryMetadata`. Read both.
@@ -268,6 +270,9 @@ export class AiSdkAgentRunner implements AgentRunner {
                         ? { prNumber: runMeta.pullRequestId }
                         : {}),
                     ...(runMeta?.teamId ? { teamId: runMeta.teamId } : {}),
+                    ...(runMeta?.repositoryId
+                        ? { repositoryId: runMeta.repositoryId }
+                        : {}),
                 },
                 system: spec.systemPrompt,
                 messages,

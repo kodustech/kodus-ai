@@ -112,27 +112,61 @@ export class TokensByDeveloperUseCase {
         return result;
     }
 
+    /**
+     * Keyed by `${repositoryId}|${number}`, NOT the bare number (#1882): PR
+     * numbers are unique per repository, not per org, so two PRs on
+     * different repos sharing a number would otherwise collapse onto one
+     * map entry — whichever the batch fetch returned last silently "won"
+     * and every usage row for that number attributed to its author.
+     *
+     * Usage rows carry `repositoryId` only from #1882 onward — rows from
+     * before that (no repositoryId on the row) fall back to the org+number
+     * lookup, same as before the fix, and key under `''|${number}`.
+     */
     private async getPullRequestsMap(
-        usages: { prNumber: number }[],
+        usages: { prNumber: number; repositoryId?: string }[],
         organizationId: string,
-    ): Promise<Map<number, IPullRequestUserMapping>> {
-        // Get unique PR numbers
-        const uniquePrNumbers = [...new Set(usages.map((u) => u.prNumber))];
+    ): Promise<Map<string, IPullRequestUserMapping>> {
+        const pullRequestsMap = new Map<string, IPullRequestUserMapping>();
 
-        if (uniquePrNumbers.length === 0) {
-            return new Map();
+        const scoped = usages.filter((u) => u.repositoryId);
+        const legacy = usages.filter((u) => !u.repositoryId);
+
+        const scopedCriteria = [
+            ...new Map(
+                scoped.map((u) => [
+                    `${u.repositoryId}|${u.prNumber}`,
+                    { number: u.prNumber, repositoryId: u.repositoryId! },
+                ]),
+            ).values(),
+        ];
+        const legacyNumbers = [...new Set(legacy.map((u) => u.prNumber))];
+
+        const [scopedPrs, legacyPrs] = await Promise.all([
+            scopedCriteria.length
+                ? this.pullRequestsService.findManyByNumbersAndRepositoryIds(
+                      scopedCriteria,
+                      organizationId,
+                  )
+                : Promise.resolve([]),
+            legacyNumbers.length
+                ? this.pullRequestsService.findManyByNumbers(
+                      legacyNumbers,
+                      organizationId,
+                  )
+                : Promise.resolve([]),
+        ]);
+
+        for (const pr of scopedPrs) {
+            if (!pr.repository?.id) continue;
+            pullRequestsMap.set(`${pr.repository.id}|${pr.number}`, {
+                number: pr.number,
+                user: pr.user,
+                organizationId,
+            });
         }
-
-        // PERF: Batch fetch all PRs in a single query instead of N+1
-        const pullRequests = await this.pullRequestsService.findManyByNumbers(
-            uniquePrNumbers,
-            organizationId,
-        );
-
-        // Build map from results
-        const pullRequestsMap = new Map<number, IPullRequestUserMapping>();
-        for (const pr of pullRequests) {
-            pullRequestsMap.set(pr.number, pr);
+        for (const pr of legacyPrs) {
+            pullRequestsMap.set(`|${pr.number}`, pr);
         }
 
         return pullRequestsMap;
@@ -140,10 +174,12 @@ export class TokensByDeveloperUseCase {
 
     private mapUsagesWithDevelopers(
         usages: (UsageByPrResultContract | DailyUsageByPrResultContract)[],
-        pullRequestsMap: Map<number, IPullRequestUserMapping>,
+        pullRequestsMap: Map<string, IPullRequestUserMapping>,
     ) {
         return usages.map((usage) => {
-            const pr = pullRequestsMap.get(usage.prNumber);
+            const pr = pullRequestsMap.get(
+                `${usage.repositoryId ?? ''}|${usage.prNumber}`,
+            );
             const developer = pr?.user?.username || 'unknown';
 
             return {

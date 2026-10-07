@@ -42,6 +42,11 @@ const DEAD_INDEXES = [
     // area aggregation stays covered).
     'tu_cover_byok_v2',
     'tu_cover_sys_v2',
+    // v3 covers, superseded by *_v4 (which add attributes.repositoryId so the
+    // repository-scoped read — #1882 — stays covered instead of matching on
+    // the collision-prone attributes.prNumber alone).
+    'tu_cover_byok_v3',
+    'tu_cover_sys_v3',
 ];
 
 type Logger = (msg: string) => void;
@@ -52,7 +57,7 @@ export async function ensureTokenUsageIndexes(
 ): Promise<void> {
     const c = db.collection(COLLECTION);
 
-    log('[token-usage-indexes] building tu_cover_byok_v3…');
+    log('[token-usage-indexes] building tu_cover_byok_v4…');
     await c.createIndex(
         {
             'attributes.organizationId': 1,
@@ -60,18 +65,19 @@ export async function ensureTokenUsageIndexes(
             timestamp: 1,
             'attributes.tu.model': 1,
             'attributes.prNumber': 1,
+            'attributes.repositoryId': 1,
             'attributes.tu.area': 1,
             'attributes.tu.route': 1,
             correlationId: 1,
             ...SUM_KEYS,
         },
         {
-            name: 'tu_cover_byok_v3',
+            name: 'tu_cover_byok_v4',
             partialFilterExpression: { 'attributes.tu.isByok': true },
         },
     );
 
-    log('[token-usage-indexes] building tu_cover_sys_v3…');
+    log('[token-usage-indexes] building tu_cover_sys_v4…');
     await c.createIndex(
         {
             'attributes.organizationId': 1,
@@ -79,13 +85,14 @@ export async function ensureTokenUsageIndexes(
             timestamp: 1,
             'attributes.tu.model': 1,
             'attributes.prNumber': 1,
+            'attributes.repositoryId': 1,
             'attributes.tu.area': 1,
             'attributes.tu.route': 1,
             correlationId: 1,
             ...SUM_KEYS,
         },
         {
-            name: 'tu_cover_sys_v3',
+            name: 'tu_cover_sys_v4',
             partialFilterExpression: { 'attributes.tu.sys': { $exists: true } },
         },
     );
@@ -106,7 +113,7 @@ export async function dropTokenUsageIndexes(
     log: Logger = () => {},
 ): Promise<void> {
     const c = db.collection(COLLECTION);
-    for (const name of ['tu_cover_byok_v3', 'tu_cover_sys_v3']) {
+    for (const name of ['tu_cover_byok_v4', 'tu_cover_sys_v4']) {
         try {
             await c.dropIndex(name);
             log(`[token-usage-indexes] dropped ${name}`);
