@@ -174,15 +174,17 @@ describe('ByokErrorCounter', () => {
             organizationId: ORG,
             provider: PROVIDER,
             errorMessage: ERROR,
-            category: 'RATE_LIMIT' as any,
-            httpStatus: 429,
+            category: 'MODEL_NOT_FOUND' as any,
+            httpStatus: 404,
+            routingRefusal: true,
         });
 
         expect(notifications.emit.mock.calls[0]![0].payload).toEqual(
             expect.objectContaining({
                 sampleError: ERROR,
-                category: 'RATE_LIMIT',
-                httpStatus: 429,
+                category: 'MODEL_NOT_FOUND',
+                httpStatus: 404,
+                routingRefusal: true,
             }),
         );
     });

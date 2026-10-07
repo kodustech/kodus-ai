@@ -44,7 +44,7 @@ describe("byokFailureCopy", () => {
         const { title, body } = byokFailureCopy(
             "OpenRouter",
             "MODEL_NOT_FOUND",
-            said,
+            { providerMessage: said },
         );
         expect(`${title} ${body}`).toMatch(/allow/i);
         expect(body).not.toMatch(/check the model id/i);
@@ -56,9 +56,20 @@ describe("byokFailureCopy", () => {
         const { body } = byokFailureCopy(
             "OpenRouter",
             "MODEL_NOT_FOUND",
-            'model "gpt-nope" does not exist',
+            { providerMessage: 'model "gpt-nope" does not exist' },
         );
         expect(body).toMatch(/check the model id/i);
+    });
+
+    it("trusts the backend's verdict when the sample lacks the sentence", () => {
+        // The sample is capped and skips the cause chain; the classifier reads
+        // the whole error, so its flag wins over re-reading the text.
+        const { body } = byokFailureCopy("OpenRouter", "MODEL_NOT_FOUND", {
+            routingRefusal: true,
+            providerMessage: "Not Found",
+        });
+        expect(body).not.toMatch(/check the model id/i);
+        expect(body).toMatch(/allow/i);
     });
 
     it("keeps the billing hint where it is the cause", () => {

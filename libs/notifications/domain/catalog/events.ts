@@ -198,6 +198,8 @@ export interface NotificationPayloadMap {
         /** `LlmErrorCategory` of the sample error; absent when unclassified. */
         category?: string;
         httpStatus?: number;
+        /** The sample error is a routing refusal (see ClassifiedErrorInfo). */
+        routingRefusal?: boolean;
     };
 
     // ── Spend limit ────────────────────────────────────────────

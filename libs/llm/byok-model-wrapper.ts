@@ -96,6 +96,7 @@ export interface WrapByokModelOptions {
         errorMessage: string;
         category?: LlmErrorCategory;
         httpStatus?: number;
+        routingRefusal?: boolean;
     }) => void;
 }
 
@@ -202,6 +203,7 @@ export function wrapByokModel(
                                         : String(err ?? 'unknown')),
                                 category: classified?.category,
                                 httpStatus: classified?.httpStatus,
+                                routingRefusal: classified?.routingRefusal,
                             });
                         } catch {
                             /* reporter failures must not surface */

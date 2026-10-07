@@ -46,9 +46,17 @@ export class ByokErrorCounter {
         /** `LlmErrorCategory` of this error, when it was classified. */
         category?: string;
         httpStatus?: number;
+        /** The classifier found a routing refusal, not a missing model. */
+        routingRefusal?: boolean;
     }): Promise<void> {
-        const { organizationId, provider, errorMessage, category, httpStatus } =
-            input;
+        const {
+            organizationId,
+            provider,
+            errorMessage,
+            category,
+            httpStatus,
+            routingRefusal,
+        } = input;
         // Internal-fallback errors (no org context) are operator concern,
         // not customer concern.
         if (!organizationId) return;
@@ -96,6 +104,7 @@ export class ByokErrorCounter {
                     // the banner words itself from it rather than guessing.
                     category,
                     httpStatus,
+                    routingRefusal,
                 },
             });
         } catch (error) {

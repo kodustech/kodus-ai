@@ -492,6 +492,32 @@ describe('wrapByokModel — failure reporting', () => {
 
         expect(reporter.mock.calls[0][0].errorMessage).toBe('socket hang up');
     });
+
+    it('reports a routing refusal as such, decided on the full error', async () => {
+        const reporter = jest.fn();
+        const err = Object.assign(new Error('Not Found'), {
+            statusCode: 404,
+            cause: new Error(
+                'No allowed providers are available for the selected model.',
+            ),
+        });
+        const wrapped = wrapByokModel(failingModel(err), {
+            organizationId: 'org-1',
+            provider: 'open_router',
+            reporter,
+        });
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT } as any),
+        ).rejects.toThrow('Not Found');
+
+        expect(reporter.mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                category: 'MODEL_NOT_FOUND',
+                routingRefusal: true,
+            }),
+        );
+    });
 });
 
 describe('wrapByokModel — a reasoning field the upstream refuses', () => {

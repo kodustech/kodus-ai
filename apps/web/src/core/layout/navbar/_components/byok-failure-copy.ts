@@ -11,8 +11,12 @@
 export function byokFailureCopy(
     provider: string,
     category?: string,
-    /** The provider's own sentence (`sampleError` on the notification). */
-    providerMessage?: string,
+    detail: {
+        /** The backend classifier's verdict, decided on the full error text. */
+        routingRefusal?: boolean;
+        /** The provider's own sentence (`sampleError` on the notification). */
+        providerMessage?: string;
+    } = {},
 ): { title: string; body: string } {
     const tail = "Reviews using this model may fail until it's resolved.";
 
@@ -20,7 +24,11 @@ export function byokFailureCopy(
     // your routing allows serves it" (OpenRouter with pinned providers). Only
     // the body tells them apart, and "check the model id" sends someone with a
     // correct id and a working key chasing the wrong thing.
-    if (category === "MODEL_NOT_FOUND" && isRoutingRefusal(providerMessage)) {
+    // Notifications emitted before the classifier carried its verdict only
+    // have the sentence, so read it as a fallback.
+    const routingRefusal =
+        detail.routingRefusal || isRoutingRefusal(detail.providerMessage);
+    if (category === "MODEL_NOT_FOUND" && routingRefusal) {
         return {
             title: `${provider} has no allowed provider for the configured model`,
             body: `The model and key are fine, but the providers ${provider} is allowed to route to don't serve this model. Allow a provider that serves it (for OpenRouter, the pinned providers or the account's allowed providers), or pick a model they serve. ${tail}`,

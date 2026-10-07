@@ -114,13 +114,17 @@ export const CriticalNotificationBanner = () => {
         : null;
 
     const category = banner.delivery.metadata?.category;
+    const sampleError = banner.delivery.metadata?.sampleError;
+    const routingRefusal = banner.delivery.metadata?.routingRefusal;
     const byokCopy = isByokError
         ? byokFailureCopy(
               provider ?? "your provider",
               typeof category === "string" ? category : undefined,
-              typeof banner.delivery.metadata?.sampleError === "string"
-                  ? banner.delivery.metadata.sampleError
-                  : undefined,
+              {
+                  routingRefusal: routingRefusal === true,
+                  providerMessage:
+                      typeof sampleError === "string" ? sampleError : undefined,
+              },
           )
         : null;
     const title = byokCopy?.title ?? banner.delivery.title;
