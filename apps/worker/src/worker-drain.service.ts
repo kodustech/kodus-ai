@@ -87,9 +87,11 @@ export class WorkerDrainService implements OnApplicationShutdown {
     private async cancelConsumers(): Promise<void> {
         const timeoutMs = Math.min(CANCEL_CONSUMERS_TIMEOUT_MS, this.drainTimeoutMs);
         let timer: NodeJS.Timeout | undefined;
+        let consumerCount: number | undefined;
 
         try {
             const consumerTags = this.amqpConnection?.consumerTags ?? [];
+            consumerCount = consumerTags.length;
 
             const results = await Promise.race([
                 Promise.allSettled(
@@ -122,6 +124,8 @@ export class WorkerDrainService implements OnApplicationShutdown {
                     'Worker drain: failed to cancel RabbitMQ consumers; closing anyway',
                 context: WorkerDrainService.name,
                 error: error instanceof Error ? error : undefined,
+                // consumerCount stays undefined when reading the registry threw
+                metadata: { timeoutMs, consumerCount },
             });
         } finally {
             clearTimeout(timer);
