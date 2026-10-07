@@ -21,6 +21,7 @@ import { ObservabilityService } from '@libs/core/log/observability.service';
 
 import { resolveWorkerRole } from './worker-role';
 import { WorkerModule } from './worker.module';
+import { startEventLoopMonitor } from './event-loop-monitor';
 import { startHealthProbe } from './health-probe';
 
 declare const module: any;
@@ -118,6 +119,9 @@ async function bootstrap() {
         // Close the probe when Node receives SIGTERM so we don't keep the
         // port reserved during the grace period. Nest's own shutdown hooks
         // (enableShutdownHooks) fire after this on the same signal.
+        // Kept running through shutdown (unref'd): the drain is when we most
+        // need to see whether the thread is blocked.
+        startEventLoopMonitor();
         const stopProbe = () => healthServer.close();
         process.once('SIGTERM', stopProbe);
         process.once('SIGINT', stopProbe);

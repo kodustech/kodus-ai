@@ -1,6 +1,9 @@
 import * as http from 'http';
 import { INestApplicationContext } from '@nestjs/common';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
+import { createLogger } from '@libs/core/log/logger';
+
+type ProbeLogger = Pick<ReturnType<typeof createLogger>, 'warn'>;
 
 export interface HealthProbeOptions {
     port: number;
@@ -23,6 +26,19 @@ export interface HealthProbeOptions {
      * don't want to flap unhealthy during that window.
      */
     startupGraceMs?: number;
+    /** Injected in tests; defaults to the worker logger. */
+    logger?: ProbeLogger;
+}
+
+/**
+ * When the probe last answered, process-wide. Read by the event-loop monitor
+ * so a task ECS marks unhealthy while this process saw no failing (or no)
+ * probes points at the health-check command, not at the worker.
+ */
+let lastProbe: { at: number; ok: boolean; status: string } | undefined;
+
+export function getLastHealthProbe() {
+    return lastProbe;
 }
 
 const DEFAULT_WORKER_CHANNELS = [
@@ -77,6 +93,7 @@ export function startHealthProbe(opts: HealthProbeOptions): http.Server {
         requireAmqp,
         requiredChannels = DEFAULT_WORKER_CHANNELS,
         startupGraceMs = 60_000,
+        logger = createLogger('WorkerHealthProbe'),
     } = opts;
     const bootTs = Date.now();
 
@@ -168,6 +185,7 @@ export function startHealthProbe(opts: HealthProbeOptions): http.Server {
             return;
         }
 
+        const startedAt = Date.now();
         let result: HealthStatus;
         try {
             result = evaluate();
@@ -181,6 +199,8 @@ export function startHealthProbe(opts: HealthProbeOptions): http.Server {
             };
         }
 
+        lastProbe = { at: startedAt, ok: result.ok, status: result.status };
+
         res.writeHead(result.ok ? 200 : 503, {
             'content-type': 'application/json',
         });
@@ -191,6 +211,28 @@ export function startHealthProbe(opts: HealthProbeOptions): http.Server {
                 ...(result.details ?? {}),
             }),
         );
+
+        // ECS only records "unhealthy" — without this line a recycled task
+        // leaves no trace of WHY the probe failed (or that it never did).
+        // Time spent queued behind a blocked event loop happens BEFORE this
+        // handler runs; the event-loop monitor is what measures that.
+        // Logged after the response, and guarded: logging must never be
+        // the reason a probe goes unanswered.
+        if (!result.ok) {
+            try {
+                logger.warn({
+                    message: `Health probe failing: ${result.status}`,
+                    context: 'WorkerHealthProbe',
+                    metadata: {
+                        status: result.status,
+                        msSinceBoot: startedAt - bootTs,
+                        ...(result.details ?? {}),
+                    },
+                });
+            } catch {
+                // best-effort
+            }
+        }
     });
 
     server.listen(port, '0.0.0.0', () => {
