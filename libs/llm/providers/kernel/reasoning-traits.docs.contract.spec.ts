@@ -64,36 +64,44 @@ describe('GLM (Z.ai) — docs.z.ai', () => {
     it('"the default value is auto, and only `auto` is supported" for tool_choice', () => {
         // The least likely-looking claim in the whole table, and exact. It is
         // what makes a structured call reroute to JSON instead of forcing a tool.
-        expect(resolveCompatibleReasoningTraits('glm-5.2').supportsForcedToolChoice).toBe(
-            false,
-        );
+        expect(
+            resolveCompatibleReasoningTraits('glm-5.2')
+                .supportsForcedToolChoice,
+        ).toBe(false);
     });
 
     it('thinking is on by default across 4.7 → 5.3, and `{"thinking":{"type":"disabled"}}` turns it off', () => {
         for (const m of ['glm-4.7', 'glm-5.1', 'glm-5.2']) {
-            expect(resolveCompatibleReasoningTraits(m).thinksByDefault).toBe(true);
-            expect(resolveCompatibleReasoningTraits(m).canDisableThinking).toBe(true);
-        }
-    });
-
-    it('GLM-5.3 and 5.3-Flash "use forced thinking and cannot be disabled"', () => {
-        for (const m of ['glm-5.3', 'glm-5.3-flash']) {
-            expect(resolveCompatibleReasoningTraits(m).canDisableThinking).toBe(false);
-        }
-    });
-
-    it('`reasoning_effort` spans the family (4.6 → 5.3), not just the newest', () => {
-        for (const m of ['glm-4.6', 'glm-4.7', 'glm-5.2', 'glm-5.3']) {
-            expect(resolveCompatibleReasoningTraits(m).acceptsEffortWithThinking).toBe(
+            expect(resolveCompatibleReasoningTraits(m).thinksByDefault).toBe(
+                true,
+            );
+            expect(resolveCompatibleReasoningTraits(m).canDisableThinking).toBe(
                 true,
             );
         }
     });
 
+    it('GLM-5.3 and 5.3-Flash "use forced thinking and cannot be disabled"', () => {
+        for (const m of ['glm-5.3', 'glm-5.3-flash']) {
+            expect(resolveCompatibleReasoningTraits(m).canDisableThinking).toBe(
+                false,
+            );
+        }
+    });
+
+    it('`reasoning_effort` spans the family (4.6 → 5.3), not just the newest', () => {
+        for (const m of ['glm-4.6', 'glm-4.7', 'glm-5.2', 'glm-5.3']) {
+            expect(
+                resolveCompatibleReasoningTraits(m).acceptsEffortWithThinking,
+            ).toBe(true);
+        }
+    });
+
     it('sampling params keep working while thinking — unlike DeepSeek and Kimi', () => {
-        expect(resolveCompatibleReasoningTraits('glm-5.2').rejectsSamplingWhileThinking).toBe(
-            false,
-        );
+        expect(
+            resolveCompatibleReasoningTraits('glm-5.2')
+                .rejectsSamplingWhileThinking,
+        ).toBe(false);
         expect(compatibleTemperaturePolicy('glm-5.2')).toEqual({
             kind: 'adjustable',
         });
@@ -111,31 +119,37 @@ describe('Kimi (Moonshot) — platform.kimi.ai/docs/guide/use-thinking-models', 
         expect(compatibleTemperaturePolicy('kimi-k2.7-code')).toEqual({
             kind: 'unsupported',
         });
-        expect(resolveCompatibleReasoningTraits('kimi-k2.7-code').canDisableThinking).toBe(
-            false,
-        );
+        expect(
+            resolveCompatibleReasoningTraits('kimi-k2.7-code')
+                .canDisableThinking,
+        ).toBe(false);
     });
 
     it('k2.6 CAN disable thinking, which says nothing about its temperature', () => {
         // The two facts are independent. Conflating them is what let a
         // documented restriction pass unnoticed for k2.6.
-        expect(resolveCompatibleReasoningTraits('kimi-k2.6').canDisableThinking).toBe(true);
+        expect(
+            resolveCompatibleReasoningTraits('kimi-k2.6').canDisableThinking,
+        ).toBe(true);
     });
 
     it('k2.x does NOT accept reasoning_effort — the API rejects it alongside thinking', () => {
         // "reasoning_effort Not supported" for K2.x, and HKUDS/nanobot#3939
         // ("Moonshot API rejects kimi-k2.5/k2.6 when reasoning_effort and
         // thinking are both sent") is the live reproduction of what that costs.
-        expect(resolveCompatibleReasoningTraits('kimi-k2.6').acceptsEffortWithThinking).toBe(
-            false,
-        );
+        expect(
+            resolveCompatibleReasoningTraits('kimi-k2.6')
+                .acceptsEffortWithThinking,
+        ).toBe(false);
     });
 
     it('k2.5 and k2.7 are NOT on that page, so they keep their temperature', () => {
         // Pinning the absence. Omitting would be the safer guess for them and it
         // would still be a guess.
         for (const m of ['kimi-k2.5', 'kimi-k2.7']) {
-            expect(compatibleTemperaturePolicy(m)).toEqual({ kind: 'adjustable' });
+            expect(compatibleTemperaturePolicy(m)).toEqual({
+                kind: 'adjustable',
+            });
         }
     });
 });
@@ -159,8 +173,12 @@ describe('Kimi (Moonshot) — platform.kimi.ai/docs/guide/use-thinking-models', 
 describe('MiniMax — platform.minimax.io/docs/api-reference/text-anthropic-api', () => {
     it('"For M2.x models, thinking cannot be disabled"', () => {
         for (const m of ['MiniMax-M2', 'minimax-m2.5', 'minimax-m2.7']) {
-            expect(resolveCompatibleReasoningTraits(m).canDisableThinking).toBe(false);
-            expect(resolveCompatibleReasoningTraits(m).thinksByDefault).toBe(true);
+            expect(resolveCompatibleReasoningTraits(m).canDisableThinking).toBe(
+                false,
+            );
+            expect(resolveCompatibleReasoningTraits(m).thinksByDefault).toBe(
+                true,
+            );
         }
     });
 
@@ -187,9 +205,9 @@ describe('MiniMax — platform.minimax.io/docs/api-reference/text-anthropic-api'
         // `reasoning_effort`. Since M2.x cannot stop thinking either way, no
         // customer is losing reasoning — only the EFFORT level is uncertain,
         // which is why this is pinned rather than changed.
-        expect(resolveCompatibleReasoningTraits('MiniMax-M2').reasoningControl).toBe(
-            'effort-only',
-        );
+        expect(
+            resolveCompatibleReasoningTraits('MiniMax-M2').reasoningControl,
+        ).toBe('effort-only');
     });
 
     it('M3 is a different model here, and is NOT claimed by the M2 row', () => {
@@ -200,7 +218,62 @@ describe('MiniMax — platform.minimax.io/docs/api-reference/text-anthropic-api'
         // vendor documents `adaptive`. That difference is NOT asserted either
         // way here, because no source says `enabled` is refused, and guessing a
         // shape is the failure this file exists to prevent.
-        expect(resolveCompatibleReasoningTraits('MiniMax-M3').reasoningControl).toBeUndefined();
+        expect(
+            resolveCompatibleReasoningTraits('MiniMax-M3').reasoningControl,
+        ).toBeUndefined();
+    });
+
+    it('M3.1 cannot disable thinking in ANY state — including `none`', () => {
+        // Same page, "Thinking Control": `thinking` omitted → "Thinking on",
+        // `{"type":"adaptive"}` → "Thinking on", `{"type":"disabled"}` →
+        // "Returns 400 — thinking cannot be disabled". That is why the OFF path
+        // still carries the adaptive shape (byok-config-matrix.spec.ts) and why
+        // `effort === 'none'` must NOT be read as "thinking is off" here: on
+        // this model there is no state in which it is.
+        expect(
+            resolveCompatibleReasoningTraits('MiniMax-M3.1-Flash-Preview'),
+        ).toMatchObject({
+            thinksByDefault: true,
+            canDisableThinking: false,
+            requiredThinkingShape: 'adaptive',
+        });
+    });
+
+    it('M3.1 documents `temperature` as FULLY SUPPORTED — the ANTHROPIC transport is what withholds it', () => {
+        // platform.minimax.io/docs/api-reference/text-anthropic-api, "Supported
+        // Parameters": `temperature` — "Fully supported. Range [0, 2], controls
+        // output randomness, recommended value: 1", repeated in the page's note
+        // list ("values outside this range will return an error"). So the VENDOR
+        // accepts the field, and this row states no sampling fact at all: a
+        // model-wide `rejectsSamplingWhileThinking` would also withhold it over
+        // api.minimax.io/v1, OpenRouter and Novita, where no adapter drops it
+        // and the user's value (0 for determinism, say) does reach the wire —
+        // the silent discard the trait table exists to prevent (#2038 review).
+        expect(
+            resolveCompatibleReasoningTraits('MiniMax-M3.1-Flash-Preview')
+                .rejectsSamplingWhileThinking,
+        ).toBeUndefined();
+        for (const effort of ['none', 'medium', 'high']) {
+            expect(
+                compatibleTemperaturePolicy(
+                    'MiniMax-M3.1-Flash-Preview',
+                    effort,
+                ),
+            ).toEqual({ kind: 'adjustable' });
+        }
+        // The withholding that IS real is the Anthropic protocol's — M3.1
+        // thinking is ON in every state (Thinking Control table above:
+        // omitted/adaptive/enabled are all "Thinking on", `disabled` is a 400),
+        // and that protocol carries no sampling temperature while thinking is
+        // enabled. The adapter says so out loud and drops the field:
+        //   AI SDK Warning (anthropic.messages / MiniMax-M3.1-Flash-Preview):
+        //   The feature "temperature" is not supported. temperature is not
+        //   supported when thinking is enabled
+        // It is applied by `anthropicModule.temperaturePolicy` (a model that
+        // must be sent the adaptive shape has no state carrying a temperature)
+        // and pinned where the wire is: byok-config-matrix.spec.ts asserts
+        // `hasNot: ['temperature']` on both M3.1 anthropic_compatible rows, and
+        // its OpenAI-protocol row asserts the field is KEPT.
     });
 });
 

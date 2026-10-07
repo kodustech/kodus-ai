@@ -50,10 +50,7 @@ jest.mock('@libs/common/utils/crypto', () => ({
 
 import PROD_SHAPES from './testing/__fixtures__/byok-prod-shapes.json';
 import { describeBaseUrlProblem } from './base-url-hygiene';
-import {
-    captureByokWire,
-    resolveProviderOptions,
-} from './testing/byok-wire';
+import { captureByokWire, resolveProviderOptions } from './testing/byok-wire';
 import {
     reasoningEffortWasDropped,
     unreachedOverrideKeys,
@@ -229,15 +226,23 @@ const CASES = [
 
     {
         id: 'open_router — the family rules survive the aggregator',
-        why: 'OpenRouter is a transport hosting other people\'s models; it does not change what a GLM is. Without delegating the shared traits, an always-thinking glm-5.3 got whatever temperature was stored, and GLM was reported as accepting a FORCED tool_choice its auto-only API rejects — for 17% of production slots',
+        why: "OpenRouter is a transport hosting other people's models; it does not change what a GLM is. Without delegating the shared traits, an always-thinking glm-5.3 got whatever temperature was stored, and GLM was reported as accepting a FORCED tool_choice its auto-only API rejects — for 17% of production slots",
         doc: 'docs.z.ai/api-reference/llm/chat-completion',
-        slot: { provider: 'open_router', model: 'z-ai/glm-5.3', temperature: 0 },
+        slot: {
+            provider: 'open_router',
+            model: 'z-ai/glm-5.3',
+            temperature: 0,
+        },
         wire: { has: { temperature: 1 } },
     },
     {
         id: 'open_router — a prefixed OpenAI id is NOT dragged into the compatible table',
         why: 'The shared table only knows the compatible brands, so openai/* and anthropic/* fall to the unknown default — unchanged, and safe because that default never forces a param',
-        slot: { provider: 'open_router', model: 'openai/gpt-5.6-luna', temperature: 0.5 },
+        slot: {
+            provider: 'open_router',
+            model: 'openai/gpt-5.6-luna',
+            temperature: 0.5,
+        },
         wire: { has: { temperature: 0.5 }, hasNot: ['thinking'] },
     },
 
@@ -464,8 +469,88 @@ const CASES = [
     // is the body itself, which is the half we control and the half that
     // regresses. Every one was READ OFF THE WIRE before being written down.
     {
+        id: 'minimax M3.1 — "off" still carries the adaptive shape, because omitting IS the 400',
+        why: 'The first version of this fix only covered a slot that had picked a level. With no effort set, defaultReasoningEffortFor returns undefined, the callers fall back to Off, and the off path returned {} for a model that cannot be disabled — so the same 400 came back for every slot that never set an effort, which is most of them. There is no off for this generation: thinking is mandatory, so Off means "the shape, without asking for a budget" rather than silence',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'MiniMax-M3.1-Flash-Preview',
+            baseURL: 'https://api.minimax.io/anthropic',
+            reasoningEffort: 'none',
+        },
+        wire: {
+            has: { thinking: { type: 'adaptive' } },
+            hasNot: ['budget_tokens'],
+        },
+    },
+    {
+        id: 'minimax M3.1 — the Anthropic transport sends the adaptive shape, not nothing',
+        why: 'M3.1 is the first MiniMax generation that REFUSES to run without a thinking shape: its endpoint answers 400 "requires adaptive thinking". Before this entry it fell to the conservative default (thinksByDefault:false), so the picker advertised no scale at all and the emitter returned {} — nothing on the wire, a 400 on every request, and a model the customer picked for its reasoning that could not be used. It wants the adaptive form, not the legacy budget one the compatible transport would otherwise fall through to (a field MiniMax never documented, which is why M3 above is deliberately sent neither)',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'MiniMax-M3.1-Flash-Preview',
+            baseURL: 'https://api.minimax.io/anthropic',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: { thinking: { type: 'adaptive' } },
+            // And NOTHING else rides along: an `effort` would render as
+            // `output_config:{effort}`, a field MiniMax documents nowhere for
+            // this endpoint — a 400 risk on the path this entry exists to fix,
+            // or a scale the request cannot honor. The off path sends the same
+            // shape alone for the same reason (#2038 review).
+            hasNot: ['budget_tokens', 'output_config'],
+        },
+    },
+    {
+        id: 'minimax M3.1 — over the OpenAI protocol the stored temperature is KEPT',
+        why: 'The counterweight to the two WITHHELD rows above, and the reason the withholding lives in the Anthropic transport rather than on the model row. MiniMax documents `temperature` as fully supported [0, 2] and api.minimax.io/v1 is the OpenAI-protocol surface where nothing removes the field, so the same slot that loses its value on /anthropic keeps it here. A model-wide `rejectsSamplingWhileThinking` (the first version of this fix) silently discarded it — including a deliberate 0 for determinism — and made the connect form call the setting unsupported on an endpoint the vendor documents as supporting it (#2038 review)',
+        doc: 'platform.minimax.io/docs/api-reference/text-anthropic-api — "temperature: Fully supported. Range [0, 2]"',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'MiniMax-M3.1-Flash-Preview',
+            baseURL: 'https://api.minimax.io/v1',
+            reasoningEffort: 'high',
+            temperature: 0.7,
+        },
+        wire: {
+            has: { temperature: 0.7 },
+        },
+    },
+    {
+        id: 'minimax M3.1 — a stored temperature is WITHHELD, because the protocol drops it',
+        why: 'M3.1 thinking is on in every state, and the Anthropic protocol carries no sampling temperature while thinking is enabled: the adapter warns "temperature is not supported when thinking is enabled" and removes the field. Captured here on the effort path AND on the off path (effort none), which is the one a reader would expect to keep its temperature — the same 400-vs-silence split as the adaptive-shape entries above. Pinning to 1 (what the always-thinking Kimi/GLM rows do) would be inventing a constraint MiniMax never states — its own parameter table lists temperature as "Fully supported", range [0, 2] — and would not reach the wire either; withholding is what the request actually does, and the connect form now says so instead of promising a value the SDK discards',
+        doc: 'platform.minimax.io/docs/api-reference/text-anthropic-api',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'MiniMax-M3.1-Flash-Preview',
+            baseURL: 'https://api.minimax.io/anthropic',
+            reasoningEffort: 'high',
+            temperature: 0.7,
+        },
+        wire: {
+            has: { thinking: { type: 'adaptive' } },
+            hasNot: ['temperature'],
+        },
+    },
+    {
+        id: 'minimax M3.1 — the OFF path withholds it too, because off is not off',
+        why: 'The counterweight to the row above: `effort: none` looks like the state where a temperature is allowed, and on a disable-able model it is (DeepSeek keeps its temperature at none, and only there). This generation has no off switch — the shape is still adaptive on the wire — so the while-thinking rule applies here as well. Without the model-can-be-disabled guard on that rule, this row is exactly where the field would leak back in',
+        doc: 'platform.minimax.io/docs/api-reference/text-anthropic-api',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'MiniMax-M3.1-Flash-Preview',
+            baseURL: 'https://api.minimax.io/anthropic',
+            reasoningEffort: 'none',
+            temperature: 0.7,
+        },
+        wire: {
+            has: { thinking: { type: 'adaptive' } },
+            hasNot: ['temperature'],
+        },
+    },
+    {
         id: 'minimax M3 — the Anthropic transport does not fabricate a budget for it',
-        why: 'This case was first written the other way round, asserting the budget as a deliberate transport difference. It was not: M3 was reaching the compatible branch\'s `return budget` fall-through and going out with thinking:{type:enabled,budgetTokens:40000} — a field invented for a brand whose own table validates a toggle for M2 and explicitly declines to for M3, on the transport four production slots use. `budget` belongs to the compatible brands that DO implement the legacy Anthropic thinking shape (Kimi, GLM, DeepSeek all declare it); an id we cannot confirm reasons gets the same treatment the native branch already gives an unidentified one — omit rather than gamble on a 400',
+        why: "This case was first written the other way round, asserting the budget as a deliberate transport difference. It was not: M3 was reaching the compatible branch's `return budget` fall-through and going out with thinking:{type:enabled,budgetTokens:40000} — a field invented for a brand whose own table validates a toggle for M2 and explicitly declines to for M3, on the transport four production slots use. `budget` belongs to the compatible brands that DO implement the legacy Anthropic thinking shape (Kimi, GLM, DeepSeek all declare it); an id we cannot confirm reasons gets the same treatment the native branch already gives an unidentified one — omit rather than gamble on a 400",
         doc: 'platform.minimax.io — Anthropic SDK endpoint https://api.minimax.io/anthropic',
         slot: {
             provider: 'anthropic_compatible',
@@ -606,8 +691,8 @@ const CASES = [
         },
     },
     {
-        id: 'bedrock claude 4.8 — the adaptive shape, in Converse\'s envelope',
-        why: 'Bedrock sent NO reasoning at all, so two production slots (claude-opus-4-7 and 4-8, both on effort=high) got none. The shape is the Anthropic family\'s — 4.7+ take adaptive + effort and reject a budget — and only the envelope is Bedrock\'s',
+        id: "bedrock claude 4.8 — the adaptive shape, in Converse's envelope",
+        why: "Bedrock sent NO reasoning at all, so two production slots (claude-opus-4-7 and 4-8, both on effort=high) got none. The shape is the Anthropic family's — 4.7+ take adaptive + effort and reject a budget — and only the envelope is Bedrock's",
         slot: {
             provider: 'amazon_bedrock',
             awsRegion: 'us-east-1',
@@ -683,7 +768,7 @@ const CASES = [
 
     {
         id: 'bedrock — a pasted reasoning override actually reaches the request',
-        why: 'The namespace was declared as `amazon-bedrock`, read off the built model\'s provider ID. The ID names the provider; the providerOptions KEY is chosen separately, and @ai-sdk/amazon-bedrock parses only `amazonBedrock` or its legacy `bedrock` alias. So every Bedrock override was wrapped under a key nothing reads and dropped in silence — the precise failure the field was added to prevent, reintroduced by verifying the wrong property. Captured empty before the fix',
+        why: "The namespace was declared as `amazon-bedrock`, read off the built model's provider ID. The ID names the provider; the providerOptions KEY is chosen separately, and @ai-sdk/amazon-bedrock parses only `amazonBedrock` or its legacy `bedrock` alias. So every Bedrock override was wrapped under a key nothing reads and dropped in silence — the precise failure the field was added to prevent, reintroduced by verifying the wrong property. Captured empty before the fix",
         slot: {
             provider: 'amazon_bedrock',
             awsRegion: 'us-east-1',
@@ -738,7 +823,9 @@ const CASES = [
         slot: {
             provider: 'openai',
             model: 'gpt-5.4',
-            reasoningConfigOverride: JSON.stringify({ reasoning_effort: 'low' }),
+            reasoningConfigOverride: JSON.stringify({
+                reasoning_effort: 'low',
+            }),
         },
         wire: { has: { reasoning: { effort: 'low' } } },
     },
@@ -767,7 +854,9 @@ const CASES = [
             awsRegion: 'us-east-1',
             model: 'anthropic.claude-opus-4-8',
             reasoningConfigOverride: JSON.stringify({
-                bedrock: { reasoningConfig: { type: 'enabled', budgetTokens: 2048 } },
+                bedrock: {
+                    reasoningConfig: { type: 'enabled', budgetTokens: 2048 },
+                },
             }),
         },
         wire: {
@@ -1220,20 +1309,46 @@ describe('production config shapes — invariants', () => {
             'openai_compatible | code-review | high',
             'openai_compatible | k3 | high',
             'openai_compatible | k3-256k | medium',
+            // Kimi k2.6 / latest joined once the shape-marker fix (#2038
+            // review) stopped reading `thinking.type` as proof the level
+            // landed: Moonshot has no effort level, so the drop was real and
+            // the marker had been hiding it.
+            'openai_compatible | kimi-k2.6 | high',
+            'openai_compatible | kimi-k2.6 | medium',
             'openai_compatible | kimi-k2.7-code | high',
             'openai_compatible | kimi-k2.7-code | medium',
             'openai_compatible | kimi-k3 | high',
+            'openai_compatible | kimi-latest | high',
             'openai_compatible | kodus-review | high',
             'openai_compatible | kodus-review-fallback | high',
             'openai_compatible | mimo-v2.5 | high',
             'openai_compatible | mimo-v2.5-pro | high',
             'openai_compatible | mimo-v2.5-pro | medium',
             'openai_compatible | mistral-large-3:675b | medium',
+            'openai_compatible | moonshotai/Kimi-K2.5 | medium',
             'openai_compatible | nemotron-3-ultra-550b-a55b | medium',
             'openai_compatible | qwen3.8-max | low',
             'openai_compatible | tencent/hy3:free | high',
         ]);
     }, 180000);
+
+    it('reports the M3.1 effort drop the production pin cannot see', () => {
+        // The M3.1 rows above are hand-written entries, not production shapes,
+        // so the corpus pin above cannot cover them. With the adaptive shape
+        // alone on the wire the level the user picked reaches nothing — and the
+        // connect form must say so. Excluding `thinking.type` from
+        // `reasoningEffortWasDropped` is what makes that visible (#2038 review).
+        expect(
+            reasoningEffortWasDropped(
+                buildReasoningProviderOptions(
+                    'anthropic_compatible',
+                    'high',
+                    'MiniMax-M3.1-Flash-Preview',
+                ),
+                { thinking: { type: 'adaptive' } },
+            ),
+        ).toBe(true);
+    });
 
     it('never sends a reasoning parameter to a model we say does not reason', async () => {
         // The coherence invariant, and the one that catches a whole class rather
@@ -1281,7 +1396,8 @@ describe('production config shapes — invariants', () => {
             const { orgs, ...slot } = shape as any;
             if (slot.provider === 'open_router') continue;
             if (reasoningConfigForModel(slot.model)) continue;
-            if (!slot.reasoningEffort || slot.reasoningEffort === 'none') continue;
+            if (!slot.reasoningEffort || slot.reasoningEffort === 'none')
+                continue;
             NON_REASONING.push(slot);
         }
 
@@ -1298,8 +1414,13 @@ describe('production config shapes — invariants', () => {
                 apiKey: 'k',
             } as any).catch(() => null);
             if (!w) continue;
-            const body = typeof w.body === 'string' ? w.body : JSON.stringify(w.body);
-            if (/"(thinking|reasoning|thinkingConfig|reasoning_effort|output_config)"/.test(body)) {
+            const body =
+                typeof w.body === 'string' ? w.body : JSON.stringify(w.body);
+            if (
+                /"(thinking|reasoning|thinkingConfig|reasoning_effort|output_config)"/.test(
+                    body,
+                )
+            ) {
                 leaked.push({ ...slot, body: body.slice(0, 160) });
             }
         }

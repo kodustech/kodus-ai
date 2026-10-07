@@ -40,16 +40,32 @@
  * to ignore the warning, which costs more than a miss.
  */
 
-/** Every scalar anywhere in a value, as strings — the comparable surface. */
-function collectScalars(node: unknown, out: Set<string>): void {
+/**
+ * Scalars that mark the SHAPE of a reasoning request rather than a level:
+ * `thinking.type` is `adaptive`/`enabled`/`disabled` whatever effort was asked,
+ * so its presence in the body proves the shape was sent, never that the level
+ * landed. Excluding them is what keeps the drop visible when only the shape can
+ * ride along (MiniMax M3.1, #2038 review): the payload is `thinking.type`
+ * alone, and without this the marker would read as "the effort reached" and no
+ * one would be told the level was withheld.
+ */
+const REASONING_SHAPE_SCALARS = new Set(['adaptive', 'enabled', 'disabled']);
+
+function collectScalars(
+    node: unknown,
+    out: Set<string>,
+    skip?: ReadonlySet<string>,
+): void {
     if (node === null || node === undefined) return;
     if (typeof node === 'object') {
         for (const v of Object.values(node as Record<string, unknown>)) {
-            collectScalars(v, out);
+            collectScalars(v, out, skip);
         }
         return;
     }
-    out.add(String(node));
+    const scalar = String(node);
+    if (skip?.has(scalar)) return;
+    out.add(scalar);
 }
 
 /** The request body as an object, whichever way the adapter returned it —
@@ -157,7 +173,7 @@ export function reasoningEffortWasDropped(
     requestBody: unknown,
 ): boolean {
     const asked = new Set<string>();
-    collectScalars(reasoningOptions, asked);
+    collectScalars(reasoningOptions, asked, REASONING_SHAPE_SCALARS);
     // The module emitted nothing for this effort: decided without the body,
     // because there is no request that could have carried it.
     if (asked.size === 0) return true;
@@ -190,13 +206,14 @@ export function describeUnreachedKeys(
 }
 
 /** The advisory for an effort that reached nothing. Says what happened and what
- *  it means, and does NOT promise a fix — for two of the three causes there is
- *  nothing the user can change on this screen except the model. */
+ *  it means, and does NOT promise a fix — for all three causes there is nothing
+ *  the user can change on this screen except the model. */
 export function describeDroppedEffort(effort: string): string {
     return (
         `The connection works, but the "${effort}" reasoning effort is not reaching this ` +
-        `provider: no reasoning parameter is sent for this model, so the setting has no ` +
-        `effect on a review. Either the model does not support reasoning, or its name here ` +
-        `is one we cannot map to a known model (common behind a proxy or a custom alias).`
+        `provider, so the setting has no effect on a review. Either the model does not ` +
+        `support reasoning, or its name here is one we cannot map to a known model ` +
+        `(common behind a proxy or a custom alias), or it is a known reasoner whose ` +
+        `transport cannot express this level.`
     );
 }

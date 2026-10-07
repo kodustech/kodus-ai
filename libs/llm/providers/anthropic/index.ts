@@ -38,8 +38,6 @@ import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 import { effortFromOutputConfig } from '../kernel/override-wire-spelling';
 
-
-
 /** Claude families that support the newer adaptive thinking (type:'adaptive'
  *  + effort); older families use enabled + budgetTokens. Delegates to the
  *  single model-generation source so 4.6/4.7+/5 and the `anthropic:` /
@@ -137,8 +135,16 @@ export const anthropicModule: ProviderModule = {
             // GLM-5.3) expose NO disable and would REJECT the field — for those,
             // omitting IS the only "off". Decide per model via the shared traits.
             if ((cfg.provider as string) === 'anthropic_compatible') {
-                return resolveCompatibleReasoningTraits(cfg.model)
-                    .canDisableThinking
+                const compatible = resolveCompatibleReasoningTraits(cfg.model);
+                // A model with no off switch still has to be sent SOMETHING when
+                // the level is Off: M3.1's endpoint refuses a request that carries
+                // no thinking shape at all (400 "requires adaptive thinking"), so
+                // the off path sends the shape it requires rather than nothing.
+                // Omitting is not "off" for this generation, it is the failure.
+                if (compatible.requiredThinkingShape === 'adaptive') {
+                    return { anthropic: { thinking: { type: 'adaptive' } } };
+                }
+                return compatible.canDisableThinking
                     ? { anthropic: { thinking: { type: 'disabled' } } }
                     : {};
             }
@@ -186,9 +192,28 @@ export const anthropicModule: ProviderModule = {
             // instead of risking a rejected body. The faithful effort needs the
             // OpenAI transport, where the openai module now emits it.
             if (
-                resolveCompatibleReasoningTraits(cfg.model)
-                    .reasoningControl === 'effort-only'
+                resolveCompatibleReasoningTraits(cfg.model).reasoningControl ===
+                'effort-only'
             ) {
+                // Except a version whose own endpoint REFUSES to run without a
+                // thinking shape: MiniMax M3.1+ answers 400 "requires adaptive
+                // thinking" for a request that carries none, so for it the shape
+                // IS the request and omitting is the failure. "Effort-only"
+                // describes the brand; this version is the exception its table now
+                // states, and `thinksByDefault` keeps the picker offering a scale.
+                if (
+                    resolveCompatibleReasoningTraits(cfg.model)
+                        .requiredThinkingShape === 'adaptive'
+                ) {
+                    // The shape IS the request, and nothing else rides along: an
+                    // `effort` here renders as `output_config:{effort}` on the
+                    // wire, a field MiniMax documents nowhere for this endpoint.
+                    // Sending it would be either the 400 this branch exists to
+                    // remove or a scale the request cannot honor; the off path
+                    // above sends the same shape alone for the same reason
+                    // (#2038 review).
+                    return { anthropic: { thinking: { type: 'adaptive' } } };
+                }
                 return {};
             }
             // A REAL Claude id proxied over a compatible endpoint is still a
@@ -310,6 +335,21 @@ export const anthropicModule: ProviderModule = {
         // pins temperature to 1 while thinking, so 1 is their only sound value.
         // Disable-able ones (Kimi k2.6, DeepSeek) keep a free temperature.
         if ((cfg.provider as string) === 'anthropic_compatible') {
+            // A model that must be sent the adaptive shape AND cannot stop
+            // thinking (MiniMax M3.1) has no state in which this protocol
+            // carries a temperature at all: the adapter warns and drops the
+            // field on every path, so the honest policy is `unsupported` rather
+            // than a setting the request discards (#2038 review). Declared HERE
+            // rather than on the shared trait row, because the rule is this
+            // protocol's: the same model keeps its temperature over the
+            // OpenAI-protocol transports (api.minimax.io/v1, OpenRouter,
+            // Novita), where nothing removes the field.
+            if (
+                resolveCompatibleReasoningTraits(cfg.model)
+                    .requiredThinkingShape === 'adaptive'
+            ) {
+                return { kind: 'unsupported' };
+            }
             return compatibleTemperaturePolicy(cfg.model, cfg.reasoningEffort);
         }
         // Real Anthropic: 4.7+ REJECT temperature (a 400); older accept it. Native

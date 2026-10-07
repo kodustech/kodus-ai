@@ -28,6 +28,14 @@ export interface ModelReasoningTraits {
     /** Sends thinking/reasoning unless explicitly told not to. Drives the UI
      *  `supportsReasoning` flag and whether an omitted config means "off". */
     thinksByDefault: boolean;
+    /** The thinking shape the brand REQUIRES when reasoning is on, when its own
+     *  endpoint refuses to run without one. Unset — the normal case — leaves the
+     *  transport's legacy shape in charge. `'adaptive'` is the Anthropic
+     *  generation form (`thinking:{type:'adaptive'}`): MiniMax M3.1 and up answer
+     *  400 "requires adaptive thinking" when NOTHING is sent, and the legacy
+     *  budget form is a field that brand never documented, so neither omitting
+     *  nor `budget` can serve it. */
+    requiredThinkingShape?: 'adaptive';
     /** Accepts an explicit "off" (e.g. `thinking:{type:'disabled'}`). False for
      *  always-thinking models (Kimi k2.7-code/k3, Claude Fable/Mythos, GLM-5.3)
      *  — sending a disable to them is invalid. */
@@ -282,6 +290,54 @@ export function resolveCompatibleReasoningTraits(
         };
     }
 
+    // MiniMax M3.1 and up: the first generation of this brand that REFUSES to run
+    // without a thinking shape. Its endpoint answers 400 "requires adaptive
+    // thinking" for a request that carries none, and it wants the adaptive form —
+    // the legacy `thinking:{type:'enabled',budgetTokens}` shape is a field the
+    // brand never documented, which is why upstream's M3 handling sends neither.
+    // Until this branch existed M3.1 fell to the conservative default below
+    // (`thinksByDefault: false`), which the picker reads as "not a reasoner" and
+    // the emitter reads as "send nothing": the model could not be used at all,
+    // with the Thinking control greyed out on the one page where it could have
+    // been configured. `canDisableThinking: false` states the same fact for the
+    // off path: there is no off, only a shape.
+    if (family === 'minimax' && /minimax[-_.]?m3[-_.]?1/.test(m)) {
+        return {
+            thinksByDefault: true,
+            canDisableThinking: false,
+            // NOT the M2 pair: M2 is served over the OpenAI protocol, where a
+            // forced tool_choice is accepted alongside reasoning. This generation
+            // is served over the Anthropic-compatible endpoint and cannot be
+            // turned off, and that protocol rejects a forced tool_choice issued
+            // while thinking is on — a pair this model has no way to escape, since
+            // the disable that would resolve it is itself rejected. So structured
+            // output must take the reroute, not the forced call.
+            supportsForcedToolChoice: false,
+            forcedToolChoiceRejectsThinking: true,
+            reasoningControl: 'effort-only',
+            omittingDisablesReasoning: false,
+            requiredThinkingShape: 'adaptive',
+            // Thinking is ON in every state here (the vendor's own Thinking
+            // Control table: `thinking` omitted and `{type:'adaptive'}` are both
+            // "Thinking on", `{type:'disabled'}` is a 400). Over the Anthropic
+            // protocol that also means no sampling temperature is ever carried
+            // — that transport's adapter says so and removes the field:
+            //   AI SDK Warning (anthropic.messages / MiniMax-M3.1-Flash-Preview):
+            //   temperature is not supported when thinking is enabled
+            // Captured through the wire harness on the high, medium AND none
+            // paths: `thinking:{type:'adaptive'}` present, `temperature` absent
+            // in each.
+            //
+            // The withholding belongs to that TRANSPORT, not to this row: the
+            // vendor documents `temperature` as "Fully supported" [0, 2], and
+            // over api.minimax.io/v1, OpenRouter or Novita no adapter drops the
+            // field, so a shared `rejectsSamplingWhileThinking` here would
+            // silently discard the user's value on endpoints that honor it
+            // (#2038 review). `anthropicModule.temperaturePolicy` applies it,
+            // which is why this row states no sampling fact at all.
+        };
+    }
+
     // MiniMax M3: what production showed, and nothing more. On MiniMax's
     // Anthropic endpoint a structured call with the `json` tool forced and
     // `thinking: disabled` came back EMPTY every time (Langfuse 2026-09-29: 37
@@ -289,8 +345,11 @@ export function resolveCompatibleReasoningTraits(
     // shard asked for JSON in plain text answered correctly. So no forced tool
     // for a structured call (the plan below becomes 'reroute-json'), and no
     // `disabled` either — nothing shows M3 accepts it. `thinksByDefault` stays
-    // false: its answers carry <think> blocks, but no parameter is known that
+    // false: its answers carry  thinking blocks, but no parameter is known that
     // would be safe to send.
+    // Must be checked after the more specific M3.1 branch above: its regex
+    // `/minimax[-_.]?m3/` would otherwise catch "minimax m3.1" and hand the
+    // adaptive-thinking model the wrong, fails-to-run traits.
     if (family === 'minimax' && /minimax[-_.]?m3/.test(m)) {
         return {
             thinksByDefault: false,
@@ -394,8 +453,13 @@ export function compatibleTemperaturePolicy(
     // effort falls through to the family default, which is on for a
     // thinks-by-default brand, and a caller that cannot supply an effort at all
     // (the connect form asking what a model supports before anything is picked)
-    // must get the conservative answer. So: omit unless we were told 'none'.
-    const thinkingExplicitlyOff = effort === 'none';
+    // must get the conservative answer. So: omit unless we were told 'none' —
+    // AND the model can actually be turned off, because on a model with no off
+    // switch (MiniMax M3.1, k3, GLM-5.3) 'none' still means thinking is ON and
+    // the field must stay withheld. Read from the declared fact rather than
+    // assumed: the two traits are declared separately and a future entry could
+    // carry both.
+    const thinkingExplicitlyOff = effort === 'none' && t.canDisableThinking;
     if (
         t.rejectsSamplingWhileThinking &&
         t.thinksByDefault &&

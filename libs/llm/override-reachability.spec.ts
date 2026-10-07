@@ -169,6 +169,52 @@ describe('reasoningEffortWasDropped', () => {
             ),
         ).toBe(false);
     });
+
+    it('is true when only the shape rode along (MiniMax M3.1 adaptive)', () => {
+        // M3.1 refuses a request with no thinking shape, so its payload IS the
+        // shape: `type: 'adaptive'` and nothing else. The marker is not a
+        // level, so the body carrying it back proves nothing about the effort
+        // the user asked for — the drop must still be reported (#2038 review).
+        expect(
+            reasoningEffortWasDropped(
+                { anthropic: { thinking: { type: 'adaptive' } } },
+                { thinking: { type: 'adaptive' } },
+            ),
+        ).toBe(true);
+    });
+
+    it('still catches a level dropped beside the shape', () => {
+        // The sibling live case: `thinking` lands, `output_config.effort` does
+        // not. Excluding the shape marker must not hide the level beside it.
+        expect(
+            reasoningEffortWasDropped(
+                {
+                    anthropic: {
+                        thinking: { type: 'adaptive' },
+                        output_config: { effort: 'high' },
+                    },
+                },
+                { thinking: { type: 'adaptive' } },
+            ),
+        ).toBe(true);
+    });
+
+    it('clears when the level rides along with the shape', () => {
+        expect(
+            reasoningEffortWasDropped(
+                {
+                    anthropic: {
+                        thinking: { type: 'adaptive' },
+                        output_config: { effort: 'high' },
+                    },
+                },
+                {
+                    thinking: { type: 'adaptive' },
+                    output_config: { effort: 'high' },
+                },
+            ),
+        ).toBe(false);
+    });
 });
 
 describe('describeDroppedEffort', () => {
@@ -176,8 +222,14 @@ describe('describeDroppedEffort', () => {
         const msg = describeDroppedEffort('high');
         expect(msg).toContain('"high"');
         expect(msg).toContain('no effect');
-        // Two of the three causes cannot be fixed on this screen, so it explains
+        // All three causes cannot be fixed on this screen, so it explains
         // rather than instructs.
         expect(msg).toContain('proxy');
+        // The third cause: a known reasoner whose transport cannot carry the
+        // level (MiniMax M3.1's mandatory thinking, Kimi's thinking) still sends
+        // a reasoning parameter, so the message must name it rather than claim
+        // none is sent (#2038 review).
+        expect(msg).toContain('cannot express this level');
+        expect(msg).not.toContain('no reasoning parameter is sent');
     });
 });
