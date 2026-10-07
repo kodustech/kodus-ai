@@ -270,8 +270,6 @@ function buildPrompts(c) {
 
 const INDEX_REF =
     /\b(previous|prior|earlier)?\s*(decision|entry|suggestion)\s*(#|index\s*)\d+|PreviousDecision\s+index/i;
-const REFERS_PRIOR =
-    /(previous|earlier|prior|last)\s+(review|round|suggestion|comment|recommendation)|kody('s)?\s+(earlier|previous|own)|suggested (earlier|previously|before)|revis(es|ing) (the|an|our) (earlier|previous)/i;
 // Placeholder until the design fixes how an unverified finding is carried:
 // any of these on the delivered finding counts as "marked".
 const isMarkedUnverified = (f) =>
@@ -376,9 +374,6 @@ async function once(c, judgeKey) {
     const {
         formatSuggestionContent,
     } = require('../../libs/code-review/infrastructure/agents/engine/format-suggestion-content.ts');
-    const {
-        applyRevisionLinks,
-    } = require('../../libs/code-review/infrastructure/agents/engine/revision-link.ts');
     const { buildEvalModel } = require('../shared/build-model');
 
     phase.verify = false;
@@ -406,21 +401,12 @@ async function once(c, judgeKey) {
             language: s.language,
         })),
     );
-    // Same post-formatter step as agent-review.stage: the revision link line.
-    const posted = kept.map((s, i) => ({
-        revisesSuggestionId: s.revisesSuggestionId,
-        suggestionContent:
-            formatted.get(i)?.suggestionContent || s.suggestionContent,
-    }));
-    applyRevisionLinks(posted, c.previousDecisions);
     const delivered = kept.map((s, i) => ({
         sourceIndex: i,
         file: s.relevantFile,
         line: s.relevantLinesStart,
         severity: severity.get(i) ?? s.severity,
-        text: posted[i].suggestionContent,
-        linkedById: !!posted[i].revisesSuggestionId,
-        revisesSuggestionId: posted[i].revisesSuggestionId,
+        text: formatted.get(i)?.suggestionContent || s.suggestionContent,
         label: s.label,
         brokenKodyRulesIds: s.brokenKodyRulesIds,
         marked: isMarkedUnverified(s),
@@ -450,13 +436,9 @@ async function once(c, judgeKey) {
                 break;
             }
         }
-        const linked =
-            !!match && match.linkedById && REFERS_PRIOR.test(match.text);
         const pass = {
             deliver: !!match,
             not_deliver: !match,
-            deliver_linked: !!match && linked,
-            if_delivered_linked: !match || linked,
             not_deliver_normal: !match || match.marked,
             observe: true,
         }[claim.expect];
@@ -466,8 +448,6 @@ async function once(c, judgeKey) {
             proposed: !!claim.proposed,
             truth: claim.truth,
             delivered: !!match,
-            linked,
-            linkedById: !!match?.linkedById,
             marked: !!match?.marked,
             severity: match?.severity ?? null,
             pass,
@@ -513,11 +493,6 @@ const PROBLEMS = {
         pick: (cl) => cl.expect === 'not_deliver' && /repeat/.test(cl.id),
         violated: (cl) => !cl.pass,
     },
-    // a revision of an earlier Kody suggestion reached the PR without saying so
-    'revision-unlinked (#2039/#2020)': {
-        pick: (cl) => /linked/.test(cl.expect) && cl.delivered,
-        violated: (cl) => !cl.linked,
-    },
     // control: a claim the readable code refutes reached the PR
     'refuted-shipped (control)': {
         pick: (cl) => cl.expect === 'not_deliver' && !/repeat/.test(cl.id),
@@ -528,7 +503,7 @@ const PROBLEMS = {
     'true-bug-missed (guard)': {
         pick: (cl) =>
             cl.truth === 'true' &&
-            (cl.expect === 'deliver' || cl.expect === 'deliver_linked'),
+            cl.expect === 'deliver',
         violated: (cl) => !cl.delivered,
     },
 };
@@ -575,7 +550,7 @@ function summarize(rows) {
 
 async function main() {
     // --rescore=<run.json>: re-apply the CURRENT expectations in cases.js to a
-    // saved run (what was delivered, linked, marked) — no model, no judge. Used
+    // saved run (what was delivered, marked) — no model, no judge. Used
     // when a design decision flips a `proposed` expectation.
     const RESCORE = arg('rescore');
     if (RESCORE) {
@@ -593,8 +568,6 @@ async function main() {
                 cl.pass = {
                     deliver: cl.delivered,
                     not_deliver: !cl.delivered,
-                    deliver_linked: cl.delivered && cl.linked,
-                    if_delivered_linked: !cl.delivered || cl.linked,
                     not_deliver_normal: !cl.delivered || cl.marked,
                     observe: true,
                 }[cl.expect];
@@ -657,7 +630,7 @@ async function main() {
                 const row = await once(c, judgeKey);
                 rows.push({ model: MODEL, rep: r + 1, ...row });
                 console.log(
-                    `[${MODEL}] ${c.id} #${r + 1} sandbox=${row.sandboxCalls}/${row.sandboxFailed} delivered=${row.delivered.length} :: ${row.claims.map((cl) => `${cl.id}:${cl.pass ? 'PASS' : 'FAIL'}(delivered=${cl.delivered}${cl.expect === 'deliver_linked' ? ` linked=${cl.linked}` : ''})`).join(' ')}`,
+                    `[${MODEL}] ${c.id} #${r + 1} sandbox=${row.sandboxCalls}/${row.sandboxFailed} delivered=${row.delivered.length} :: ${row.claims.map((cl) => `${cl.id}:${cl.pass ? 'PASS' : 'FAIL'}(delivered=${cl.delivered})`).join(' ')}`,
                 );
             } catch (e) {
                 rows.push({

@@ -1,13 +1,13 @@
 # review-rounds — what reaches the PR across rounds and sandbox failures
 
-> - **Answers:** When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?
+> - **Answers:** When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, nothing already sent posted again?
 > - **Runs:** every engine PR on the scripted model (`evals/wiring-smoke.js`, one case); on demand with a real model.
 > - **Run it:** `node evals/review-rounds/run.js --model=deepseek-v4-flash --reps=3` · `node evals/review-rounds/run.js --model=eval-fake --case=R2,K1`
 > - **Gate:** none yet (report-only). Floors per problem are set in the PR that fixes it, from two runs of the same commit.
 > - **Cost:** one review per selected case in `cases.js` and rep, plus one judge call per delivered finding and claim.
 
 Issues #2040 (findings shipped on code nobody read), #2039 (a finding caused by
-applying Kody's own earlier suggestion, posted without saying so) and #2020 (the
+applying Kody's own earlier suggestion) and #2020 (the
 next round is shown a stale status for that suggestion), and a production report
 (2026-10-01) of Kody Rule findings reposted every round, reworded, after the
 developer declined or fixed them.
@@ -16,8 +16,7 @@ developer declined or fixed them.
 
 The chain the worker runs once the sandbox is up: `runAgentLoopViaCore` (finder,
 verifier, evidence gate) — or, for `agent: 'kody-rules'` cases, the production
-`KodyRulesAgentProvider` — → `classifySeverity` → `formatSuggestionContent` → the revision link
-(`engine/revision-link.ts`). Tools
+`KodyRulesAgentProvider` — → `classifySeverity` → `formatSuggestionContent`. Tools
 go through the production registry. Only `RemoteCommands` — the sandbox — is
 replaced. Modes, each a shape seen in production:
 
@@ -52,30 +51,32 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | U3 | true bug visible only in a caller; sandbox dies when verify starts | `deliver` (the finder read the premise) |
 | U4 | same, sandbox dead from the start | `not_deliver_normal` |
 | R1 | earlier suggestion still open, round B only adds a metric next to it | repeat → `not_deliver` |
-| R2 | round B applies the earlier suggestion; that creates a bug in a caller; status shown `implemented` | `deliver_linked` |
-| R3 | same, status shown `not_implemented` (stale) | `deliver_linked` |
-| R4a/b | PR #2011 round B (this repo), status `implemented` / stale | contested claim → `if_delivered_linked` |
+| R2 | round B applies the earlier suggestion; that creates a bug in a caller; status shown `implemented` | `deliver` (a real bug, posted as a regular finding) |
+| R3 | same, status shown `not_implemented` (stale) | `deliver` |
+| R4a/b | PR #2011 round B (this repo), status `implemented` / stale | contested claim → `observe` |
 | R5 | an applied earlier suggestion and a new, unrelated bug on the same lines | `deliver` (no link needed) |
 | U5 | premise read, then the sandbox dies | false claim → `not_deliver` |
 | U6 | only the premise file is unreachable | false claim → `not_deliver_normal` |
 | U7 | sandbox fails 3 calls, then recovers | false claim → `not_deliver` |
 | U8 | no sandbox by design (self-contained) | false claim → `observe` (behaviour not decided) |
 | U9 | the imported module does not exist: the tool error IS the evidence | `deliver` |
-| R3p | same as R3, status `pending` (the implementation check had not run yet, #2020) | `deliver_linked` |
+| R3p | same as R3, status `pending` (the implementation check had not run yet, #2020) | `deliver` |
 | R6 | earlier suggestion applied to one of the two places it named | repeat → `not_deliver` (already sent; never posted again) |
 | R7 | earlier suggestion applied ineffectively (timeout never aborts) | repeat → `not_deliver` (already sent; never posted again) |
-| R8 | #2039 exactly: the earlier suggestion came from a Kody Rule | `deliver_linked` |
+| R8 | #2039 exactly: the earlier suggestion came from a Kody Rule | `deliver` |
 | R9 | the developer explicitly rejected the earlier suggestion (stored `not_implemented`) | repeat → `not_deliver` |
-| R10, R11 | reversals replayed from this repository's own PRs | `if_delivered_linked` |
+| R10, R11 | reversals replayed from this repository's own PRs | `observe` |
 | K1 | Kody Rules: a violation already posted, plus a new one in another function | repeat → `not_deliver`; new → `deliver` |
-| K2 | Kody Rules: the rule judge flags code Kody's own earlier suggestion produced | `if_delivered_linked` |
+| K2 | Kody Rules: the rule judge flags code Kody's own earlier suggestion produced | `observe` (#2090) |
+| R12 | an applied suggestion in the history, and a new unrelated bug in another file | `deliver` (guard) |
+| R13 | the open suggestion's code moved to another file unchanged | repeat → `not_deliver` |
+| R14 | the earlier comment was a declined Kody Rule; the bug finder sees the same problem | repeat → `not_deliver` |
+| K4 | the bug finder raised it earlier and it was declined; the rule judge sees the same problem, plus a new site | repeat → `not_deliver`; new → `deliver` |
 
 The U cases belong to #2040, which this branch does not fix: they stay red on
 purpose until that issue's design is decided.
 
-`deliver_linked`: the finding reaches the PR and tells the reader which earlier
-Kody suggestion it revises. `if_delivered_linked`: it may be absent, but if it
-ships it must be linked. `observe`: recorded, never scored. `not_deliver_normal`: it does not reach the PR as a
+`observe`: recorded, never scored. `not_deliver_normal`: it does not reach the PR as a
 regular finding — absent, or carried as unverified. Expectations flagged
 `proposed` in `cases.js` encode decisions the design comments have not taken
 yet; change them there, with the decision linked.
@@ -87,9 +88,6 @@ One rate per problem, over every rep × claim with that expectation:
 - `unverified-shipped (#2040)` — `not_deliver_normal` violated;
 - `repeat-of-sent` — a problem an earlier suggestion already raised, posted
   again (open, declined, or "fixed" in a way the reviewer finds incomplete);
-- `revision-unlinked (#2039/#2020)` — a revision that reached the PR without
-  naming the earlier suggestion (over delivered revisions only; a true one that
-  never reached the PR counts under `true-bug-missed`);
 - `refuted-shipped` — control: a claim the readable code refutes was delivered;
 - `true-bug-missed` — guard: a fix must not buy the rates above by suppressing
   real bugs. On the unfixed engine this is plain finder recall.
@@ -99,11 +97,7 @@ engine is `results/baseline-main-*.json`.
 
 ## Known limits
 
-- A scored revision needs both a valid `revisesSuggestionId` and the rendered
-  reference. The reference identifies the earlier file/line/time; it is not a
-  URL to the original comment.
-- Conditional absence in R4 is not evidence that a delivered revision would
-  be linked. U8's false claim is observational, never scored.
+- U8's false claim is observational, never scored.
 - These synthetic cases do not measure fleet incidence or validate a private
   customer PR. Small runs do not establish a calibrated quality floor.
 - The history shown to the review is the `MAX_PR_DECISIONS` most recent

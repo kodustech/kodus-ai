@@ -167,7 +167,7 @@ describe('buildUserPrompt', () => {
         );
     });
 
-    // #2039/#2020 and repeats: each entry carries the Id a revision links to,
+    // #2020 and repeats: each entry carries its Id,
     // the block forbids raising an entry's problem again whatever its Outcome,
     // and an entry's text is bounded (it is rendered into every finder,
     // verifier and rule-judge prompt).
@@ -185,7 +185,7 @@ describe('buildUserPrompt', () => {
 
         expect(block).toContain('Id: sug-77');
         expect(block).toContain('never report the problem an entry raised again');
-        expect(block).toContain('revisesSuggestionId');
+        expect(block).not.toContain('revisesSuggestionId');
         expect(block).not.toContain('x'.repeat(601));
         expect(block).toContain('x'.repeat(600) + '…');
     });

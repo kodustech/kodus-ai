@@ -1,0 +1,3451 @@
+{
+  "model": "deepseek-v4-flash",
+  "judge": "gpt-5.6-luna",
+  "engine": {
+    "commit": "c2ac14f4d09544f26d7a1745aca2dbbdf413fb62",
+    "sourceDigest": "e39f7d1c4858f21fa04bac9c31bd35c36648bfcfb041b6381835dee599a53faf"
+  },
+  "complete": true,
+  "reps": 2,
+  "runs": [
+    {
+      "sequence": "rejected-four-rounds",
+      "action": "Developer rejects as intentional; persisted status remains not_implemented.",
+      "rep": 1,
+      "rounds": [
+        {
+          "case": "rejected-four-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 70542,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/poller.ts",
+              "claim": "WHAT: `gw.submit(charge.payload)` is called for a charge the gateway already holds, but `Gateway.submit` is not idempotent ('NOT idempotent: every call creates a new charge', gateway.ts:3) and `pollCharge` runs on every tick (poller.ts:7). WHY: each poll tick that returns NotReadyError (a transient state that can recur, and which errors.ts defines as 'the gateway has the charge but has not settled it yet') creates an additional brand-new charge for the same logical payment, causing duplicate charges / double billing. The previous code deliberately did not resubmit, so this PR unlocks the duplicate-charge path. HOW: make the resend idempotent — pass an idempotency key derived from `charge.id` (or a stored per-charge resubmit token) so the gateway dedupes retries, and/or guard resubmission to fire at most once per charge.",
+              "keep": true,
+              "rationale": "Evidence confirms the technical claim. gateway.ts:3 explicitly documents submit as 'NOT idempotent: every call creates a new charge.' errors.ts:1-2 defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)' — i.e., the gateway already holds the charge (contradicting poller.ts's own comment that it 'never received it'). pollCharge (poller.ts:10-21) is called on every tick and, on the NotReadyError branch (line 14-16), issues gw.submit(charge.payload), which creates a brand-new charge each time. Since NotReadyError is a recurring transient state, repeated ticks resubmit repeatedly for the same logical payment, producing duplicate charges / double billing. No upstream guard prevents this branch, and the callee does not dedupe. The finding's root cause and failure path are accurate and reachable.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/poller.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "findFile",
+                  "args": {
+                    "pattern": "gateway.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "findFile",
+                  "args": {
+                    "pattern": "errors.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "submit|NotReadyError|idempotent",
+                    "namesOnly": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "NotReadyError"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/gateway.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 23,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/poller.ts",
+              "line": 16,
+              "severity": "critical",
+              "label": "bug",
+              "marked": false,
+              "text": "`gw.submit(charge.payload)` now runs on every poll tick, but `Gateway.submit` is not idempotent (gateway.ts:3), so each `NotReadyError` from `pollCharge` (poller.ts:7) creates a brand-new charge for the same logical payment and causes duplicate charges / double billing — the previous code deliberately did not resubmit. Make the resend idempotent by passing an idempotency key derived from `charge.id` (or a stored per-charge resubmit token), and/or guard resubmission to fire at most once per charge."
+            }
+          ],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "critical",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -13,7 +13,7 @@\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n             metrics.increment('billing.resubmit');\n-            // Wait: this charge is already submitted.\n+            await gw.submit(charge.payload); // resend\n             return { state: 'resubmitted' as const };\n         }\n         throw err;\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 21005,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 5,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "`gw.submit(charge.payload)` now runs on every poll tick, but `Gateway.submit` is not idempotent (gateway.ts:3), so each `NotReadyError` from `pollCharge` (poller.ts:7) creates a brand-new charge for the same logical payment and causes duplicate charges / double billing — the previous code deliberately did not resubmit. Make the resend idempotent by passing an idempotency key derived from `charge.id` (or a stored per-charge resubmit token), and/or guard resubmission to fire at most once per charge.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T00:55:08.110Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -19,3 +19,5 @@\n         throw err;\n     }\n }\n+\n+// Review commit 1: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 17110,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 5,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "`gw.submit(charge.payload)` now runs on every poll tick, but `Gateway.submit` is not idempotent (gateway.ts:3), so each `NotReadyError` from `pollCharge` (poller.ts:7) creates a brand-new charge for the same logical payment and causes duplicate charges / double billing — the previous code deliberately did not resubmit. Make the resend idempotent by passing an idempotency key derived from `charge.id` (or a stored per-charge resubmit token), and/or guard resubmission to fire at most once per charge.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T00:55:08.110Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -21,3 +21,5 @@\n }\n \n // Review commit 1: telemetry documentation only.\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 25801,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "`gw.submit(charge.payload)` now runs on every poll tick, but `Gateway.submit` is not idempotent (gateway.ts:3), so each `NotReadyError` from `pollCharge` (poller.ts:7) creates a brand-new charge for the same logical payment and causes duplicate charges / double billing — the previous code deliberately did not resubmit. Make the resend idempotent by passing an idempotency key derived from `charge.id` (or a stored per-charge resubmit token), and/or guard resubmission to fire at most once per charge.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T00:55:08.110Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -23,3 +23,5 @@\n // Review commit 1: telemetry documentation only.\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 15947,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 3,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "`gw.submit(charge.payload)` now runs on every poll tick, but `Gateway.submit` is not idempotent (gateway.ts:3), so each `NotReadyError` from `pollCharge` (poller.ts:7) creates a brand-new charge for the same logical payment and causes duplicate charges / double billing — the previous code deliberately did not resubmit. Make the resend idempotent by passing an idempotency key derived from `charge.id` (or a stored per-charge resubmit token), and/or guard resubmission to fire at most once per charge.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T00:55:08.110Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -25,3 +25,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 37604,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/status.ts",
+              "claim": "WHAT: the arguments to FailedError are swapped — new FailedError(String(err), chargeId) passes the stringified error as the chargeId and the real charge id as cause, but the constructor is (chargeId: string, cause?: unknown). WHY: FailedError.chargeId now contains the error message instead of the charge identifier and cause contains the charge id, breaking the error's contract so any downstream telemetry/handler reading chargeId mislabels the failure (the pre-diff call new FailedError(chargeId, err) had the correct order). HOW: restore the argument order — new FailedError(chargeId, String(err)).",
+              "keep": true,
+              "rationale": "Confirmed: FailedError constructor is (chargeId: string, cause?: unknown) [errors.ts:4], but status.ts:11 calls new FailedError(String(err), chargeId), passing the error message as chargeId and the real charge id as cause. This inverts the contract, so downstream handlers/telemetry reading FailedError.chargeId get the error message rather than the charge identifier. The root cause is factually correct and the failure path is concrete.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "class FailedError"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 11,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/status.ts",
+              "line": 11,
+              "severity": "low",
+              "label": "bug",
+              "marked": false,
+              "text": "The arguments to FailedError are swapped: new FailedError(String(err), chargeId) passes the stringified error as chargeId and the real charge id as cause, while the constructor is (chargeId: string, cause?: unknown), so FailedError.chargeId holds the error message and downstream telemetry/handlers mislabel the failure. Restore the order with new FailedError(chargeId, String(err))."
+            }
+          ],
+          "claims": [
+            {
+              "id": "swapped-args",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "low",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "`gw.submit(charge.payload)` now runs on every poll tick, but `Gateway.submit` is not idempotent (gateway.ts:3), so each `NotReadyError` from `pollCharge` (poller.ts:7) creates a brand-new charge for the same logical payment and causes duplicate charges / double billing — the previous code deliberately did not resubmit. Make the resend idempotent by passing an idempotency key derived from `charge.id` (or a stored per-charge resubmit token), and/or guard resubmission to fire at most once per charge.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T00:55:08.110Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/status.ts",
+              "patchWithLinesStr": "## file: 'src/billing/status.ts'\n\n@@ -8,5 +8,5 @@\n__new hunk__\n8          if (err instanceof NotReadyError) {\n9              throw err;\n10          }\n11 +        throw new FailedError(String(err), chargeId);\n12      }\n__old hunk__\n         if (err instanceof NotReadyError) {\n             throw err;\n         }\n-        throw new FailedError(chargeId, err);\n     }"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rejected-four-rounds",
+      "action": "Developer rejects as intentional; persisted status remains not_implemented.",
+      "rep": 2,
+      "rounds": [
+        {
+          "case": "rejected-four-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 64712,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/poller.ts",
+              "claim": "WHAT: On a NotReadyError, pollCharge now calls `gw.submit(charge.payload)` to 'resend', but the Gateway.submit contract is documented as NOT idempotent — every call creates a new charge (gateway.ts:3), while NotReadyError means the gateway already HAS the charge but has not settled it (errors.ts:1). WHY: Resubmitting a charge the gateway already holds creates a duplicate charge, charging the customer twice on a transient not-settled status. The previous code deliberately did not resubmit ('this charge is already submitted'), confirming this is a regression. HOW: Do not resubmit on NotReadyError — remove the `await gw.submit(charge.payload)` call and return the resubmitted/pending state only when a distinct 'never received' signal is present; if a resend is truly required, gate it behind an idempotency key so the gateway deduplicates instead of opening a new charge.",
+              "keep": true,
+              "rationale": "gateway.ts:3 documents submit as NOT idempotent (every call creates a new charge), and errors.ts:1-2 defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)'. NotReadyError is only raised from gw.status(chargeId) (status.ts rethrows it), so the charge already exists when poller.ts:16 calls gw.submit(charge.payload), creating a duplicate charge. The poller's doc comment claiming 'never received' contradicts the authoritative errors.ts semantics and is unsupported by any throw site, so the resubmit path is a real duplicate-charge bug rather than intended behavior.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/poller.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/gateway.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts",
+                    "startLine": 1,
+                    "endLine": 30
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "NotReadyError",
+                    "excludeTests": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "endLine": 40,
+                    "path": "src/billing/status.ts",
+                    "startLine": 1
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 19,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/poller.ts",
+              "line": 14,
+              "severity": "critical",
+              "label": "bug",
+              "marked": false,
+              "text": "On a NotReadyError, pollCharge now calls `gw.submit(charge.payload)`, but Gateway.submit is not idempotent (gateway.ts:3) and NotReadyError means the gateway already holds the charge (errors.ts:1), so this duplicate submission charges the customer twice — a regression from the previous code that deliberately skipped resubmission. Remove the `await gw.submit(charge.payload)` call and return `{ state: 'pending' as const }`, only resending behind an idempotency key when a distinct 'never received' signal is present."
+            }
+          ],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "critical",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -13,7 +13,7 @@\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n             metrics.increment('billing.resubmit');\n-            // Wait: this charge is already submitted.\n+            await gw.submit(charge.payload); // resend\n             return { state: 'resubmitted' as const };\n         }\n         throw err;\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 22101,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 5,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 14,
+              "suggestionContent": "On a NotReadyError, pollCharge now calls `gw.submit(charge.payload)`, but Gateway.submit is not idempotent (gateway.ts:3) and NotReadyError means the gateway already holds the charge (errors.ts:1), so this duplicate submission charges the customer twice — a regression from the previous code that deliberately skipped resubmission. Remove the `await gw.submit(charge.payload)` call and return `{ state: 'pending' as const }`, only resending behind an idempotency key when a distinct 'never received' signal is present.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T00:58:10.302Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -19,3 +19,5 @@\n         throw err;\n     }\n }\n+\n+// Review commit 1: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 20516,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 12,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 14,
+              "suggestionContent": "On a NotReadyError, pollCharge now calls `gw.submit(charge.payload)`, but Gateway.submit is not idempotent (gateway.ts:3) and NotReadyError means the gateway already holds the charge (errors.ts:1), so this duplicate submission charges the customer twice — a regression from the previous code that deliberately skipped resubmission. Remove the `await gw.submit(charge.payload)` call and return `{ state: 'pending' as const }`, only resending behind an idempotency key when a distinct 'never received' signal is present.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T00:58:10.302Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -21,3 +21,5 @@\n }\n \n // Review commit 1: telemetry documentation only.\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 14067,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 14,
+              "suggestionContent": "On a NotReadyError, pollCharge now calls `gw.submit(charge.payload)`, but Gateway.submit is not idempotent (gateway.ts:3) and NotReadyError means the gateway already holds the charge (errors.ts:1), so this duplicate submission charges the customer twice — a regression from the previous code that deliberately skipped resubmission. Remove the `await gw.submit(charge.payload)` call and return `{ state: 'pending' as const }`, only resending behind an idempotency key when a distinct 'never received' signal is present.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T00:58:10.302Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -23,3 +23,5 @@\n // Review commit 1: telemetry documentation only.\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 18523,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 14,
+              "suggestionContent": "On a NotReadyError, pollCharge now calls `gw.submit(charge.payload)`, but Gateway.submit is not idempotent (gateway.ts:3) and NotReadyError means the gateway already holds the charge (errors.ts:1), so this duplicate submission charges the customer twice — a regression from the previous code that deliberately skipped resubmission. Remove the `await gw.submit(charge.payload)` call and return `{ state: 'pending' as const }`, only resending behind an idempotency key when a distinct 'never received' signal is present.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T00:58:10.302Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -25,3 +25,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 101113,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/status.ts",
+              "claim": "WHAT: The arguments to FailedError are swapped — `new FailedError(String(err), chargeId)` passes the stringified error into the `chargeId` parameter and the actual charge id into the `cause` parameter (the constructor is `(chargeId, cause?)`). WHY: This corrupts the error object — `err.chargeId` now holds a stringified exception instead of the charge id, `err.cause` holds the charge id instead of the original error, and the thrown message (`super(chargeId)`) becomes the raw error text, so any caller/monitoring relying on `err.chargeId` gets the wrong value. HOW: Restore the original order: `throw new FailedError(chargeId, err);`.",
+              "keep": true,
+              "rationale": "Confirmed: errors.ts:4 defines `FailedError` as `constructor(readonly chargeId: string, readonly cause?: unknown) { super(chargeId); }`, but status.ts:11 calls `new FailedError(String(err), chargeId)`. So `chargeId` receives the stringified error, `cause` receives the charge id, and the thrown message becomes the raw error text. The claim's root cause and consequence are factually accurate and not refuted by any upstream guard or prior review decision (the only prior decision concerns poller.ts resubmission, an unrelated issue).",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "class FailedError|constructor",
+                    "path": "src/billing/errors.ts"
+                  },
+                  "failed": false
+                }
+              ]
+            },
+            {
+              "file": "src/billing/status.ts",
+              "claim": "WHAT: The FailedError constructor arguments are swapped — `new FailedError(String(err), chargeId)` passes the stringified error as the first argument and the real chargeId as the second. WHY: FailedError's signature is `(chargeId: string, cause?: unknown)`, so the thrown error's `chargeId` field now contains the gateway error message while `cause` holds a string instead of the original error object, breaking the contract for any consumer that reads `err.chargeId` to identify the failed charge and discarding the underlying cause. HOW: Restore the original order: `throw new FailedError(chargeId, err);`",
+              "keep": true,
+              "rationale": "Confirmed: FailedError's signature is `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:4), but src/billing/status.ts:11 calls `new FailedError(String(err), chargeId)`. The arguments are swapped, so the resulting error's `chargeId` field holds the stringified gateway error and `cause` holds the charge ID string, mangling the error contract and discarding the original error object. This is a distinct issue from the earlier review decision (which concerned duplicate submission in poller.ts), so it is not a repeat.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "class FailedError"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "FailedError|NotReadyError"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 14,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 2,
+            "after": 2
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/status.ts",
+              "line": 11,
+              "severity": "medium",
+              "label": "bug",
+              "marked": false,
+              "text": "The FailedError constructor arguments are swapped: `new FailedError(String(err), chargeId)` passes the stringified error as the first argument and the real chargeId as the second, but the signature is `(chargeId: string, cause?: unknown)`. This puts the gateway error message in the thrown error's `chargeId` field and a string in `cause`, breaking any consumer that reads `err.chargeId` to identify the failed charge and discarding the underlying cause; restore the original order with `throw new FailedError(chargeId, err);`."
+            },
+            {
+              "sourceIndex": 1,
+              "file": "src/billing/status.ts",
+              "line": 11,
+              "severity": "medium",
+              "label": "bug",
+              "marked": false,
+              "text": "The arguments to FailedError are swapped: `new FailedError(String(err), chargeId)` passes the stringified error into the `chargeId` parameter and the actual charge id into the `cause` parameter, though the constructor is `(chargeId, cause?)`. This corrupts the error object so `err.chargeId` holds a stringified exception, `err.cause` holds the charge id, and the thrown message (`super(chargeId)`) becomes the raw error text; restore the original order with `throw new FailedError(chargeId, err);`."
+            }
+          ],
+          "claims": [
+            {
+              "id": "swapped-args",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 14,
+              "suggestionContent": "On a NotReadyError, pollCharge now calls `gw.submit(charge.payload)`, but Gateway.submit is not idempotent (gateway.ts:3) and NotReadyError means the gateway already holds the charge (errors.ts:1), so this duplicate submission charges the customer twice — a regression from the previous code that deliberately skipped resubmission. Remove the `await gw.submit(charge.payload)` call and return `{ state: 'pending' as const }`, only resending behind an idempotency key when a distinct 'never received' signal is present.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T00:58:10.302Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/status.ts",
+              "patchWithLinesStr": "## file: 'src/billing/status.ts'\n\n@@ -8,5 +8,5 @@\n__new hunk__\n8          if (err instanceof NotReadyError) {\n9              throw err;\n10          }\n11 +        throw new FailedError(String(err), chargeId);\n12      }\n__old hunk__\n         if (err instanceof NotReadyError) {\n             throw err;\n         }\n-        throw new FailedError(chargeId, err);\n     }"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "fixed-three-rounds",
+      "action": "Developer removes the duplicate submission; persisted status deliberately stays pending.",
+      "rep": 1,
+      "rounds": [
+        {
+          "case": "fixed-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 83548,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/poller.ts",
+              "claim": "WHAT: The NotReadyError branch now calls `gw.submit(charge.payload)`, but Gateway.submit is documented as 'NOT idempotent: every call creates a new charge', while NotReadyError means 'the gateway has the charge but has not settled it yet (transient)'. WHY: pollCharge is invoked on every tick for an accepted charge, so a transient NotReadyError will re-enter this branch repeatedly and each call creates an additional charge — producing duplicate/double billing. HOW: Do not resubmit on NotReadyError; keep the previous behavior (record the metric and return without calling submit), or guard the resubmit behind an idempotency key so the gateway de-duplicates.",
+              "keep": true,
+              "rationale": "Not refutable. errors.ts authoritatively documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', while gateway.ts documents submit as 'NOT idempotent: every call creates a new charge'. pollCharge explicitly runs 'on every tick for charges the gateway has ACCEPTED' and now calls gw.submit(charge.payload) in the NotReadyError branch. Since fetchStatus merely re-throws NotReadyError (status.ts:8-9), a transient not-ready state will re-trigger this branch repeatedy across ticks, each call creating a fresh charge — a genuine duplicate/double-billing path. The only counter is the contradictory poller.ts comment ('the gateway never received it'), but that comment conflicts with the canonical error semantics and does not constitute concrete evidence refuting the bug.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/poller.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "submit",
+                    "glob": "*.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/gateway.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "pollCharge|NotReadyError",
+                    "excludeTests": true
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 17,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/poller.ts",
+              "line": 16,
+              "severity": "critical",
+              "label": "bug",
+              "marked": false,
+              "text": "The NotReadyError branch in src/billing/poller.ts now calls `gw.submit(charge.payload)`, but Gateway.submit is 'NOT idempotent: every call creates a new charge' while NotReadyError only means the gateway already has the charge without settling it, so because pollCharge runs on every tick for an accepted charge this branch repeatedly creates additional charges and causes duplicate/double billing. Do not resubmit on NotReadyError (keep the previous behavior of recording the metric and returning without calling submit), or guard the resubmit behind an idempotency key so the gateway de-duplicates."
+            }
+          ],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "critical",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -13,7 +13,7 @@\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n             metrics.increment('billing.resubmit');\n-            // Wait: this charge is already submitted.\n+            await gw.submit(charge.payload); // resend\n             return { state: 'resubmitted' as const };\n         }\n         throw err;\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 67185,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 22,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "The NotReadyError branch in src/billing/poller.ts now calls `gw.submit(charge.payload)`, but Gateway.submit is 'NOT idempotent: every call creates a new charge' while NotReadyError only means the gateway already has the charge without settling it, so because pollCharge runs on every tick for an accepted charge this branch repeatedly creates additional charges and causes duplicate/double billing. Do not resubmit on NotReadyError (keep the previous behavior of recording the metric and returning without calling submit), or guard the resubmit behind an idempotency key so the gateway de-duplicates.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:02:30.181Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -5,16 +5,16 @@\n \n /**\n  * Called on every tick for charges the gateway has ACCEPTED.\n- * NotReadyError means \"the gateway never received it\": resubmit.\n+ * NotReadyError means the gateway is settling the submitted charge: wait.\n  */\n export async function pollCharge(gw: Gateway, charge: { id: string; payload: unknown }) {\n     try {\n         return await fetchStatus(gw, charge.id);\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n-            metrics.increment('billing.resubmit');\n-            await gw.submit(charge.payload); // resend\n-            return { state: 'resubmitted' as const };\n+            metrics.increment('billing.pending');\n+            // Already submitted: wait for the gateway instead of submitting twice.\n+            return { state: 'pending' as const };\n         }\n         throw err;\n     }\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 37446,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 10,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "The NotReadyError branch in src/billing/poller.ts now calls `gw.submit(charge.payload)`, but Gateway.submit is 'NOT idempotent: every call creates a new charge' while NotReadyError only means the gateway already has the charge without settling it, so because pollCharge runs on every tick for an accepted charge this branch repeatedly creates additional charges and causes duplicate/double billing. Do not resubmit on NotReadyError (keep the previous behavior of recording the metric and returning without calling submit), or guard the resubmit behind an idempotency key so the gateway de-duplicates.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:02:30.181Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -19,3 +19,5 @@\n         throw err;\n     }\n }\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 14489,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "The NotReadyError branch in src/billing/poller.ts now calls `gw.submit(charge.payload)`, but Gateway.submit is 'NOT idempotent: every call creates a new charge' while NotReadyError only means the gateway already has the charge without settling it, so because pollCharge runs on every tick for an accepted charge this branch repeatedly creates additional charges and causes duplicate/double billing. Do not resubmit on NotReadyError (keep the previous behavior of recording the metric and returning without calling submit), or guard the resubmit behind an idempotency key so the gateway de-duplicates.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:02:30.181Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -21,3 +21,5 @@\n }\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 16461,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "The NotReadyError branch in src/billing/poller.ts now calls `gw.submit(charge.payload)`, but Gateway.submit is 'NOT idempotent: every call creates a new charge' while NotReadyError only means the gateway already has the charge without settling it, so because pollCharge runs on every tick for an accepted charge this branch repeatedly creates additional charges and causes duplicate/double billing. Do not resubmit on NotReadyError (keep the previous behavior of recording the metric and returning without calling submit), or guard the resubmit behind an idempotency key so the gateway de-duplicates.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:02:30.181Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -23,3 +23,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "fixed-three-rounds",
+      "action": "Developer removes the duplicate submission; persisted status deliberately stays pending.",
+      "rep": 2,
+      "rounds": [
+        {
+          "case": "fixed-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 56025,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/poller.ts",
+              "claim": "WHAT: The retry path now calls `await gw.submit(charge.payload)`, but `Gateway.submit` is documented as non-idempotent ('every call creates a new charge') while `NotReadyError` means the gateway already HAS the charge (just unsettled/transient). WHY: Because `pollCharge` runs on every tick and the NotReadyError is transient (it recurs until settlement), this creates a brand-new charge on every tick for a charge that already exists — duplicate/double billing of the customer and unbounded charge creation. HOW: Do not resubmit for a charge the gateway already holds; either return the 'resubmitted'/'pending' state without calling submit, or guard the submit behind an idempotency key and a check that confirms the gateway truly lacks the charge before creating one.",
+              "keep": true,
+              "rationale": "Confirmed. errors.ts documents NotReadyError as \"The gateway has the charge but has not settled it yet (transient)\", while gateway.ts documents submit as \"NOT idempotent: every call creates a new charge.\" pollCharge runs on every tick and on NotReadyError calls gw.submit(charge.payload), creating a new charge each tick for a charge the gateway already holds (the NotReady condition recurs until settlement). status.ts corroborates that NotReadyError arises from a status lookup by an existing charge id. This produces duplicate/double billing. The finding's root cause and failure path are technically correct; no guard prevents the resubmit and the only contradictory signal is the poller's own comment, which is the mistaken assumption being flagged.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/poller.ts",
+                    "startLine": 1,
+                    "endLine": 80
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "NotReadyError|submit\\(|pollCharge",
+                    "excludeTests": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/gateway.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 15,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/poller.ts",
+              "line": 14,
+              "severity": "critical",
+              "label": "bug",
+              "marked": false,
+              "text": "The retry path calls `await gw.submit(charge.payload)` on `NotReadyError`, but `Gateway.submit` is non-idempotent while `NotReadyError` means the gateway already holds the charge, so `pollCharge` running on every tick creates a new charge each tick — duplicate billing and unbounded charge creation. Do not resubmit for a charge the gateway already holds; return the 'pending' state, or guard the submit behind an idempotency key that confirms the gateway truly lacks the charge."
+            }
+          ],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "critical",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -13,7 +13,7 @@\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n             metrics.increment('billing.resubmit');\n-            // Wait: this charge is already submitted.\n+            await gw.submit(charge.payload); // resend\n             return { state: 'resubmitted' as const };\n         }\n         throw err;\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 81581,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 28,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 14,
+              "suggestionContent": "The retry path calls `await gw.submit(charge.payload)` on `NotReadyError`, but `Gateway.submit` is non-idempotent while `NotReadyError` means the gateway already holds the charge, so `pollCharge` running on every tick creates a new charge each tick — duplicate billing and unbounded charge creation. Do not resubmit for a charge the gateway already holds; return the 'pending' state, or guard the submit behind an idempotency key that confirms the gateway truly lacks the charge.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:05:41.800Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -5,16 +5,16 @@\n \n /**\n  * Called on every tick for charges the gateway has ACCEPTED.\n- * NotReadyError means \"the gateway never received it\": resubmit.\n+ * NotReadyError means the gateway is settling the submitted charge: wait.\n  */\n export async function pollCharge(gw: Gateway, charge: { id: string; payload: unknown }) {\n     try {\n         return await fetchStatus(gw, charge.id);\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n-            metrics.increment('billing.resubmit');\n-            await gw.submit(charge.payload); // resend\n-            return { state: 'resubmitted' as const };\n+            metrics.increment('billing.pending');\n+            // Already submitted: wait for the gateway instead of submitting twice.\n+            return { state: 'pending' as const };\n         }\n         throw err;\n     }\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 21847,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 7,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 14,
+              "suggestionContent": "The retry path calls `await gw.submit(charge.payload)` on `NotReadyError`, but `Gateway.submit` is non-idempotent while `NotReadyError` means the gateway already holds the charge, so `pollCharge` running on every tick creates a new charge each tick — duplicate billing and unbounded charge creation. Do not resubmit for a charge the gateway already holds; return the 'pending' state, or guard the submit behind an idempotency key that confirms the gateway truly lacks the charge.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:05:41.800Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -19,3 +19,5 @@\n         throw err;\n     }\n }\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 18371,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 5,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 14,
+              "suggestionContent": "The retry path calls `await gw.submit(charge.payload)` on `NotReadyError`, but `Gateway.submit` is non-idempotent while `NotReadyError` means the gateway already holds the charge, so `pollCharge` running on every tick creates a new charge each tick — duplicate billing and unbounded charge creation. Do not resubmit for a charge the gateway already holds; return the 'pending' state, or guard the submit behind an idempotency key that confirms the gateway truly lacks the charge.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:05:41.800Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -21,3 +21,5 @@\n }\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 17599,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 14,
+              "suggestionContent": "The retry path calls `await gw.submit(charge.payload)` on `NotReadyError`, but `Gateway.submit` is non-idempotent while `NotReadyError` means the gateway already holds the charge, so `pollCharge` running on every tick creates a new charge each tick — duplicate billing and unbounded charge creation. Do not resubmit for a charge the gateway already holds; return the 'pending' state, or guard the submit behind an idempotency key that confirms the gateway truly lacks the charge.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:05:41.800Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -23,3 +23,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "refinement-three-rounds",
+      "action": "Developer adds an ineffective timeout; the hang the first comment raised is not posted again.",
+      "rep": 1,
+      "rounds": [
+        {
+          "case": "refinement-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 47680,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/http/client.ts",
+              "claim": "WHAT: the change removes `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call, leaving the request with no timeout. WHY: without a signal, a stalled connection or non-responsive server never rejects, so the awaiting caller hangs indefinitely and each such call holds an open socket/promise — a resource-exhaustion and hang regression versus the previous 5s bound. HOW: restore a bounded request, e.g. `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });` (or make the timeout configurable with a default upper bound).",
+              "keep": true,
+              "rationale": "The cited code (src/http/client.ts line 2) is exactly `const res = await fetch(url);` with no signal/AbortSignal, confirming the finding's core technical claim: the request has no timeout bound. A fetch without an AbortSignal in Node/undici has no request timeout, so a stalled or non-responsive server leaves the awaited promise pending indefinitely, holding an open socket — a real hang/resource-exhaustion behavior, not a mere style or generic 'missing X' suggestion. There is a concrete code path with a concrete wrong outcome (await never rejects). Nothing in the file or repo refutes it (no upstream guard, no default timeout). The only unverifiable part is the 'previous 5s bound' framing, which does not undermine the current defect.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 60
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "client\\.ts|from ['\\\"].*http/client",
+                    "namesOnly": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "getJson"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "AbortSignal|signal:|fetch\\("
+                  },
+                  "failed": false
+                }
+              ]
+            },
+            {
+              "file": "src/http/client.ts",
+              "claim": "The diff removes the client-side abort deadline from the fetch call, leaving the request with no timeout. Requests can now hang indefinitely or pile up, which is an unbounded-waiting / DoS resource concern. Restore a timeout so the request is bounded.",
+              "keep": true,
+              "rationale": "The code at src/http/client.ts:2 performs `await fetch(url)` with no signal/AbortSignal, and a repo-wide search for `AbortController`, `AbortSignal.timeout`, `setTimeout`, or any `timeout` handler returns nothing — there is no other place (caller, wrapper, or dispatcher config) that bounds the request. Since the module exports getJson to consumers, a stalled or non-responding endpoint leaves the promise pending until the runtime/network layer gives up (undici defaults are on the order of minutes; in a browser/edge runtime fetch has no client deadline at all), so concurrent calls can accumulate. I found no evidence refuting the claim: no guard upstream, no fallback timeout, and no indication the abort deadline still exists elsewhere. Per the \"keep unless actively refuted\" rule, the finding stands; only the exact wording about what the prior diff contained can't be independently confirmed from the tree.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 60
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "fetch\\(|fetch\\(url|AbortController|signal|timeout",
+                    "path": "src",
+                    "namesOnly": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "getJson|client\\.ts|http/client",
+                    "excludeTests": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "AbortController|AbortSignal\\.timeout|setTimeout|timeout"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "listDir",
+                  "args": {
+                    "path": ".",
+                    "maxDepth": 3
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 17,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 2,
+            "after": 2
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/http/client.ts",
+              "line": 2,
+              "severity": "high",
+              "label": "performance",
+              "marked": false,
+              "text": "The change removes `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call, leaving the request with no timeout, so a stalled connection or non-responsive server never rejects and each awaiting caller hangs indefinitely while holding an open socket/promise. Restore a bounded request with `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`, or make the timeout configurable with a default upper bound."
+            },
+            {
+              "sourceIndex": 1,
+              "file": "src/http/client.ts",
+              "line": 2,
+              "severity": "high",
+              "label": "performance",
+              "marked": false,
+              "text": "The diff removes the client-side abort deadline from the fetch call, leaving requests with no timeout that can hang indefinitely or pile up, which is an unbounded-waiting / DoS resource concern. Restore a timeout so the request is bounded."
+            }
+          ],
+          "claims": [
+            {
+              "id": "timeout-missing",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -1,5 +1,5 @@\n export async function getJson(url: string) {\n-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });\n+    const res = await fetch(url);\n     if (!res.ok) throw new Error(`HTTP ${res.status}`);\n     return await res.json();\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 87905,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 5,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:1:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The change removes `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call, leaving the request with no timeout, so a stalled connection or non-responsive server never rejects and each awaiting caller hangs indefinitely while holding an open socket/promise. Restore a bounded request with `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`, or make the timeout configurable with a default upper bound.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:08:48.892Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:1:0:1",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The diff removes the client-side abort deadline from the fetch call, leaving requests with no timeout that can hang indefinitely or pile up, which is an unbounded-waiting / DoS resource concern. Restore a timeout so the request is bounded.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:08:48.892Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -1,5 +1,11 @@\n export async function getJson(url: string) {\n-    const res = await fetch(url);\n-    if (!res.ok) throw new Error(`HTTP ${res.status}`);\n-    return await res.json();\n+    const controller = new AbortController();\n+    const timer = setTimeout(() => controller.abort(), 5000);\n+    try {\n+        const res = await fetch(url);\n+        if (!res.ok) throw new Error(`HTTP ${res.status}`);\n+        return await res.json();\n+    } finally {\n+        clearTimeout(timer);\n+    }\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 21228,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:1:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The change removes `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call, leaving the request with no timeout, so a stalled connection or non-responsive server never rejects and each awaiting caller hangs indefinitely while holding an open socket/promise. Restore a bounded request with `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`, or make the timeout configurable with a default upper bound.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:08:48.892Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:1:0:1",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The diff removes the client-side abort deadline from the fetch call, leaving requests with no timeout that can hang indefinitely or pile up, which is an unbounded-waiting / DoS resource concern. Restore a timeout so the request is bounded.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:08:48.892Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -9,3 +9,5 @@\n         clearTimeout(timer);\n     }\n }\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 20127,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 3,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:1:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The change removes `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call, leaving the request with no timeout, so a stalled connection or non-responsive server never rejects and each awaiting caller hangs indefinitely while holding an open socket/promise. Restore a bounded request with `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`, or make the timeout configurable with a default upper bound.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:08:48.892Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:1:0:1",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The diff removes the client-side abort deadline from the fetch call, leaving requests with no timeout that can hang indefinitely or pile up, which is an unbounded-waiting / DoS resource concern. Restore a timeout so the request is bounded.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:08:48.892Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -11,3 +11,5 @@\n }\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 19471,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 1,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:1:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The change removes `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call, leaving the request with no timeout, so a stalled connection or non-responsive server never rejects and each awaiting caller hangs indefinitely while holding an open socket/promise. Restore a bounded request with `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`, or make the timeout configurable with a default upper bound.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:08:48.892Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:1:0:1",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The diff removes the client-side abort deadline from the fetch call, leaving requests with no timeout that can hang indefinitely or pile up, which is an unbounded-waiting / DoS resource concern. Restore a timeout so the request is bounded.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:08:48.892Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -13,3 +13,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "refinement-three-rounds",
+      "action": "Developer adds an ineffective timeout; the hang the first comment raised is not posted again.",
+      "rep": 2,
+      "rounds": [
+        {
+          "case": "refinement-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 37834,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/http/client.ts",
+              "claim": "WHAT: The call `fetch(url)` no longer passes an abort signal, removing the previous 5000 ms timeout. WHY: A stalled or slow remote server now hangs the request indefinitely, holding the socket/connection and blocking the awaiting caller forever, causing resource exhaustion and possible request pile-up under repeated calls. HOW: Restore a bounded timeout, e.g. `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`.",
+              "keep": true,
+              "rationale": "The cited code confirms `getJson` calls `const res = await fetch(url)` with no AbortSignal, and a repo-wide search finds no timeout or AbortSignal anywhere else in the codebase. There is no upstream guard providing a bounded timeout, so a stalled/slow remote server leaves `await fetch(url)` (and thus the awaiting caller) unresolved, which is exactly the failure path described. I could not find evidence refuting the claim (no caller-side timeout, no global fetch wrapper adding one). The behavioral core — an unbounded fetch in this helper — holds in the actual code; only the exact 'previous 5000 ms' history is unverifiable from the working tree, which is insufficient to refute the finding.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "fetch\\(",
+                    "path": "src/http/client.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "getJson|AbortSignal|AbortController|timeout",
+                    "excludeTests": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "listDir",
+                  "args": {
+                    "path": "src/http"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "5000|signal"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 15,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/http/client.ts",
+              "line": 2,
+              "severity": "high",
+              "label": "performance",
+              "marked": false,
+              "text": "The call `fetch(url)` no longer passes an abort signal, removing the previous 5000 ms timeout, so a stalled or slow remote server now hangs the request indefinitely, holding the socket and blocking the awaiting caller under repeated calls. Restore a bounded timeout with `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`."
+            }
+          ],
+          "claims": [
+            {
+              "id": "timeout-missing",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -1,5 +1,5 @@\n export async function getJson(url: string) {\n-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });\n+    const res = await fetch(url);\n     if (!res.ok) throw new Error(`HTTP ${res.status}`);\n     return await res.json();\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 108249,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:2:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The call `fetch(url)` no longer passes an abort signal, removing the previous 5000 ms timeout, so a stalled or slow remote server now hangs the request indefinitely, holding the socket and blocking the awaiting caller under repeated calls. Restore a bounded timeout with `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:11:55.471Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -1,5 +1,11 @@\n export async function getJson(url: string) {\n-    const res = await fetch(url);\n-    if (!res.ok) throw new Error(`HTTP ${res.status}`);\n-    return await res.json();\n+    const controller = new AbortController();\n+    const timer = setTimeout(() => controller.abort(), 5000);\n+    try {\n+        const res = await fetch(url);\n+        if (!res.ok) throw new Error(`HTTP ${res.status}`);\n+        return await res.json();\n+    } finally {\n+        clearTimeout(timer);\n+    }\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 27760,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/http/client.ts",
+              "claim": "Pre-existing (already reported in an earlier review, not re-reported by this diff review): `getJson` creates an `AbortController` and a `setTimeout` timer (cleared in the `finally` block) but calls `fetch(url)` without passing `{ signal: controller.signal }`. As a result the abort/timeout never reaches the in-flight request, so a hung fetch is never actually cancelled. This diff (a comment-only change) does not introduce or alter this behavior; it is restated here only for completeness because the reviewer explicitly described it as the sole pre-existing runtime concern in this file.",
+              "keep": false,
+              "rationale": "The finding restates the exact failure already raised in the prior review round. PreviousReviewDecisions entry (src/http/client.ts:2-2, performance) explicitly describes `fetch(url)` no longer passing an abort signal, so a stalled/slow server hangs the request indefinitely with no timeout — the same hang in the same operation at the same location. The current file confirms the code (`const controller = new AbortController(); setTimeout(() => controller.abort(), 5000); ... await fetch(url);`), i.e. the signal is never wired to the request, matching that entry's failure regardless of wording. The candidate itself concedes it is pre-existing and already reported. Per the dedup rule, a finding whose consequence duplicates an existing PreviousDecision must be dropped.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 30
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 4,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 0
+          },
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:2:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The call `fetch(url)` no longer passes an abort signal, removing the previous 5000 ms timeout, so a stalled or slow remote server now hangs the request indefinitely, holding the socket and blocking the awaiting caller under repeated calls. Restore a bounded timeout with `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:11:55.471Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -9,3 +9,5 @@\n         clearTimeout(timer);\n     }\n }\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 16415,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 4,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:2:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The call `fetch(url)` no longer passes an abort signal, removing the previous 5000 ms timeout, so a stalled or slow remote server now hangs the request indefinitely, holding the socket and blocking the awaiting caller under repeated calls. Restore a bounded timeout with `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:11:55.471Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -11,3 +11,5 @@\n }\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 14150,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 1,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:2:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The call `fetch(url)` no longer passes an abort signal, removing the previous 5000 ms timeout, so a stalled or slow remote server now hangs the request indefinitely, holding the socket and blocking the awaiting caller under repeated calls. Restore a bounded timeout with `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:11:55.471Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -13,3 +13,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rules-rejected-four-rounds",
+      "action": "Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
+      "rep": 1,
+      "rounds": [
+        {
+          "case": "rules-rejected-four-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 18738,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 5,
+              "severity": "medium",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In `finishRun`, `db.progress.update` is now awaited after `db.results.insert`, so results become visible before progress is marked 'done', violating Rule 1 which requires `db.progress.update` before any `db.results.insert`/`insertMany` in the same function. Swap the two statements back so the progress update runs first."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n+    await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 1804,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In `finishRun`, `db.progress.update` is now awaited after `db.results.insert`, so results become visible before progress is marked 'done', violating Rule 1 which requires `db.progress.update` before any `db.results.insert`/`insertMany` in the same function. Swap the two statements back so the progress update runs first.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:15:00.801Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 1702,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In `finishRun`, `db.progress.update` is now awaited after `db.results.insert`, so results become visible before progress is marked 'done', violating Rule 1 which requires `db.progress.update` before any `db.results.insert`/`insertMany` in the same function. Swap the two statements back so the progress update runs first.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:15:00.801Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 1209,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In `finishRun`, `db.progress.update` is now awaited after `db.results.insert`, so results become visible before progress is marked 'done', violating Rule 1 which requires `db.progress.update` before any `db.results.insert`/`insertMany` in the same function. Swap the two statements back so the progress update runs first.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:15:00.801Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 2495,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In `finishRun`, `db.progress.update` is now awaited after `db.results.insert`, so results become visible before progress is marked 'done', violating Rule 1 which requires `db.progress.update` before any `db.results.insert`/`insertMany` in the same function. Swap the two statements back so the progress update runs first.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:15:00.801Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 4: document completion telemetry.\n     // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 36992,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 14,
+              "severity": "high",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In the newly added finishBatch in src/jobs/handler.ts, db.progress.update is awaited after db.results.insertMany, violating Rule 1's requirement that db.progress.update run before any db.results.insert/insertMany in the same handler and exposing results for a job still marked in-progress. Move the progress update ahead of the insert so db.progress.update runs first."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            },
+            {
+              "id": "finishBatch-new-site",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In `finishRun`, `db.progress.update` is now awaited after `db.results.insert`, so results become visible before progress is marked 'done', violating Rule 1 which requires `db.progress.update` before any `db.results.insert`/`insertMany` in the same function. Swap the two statements back so the progress update runs first.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:15:00.801Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -1,5 +1,5 @@\n import { db } from './db';\n-import type { Run } from './types';\n+import type { Run, Batch } from './types';\n \n export async function finishRun(run: Run) {\n     // Commit 4: document completion telemetry.\n@@ -9,3 +9,8 @@\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n }\n+\n+export async function finishBatch(batch: Batch) {\n+    await db.results.insertMany(batch.id, batch.outputs);\n+    await db.progress.update(batch.id, 'done');\n+}\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rules-rejected-four-rounds",
+      "action": "Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
+      "rep": 2,
+      "rounds": [
+        {
+          "case": "rules-rejected-four-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 21502,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 5,
+              "severity": "high",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "Swapping the order so db.results.insert runs before db.progress.update in finishRun violates Rule 1, which requires progress to be recorded before the result becomes visible, so a result can be observed for a job whose progress was never written. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output)."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n+    await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 6957,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "Swapping the order so db.results.insert runs before db.progress.update in finishRun violates Rule 1, which requires progress to be recorded before the result becomes visible, so a result can be observed for a job whose progress was never written. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:16:06.526Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 1506,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "Swapping the order so db.results.insert runs before db.progress.update in finishRun violates Rule 1, which requires progress to be recorded before the result becomes visible, so a result can be observed for a job whose progress was never written. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:16:06.526Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 2164,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "Swapping the order so db.results.insert runs before db.progress.update in finishRun violates Rule 1, which requires progress to be recorded before the result becomes visible, so a result can be observed for a job whose progress was never written. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:16:06.526Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 1733,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "Swapping the order so db.results.insert runs before db.progress.update in finishRun violates Rule 1, which requires progress to be recorded before the result becomes visible, so a result can be observed for a job whose progress was never written. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:16:06.526Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 4: document completion telemetry.\n     // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 30388,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 13,
+              "severity": "high",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In src/jobs/handler.ts, the new finishBatch handler writes batch results with db.results.insertMany before db.progress.update records the job's progress, violating Rule 1 and risking observable outputs if the process dies between calls while the job still looks in-progress or never finished. Swap the two calls so db.progress.update(batch.id, 'done') runs first, then db.results.insertMany(batch.id, batch.outputs)."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            },
+            {
+              "id": "finishBatch-new-site",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "Swapping the order so db.results.insert runs before db.progress.update in finishRun violates Rule 1, which requires progress to be recorded before the result becomes visible, so a result can be observed for a job whose progress was never written. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-07T01:16:06.526Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -1,5 +1,5 @@\n import { db } from './db';\n-import type { Run } from './types';\n+import type { Run, Batch } from './types';\n \n export async function finishRun(run: Run) {\n     // Commit 4: document completion telemetry.\n@@ -9,3 +9,8 @@\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n }\n+\n+export async function finishBatch(batch: Batch) {\n+    await db.results.insertMany(batch.id, batch.outputs);\n+    await db.progress.update(batch.id, 'done');\n+}\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rules-fixed-three-rounds",
+      "action": "Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
+      "rep": 1,
+      "rounds": [
+        {
+          "case": "rules-fixed-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 21953,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 5,
+              "severity": "medium",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In src/jobs/handler.ts, the diff swapped the order in finishRun so db.results.insert now runs before db.progress.update, violating Rule 1, which requires db.progress.update before db.results.insert / insertMany in the same job handler, otherwise a result can become visible for a job whose progress was never recorded. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output)."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n+    await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 2896,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In src/jobs/handler.ts, the diff swapped the order in finishRun so db.results.insert now runs before db.progress.update, violating Rule 1, which requires db.progress.update before db.results.insert / insertMany in the same job handler, otherwise a result can become visible for a job whose progress was never recorded. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:17:11.247Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n+    await db.results.insert(run.id, run.output);\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 1454,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In src/jobs/handler.ts, the diff swapped the order in finishRun so db.results.insert now runs before db.progress.update, violating Rule 1, which requires db.progress.update before db.results.insert / insertMany in the same job handler, otherwise a result can become visible for a job whose progress was never recorded. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:17:11.247Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 1590,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In src/jobs/handler.ts, the diff swapped the order in finishRun so db.results.insert now runs before db.progress.update, violating Rule 1, which requires db.progress.update before db.results.insert / insertMany in the same job handler, otherwise a result can become visible for a job whose progress was never recorded. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:17:11.247Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 2135,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In src/jobs/handler.ts, the diff swapped the order in finishRun so db.results.insert now runs before db.progress.update, violating Rule 1, which requires db.progress.update before db.results.insert / insertMany in the same job handler, otherwise a result can become visible for a job whose progress was never recorded. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:17:11.247Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 27898,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 13,
+              "severity": "high",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In the newly added `finishBatch` handler, `db.results.insertMany` runs before `db.progress.update`, so batch results become readable before the job is marked 'done'; if the process crashes between the two calls, results exist for a job whose progress was never recorded, violating Rule 1's requirement that `db.progress.update` run first. Swap the two statements so `db.progress.update(batch.id, 'done')` is awaited first, then `db.results.insertMany(batch.id, batch.outputs)`, matching the ordering used in `finishRun`."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            },
+            {
+              "id": "finishBatch-new-site",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In src/jobs/handler.ts, the diff swapped the order in finishRun so db.results.insert now runs before db.progress.update, violating Rule 1, which requires db.progress.update before db.results.insert / insertMany in the same job handler, otherwise a result can become visible for a job whose progress was never recorded. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:17:11.247Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -1,5 +1,5 @@\n import { db } from './db';\n-import type { Run } from './types';\n+import type { Run, Batch } from './types';\n \n export async function finishRun(run: Run) {\n     // Commit 3: document completion telemetry.\n@@ -8,3 +8,8 @@\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n }\n+\n+export async function finishBatch(batch: Batch) {\n+    await db.results.insertMany(batch.id, batch.outputs);\n+    await db.progress.update(batch.id, 'done');\n+}\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rules-fixed-three-rounds",
+      "action": "Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
+      "rep": 2,
+      "rounds": [
+        {
+          "case": "rules-fixed-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 24673,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 6,
+              "severity": "medium",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "The rule requires db.progress.update to run before db.results.insert within the same handler so a result is never visible for a job whose progress was not recorded, but this PR reverses that order by running db.results.insert(run.id, run.output) first and the moved db.progress.update call at line 6 only afterwards. Restore the original ordering by calling db.progress.update before db.results.insert."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n+    await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 3368,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "The rule requires db.progress.update to run before db.results.insert within the same handler so a result is never visible for a job whose progress was not recorded, but this PR reverses that order by running db.results.insert(run.id, run.output) first and the moved db.progress.update call at line 6 only afterwards. Restore the original ordering by calling db.progress.update before db.results.insert.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:18:11.916Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n+    await db.results.insert(run.id, run.output);\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 1625,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "The rule requires db.progress.update to run before db.results.insert within the same handler so a result is never visible for a job whose progress was not recorded, but this PR reverses that order by running db.results.insert(run.id, run.output) first and the moved db.progress.update call at line 6 only afterwards. Restore the original ordering by calling db.progress.update before db.results.insert.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:18:11.916Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 1803,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "The rule requires db.progress.update to run before db.results.insert within the same handler so a result is never visible for a job whose progress was not recorded, but this PR reverses that order by running db.results.insert(run.id, run.output) first and the moved db.progress.update call at line 6 only afterwards. Restore the original ordering by calling db.progress.update before db.results.insert.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:18:11.916Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 2151,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "The rule requires db.progress.update to run before db.results.insert within the same handler so a result is never visible for a job whose progress was not recorded, but this PR reverses that order by running db.results.insert(run.id, run.output) first and the moved db.progress.update call at line 6 only afterwards. Restore the original ordering by calling db.progress.update before db.results.insert.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:18:11.916Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 24917,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 13,
+              "severity": "critical",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In the newly added `finishBatch` handler, `db.results.insertMany` runs before `db.progress.update`, violating Rule 1's requirement that progress be recorded before results are written—if `insertMany` succeeds but the process dies before `db.progress.update`, batch outputs persist while the job still appears incomplete. Swap the two calls so `db.progress.update(batch.id, 'done')` executes first, then `db.results.insertMany(batch.id, batch.outputs)`, matching the ordering already used in `finishRun`."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            },
+            {
+              "id": "finishBatch-new-site",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "marked": false,
+              "severity": "critical",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "The rule requires db.progress.update to run before db.results.insert within the same handler so a result is never visible for a job whose progress was not recorded, but this PR reverses that order by running db.results.insert(run.id, run.output) first and the moved db.progress.update call at line 6 only afterwards. Restore the original ordering by calling db.progress.update before db.results.insert.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-07T01:18:11.916Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -1,5 +1,5 @@\n import { db } from './db';\n-import type { Run } from './types';\n+import type { Run, Batch } from './types';\n \n export async function finishRun(run: Run) {\n     // Commit 3: document completion telemetry.\n@@ -8,3 +8,8 @@\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n }\n+\n+export async function finishBatch(batch: Batch) {\n+    await db.results.insertMany(batch.id, batch.outputs);\n+    await db.progress.update(batch.id, 'done');\n+}\n"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

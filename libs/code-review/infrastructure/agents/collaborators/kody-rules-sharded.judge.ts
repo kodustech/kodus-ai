@@ -160,10 +160,6 @@ export const shardViolationsSchema = z.object({
                 claimKind: nullableWireClaimKind,
                 claimSymbol: nullableWireClaimTarget,
                 claimPath: nullableWireClaimTarget,
-                // The Id of a <PreviousReviewDecisions> entry this finding
-                // revises, reverses or follows from (#2039, #2020) — rendered
-                // as a link to that earlier suggestion. Null when none.
-                revisesSuggestionId: nullableWire(z.string()),
             }),
         )
         .default([]),
@@ -216,7 +212,6 @@ export interface RawShardViolation {
     claimKind?: ShardClaimKind | null;
     claimSymbol?: string | null;
     claimPath?: string | null;
-    revisesSuggestionId?: string | null;
 }
 
 /** A resolved violation for a (file, rule) pair — `ruleId` mapped to a UUID. */
@@ -237,8 +232,6 @@ export interface ShardViolation {
     claimKind?: ShardClaimKind;
     claimSymbol?: string;
     claimPath?: string;
-    /** Id of the earlier suggestion on this PR the finding revises (#2039). */
-    revisesSuggestionId?: string;
 }
 
 /**
@@ -720,12 +713,7 @@ function fileShardUser(
         // finding when the repository says otherwise. Under-claiming is safe —
         // "none" publishes the finding unchanged, exactly as today.
         `State what your finding ASSERTS about the repository in "claimKind": "unused" (this symbol is used nowhere else), "missing" (this file or path does not exist), "duplicate" (this already exists elsewhere), or "none" for everything else. Name the target: "claimSymbol" is the identifier the claim is about, "claimPath" the file path; use null for whichever does not apply. A claim is CHECKED against the repository and the finding is dropped if the repository contradicts it, so claim only what you mean.`,
-        ...(previousDecisionsSection
-            ? [
-                  `When a finding is a DIFFERENT problem that exists because an entry in <PreviousReviewDecisions> was applied, or reverses or narrows one, put that entry's Id in "revisesSuggestionId" and say why in the finding; otherwise null.`,
-              ]
-            : []),
-        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<short>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>","revisesSuggestionId":"<Id or null>"}]}`,
+        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<short>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>"}]}`,
     ].join('\n');
 }
 

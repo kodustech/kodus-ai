@@ -111,7 +111,6 @@ import {
 } from '@libs/llm/error-classifier';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
 import { LLM } from '@libs/llm/llm';
-import { applyRevisionLinks } from '@libs/code-review/infrastructure/agents/engine/revision-link';
 import {
     normalizeEnvelope,
     LLM_ENVELOPE_TAG,
@@ -1477,11 +1476,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
                 s.suggestionContent = content;
             }
-
-            // #2039/#2020: a finding that revises, reverses or exists because
-            // of an earlier Kody suggestion on this PR says so, in a line the
-            // formatter never sees (same reason as the rule link above).
-            applyRevisionLinks(deduped, context.previousDecisions);
 
             // Separate PR-level kody rules (no anchor) from file-level suggestions.
             // PR-level suggestions go to validSuggestionsByPR → CreatePrLevelCommentsStage.

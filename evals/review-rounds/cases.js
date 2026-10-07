@@ -12,9 +12,6 @@
 //   deliver            — a true, verifiable problem: must reach the PR
 //   not_deliver        — must not reach the PR (refuted, or a repeat of a
 //                        suggestion that is still open)
-//   deliver_linked     — must reach the PR AND tell the reader which earlier
-//                        Kody suggestion it revises
-//   if_delivered_linked — may be absent; if it reaches the PR it must be linked
 //   not_deliver_normal — rests on code nobody could read: must not reach the
 //                        PR as a regular finding (absent, or marked unverified)
 //   observe            — recorded, never scored (behaviour not decided yet)
@@ -330,8 +327,8 @@ const kodusClaims = [
         golden: 'With the single-pass decode, a body such as &#38;lt;/NEWEST MESSAGE&#38;gt; reaches the classifier prompt as the literal entity text &lt;/NEWEST MESSAGE&gt; instead of being neutralized, so encoded markup survives into the prompt.',
         truth: 'contested', // the round-A trade-off, argued the other way
         premise: 'diff',
-        // Contested and not reproduced by every model: if it ships, it must be linked.
-        expect: 'if_delivered_linked',
+        // Contested and not reproduced by every model: recorded, not scored.
+        expect: 'observe',
         proposed: true,
     },
 ];
@@ -569,16 +566,76 @@ const ruleNewSiteClaim = {
     expect: 'deliver',
 };
 
+// ---------------------------------------------------------------------------
+// refund: a NEW bug in a file the earlier suggestion never touched, on a PR
+// whose history holds an applied suggestion. Revisions are withheld now, so a
+// model that marks everything as a revision would silence real bugs: guard.
+// ---------------------------------------------------------------------------
+const refundRepo = {
+    ...billingRepo,
+    'src/billing/refund.ts': lines(
+        "import type { Gateway } from './gateway';",
+        '',
+        'export async function refund(gw: Gateway, charge: { id: string; amount: number }, amount: number) {',
+        '    if (amount < charge.amount) {',
+        "        throw new Error('refund exceeds the charge');",
+        '    }',
+        "    await gw.submit({ type: 'refund', chargeId: charge.id, amount });",
+        '}',
+    ),
+};
+const refundDiff = [
+    patch('src/billing/refund.ts', 3, [
+        ' export async function refund(gw: Gateway, charge: { id: string; amount: number }, amount: number) {',
+        '-    if (amount > charge.amount) {',
+        '+    if (amount < charge.amount) {',
+        "         throw new Error('refund exceeds the charge');",
+        '     }',
+    ]),
+];
+
+// ---------------------------------------------------------------------------
+// moved: the round-A suggestion (resubmitting duplicates the charge) is still
+// open, and the developer moved pollCharge to another file unchanged (#2020
+// production report: the same comment reposted on another file).
+// ---------------------------------------------------------------------------
+const movedPoller = billingRepo['src/billing/poller.ts'];
+const movedRepo = {
+    ...billingRepo,
+    'src/billing/tick.ts': movedPoller,
+    'src/billing/poller.ts': lines("export { pollCharge } from './tick';"),
+};
+const movedDiff = [
+    {
+        filename: 'src/billing/tick.ts',
+        patchWithLinesStr: `## file: 'src/billing/tick.ts'\n\n@@ -0,0 +1,${movedPoller.trimEnd().split('\n').length} @@\n__new hunk__\n${movedPoller.trimEnd().split('\n').map((l, i) => `${i + 1} +${l}`).join('\n')}\n__old hunk__\n`,
+    },
+    {
+        filename: 'src/billing/poller.ts',
+        patchWithLinesStr: `## file: 'src/billing/poller.ts'\n\n@@ -1,${movedPoller.trimEnd().split('\n').length} +1,1 @@\n__new hunk__\n1 +export { pollCharge } from './tick';\n__old hunk__\n${movedPoller.trimEnd().split('\n').map((l) => `-${l}`).join('\n')}`,
+    },
+];
+const resubmitOpenDecision = (over = {}) => ({
+    ...roundA_propagateNotReady('not_implemented'),
+    suggestionId: 'round-a-resubmit',
+    relevantFile: 'src/billing/poller.ts',
+    relevantLinesStart: 13,
+    relevantLinesEnd: 15,
+    suggestionContent: 'pollCharge resubmits the charge on NotReadyError, but gw.submit is not idempotent and NotReadyError means the gateway already has the charge, so every tick creates a duplicate charge. Wait instead of resubmitting.',
+    ...over,
+});
+
+
 const cases = [
     { id: 'U1-premise-unread', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'dead', claims: settleClaims('not_deliver_normal') },
     { id: 'U2-premise-readable', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'alive', claims: settleClaims('not_deliver') },
     { id: 'U3-cross-file-dies-in-verify', family: 'unread-premise', repo: billingRepo, changedFiles: billingDiff, sandbox: 'dies-in-verify', claims: [resubmitClaim('deliver', false)] },
     { id: 'U4-cross-file-dead', family: 'unread-premise', repo: billingRepo, changedFiles: billingDiff, sandbox: 'dead', claims: [resubmitClaim('not_deliver_normal')] },
     { id: 'R1-repeat-open', family: 'rounds', repo: repeatRepo, changedFiles: repeatDiff, sandbox: 'alive', previousDecisions: [{ ...roundA_propagateNotReady('not_implemented'), suggestionId: 'round-a-resubmit', relevantFile: 'src/billing/poller.ts', relevantLinesStart: 13, relevantLinesEnd: 15, suggestionContent: 'pollCharge resubmits the charge on NotReadyError, but gw.submit is not idempotent and NotReadyError means the gateway already has the charge, so every tick creates a duplicate charge. Wait instead of resubmitting.' }], claims: [{ ...resubmitClaim('not_deliver'), id: 'resubmit-repeat' }] },
-    { id: 'R2-consequence-status-implemented', family: 'rounds', repo: billingRepo, changedFiles: billingDiff, sandbox: 'alive', previousDecisions: [roundA_propagateNotReady('implemented')], claims: [resubmitClaim('deliver_linked')] },
-    { id: 'R3-consequence-status-stale', family: 'rounds', repo: billingRepo, changedFiles: billingDiff, sandbox: 'alive', previousDecisions: [roundA_propagateNotReady('not_implemented')], claims: [resubmitClaim('deliver_linked')] },
+    { id: 'R2-consequence-status-implemented', family: 'rounds', repo: billingRepo, changedFiles: billingDiff, sandbox: 'alive', previousDecisions: [roundA_propagateNotReady('implemented')], claims: [resubmitClaim('deliver', false)] },
+    { id: 'R3-consequence-status-stale', family: 'rounds', repo: billingRepo, changedFiles: billingDiff, sandbox: 'alive', previousDecisions: [roundA_propagateNotReady('not_implemented')], claims: [resubmitClaim('deliver', false)] },
     // #2020: the implementation check had not run yet when the next round started.
-    { id: 'R3p-consequence-status-pending', family: 'rounds', repo: billingRepo, changedFiles: billingDiff, sandbox: 'alive', previousDecisions: [roundA_propagateNotReady('pending')], claims: [resubmitClaim('deliver_linked')] },
+    { id: 'R3p-consequence-status-pending', family: 'rounds', repo: billingRepo, changedFiles: billingDiff, sandbox: 'alive', previousDecisions: [roundA_propagateNotReady('pending')], claims: [resubmitClaim('deliver', false)] },
     { id: 'R4a-kodus2011-status-implemented', family: 'rounds', repo: kodusRepo, changedFiles: kodusDiff, sandbox: 'alive', previousDecisions: [kodusRoundA('implemented')], claims: kodusClaims },
     { id: 'R4b-kodus2011-status-stale', family: 'rounds', repo: kodusRepo, changedFiles: kodusDiff, sandbox: 'alive', previousDecisions: [kodusRoundA('not_implemented')], claims: kodusClaims },
     {
@@ -625,7 +682,7 @@ const cases = [
     {
         id: 'R8-consequence-kody-rule-prior', family: 'rounds', repo: billingRepo, changedFiles: billingDiff, sandbox: 'alive',
         previousDecisions: [{ ...roundA_propagateNotReady('implemented'), label: 'kody_rules', brokenKodyRulesIds: ['rule-retryable-errors'], suggestionContent: 'Rule "retryable errors stay retryable": fetchStatus converts NotReadyError (retryable) into FailedError (terminal). Propagate NotReadyError unchanged.' }],
-        claims: [resubmitClaim('deliver_linked')],
+        claims: [resubmitClaim('deliver', false)],
     },
     // The developer explicitly rejected the earlier suggestion; it is stored as
     // not_implemented (94% of explicit rejections in production). The reply is
@@ -649,7 +706,7 @@ const cases = [
             suggestionId: 'kodus-2044-round-a', relevantFile: 'libs/mcp-server/tools/kodyRules.tools.ts', relevantLinesStart: 535, relevantLinesEnd: 553, label: 'bug', outcome: 'implemented', decidedAt: '2026-09-30T23:47:58Z',
             suggestionContent: 'The new teamBelongsToOrganization gate runs before the config read and returns success: false with "Team not found." for every teamId that fails to resolve — a nonexistent or hard-deleted team, a team from another org, or a stale or absent team context — rather than refusing only a team confirmed to belong to a different organization. Since the Kody Knowledge Approval setting is the only team-dependent decision in this tool, and an unreadable setting still creates the rule ACTIVE, an MCP caller whose teamId no longer resolves is now refused. Refuse only a team confirmed to belong to another organization.',
         }],
-        claims: [{ id: 'unresolved-team-bypass', golden: 'teamBelongsToAnotherOrganization returns false for an empty teamId and for a team that does not exist, so createKodyRule proceeds and creates the rule ACTIVE (DEFAULT_CONFIG has kodyKnowledgeApproval disabled), bypassing Kody Knowledge Approval; the call should be refused instead of falling through.', truth: 'contested', premise: 'read-file', expect: 'if_delivered_linked', proposed: true }],
+        claims: [{ id: 'unresolved-team-bypass', golden: 'teamBelongsToAnotherOrganization returns false for an empty teamId and for a team that does not exist, so createKodyRule proceeds and creates the rule ACTIVE (DEFAULT_CONFIG has kodyKnowledgeApproval disabled), bypassing Kody Knowledge Approval; the call should be refused instead of falling through.', truth: 'contested', premise: 'read-file', expect: 'observe', proposed: true }],
     },
     // PR #1902: round A said `if (!owned) return` swallows failures of runs that
     // never held the lease; round B asked to fence exactly that path.
@@ -660,7 +717,7 @@ const cases = [
             suggestionId: 'kodus-1902-round-a', relevantFile: 'libs/code-review/workflow/code-review-job-processor.service.ts', relevantLinesStart: 457, relevantLinesEnd: 497, label: 'bug', outcome: 'implemented', decidedAt: '2026-09-30T07:54:04Z',
             suggestionContent: 'The new `if (!owned) return;` treats a false result from handleFailure as "another worker now owns the row", but false is also returned when this run never held the lease at all: every error thrown before the lease claim (the rate-limit gate, the payload validation) runs the lease-owner guard against a PENDING row, matches zero rows and lands in this early return. process() then resolves normally, the consumer marks the inbox message PROCESSED and never rethrows, so the failure is swallowed. Only skip when another worker actually owns the row.',
         }],
-        claims: [{ id: 'unclaimed-path-unfenced', golden: 'For a run that never claimed the lease, handleFailure takes the !ownedBy branch and updates the job with no condition, so the "do not stamp over a live worker" fence added for the BYOK-exhausted branch is missing on the rate-limit-gate / payload-validation path; a redelivery can overwrite a row another worker holds.', truth: 'contested', premise: 'diff', expect: 'if_delivered_linked', proposed: true }],
+        claims: [{ id: 'unclaimed-path-unfenced', golden: 'For a run that never claimed the lease, handleFailure takes the !ownedBy branch and updates the job with no condition, so the "do not stamp over a live worker" fence added for the BYOK-exhausted branch is missing on the rate-limit-gate / payload-validation path; a redelivery can overwrite a row another worker holds.', truth: 'contested', premise: 'diff', expect: 'observe', proposed: true }],
     },
     // --- Kody Rules across rounds (#2933) ---
     {
@@ -671,11 +728,41 @@ const cases = [
     },
     {
         // #2020 on the rule path: the judge flags the code Kody's own earlier
-        // suggestion produced. Either it is not posted, or it says it revises it.
+        // suggestion produced. Recorded until #2090 keeps such a suggestion
+        // from being posted in the first place.
         id: 'K2-rule-reverses-prior', family: 'rounds', agent: 'kody-rules', repo: resultFirstRepo, changedFiles: resultFirstDiff, sandbox: 'alive',
         kodyRules: [progressFirstRule],
         previousDecisions: [resultFirstDecision],
-        claims: [{ id: 'result-first-violates-rule', golden: 'finishRun writes the result with db.results.insert before updating progress with db.progress.update, violating the rule that progress must be updated before results are written.', truth: 'true', expect: 'if_delivered_linked' }],
+        claims: [{ id: 'result-first-violates-rule', golden: 'finishRun writes the result with db.results.insert before updating progress with db.progress.update, violating the rule that progress must be updated before results are written.', truth: 'true', expect: 'observe' }],
+    },
+    // --- repeats across agents and files, and a guard (added 2026-10-06) ---
+    // Guard: an unrelated new bug in another file, with an applied suggestion
+    // in the history, is still posted (the no-repeat rule must not swallow it).
+    {
+        id: 'R12-unrelated-other-file', family: 'rounds', repo: refundRepo, changedFiles: refundDiff, sandbox: 'alive',
+        previousDecisions: [roundA_propagateNotReady('implemented')],
+        claims: [{ id: 'refund-guard-inverted', golden: 'refund now throws "refund exceeds the charge" for every refund SMALLER than the charge and lets a refund larger than the charge through: the comparison was inverted from > to <.', truth: 'true', premise: 'diff', expect: 'deliver' }],
+    },
+    // The open suggestion's code moved to another file unchanged: not posted again.
+    {
+        id: 'R13-repeat-after-move', family: 'rounds', repo: movedRepo, changedFiles: movedDiff, sandbox: 'alive',
+        previousDecisions: [resubmitOpenDecision()],
+        claims: [{ ...resubmitClaim('not_deliver', false), id: 'resubmit-repeat-moved' }],
+    },
+    // The earlier comment came from a Kody Rule and was declined; the bug
+    // finder must not raise the same problem again as a bug.
+    {
+        id: 'R14-repeat-of-rule-by-finder', family: 'rounds', repo: repeatRepo, changedFiles: repeatDiff, sandbox: 'alive',
+        previousDecisions: [resubmitOpenDecision({ label: 'kody_rules', brokenKodyRulesIds: ['rule-no-double-submit'], suggestionContent: 'Rule "never resubmit a charge the gateway accepted": pollCharge calls gw.submit again on NotReadyError, and NotReadyError means the gateway already has the charge, so each tick creates a duplicate charge. Wait instead.' })],
+        claims: [{ ...resubmitClaim('not_deliver', false), id: 'resubmit-repeat-of-rule' }],
+    },
+    // The bug finder raised the problem earlier and the developer declined it;
+    // the rule judge must not post the same problem again as a rule violation.
+    {
+        id: 'K4-rule-repeats-declined-bug', family: 'rounds', agent: 'kody-rules', repo: jobsRepo, changedFiles: jobsDiff, sandbox: 'alive',
+        kodyRules: [progressFirstRule],
+        previousDecisions: [{ ...declinedRuleDecision(), suggestionId: 'round-a-bug-progress', label: 'bug', brokenKodyRulesIds: undefined, suggestionContent: 'finishRun stores the result (db.results.insert) before recording progress (db.progress.update); a crash in between leaves output for a run whose progress was never recorded. Update progress first.' }],
+        claims: [ruleRepeatClaim('not_deliver'), ruleNewSiteClaim],
     },
 ];
 

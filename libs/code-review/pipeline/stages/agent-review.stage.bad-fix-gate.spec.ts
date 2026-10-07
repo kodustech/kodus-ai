@@ -117,13 +117,15 @@ afterEach(() => {
 });
 
 describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
-    it('adds the revision reference after formatting to both the comment and the correction prompt', async () => {
+    it('posts a finding on a PR with history as written, with no reference to an earlier suggestion', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
+            // As a model on the old contract would still send it.
             happyEnvelope([
                 sugg({
+                    suggestionContent: 'Formatted finding.',
                     revisesSuggestionId: 'prior-1',
-                    llmPrompt: 'Raw finding.',
+                    llmPrompt: 'Formatted finding.',
                 }),
             ]),
         );
@@ -150,11 +152,8 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
             }),
         );
         const [published] = analyzedSuggestions(result);
-        expect(published.suggestionContent).toContain(
-            'Revises an earlier Kody suggestion',
-        );
-        expect(published.suggestionContent).toContain('Formatted finding.');
-        expect(published.llmPrompt).toBe(published.suggestionContent);
+        expect(published.suggestionContent).toBe('Formatted finding.');
+        expect(published.llmPrompt).not.toContain('Revises an earlier');
     });
 
     it('assigns distinct suggestion IDs to PR-level findings of the same rule across rounds', async () => {

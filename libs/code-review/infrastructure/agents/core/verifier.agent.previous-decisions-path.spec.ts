@@ -106,15 +106,7 @@ describe('#2020 — previous decisions reach the verifier whatever spelling the 
     });
 });
 
-describe('revision history beyond the anchor file', () => {
-    it('includes the named earlier suggestion when its consequence is in a caller', async () => {
-        expect(
-            await promptFor('src/caller.ts', {
-                revisesSuggestionId: 'round-a',
-            }),
-        ).toContain('Id: round-a');
-    });
-
+describe('history beyond the anchor file', () => {
     it('includes PR-level decisions for a file-anchored candidate', async () => {
         expect(
             await promptFor('src/caller.ts', {}, [
@@ -123,7 +115,7 @@ describe('revision history beyond the anchor file', () => {
         ).toContain('Id: round-a');
     });
 
-    it('provides other-file history even without a revision id', async () => {
+    it('provides other-file history', async () => {
         expect(await promptFor('src/caller.ts')).toContain('Id: round-a');
     });
 });

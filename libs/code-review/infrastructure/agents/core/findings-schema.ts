@@ -13,9 +13,6 @@ const logger = createLogger('FindingsSchema');
 
 /** Schema for structured output */
 const suggestionSchema = z.object({
-    // Id of an earlier Kody suggestion on this PR that this finding revises,
-    // reverses, or exists because of (#2039/#2020) — PreviousDecision Id.
-    revisesSuggestionId: z.string().optional(),
     relevantFile: z.string(),
     language: z.string().optional(),
     label: z.enum(['bug', 'security', 'performance']).optional(),
