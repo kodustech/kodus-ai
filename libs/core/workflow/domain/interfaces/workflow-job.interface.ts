@@ -22,6 +22,13 @@ export interface IWorkflowJob {
     startedAt?: Date;
     completedAt?: Date;
     currentStage?: string;
+    // Lease on job ownership (issue #1830): the worker processing the job
+    // renews `leaseExpiresAt` on a ~30s cadence and stamps `leaseOwner`. The
+    // stale-job reaper reclaims PROCESSING jobs by an EXPIRED lease (or, for
+    // pre-lease rows, by age), which detects a dead worker in ~90s instead of
+    // waiting out the 180-min in-process timeout that dies with the process.
+    leaseOwner?: string;
+    leaseExpiresAt?: Date;
     metadata?: Record<string, unknown>;
     waitingForEvent?: {
         eventType: string; // e.g., 'ast.task.completed'
