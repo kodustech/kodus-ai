@@ -92,6 +92,7 @@ export interface ICommentManagerService {
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
         platformType?: PlatformType,
         onPromptReplyError?: (error: Error) => void,
+        reviewedCommit?: string,
     ): Promise<{
         lastAnalyzedCommit: any;
         commits: any[];
