@@ -282,8 +282,10 @@ const ModelPickerPopover = ({
                         // (the label is now derived, so the id no longer matches
                         // the visible text on its own).
                         const q = search.toLowerCase();
-                        return repository.name.toLowerCase().includes(q) ||
-                            repository.id.toLowerCase().includes(q)
+                        return (repository.name ?? "")
+                            .toLowerCase()
+                            .includes(q) ||
+                            (repository.id ?? "").toLowerCase().includes(q)
                             ? 1
                             : 0;
                     }}>
