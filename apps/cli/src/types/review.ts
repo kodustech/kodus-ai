@@ -48,6 +48,8 @@ export interface ApiFileSuggestion {
     filePath?: string;
     language?: string;
     suggestionContent: string;
+    /** The whole explanation; suggestionContent is the short body shown on the PR. */
+    fullExplanation?: string;
     existingCode?: string;
     improvedCode?: string;
     oneSentenceSummary?: string;
@@ -62,6 +64,7 @@ export interface ApiFileSuggestion {
 export interface ApiPrLevelSuggestion {
     id: string;
     suggestionContent: string;
+    fullExplanation?: string;
     oneSentenceSummary?: string;
     label?: string;
     severity?: ApiSeverity;

@@ -1,7 +1,8 @@
 {
     "reviewComment": {
         "talkToKody": "Kody에게 @kody를 언급하여 이야기하세요",
-        "feedback": "이 제안이 도움이 되었나요? 👍 또는 👎로 반응하여 Kody가 이 상호작용에서 학습할 수 있도록 도와주세요."
+        "feedback": "이 제안이 도움이 되었나요? 👍 또는 👎로 반응하여 Kody가 이 상호작용에서 학습할 수 있도록 도와주세요.",
+        "feedbackReply": "이 제안이 도움이 되었나요? 👍 또는 👎로 답글을 달아 Kody가 이 상호작용에서 학습할 수 있도록 도와주세요."
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## 코드 리뷰 완료! 🔥\n\n현재 설정을 기반으로 코드 리뷰가 성공적으로 완료되었습니다.\n\n",

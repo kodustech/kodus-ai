@@ -13,6 +13,7 @@ import type {
     AgentRunner,
     AgentSpec,
 } from '@libs/agent-harness/domain/contracts/agent.contract';
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import type { Compressor } from '@libs/agent-harness/domain/contracts/compression.contract';
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
 import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
@@ -109,7 +110,10 @@ const SUBMIT_RESULT_SCHEMA: JSONSchema = {
                     suggestionContent: { type: 'string' },
                     existingCode: { type: 'string' },
                     improvedCode: { type: 'string' },
-                    oneSentenceSummary: { type: 'string' },
+                    oneSentenceSummary: {
+                        type: 'string',
+                        description: TITLE_PROMPT_SPEC,
+                    },
                     relevantLinesStart: { type: 'number' },
                     relevantLinesEnd: { type: 'number' },
                     severity: {
@@ -124,6 +128,7 @@ const SUBMIT_RESULT_SCHEMA: JSONSchema = {
                     'suggestionContent',
                     'existingCode',
                     'improvedCode',
+                    'oneSentenceSummary',
                 ],
             },
         },

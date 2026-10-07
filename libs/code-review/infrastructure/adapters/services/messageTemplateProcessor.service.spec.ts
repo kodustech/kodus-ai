@@ -1,3 +1,4 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { MessageTemplateProcessor } from './messageTemplateProcessor.service';
 
 describe('MessageTemplateProcessor', () => {
@@ -214,6 +215,57 @@ describe('MessageTemplateProcessor', () => {
 
         it('returns empty for an empty comment list', () => {
             expect(processor.getConsolidatedLLMPromptBody([])).toBe('');
+        });
+
+        describe('size budget', () => {
+            const many = (count: number, promptChars: number) =>
+                Array.from({ length: count }, (_, i) =>
+                    makeLineComment(
+                        {
+                            llmPrompt: `Fix ${i}: ${'x'.repeat(promptChars)}`,
+                            improvedCode: 'const y = 1;',
+                        },
+                        { path: `src/f${i}.ts`, line: i + 1 },
+                    ),
+                );
+
+            it('keeps every fix when the block fits', () => {
+                const body = processor.getConsolidatedLLMPromptBody(
+                    many(3, 100),
+                    PlatformType.GITHUB,
+                );
+
+                expect(body).toContain('[3/3]');
+                expect(body).not.toContain('more fixes are not included');
+            });
+
+            it('drops whole fixes from the end to stay under the GitHub comment limit, and says so', () => {
+                const body = processor.getConsolidatedLLMPromptBody(
+                    many(40, 3000),
+                    PlatformType.GITHUB,
+                );
+
+                expect(body.length).toBeLessThan(65_536 * 0.8);
+                expect(body).toMatch(/\d+ more fixes are not included here/);
+                expect(body).toContain('src/f0.ts');
+                expect(body).not.toContain('src/f39.ts');
+                // The fence still closes: the block ends with the fence and </details>.
+                expect(body.trimEnd().endsWith('</details>')).toBe(true);
+            });
+
+            it('uses a smaller budget on Bitbucket', () => {
+                const github = processor.getConsolidatedLLMPromptBody(
+                    many(40, 3000),
+                    PlatformType.GITHUB,
+                );
+                const bitbucket = processor.getConsolidatedLLMPromptBody(
+                    many(40, 3000),
+                    PlatformType.BITBUCKET,
+                );
+
+                expect(bitbucket.length).toBeLessThan(github.length);
+                expect(bitbucket.length).toBeLessThan(32_768);
+            });
         });
 
         it('returns empty when no comment carries an llmPrompt', () => {

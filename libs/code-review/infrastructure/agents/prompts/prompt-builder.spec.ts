@@ -11,6 +11,7 @@ import {
     formatCommits,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import { currentDefaultWritingGuidelines } from '@libs/common/utils/writing-guidelines';
 
 const meta: PromptAgentMeta = {
     identity: {
@@ -59,6 +60,39 @@ describe('buildSystemPrompt', () => {
         );
         expect(sys).toContain('mode="self-contained"');
         expect(sys).toContain('you cannot see callers');
+    });
+});
+
+describe('writing guidelines', () => {
+    it('replaces a saved copy of an old default with the current default', () => {
+        const sys = buildSystemPrompt(
+            baseInput({
+                v2PromptOverrides: {
+                    generation: {
+                        main: 'Detailed and verifiable issue description',
+                    },
+                },
+            }),
+            meta,
+        );
+
+        expect(sys).toContain(
+            `## Writing Guidelines\n${currentDefaultWritingGuidelines()}`,
+        );
+        expect(sys).not.toContain('Detailed and verifiable issue description');
+    });
+
+    it('keeps a team-written text as is', () => {
+        const sys = buildSystemPrompt(
+            baseInput({
+                v2PromptOverrides: {
+                    generation: { main: 'Write like a mentor.' },
+                },
+            }),
+            meta,
+        );
+
+        expect(sys).toContain('## Writing Guidelines\nWrite like a mentor.');
     });
 });
 

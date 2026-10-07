@@ -201,6 +201,8 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     'files.suggestions.existingCode': 0,
                     'files.suggestions.improvedCode': 0,
                     'files.suggestions.suggestionContent': 0,
+                    'files.suggestions.fullExplanation': 0,
+                    'files.suggestions.llmPrompt': 0,
                     'commits': 0,
                     'prLevelSuggestions': 0,
                 },

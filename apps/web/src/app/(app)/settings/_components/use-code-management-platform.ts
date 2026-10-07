@@ -50,19 +50,3 @@ export function useShouldHideHiddenComments(): boolean {
     const platforms = useCodeManagementPlatforms();
     return platforms.size > 0 && !platforms.has(PlatformType.GITHUB);
 }
-
-/**
- * Returns true when the "Enable LLM Prompt" toggle should be hidden.
- * Hidden when ALL connected platforms are Bitbucket (the feature is not
- * supported there).  For mixed-platform teams the setting is shown
- * because it may apply to non-Bitbucket repositories.
- */
-export function useShouldHideLLMPrompt(): boolean {
-    const platforms = useCodeManagementPlatforms();
-
-    // All connected platforms are Bitbucket → feature unsupported everywhere.
-    return platforms.size > 0 && !platforms.has(PlatformType.GITHUB)
-        && !platforms.has(PlatformType.GITLAB)
-        && !platforms.has(PlatformType.AZURE_REPOS)
-        && !platforms.has(PlatformType.FORGEJO);
-}

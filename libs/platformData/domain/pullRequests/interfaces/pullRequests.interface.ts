@@ -113,6 +113,7 @@ export interface ISuggestion {
     existingCode: string;
     improvedCode: string;
     oneSentenceSummary: string;
+    fullExplanation?: string;
     relevantLinesStart: number;
     relevantLinesEnd: number;
     label: string;
@@ -225,6 +226,7 @@ export interface IPullRequestUser {
 export interface ISuggestionByPR {
     id: string;
     suggestionContent: string;
+    fullExplanation?: string;
     oneSentenceSummary: string;
     label: LabelType;
     severity?: SeverityLevel;

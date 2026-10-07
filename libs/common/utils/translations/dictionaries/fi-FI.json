@@ -1,7 +1,8 @@
 {
     "reviewComment": {
         "talkToKody": "Keskustele Kodyn kanssa mainitsemalla @kody",
-        "feedback": "Oliko tämä ehdotus hyödyllinen? Reagoi 👍 tai 👎 auttaaksesi Kodya oppimaan tästä vuorovaikutuksesta."
+        "feedback": "Oliko tämä ehdotus hyödyllinen? Reagoi 👍 tai 👎 auttaaksesi Kodya oppimaan tästä vuorovaikutuksesta.",
+        "feedbackReply": "Oliko tämä ehdotus hyödyllinen? Vastaa 👍 tai 👎 auttaaksesi Kodya oppimaan tästä vuorovaikutuksesta."
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Koodikatselmointi valmis! 🔥\n\nKoodikatselmointi on onnistuneesti suoritettu nykyisten asetustesi perusteella.\n\n",

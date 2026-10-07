@@ -188,8 +188,20 @@ for (const entry of manifest.prs) {
       // Skip suggestions discarded by the verifier (safeguard) — these are confirmed FPs
       if (s.priorityStatus === 'discarded-by-safeguard') continue;
       if (!shouldIncludeInBenchmarkEvaluation(s)) continue;
+      // The judge reads what the finding says: its title and full
+      // explanation. BENCHMARK_JUDGE_INPUT=body judges the short comment body
+      // instead, cut at 500 chars, as runs before the title existed did;
+      // BENCHMARK_JUDGE_INPUT=shown judges the title and body a reader sees.
+      const judgedText = process.env.BENCHMARK_JUDGE_INPUT === 'body'
+        ? (s.suggestionContent || '').substring(0, 500)
+        : process.env.BENCHMARK_JUDGE_INPUT === 'shown'
+        ? [s.oneSentenceSummary, s.suggestionContent].filter(Boolean).join('\n\n').substring(0, 600)
+        : [s.oneSentenceSummary, s.fullExplanation || s.suggestionContent]
+            .filter(Boolean)
+            .join('\n\n')
+            .substring(0, 1500);
       const entry2 = {
-        comment: (s.suggestionContent || '').substring(0, 500),
+        comment: judgedText,
         location: (s.relevantFile || file.filename) + ':' + (s.relevantLinesStart || 'general'),
         severity: s.severity || 'unknown',
         label: s.label || 'unknown',
@@ -252,16 +264,19 @@ if [ "$EXTRACT_ONLY" = true ]; then
 fi
 
 # ── Judge with Sonnet ────────────────────────────────────────────
-if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+if [ -n "${JUDGE_BASE_URL:-}" ]; then
+  echo ""
+  echo "▸ Judging with ${JUDGE_MODEL:-?} via ${JUDGE_BASE_URL} (single severity pass)..."
+elif [ -z "${ANTHROPIC_API_KEY:-}" ]; then
   echo ""
   echo "  ⚠ ANTHROPIC_API_KEY not set — skipping judge"
   echo "  Set it in .env and re-run"
   exit 0
+else
+  echo ""
+  echo "▸ Judging with Sonnet (single severity pass)..."
+  echo "  Using ANTHROPIC_API_KEY from environment"
 fi
-
-echo ""
-echo "▸ Judging with Sonnet (single severity pass)..."
-echo "  Key: ${ANTHROPIC_API_KEY:0:15}... (len=${#ANTHROPIC_API_KEY})"
 
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" node "$SCRIPT_DIR/judge-sonnet.js" \
   "$RESULTS_DIR/golden.json" \

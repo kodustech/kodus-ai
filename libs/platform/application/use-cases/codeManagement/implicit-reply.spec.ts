@@ -286,3 +286,47 @@ describe('reply thread rendering', () => {
         expect(user.match(/<\/NEWEST MESSAGE>/g)).toHaveLength(1);
     });
 });
+
+describe('implicitReplyGate — Bitbucket prompt reply', () => {
+    const { implicitReplyGate } = jest.requireActual('./implicit-reply');
+    const kody = (id: number, body = 'An answer `kody|code-review`'): ThreadMessage => ({
+        id,
+        author: 'Kody',
+        isKody: true,
+        isBot: true,
+        body,
+    });
+    const human = (id: number): ThreadMessage => ({
+        id,
+        author: 'alice',
+        isKody: false,
+        isBot: false,
+        body: 'and this?',
+    });
+    const promptReply = kody(
+        2,
+        '`kody|code-review` **Prompt for LLM**: copy into your coding agent\n\n```text\nFix it\n```',
+    );
+
+    it('does not count the prompt reply toward the thread cap', () => {
+        const answers = Array.from({ length: 9 }, (_, i) => kody(10 + i));
+
+        expect(
+            implicitReplyGate([kody(1), promptReply, ...answers, human(99)]),
+        ).toBeUndefined();
+    });
+
+    it('stays quiet when the routed message is the prompt reply itself', () => {
+        expect(implicitReplyGate([kody(1), human(5), promptReply])).toBe(
+            'kody_author',
+        );
+    });
+
+    it('still stops at the cap of real answers', () => {
+        const answers = Array.from({ length: 10 }, (_, i) => kody(10 + i));
+
+        expect(
+            implicitReplyGate([kody(1), promptReply, ...answers, human(99)]),
+        ).toBe('thread_cap');
+    });
+});

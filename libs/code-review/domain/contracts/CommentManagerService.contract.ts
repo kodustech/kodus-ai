@@ -90,6 +90,8 @@ export interface ICommentManagerService {
         language: string,
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
+        platformType?: PlatformType,
+        onPromptReplyError?: (error: Error) => void,
     ): Promise<{
         lastAnalyzedCommit: any;
         commits: any[];
@@ -114,6 +116,8 @@ export interface ICommentManagerService {
         prLevelSuggestions: ISuggestionByPR[],
         language: string,
         suggestionCopyPrompt?: boolean,
+        platformType?: PlatformType,
+        onPromptReplyError?: (error: Error) => void,
     ): Promise<{ commentResults: Array<CommentResult> }>;
 
     findLastReviewComment(

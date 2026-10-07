@@ -192,6 +192,32 @@ describe('BitbucketService — deterministic logic', () => {
             expect(result[0].reactions).toEqual({ thumbsUp: 1, thumbsDown: 0 });
         });
 
+        it("skips Kody's own replies, which carry the kody|code-review chip", async () => {
+            const result = await (service as any).countReactions({
+                comments: [
+                    {
+                        id: 'c1',
+                        body: 'finding',
+                        replies: [
+                            {
+                                user: { uuid: 'kody' },
+                                content: {
+                                    raw: '`kody|code-review` Kody answer 👍',
+                                },
+                            },
+                            {
+                                user: { uuid: 'dev' },
+                                content: { raw: '👎' },
+                            },
+                        ],
+                    },
+                ],
+                pr: buildPr(),
+            });
+
+            expect(result[0].reactions).toEqual({ thumbsUp: 0, thumbsDown: 1 });
+        });
+
         it('returns [] as a fail-safe fallback when the input throws', async () => {
             const pr = buildPr();
             // comments is not an array -> .filter throws -> catch returns [].
@@ -205,11 +231,15 @@ describe('BitbucketService — deterministic logic', () => {
     });
 
     describe('formatReviewCommentBody', () => {
-        it('renders the full body with header, content, action statement, code fence and footer', async () => {
+        const FOOTER =
+            'Was this suggestion helpful? Reply with 👍 or 👎 to help Kody learn from this interaction.\n\n```\n👍\n```\n\n```\n👎\n```';
+
+        it('renders chips, the bold title, the body, the action statement and the footer, with no code', async () => {
             const body = await service.formatReviewCommentBody({
                 suggestion: {
                     severity: 'high',
                     label: 'bug',
+                    oneSentenceSummary: 'User can be null',
                     suggestionContent: 'Fix this',
                     clusteringInformation: { actionStatement: 'Do it now' },
                     improvedCode: 'const x = 1;',
@@ -218,15 +248,14 @@ describe('BitbucketService — deterministic logic', () => {
                 organizationAndTeamData: {} as any,
             });
 
-            const expected =
-                '`kody|code-review` `bug` `severity-level|high`\n\n\n' +
-                'Fix this\n\n' +
-                'Do it now\n\n' +
-                '```typescript\nconst x = 1;\n```\n\n' +
-                'Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n\n' +
-                '```\n👍\n```\n\n```\n👎\n```';
-
-            expect(body).toBe(expected);
+            expect(body).toBe(
+                '`kody|code-review` `bug` `severity-level|high`\n\n' +
+                    '**User can be null**\n\n' +
+                    'Fix this\n\n' +
+                    'Do it now\n\n' +
+                    FOOTER,
+            );
+            expect(body).not.toContain('const x = 1;');
         });
 
         it('omits the header when includeHeader is false', async () => {
@@ -265,11 +294,7 @@ describe('BitbucketService — deterministic logic', () => {
                     '`kody|code-review` `style` `severity-level|low`',
                 ),
             ).toBe(true);
-            expect(
-                body.endsWith(
-                    'Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n\n```\n👍\n```\n\n```\n👎\n```',
-                ),
-            ).toBe(true);
+            expect(body.endsWith(FOOTER)).toBe(true);
         });
 
         it('includes only the suggestion content when other parts are absent', async () => {
@@ -299,28 +324,17 @@ describe('BitbucketService — deterministic logic', () => {
             expect(body).toBe('Content');
         });
 
-        it('lowercases the repository language for the improvedCode fence', async () => {
+        it('translates the footer into the review language', async () => {
             const body = await service.formatReviewCommentBody({
-                suggestion: { improvedCode: 'print(1)' },
-                repository: { name: 'r', language: 'PYTHON' },
+                suggestion: {},
+                repository: { name: 'r', language: 'ts' },
                 includeHeader: false,
-                includeFooter: false,
+                includeFooter: true,
+                language: 'pt-BR',
                 organizationAndTeamData: {} as any,
             });
 
-            expect(body).toBe('```python\nprint(1)\n```');
-        });
-
-        it('defaults the code fence language to javascript when repository language is missing', async () => {
-            const body = await service.formatReviewCommentBody({
-                suggestion: { improvedCode: 'var x = 1;' },
-                repository: { name: 'r' } as any,
-                includeHeader: false,
-                includeFooter: false,
-                organizationAndTeamData: {} as any,
-            });
-
-            expect(body).toBe('```javascript\nvar x = 1;\n```');
+            expect(body.startsWith('Essa sugestão foi útil? Responda com 👍 ou 👎')).toBe(true);
         });
 
         it('renders only the footer when includeFooter is true and everything else is empty', async () => {
@@ -332,9 +346,7 @@ describe('BitbucketService — deterministic logic', () => {
                 organizationAndTeamData: {} as any,
             });
 
-            expect(body).toBe(
-                'Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n\n```\n👍\n```\n\n```\n👎\n```',
-            );
+            expect(body).toBe(FOOTER);
         });
     });
 });

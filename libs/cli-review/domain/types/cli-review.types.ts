@@ -12,6 +12,7 @@ export interface CliReviewIssue {
     endLine?: number;
     severity: string;
     category?: string;
+    title?: string;
     message: string;
     suggestion?: string;
     recommendation?: string;
