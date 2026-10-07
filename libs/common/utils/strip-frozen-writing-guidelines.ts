@@ -1,6 +1,6 @@
 /**
  * Frozen matcher and transform for the StripFrozenWritingGuidelines migration
- * (2026100500000000). Kept out of the migrations folder because TypeORM loads
+ * (2026100700000000). Kept out of the migrations folder because TypeORM loads
  * every export of a migration file as a migration.
  *
  * The texts and the rule mirror `writing-guidelines.ts` as of the migration and
@@ -126,43 +126,98 @@ type Removal = { level: string; match: string };
 const isRecord = (v: unknown): v is Record<string, unknown> =>
     !!v && typeof v === 'object' && !Array.isArray(v);
 
-/** Removes a shipped generation.main from one scope's configs, pruning what it empties. */
-function stripScope(configs: unknown, level: string, removed: Removal[]): void {
-    if (!isRecord(configs)) return;
+/** The scope's stored generation.main, boxed so an absent key differs from a stored null. */
+function storedMain(configs: unknown): { value: unknown } | undefined {
+    if (!isRecord(configs)) return undefined;
     const overrides = configs.v2PromptOverrides;
-    if (!isRecord(overrides)) return;
+    if (!isRecord(overrides)) return undefined;
     const generation = overrides.generation;
-    if (!isRecord(generation) || !('main' in generation)) return;
+    if (!isRecord(generation) || !('main' in generation)) return undefined;
+    return { value: generation.main };
+}
 
-    const match = matchFrozenWritingGuidelines(generation.main);
+/** True when reviews read the value as a default: nothing stored, nothing in it, or a shipped copy. */
+function readsAsDefault(main: { value: unknown } | undefined): boolean {
+    return (
+        !main ||
+        !storedText(main.value) ||
+        matchFrozenWritingGuidelines(main.value) !== null
+    );
+}
+
+/**
+ * Removes a shipped generation.main from one scope's configs, pruning what it
+ * empties. A scope inherits the nearest value stored above it, so a copy is
+ * removed only when that inherited value also reads as a default; otherwise
+ * removing it would switch the scope to the parent's team guidelines.
+ */
+function stripScope(
+    configs: unknown,
+    level: string,
+    inherited: { value: unknown } | undefined,
+    removed: Removal[],
+    kept: Removal[],
+): void {
+    const main = storedMain(configs);
+    if (!main) return;
+    const match = matchFrozenWritingGuidelines(main.value);
     if (!match) return;
+    if (!readsAsDefault(inherited)) {
+        kept.push({ level, match });
+        return;
+    }
 
-    delete generation.main;
-    if (Object.keys(generation).length === 0) delete overrides.generation;
-    if (Object.keys(overrides).length === 0) delete configs.v2PromptOverrides;
+    const overrides = (configs as Record<string, any>).v2PromptOverrides;
+    delete overrides.generation.main;
+    if (Object.keys(overrides.generation).length === 0) {
+        delete overrides.generation;
+    }
+    if (Object.keys(overrides).length === 0) {
+        delete (configs as Record<string, unknown>).v2PromptOverrides;
+    }
     removed.push({ level, match });
 }
 
 /**
  * The config without shipped copies of the writing guidelines, at the global,
- * repository and directory scopes, and what was removed where. Does not mutate
- * its input.
+ * repository and directory scopes, and what was removed where. A copy whose
+ * scope would inherit team guidelines once removed is kept and reported, so
+ * no scope changes which guidelines are in effect. Does not mutate its input.
  */
 export function stripFrozenWritingGuidelines(configValue: unknown): {
     value: unknown;
     removed: Removal[];
+    kept: Removal[];
 } {
-    if (!isRecord(configValue)) return { value: configValue, removed: [] };
+    if (!isRecord(configValue)) {
+        return { value: configValue, removed: [], kept: [] };
+    }
     const value = JSON.parse(JSON.stringify(configValue));
     const removed: Removal[] = [];
+    const kept: Removal[] = [];
 
-    stripScope(value.configs, 'global', removed);
+    // Parents are read from the input, so the order scopes are processed in
+    // never changes the outcome.
+    const globalMain = storedMain(configValue.configs);
+    stripScope(value.configs, 'global', undefined, removed, kept);
+
+    const originals = Array.isArray(configValue.repositories)
+        ? configValue.repositories
+        : [];
     const repositories = Array.isArray(value.repositories)
         ? value.repositories
         : [];
-    for (const repository of repositories) {
-        if (!isRecord(repository)) continue;
-        stripScope(repository.configs, `repository ${repository.id}`, removed);
+    repositories.forEach((repository: unknown, r: number) => {
+        if (!isRecord(repository)) return;
+        const original = originals[r] as Record<string, unknown>;
+        const repositoryMain = storedMain(original?.configs) ?? globalMain;
+        stripScope(
+            repository.configs,
+            `repository ${repository.id}`,
+            globalMain,
+            removed,
+            kept,
+        );
         const directories = Array.isArray(repository.directories)
             ? repository.directories
             : [];
@@ -171,14 +226,16 @@ export function stripFrozenWritingGuidelines(configValue: unknown): {
             stripScope(
                 directory.configs,
                 `directory ${directory.id} in repository ${repository.id}`,
+                repositoryMain,
                 removed,
+                kept,
             );
         }
-    }
+    });
 
     return removed.length
-        ? { value, removed }
-        : { value: configValue, removed };
+        ? { value, removed, kept }
+        : { value: configValue, removed, kept };
 }
 
 /** JSON with object keys sorted, so jsonb read back in any key order compares equal. */

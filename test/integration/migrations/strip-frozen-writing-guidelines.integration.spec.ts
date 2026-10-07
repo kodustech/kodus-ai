@@ -1,5 +1,5 @@
 /**
- * INTEGRATION TEST — StripFrozenWritingGuidelines2026100500000000 against real
+ * INTEGRATION TEST — StripFrozenWritingGuidelines2026100700000000 against real
  * Postgres, through TypeORM's migration runner.
  *
  * Runs in a throwaway schema whose `parameters` table is a copy of the real
@@ -19,9 +19,12 @@ require('dotenv').config();
 import { DataSource } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { StripFrozenWritingGuidelines2026100500000000 } from '@libs/core/infrastructure/database/typeorm/migrations/2026100500000000-StripFrozenWritingGuidelines';
+import { StripFrozenWritingGuidelines2026100700000000 } from '@libs/core/infrastructure/database/typeorm/migrations/2026100700000000-StripFrozenWritingGuidelines';
 import { stripFrozenWritingGuidelines } from '@libs/common/utils/strip-frozen-writing-guidelines';
-import { matchKnownWritingGuidelines } from '@libs/common/utils/writing-guidelines';
+import {
+    matchKnownWritingGuidelines,
+    resolveWritingGuidelines,
+} from '@libs/common/utils/writing-guidelines';
 
 const PG = {
     host: process.env.TEST_PG_HOST ?? 'localhost',
@@ -50,7 +53,7 @@ const dataSource = (searchPath?: string) =>
         ...PG,
         logging: false,
         synchronize: false,
-        migrations: [StripFrozenWritingGuidelines2026100500000000],
+        migrations: [StripFrozenWritingGuidelines2026100700000000],
         migrationsTransactionMode: 'each',
         extra: {
             max: 2,
@@ -239,6 +242,36 @@ function seedRows(): Seed[] {
                 },
             ],
         });
+        // under team guidelines: at repository scope below the global ones,
+        // at directory scope below the repository's or the inherited global
+        add({
+            configs: gen('Team text at global'),
+            repositories: [
+                { id: 'r1', name: 'r1', configs: gen(main), directories: [] },
+            ],
+        });
+        add({
+            configs: {},
+            repositories: [
+                {
+                    id: 'r1',
+                    name: 'r1',
+                    configs: gen('Repository team text'),
+                    directories: [{ id: 'd1', configs: gen(main) }],
+                },
+            ],
+        });
+        add({
+            configs: gen('Team text at global'),
+            repositories: [
+                {
+                    id: 'r1',
+                    name: 'r1',
+                    configs: {},
+                    directories: [{ id: 'd1', configs: gen(main) }],
+                },
+            ],
+        });
         // next to category descriptions and another generation key
         add({
             configs: {
@@ -282,27 +315,43 @@ function seedRows(): Seed[] {
 function expectedValue(seed: Seed): unknown {
     if (seed.configKey !== 'code_review_config' || !seed.active)
         return seed.configValue;
+    const original = seed.configValue as any;
     const value = JSON.parse(JSON.stringify(seed.configValue));
-    const strip = (configs: any) => {
+    const mainOf = (configs: any) => {
+        const g = configs?.v2PromptOverrides?.generation;
+        return g && typeof g === 'object' && 'main' in g
+            ? { value: g.main }
+            : undefined;
+    };
+    // A scope reviews with the nearest value stored above it; a copy goes only
+    // when what it would then inherit reads as a default to reviews too.
+    const inheritsDefault = (inherited?: { value: unknown }) =>
+        !inherited || !resolveWritingGuidelines(inherited.value).isCustom;
+    const strip = (configs: any, inherited?: { value: unknown }) => {
         const g = configs?.v2PromptOverrides?.generation;
         if (!g || typeof g !== 'object' || !('main' in g)) return;
         if (matchKnownWritingGuidelines(g.main) === null) return;
+        if (!inheritsDefault(inherited)) return;
         delete g.main;
         if (!Object.keys(g).length) delete configs.v2PromptOverrides.generation;
         if (!Object.keys(configs.v2PromptOverrides).length)
             delete configs.v2PromptOverrides;
     };
     if (value && typeof value === 'object') {
+        const globalMain = mainOf(original?.configs);
         strip(value.configs);
-        for (const r of Array.isArray(value.repositories)
+        const repos = Array.isArray(value.repositories)
             ? value.repositories
-            : []) {
-            if (!r || typeof r !== 'object') continue;
-            strip(r.configs);
+            : [];
+        repos.forEach((r: any, i: number) => {
+            if (!r || typeof r !== 'object') return;
+            const repoMain =
+                mainOf(original.repositories[i]?.configs) ?? globalMain;
+            strip(r.configs, globalMain);
             for (const d of Array.isArray(r.directories) ? r.directories : []) {
-                if (d && typeof d === 'object') strip(d.configs);
+                if (d && typeof d === 'object') strip(d.configs, repoMain);
             }
-        }
+        });
     }
     return value;
 }
@@ -320,7 +369,7 @@ const canonical = (v: unknown): string =>
 
 // ---------------------------------------------------------------- suite
 (skipIntegration ? describe.skip : describe)(
-    'StripFrozenWritingGuidelines2026100500000000 on Postgres',
+    'StripFrozenWritingGuidelines2026100700000000 on Postgres',
     () => {
         let admin: DataSource;
         let ds: DataSource;
@@ -475,7 +524,7 @@ const canonical = (v: unknown): string =>
                 }
 
                 const [{ count }] = await ds.query(
-                    `SELECT count(*)::int AS count FROM migrations WHERE name = 'StripFrozenWritingGuidelines2026100500000000'`,
+                    `SELECT count(*)::int AS count FROM migrations WHERE name = 'StripFrozenWritingGuidelines2026100700000000'`,
                 );
                 expect(count).toBe(1);
                 expect(log).toHaveBeenCalledWith(
@@ -537,7 +586,7 @@ const canonical = (v: unknown): string =>
                     return result;
                 };
 
-                await new StripFrozenWritingGuidelines2026100500000000().up(
+                await new StripFrozenWritingGuidelines2026100700000000().up(
                     runner,
                 );
                 await runner.release();
@@ -570,6 +619,61 @@ const canonical = (v: unknown): string =>
         );
 
         itPg(
+            'no scope of any row changes which guidelines are in effect',
+            async () => {
+                const mainOf = (configs: any) => {
+                    const g = configs?.v2PromptOverrides?.generation;
+                    return g && typeof g === 'object' && 'main' in g
+                        ? { value: g.main }
+                        : undefined;
+                };
+                const effective = (value: any): string[] => {
+                    if (!value || typeof value !== 'object') return [];
+                    const resolve = (v?: { value: unknown }) =>
+                        resolveWritingGuidelines(v?.value).text;
+                    const g = mainOf(value.configs);
+                    const out = [resolve(g)];
+                    for (const r of Array.isArray(value.repositories)
+                        ? value.repositories
+                        : []) {
+                        if (!r || typeof r !== 'object') continue;
+                        const rm = mainOf(r.configs) ?? g;
+                        out.push(resolve(rm));
+                        for (const d of Array.isArray(r.directories)
+                            ? r.directories
+                            : []) {
+                            if (d && typeof d === 'object')
+                                out.push(resolve(mainOf(d.configs) ?? rm));
+                        }
+                    }
+                    return out;
+                };
+
+                await ds.runMigrations();
+                const now = await current();
+
+                let keptUnderTeam = 0;
+                for (const s of seeds) {
+                    expect({
+                        row: s.uuid,
+                        effective: effective(now.get(s.uuid)!.configValue),
+                    }).toEqual({
+                        row: s.uuid,
+                        effective: effective(s.configValue),
+                    });
+                    keptUnderTeam += stripFrozenWritingGuidelines(s.configValue)
+                        .kept.length;
+                }
+                expect(keptUnderTeam).toBeGreaterThan(20);
+                expect(log).toHaveBeenCalledWith(
+                    expect.stringContaining(
+                        `kept under team guidelines: ${keptUnderTeam}`,
+                    ),
+                );
+            },
+        );
+
+        itPg(
             'a second up() changes nothing and keeps the first backup',
             async () => {
                 await ds.runMigrations();
@@ -581,7 +685,7 @@ const canonical = (v: unknown): string =>
                 );
 
                 const runner = ds.createQueryRunner();
-                await new StripFrozenWritingGuidelines2026100500000000().up(
+                await new StripFrozenWritingGuidelines2026100700000000().up(
                     runner,
                 );
                 await runner.release();

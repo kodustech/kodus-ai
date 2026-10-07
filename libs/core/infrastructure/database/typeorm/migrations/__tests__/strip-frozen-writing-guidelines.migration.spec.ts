@@ -5,12 +5,15 @@
  * in-memory QueryRunner.
  */
 import type { QueryRunner } from 'typeorm';
-import { StripFrozenWritingGuidelines2026100500000000 } from '../2026100500000000-StripFrozenWritingGuidelines';
+import { StripFrozenWritingGuidelines2026100700000000 } from '../2026100700000000-StripFrozenWritingGuidelines';
 import {
     matchFrozenWritingGuidelines,
     stripFrozenWritingGuidelines,
 } from '@libs/common/utils/strip-frozen-writing-guidelines';
-import { matchKnownWritingGuidelines } from '@libs/common/utils/writing-guidelines';
+import {
+    matchKnownWritingGuidelines,
+    resolveWritingGuidelines,
+} from '@libs/common/utils/writing-guidelines';
 
 const CURRENT =
     'Each suggestion is shown as a title, then this text. The title already names the problem.\n- **Don\'t repeat the title**: open with why the problem matters, not what it is.\n- **Two sentences at most**: one on the impact, one on what to change.\n- **No code blocks**: the fix is shown separately; name identifiers in `inline code` only.\n- **No conversational filler**: avoid "I noticed that", "It seems like", "You should consider".\n- **Strictly technical, active voice**: "The function leaks memory", not "Memory is leaked by the function".\n';
@@ -208,6 +211,7 @@ describe('stripFrozenWritingGuidelines', () => {
         expect(stripFrozenWritingGuidelines(value)).toEqual({
             value,
             removed: [],
+            kept: [],
         });
     });
 
@@ -227,6 +231,7 @@ describe('stripFrozenWritingGuidelines', () => {
             expect(stripFrozenWritingGuidelines(value)).toEqual({
                 value,
                 removed: [],
+                kept: [],
             });
         }
     });
@@ -262,7 +267,7 @@ describe('stripFrozenWritingGuidelines', () => {
         );
     });
 
-    it('handles repository and directory levels independently of the global one', () => {
+    it('keeps a lower-scope copy whose parent has team guidelines, since removing it would switch the scope to them', () => {
         const result = stripFrozenWritingGuidelines(
             config(gen('Team text at global'), [
                 repo('r1', gen(paragraphs(D2026)), [
@@ -275,19 +280,92 @@ describe('stripFrozenWritingGuidelines', () => {
         );
         expect(result.value).toEqual(
             config(gen('Team text at global'), [
-                repo('r1', {}, [
+                repo('r1', gen(paragraphs(D2026)), [
                     dir('d1', {}),
                     dir('d2', gen('Directory team text')),
                 ]),
-                repo('r2', { automatedReviewActive: false }),
+                repo('r2', { automatedReviewActive: false, ...gen(D2025) }),
                 repo('r3'),
             ]),
         );
         expect(result.removed).toEqual([
-            { level: 'repository r1', match: 'default-2026-02' },
             { level: 'directory d1 in repository r1', match: 'preset-coach' },
+        ]);
+        expect(result.kept).toEqual([
+            { level: 'repository r1', match: 'default-2026-02' },
             { level: 'repository r2', match: 'default-2025' },
         ]);
+    });
+
+    it('removes lower-scope copies when every parent reads as a default', () => {
+        for (const globalConfigs of [{}, gen(D2025), gen(''), gen(null)]) {
+            const result = stripFrozenWritingGuidelines(
+                config(globalConfigs, [
+                    repo('r1', gen(D2025), [dir('d1', gen(COACH))]),
+                    repo('r2', {}, [dir('d2', gen(D2026))]),
+                ]),
+            );
+            expect(result.kept).toEqual([]);
+            expect(result.removed.map((r) => r.level)).toEqual(
+                expect.arrayContaining([
+                    'repository r1',
+                    'directory d1 in repository r1',
+                    'directory d2 in repository r2',
+                ]),
+            );
+        }
+    });
+
+    it('keeps a directory copy under a repository with team guidelines, or under team guidelines inherited from global', () => {
+        const result = stripFrozenWritingGuidelines(
+            config(gen('Team text at global'), [
+                repo('r1', gen('Repository team text'), [
+                    dir('d1', gen(D2025)),
+                ]),
+                repo('r2', {}, [dir('d2', gen(D2025))]),
+            ]),
+        );
+        expect(result.removed).toEqual([]);
+        expect(result.kept.map((k) => k.level)).toEqual([
+            'directory d1 in repository r1',
+            'directory d2 in repository r2',
+        ]);
+    });
+
+    it('never changes which guidelines are in effect at any scope (every combination)', () => {
+        const options: Array<[string, Record<string, unknown>]> = [
+            ['absent', {}],
+            ['empty', gen('')],
+            ['2025 copy', gen(D2025)],
+            ['2026-02 copy', gen(editorList(D2026_LINES))],
+            ['coach copy', gen(paragraphs(COACH))],
+            ['team text', gen('Our own guidelines')],
+        ];
+        const main = (configs: any) =>
+            configs?.v2PromptOverrides?.generation &&
+            'main' in configs.v2PromptOverrides.generation
+                ? { value: configs.v2PromptOverrides.generation.main }
+                : undefined;
+        // What reviews read at each scope: the nearest stored value, resolved.
+        const effective = (value: any) => {
+            const g = main(value.configs);
+            const r = main(value.repositories[0].configs) ?? g;
+            const d = main(value.repositories[0].directories[0].configs) ?? r;
+            const resolve = (v?: { value: unknown }) =>
+                resolveWritingGuidelines(v?.value).text;
+            return [resolve(g), resolve(r), resolve(d)];
+        };
+        let combinations = 0;
+        for (const [, g] of options)
+            for (const [, r] of options)
+                for (const [, d] of options) {
+                    const value = config(g, [repo('r1', r, [dir('d1', d)])]);
+                    const { value: stripped } =
+                        stripFrozenWritingGuidelines(value);
+                    expect(effective(stripped)).toEqual(effective(value));
+                    combinations++;
+                }
+        expect(combinations).toBe(216);
     });
 
     it('does not mutate its input', () => {
@@ -324,7 +402,7 @@ describe('stripFrozenWritingGuidelines', () => {
             config(gen(D2025), [repo('r1', gen(COACH))]),
         );
         const twice = stripFrozenWritingGuidelines(once.value);
-        expect(twice).toEqual({ value: once.value, removed: [] });
+        expect(twice).toEqual({ value: once.value, removed: [], kept: [] });
     });
 });
 
@@ -460,7 +538,11 @@ describe('StripFrozenWritingGuidelines migration', () => {
 
     const seed = () => [
         row('frozen-global', config(gen(editorList(D2026_LINES)))),
-        row('frozen-repo', config(gen('Team text'), [repo('r1', gen(D2025))])),
+        row('frozen-repo', config({}, [repo('r1', gen(D2025))])),
+        row(
+            'kept-under-team',
+            config(gen('Team text'), [repo('r1', gen(D2025))]),
+        ),
         row('custom', config(gen(`${D2025}.`))),
         row('no-overrides', config()),
         row('inactive', config(gen(D2025)), { active: false }),
@@ -471,7 +553,7 @@ describe('StripFrozenWritingGuidelines migration', () => {
         const { queryRunner, rows, backup } = makeQueryRunner(seed());
         const original = JSON.parse(JSON.stringify(rows));
 
-        await new StripFrozenWritingGuidelines2026100500000000().up(
+        await new StripFrozenWritingGuidelines2026100700000000().up(
             queryRunner,
         );
 
@@ -482,10 +564,14 @@ describe('StripFrozenWritingGuidelines migration', () => {
             original.map((r: Row) => [r.uuid, r.configValue]),
         );
         expect(byId['frozen-global']).toEqual(config());
-        expect(byId['frozen-repo']).toEqual(
-            config(gen('Team text'), [repo('r1')]),
-        );
-        for (const id of ['custom', 'no-overrides', 'inactive', 'other-key']) {
+        expect(byId['frozen-repo']).toEqual(config({}, [repo('r1')]));
+        for (const id of [
+            'kept-under-team',
+            'custom',
+            'no-overrides',
+            'inactive',
+            'other-key',
+        ]) {
             expect(byId[id]).toEqual(before[id]);
         }
         expect([...backup.keys()].sort()).toEqual([
@@ -496,13 +582,21 @@ describe('StripFrozenWritingGuidelines migration', () => {
             before['frozen-global'],
         );
         expect(log).toHaveBeenCalledWith(
-            expect.stringContaining('updated 2 of 4'),
+            expect.stringContaining('updated 2 of 5'),
+        );
+        expect(log).toHaveBeenCalledWith(
+            expect.stringContaining('kept under team guidelines: 1'),
+        );
+        expect(log).toHaveBeenCalledWith(
+            expect.stringMatching(
+                /row kept-under-team: kept repository r1 \(default-2025\)/,
+            ),
         );
     });
 
     it('up(): a second run changes nothing and keeps the first backup', async () => {
         const { queryRunner, rows, backup } = makeQueryRunner(seed());
-        const migration = new StripFrozenWritingGuidelines2026100500000000();
+        const migration = new StripFrozenWritingGuidelines2026100700000000();
         await migration.up(queryRunner);
         const afterFirst = JSON.stringify(rows);
         const firstBackup = JSON.stringify([...backup.entries()]);
@@ -512,7 +606,7 @@ describe('StripFrozenWritingGuidelines migration', () => {
         expect(JSON.stringify(rows)).toBe(afterFirst);
         expect(JSON.stringify([...backup.entries()])).toBe(firstBackup);
         expect(log).toHaveBeenLastCalledWith(
-            expect.stringContaining('updated 0 of 4'),
+            expect.stringContaining('updated 0 of 5'),
         );
     });
 
@@ -527,7 +621,7 @@ describe('StripFrozenWritingGuidelines migration', () => {
             );
         });
 
-        await new StripFrozenWritingGuidelines2026100500000000().up(
+        await new StripFrozenWritingGuidelines2026100700000000().up(
             queryRunner,
         );
 
@@ -539,7 +633,7 @@ describe('StripFrozenWritingGuidelines migration', () => {
         );
         expect(backup.size).toBe(0);
         expect(log).toHaveBeenLastCalledWith(
-            expect.stringContaining('updated 0 of 4'),
+            expect.stringContaining('updated 0 of 5'),
         );
         expect(log).toHaveBeenLastCalledWith(
             expect.stringContaining('2 skipped'),
@@ -549,7 +643,7 @@ describe('StripFrozenWritingGuidelines migration', () => {
     it('down(): restores every changed row exactly and drops the backup', async () => {
         const { queryRunner, rows, backup } = makeQueryRunner(seed());
         const original = JSON.parse(JSON.stringify(rows));
-        const migration = new StripFrozenWritingGuidelines2026100500000000();
+        const migration = new StripFrozenWritingGuidelines2026100700000000();
 
         await migration.up(queryRunner);
         await migration.down(queryRunner);
@@ -560,7 +654,7 @@ describe('StripFrozenWritingGuidelines migration', () => {
 
     it('down(): leaves a row alone when it changed after the migration', async () => {
         const { queryRunner, rows } = makeQueryRunner(seed());
-        const migration = new StripFrozenWritingGuidelines2026100500000000();
+        const migration = new StripFrozenWritingGuidelines2026100700000000();
         await migration.up(queryRunner);
         const edited = config(gen('Edited after the migration'));
         rows.find((r) => r.uuid === 'frozen-global')!.configValue = edited;
@@ -581,7 +675,7 @@ describe('StripFrozenWritingGuidelines migration', () => {
     it('down(): is a no-op when there is no backup table', async () => {
         const { queryRunner, rows } = makeQueryRunner(seed());
         const before = JSON.stringify(rows);
-        await new StripFrozenWritingGuidelines2026100500000000().down(
+        await new StripFrozenWritingGuidelines2026100700000000().down(
             queryRunner,
         );
         expect(JSON.stringify(rows)).toBe(before);

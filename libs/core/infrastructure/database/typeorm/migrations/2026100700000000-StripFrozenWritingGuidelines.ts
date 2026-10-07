@@ -24,13 +24,18 @@ import {
  * `strip-frozen-writing-guidelines.ts`: an install that upgrades later must
  * remove what was shipped up to now, whatever the defaults become.
  *
+ * A repository or directory inherits the nearest value stored above it, so a
+ * copy there is removed only when that inherited value also reads as a
+ * default. A copy under a parent with team guidelines stays and is logged:
+ * removing it would switch the scope to those guidelines.
+ *
  * Every changed row is copied to `parameters_writing_guidelines_backup` first;
  * down() restores the rows that still hold what up() wrote.
  */
 const BACKUP_TABLE = 'parameters_writing_guidelines_backup';
 
-export class StripFrozenWritingGuidelines2026100500000000 implements MigrationInterface {
-    name = 'StripFrozenWritingGuidelines2026100500000000';
+export class StripFrozenWritingGuidelines2026100700000000 implements MigrationInterface {
+    name = 'StripFrozenWritingGuidelines2026100700000000';
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`
@@ -53,10 +58,21 @@ export class StripFrozenWritingGuidelines2026100500000000 implements MigrationIn
         const byMatch: Record<string, number> = {};
         let updated = 0;
         let skipped = 0;
+        let keptScopes = 0;
         for (const row of rows) {
-            const { value, removed } = stripFrozenWritingGuidelines(
+            const { value, removed, kept } = stripFrozenWritingGuidelines(
                 row.configValue,
             );
+            if (kept.length) {
+                keptScopes += kept.length;
+                console.log(
+                    `[StripFrozenWritingGuidelines] row ${row.uuid}: kept ${kept
+                        .map((k) => `${k.level} (${k.match})`)
+                        .join(
+                            ', ',
+                        )}; a parent scope has team guidelines, so removing it would switch to them`,
+                );
+            }
             if (!removed.length) continue;
 
             if (
@@ -113,7 +129,7 @@ export class StripFrozenWritingGuidelines2026100500000000 implements MigrationIn
         }
 
         console.log(
-            `[StripFrozenWritingGuidelines] updated ${updated} of ${rows.length} active code_review_config rows, ${skipped} skipped; levels removed by text: ${JSON.stringify(byMatch)}; originals in "${BACKUP_TABLE}"`,
+            `[StripFrozenWritingGuidelines] updated ${updated} of ${rows.length} active code_review_config rows, ${skipped} skipped; kept under team guidelines: ${keptScopes}; levels removed by text: ${JSON.stringify(byMatch)}; originals in "${BACKUP_TABLE}"`,
         );
     }
 
