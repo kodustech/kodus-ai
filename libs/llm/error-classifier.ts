@@ -47,6 +47,13 @@ export interface ClassifiedErrorInfo {
      * and dropping theirs is what left a failed review with nothing to act on.
      */
     providerMessage?: string;
+    /**
+     * Set when a MODEL_NOT_FOUND is a routing refusal: the model exists, but
+     * the aggregator's allowed/pinned providers serve no upstream for it.
+     * Decided here, on the full error text, so every surface that words the
+     * failure (the PR comment, the dashboard banner) agrees.
+     */
+    routingRefusal?: boolean;
 }
 
 const CLASSIFICATION_KEY = Symbol('reviewErrorClassification');
@@ -130,6 +137,10 @@ export function classifyLLMError(
                 ? buildContextOverflowMessage(err, provider)
                 : buildFriendlyMessage(category, provider, lower),
         providerMessage: extractProviderMessage(err),
+        ...(category === LlmErrorCategory.MODEL_NOT_FOUND &&
+        isRoutingRefusal(lower)
+            ? { routingRefusal: true }
+            : {}),
     };
 }
 

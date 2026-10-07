@@ -426,6 +426,100 @@ describe('wrapByokModel — secret hygiene on the tpm path', () => {
     });
 });
 
+// ─── failure reporting (#1871) ────────────────────────────────────────────────
+// The reporter feeds the "your key is failing" banner, the in-app notification
+// and the email. For an AI SDK `APICallError` the `message` is a restatement of
+// the status ("Provider returned error") and the cause lives in `responseBody`,
+// so reporting `err.message` told owners nothing — and without the category the
+// banner could only guess at billing.
+describe('wrapByokModel — failure reporting', () => {
+    function failingModel(err: unknown) {
+        return {
+            specificationVersion: 'v4',
+            provider: 'test-provider',
+            modelId: 'test-model',
+            supportedUrls: {},
+            doGenerate: jest.fn(async () => {
+                throw err;
+            }),
+            doStream: jest.fn(async () => ({ stream: undefined })),
+        } as any;
+    }
+
+    function apiCallError() {
+        return Object.assign(new Error('Provider returned error'), {
+            statusCode: 429,
+            responseBody: JSON.stringify({
+                error: {
+                    message: 'Rate limit exceeded: free-models-per-day',
+                    code: 429,
+                },
+            }),
+        });
+    }
+
+    it('reports what the provider said, not the SDK restatement', async () => {
+        const reporter = jest.fn();
+        const wrapped = wrapByokModel(failingModel(apiCallError()), {
+            organizationId: 'org-1',
+            provider: 'open_router',
+            reporter,
+        });
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT } as any),
+        ).rejects.toThrow('Provider returned error');
+
+        expect(reporter).toHaveBeenCalledTimes(1);
+        const entry = reporter.mock.calls[0][0];
+        expect(entry.errorMessage).toContain(
+            'Rate limit exceeded: free-models-per-day',
+        );
+        expect(entry.category).toBe('RATE_LIMIT');
+        expect(entry.httpStatus).toBe(429);
+    });
+
+    it('falls back to the error message when the provider body says nothing', async () => {
+        const reporter = jest.fn();
+        const wrapped = wrapByokModel(
+            failingModel(new Error('socket hang up')),
+            { organizationId: 'org-1', provider: 'openai', reporter },
+        );
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT } as any),
+        ).rejects.toThrow('socket hang up');
+
+        expect(reporter.mock.calls[0][0].errorMessage).toBe('socket hang up');
+    });
+
+    it('reports a routing refusal as such, decided on the full error', async () => {
+        const reporter = jest.fn();
+        const err = Object.assign(new Error('Not Found'), {
+            statusCode: 404,
+            cause: new Error(
+                'No allowed providers are available for the selected model.',
+            ),
+        });
+        const wrapped = wrapByokModel(failingModel(err), {
+            organizationId: 'org-1',
+            provider: 'open_router',
+            reporter,
+        });
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT } as any),
+        ).rejects.toThrow('Not Found');
+
+        expect(reporter.mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                category: 'MODEL_NOT_FOUND',
+                routingRefusal: true,
+            }),
+        );
+    });
+});
+
 describe('wrapByokModel — a reasoning field the upstream refuses', () => {
     // Each layer of the retry is pinned on its own here, with a fake model whose
     // error states the body it "sent": the end-to-end suites cannot separate
