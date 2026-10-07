@@ -208,6 +208,11 @@ export interface NotificationPayloadMap {
         windowStart: string;
         windowEnd: string;
         sampleError: string;
+        /** `LlmErrorCategory` of the sample error; absent when unclassified. */
+        category?: string;
+        httpStatus?: number;
+        /** The sample error is a routing refusal (see ClassifiedErrorInfo). */
+        routingRefusal?: boolean;
     };
 
     // ── Spend limit ────────────────────────────────────────────
