@@ -11,6 +11,7 @@ import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
 import { reportExceptionToSentry } from '../config/log/sentry';
 import { QueryFailedError } from 'typeorm';
+import { isMongoQueryTimeout } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 interface ExceptionResponse {
     statusCode?: number;
@@ -48,11 +49,17 @@ export class ExceptionsFilter implements ExceptionFilter {
             (exception as { driverError?: { code?: string } }).driverError
                 ?.code === '22P02';
 
+        // A Mongo read that hit `maxTimeMS` is the database being overloaded,
+        // not a bug in the request: answer 503 so clients can retry/fallback.
+        const isMongoTimeout = isMongoQueryTimeout(exception);
+
         const status = isPgInvalidInput
             ? StatusCodes.BAD_REQUEST
-            : exception instanceof HttpException
-              ? exception.getStatus()
-              : StatusCodes.INTERNAL_SERVER_ERROR;
+            : isMongoTimeout
+              ? StatusCodes.SERVICE_UNAVAILABLE
+              : exception instanceof HttpException
+                ? exception.getStatus()
+                : StatusCodes.INTERNAL_SERVER_ERROR;
 
         const requestId = request?.requestId || 'unknown-request-id';
         const shouldReportToSentry =
@@ -80,7 +87,9 @@ export class ExceptionsFilter implements ExceptionFilter {
             exception instanceof HttpException ? exception.getResponse() : {};
         let message = isPgInvalidInput
             ? 'Invalid parameter format'
-            : 'An unexpected error occurred';
+            : isMongoTimeout
+              ? 'The database is busy, please retry shortly'
+              : 'An unexpected error occurred';
         let error_key: string | undefined;
         let code: string | undefined;
         let details: unknown | undefined;
@@ -102,7 +111,9 @@ export class ExceptionsFilter implements ExceptionFilter {
         }
 
         const error =
-            exception instanceof HttpException || isPgInvalidInput
+            exception instanceof HttpException ||
+            isPgInvalidInput ||
+            isMongoTimeout
                 ? getReasonPhrase(status)
                 : 'Internal Server Error';
 

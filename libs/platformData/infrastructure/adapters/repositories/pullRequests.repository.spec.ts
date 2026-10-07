@@ -88,6 +88,126 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
     });
 
+    describe('findPRNumbersByTitleAndOrganization (PR list title search)', () => {
+        it('matches the typed title as literal text, case-insensitive', async () => {
+            const findExec = jest.fn().mockResolvedValue([]);
+            const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
+            const lean = jest.fn().mockReturnValue({ maxTimeMS });
+            model.find = jest.fn().mockReturnValue({ lean });
+
+            await repo.findPRNumbersByTitleAndOrganization('fix(api) .*', 'org-A', [
+                'r1',
+            ]);
+
+            const [filter] = model.find.mock.calls[0];
+            expect(filter).toEqual({
+                'organizationId': 'org-A',
+                'title': { $regex: 'fix\\(api\\) \\.\\*', $options: 'i' },
+                'repository.id': { $in: ['r1'] },
+            });
+            // The escaped pattern is valid and matches only the literal text.
+            const rx = new RegExp(filter.title.$regex, 'i');
+            expect(rx.test('FIX(API) .* in billing')).toBe(true);
+            expect(rx.test('fix api anything')).toBe(false);
+        });
+    });
+
+    describe('findManyByNumbersAndRepositoryIds (PR list hydration)', () => {
+        const mockFind = (docs: any[]) => {
+            const findExec = jest.fn().mockResolvedValue(docs);
+            const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
+            const lean = jest.fn().mockReturnValue({ maxTimeMS });
+            model.find = jest.fn().mockReturnValue({ lean });
+            return { find: model.find as jest.Mock, maxTimeMS };
+        };
+
+        it('queries with bounded $in on both keys instead of an $or per pair', async () => {
+            const { find, maxTimeMS } = mockFind([]);
+
+            await repo.findManyByNumbersAndRepositoryIds(
+                [
+                    { number: 1, repositoryId: 'r1' },
+                    { number: 2, repositoryId: 'r1' },
+                    { number: 1, repositoryId: 'r2' },
+                ],
+                'org-A',
+            );
+
+            const [filter, projection] = find.mock.calls[0];
+            expect(filter).toEqual({
+                'organizationId': 'org-A',
+                'number': { $in: [1, 2] },
+                'repository.id': { $in: ['r1', 'r2'] },
+            });
+            expect(filter.$or).toBeUndefined();
+            expect(projection).toEqual({
+                files: 0,
+                commits: 0,
+                prLevelSuggestions: 0,
+            });
+            expect(maxTimeMS).toHaveBeenCalledWith(50_000);
+        });
+
+        it('returns only the exact requested pairs, not the $in cross-product', async () => {
+            mockFind([
+                { number: 1, repository: { id: 'r1' } },
+                { number: 2, repository: { id: 'r1' } },
+                { number: 2, repository: { id: 'r2' } }, // cross-product, not requested
+            ]);
+
+            const result = await repo.findManyByNumbersAndRepositoryIds(
+                [
+                    { number: 1, repositoryId: 'r1' },
+                    { number: 2, repositoryId: 'r1' },
+                    { number: 1, repositoryId: 'r2' },
+                ],
+                'org-A',
+            );
+
+            expect(
+                result.map((pr: any) => `${pr.repository.id}:${pr.number}`),
+            ).toEqual(['r1:1', 'r1:2']);
+        });
+
+        it('skips the query for an empty criteria list', async () => {
+            const { find } = mockFind([]);
+            expect(
+                await repo.findManyByNumbersAndRepositoryIds([], 'org-A'),
+            ).toEqual([]);
+            expect(find).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('findPullRequestsWithDeliveredSuggestions', () => {
+        it('projects the read fields before unwinding files/suggestions', async () => {
+            const option = jest.fn().mockReturnValue({ exec });
+            aggregate.mockReturnValue({ option });
+            exec.mockResolvedValue([]);
+
+            await repo.findPullRequestsWithDeliveredSuggestions(
+                'org-A',
+                [1, 2],
+                'open',
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            expect(Object.keys(pipeline[0])).toEqual(['$match']);
+            expect(pipeline[1].$project).toEqual({
+                'number': 1,
+                'organizationId': 1,
+                'status': 1,
+                'provider': 1,
+                'repository.id': 1,
+                'repository.name': 1,
+                'files.suggestions.id': 1,
+                'files.suggestions.deliveryStatus': 1,
+                'files.suggestions.comment': 1,
+            });
+            expect(pipeline[2]).toEqual({ $unwind: '$files' });
+            expect(option).toHaveBeenCalledWith({ maxTimeMS: 50_000 });
+        });
+    });
+
     describe('addFileToPullRequest', () => {
         it('includes organizationId in the Mongo filter', async () => {
             await repo.addFileToPullRequest(

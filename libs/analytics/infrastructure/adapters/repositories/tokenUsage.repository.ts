@@ -19,6 +19,7 @@ import {
 
 import { ObservabilityTelemetryModel } from './schemas/observabilityTelemetry.model';
 import { PricingResolver } from '@libs/analytics/application/use-cases/usage/pricing-resolver';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 type RawAggRow = {
     model: string;
@@ -139,42 +140,56 @@ export class TokenUsageRepository implements ITokenUsageRepository {
     }
 
     /**
-     * Aggregation expression that derives a call's BRACKET INDEX from the
-     * covered `attributes.tu.model` + `attributes.tu.input` and the catalog
-     * thresholds. 0 = at/below the first threshold (default rate); k = above
-     * the k-th threshold (k-th tier rate). Computed as the count of the
-     * model's thresholds the call's input exceeds. Reads only index fields →
-     * the pipeline stays covered. Supports N thresholds per model (Doubao).
+     * Sorted distinct input thresholds across every tiered model. The catalog
+     * (LiteLLM + models.dev, every canonical name variant) holds hundreds of
+     * tiered models but only a handful of distinct threshold values.
      */
-    private _tierExpr(thresholds: Map<string, number[]>): any {
+    private _distinctThresholds(thresholds: Map<string, number[]>): number[] {
+        const all = new Set<number>();
+        for (const thrs of thresholds.values()) thrs.forEach((t) => all.add(t));
+        return [...all].sort((a, b) => a - b);
+    }
+
+    /**
+     * Per-call input BRACKET against the distinct thresholds: how many of them
+     * `attributes.tu.input` exceeds. K constant comparisons per row, instead of
+     * a `$switch` with one branch per tiered model evaluated row by row (cost
+     * grew with catalog size: ~2s at 1 branch, ~11s at 500 over 500k rows).
+     * Reads only index fields → the pipeline stays covered. The exact per-model
+     * tier is derived from the bracket afterwards in `_withTiers`.
+     */
+    private _bracketExpr(distinct: number[], input = '$attributes.tu.input'): any {
         // `$literal`, not a bare 0: in a `$project` (the overview `$facet`
         // path) a plain 0 is read as field EXCLUSION and crashes the mixed
         // projection. `$literal` forces the VALUE 0 (bracket 0 = default
         // band) — the safe degradation when no model is tiered.
-        if (thresholds.size === 0) return { $literal: 0 };
-        const branches: Array<{ case: any; then: number[] }> = [];
-        for (const [model, thrs] of thresholds) {
-            branches.push({
-                case: { $eq: ['$attributes.tu.model', model] },
-                then: thrs,
-            });
-        }
+        if (distinct.length === 0) return { $literal: 0 };
         return {
-            $let: {
-                vars: { thrs: { $switch: { branches, default: [] } } },
-                in: {
-                    $size: {
-                        $filter: {
-                            input: '$$thrs',
-                            as: 't',
-                            cond: {
-                                $gt: ['$attributes.tu.input', '$$t'],
-                            },
-                        },
-                    },
-                },
-            },
+            $add: distinct.map((t) => ({ $cond: [{ $gt: [input, t] }, 1, 0] })),
         };
+    }
+
+    /**
+     * Maps each row's bracket to the model's own tier index: the count of the
+     * model's thresholds the call's input exceeds. Exact, because the model's
+     * thresholds are a subset of `distinct`: input > t ⇔ t ≤ distinct[b - 1].
+     * Several brackets can map to the same tier; `_mergeTierRows` folds them.
+     */
+    private _withTiers(
+        rows: RawAggRow[],
+        thresholds: Map<string, number[]>,
+        distinct: number[],
+    ): RawAggRow[] {
+        for (const row of rows) {
+            const own = thresholds.get(row.model);
+            if (!own || row.tier === 0) {
+                row.tier = 0;
+                continue;
+            }
+            const cut = distinct[row.tier - 1];
+            row.tier = own.filter((t) => t <= cut).length;
+        }
+        return rows;
     }
 
     /**
@@ -295,15 +310,16 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         extraAcc: Record<string, any> = {},
         maxRows = 0,
     ): Promise<RawAggRow[]> {
+        const distinct = this._distinctThresholds(thresholds);
         const pipeline: Record<string, any>[] = [
             { $match: { ...this._tuMatch(query, prOnly), ...extraMatch } },
-            // Derive the tier per call from the catalog thresholds (not baked).
-            { $addFields: { _tier: this._tierExpr(thresholds) } },
             {
                 $group: {
                     _id: {
                         model: '$attributes.tu.model',
-                        tier: '$_tier',
+                        // Input bracket, mapped to the per-model tier below
+                        // (derived from the catalog thresholds, not baked).
+                        tier: this._bracketExpr(distinct),
                         ...groupById,
                     },
                     input: { $sum: '$attributes.tu.input' },
@@ -337,15 +353,19 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         if (maxRows > 0) {
             pipeline.push({ $sort: { total: -1 } }, { $limit: maxRows });
         }
-        return this.observabilityTelemetryModel
+        const rows = await this.observabilityTelemetryModel
             .aggregate<RawAggRow>(pipeline as any)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
+        return this._withTiers(rows, thresholds, distinct);
     }
 
     async getSummary(
         query: TokenUsageQueryContract,
     ): Promise<UsageSummaryContract> {
-        const rows = await this._tuRows(query, await this._thresholds());
+        // Cross-model rollup that ignores tiers: no thresholds → no bracket
+        // math and no pricing-catalog fetch on the BYOK page's hottest read.
+        const rows = await this._tuRows(query, new Map());
 
         // Cross-model rollup: one row total.
         const summary: UsageSummaryContract = {
@@ -450,6 +470,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                     },
                 },
             ] as any)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
     }
 
@@ -622,6 +643,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         byTaskModelSpan: UsageByTaskModelSpanContract[];
     }> {
         const thresholds = await this._thresholds();
+        const distinct = this._distinctThresholds(thresholds);
         // Project only index fields → $facet works on a lean covered stream.
         // Tier is derived here (from the catalog thresholds) instead of read
         // from a baked field, so it can't drift when pricing tiers change.
@@ -629,7 +651,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
             $project: {
                 _id: 0,
                 model: '$attributes.tu.model',
-                tier: this._tierExpr(thresholds),
+                tier: this._bracketExpr(distinct),
                 pr: '$attributes.prNumber',
                 area: { $ifNull: ['$attributes.tu.area', AREA_FALLBACK] },
                 task: taskExpr({ $ifNull: ['$attributes.tu.area', AREA_FALLBACK] }),
@@ -745,6 +767,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 byTaskArea: RawAggRow[];
                 taskModelSpan: RawSpanRow[];
             }>(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         const rows = facet ?? {
@@ -756,7 +779,16 @@ export class TokenUsageRepository implements ITokenUsageRepository {
             taskModelSpan: [],
         };
         // `thresholds` fetched above drives both the tier derivation and the
-        // byTier merge — same source, no drift.
+        // byTier merge — same source, no drift. Brackets → per-model tiers.
+        for (const facetRows of [
+            rows.byModel,
+            rows.daily,
+            rows.byPr,
+            rows.byArea ?? [],
+            rows.byTaskArea ?? [],
+        ]) {
+            this._withTiers(facetRows, thresholds, distinct);
+        }
 
         const byModel = this._mergeTierRows(
             rows.byModel,
