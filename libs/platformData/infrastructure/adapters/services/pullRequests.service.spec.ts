@@ -72,9 +72,10 @@ describe('PullRequestsService.handleInitialPullRequest — E11000 race recovery 
         // Stub the two private helpers `handleInitialPullRequest` runs
         // before reaching `create()` — we don't care what they do for
         // this regression, only that they don't error out.
-        jest.spyOn(service as any, 'initializeCodeReviewStructure').mockResolvedValue(
-            { ...fakeStructure },
-        );
+        jest.spyOn(
+            service as any,
+            'initializeCodeReviewStructure',
+        ).mockResolvedValue({ ...fakeStructure });
         jest.spyOn(service as any, 'addFilesToStructure').mockImplementation(
             async (s: any) => s,
         );
@@ -159,7 +160,9 @@ describe('PullRequestsService.handleInitialPullRequest — E11000 race recovery 
         // Fallback returns null (e.g. lookup raced, or different
         // `repository.id` between webhooks). We do NOT silently swallow
         // — the error propagates so the caller can fail loudly.
-        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(null);
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            null,
+        );
 
         await expect(callHandleInitial()).rejects.toBe(e11000);
     });
@@ -184,5 +187,300 @@ describe('PullRequestsService.handleInitialPullRequest — E11000 race recovery 
         expect(
             pullRequestsRepository.findByNumberAndRepositoryId,
         ).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * Regression test for issue #2059 — two repositories that share a name.
+ *
+ * The save path resolved the existing record with
+ * `findByNumberAndRepositoryName`, so two repositories of one organization
+ * whose names collide across owners or providers (GitLab
+ * `jairo.litman/kody-format-probe-1822` MR !2 and Bitbucket
+ * `wellingtonsantana01/kody-format-probe-1822` PR #2) landed on ONE document:
+ * the second save overwrote the first PR's suggestions and its feedback was
+ * never attributed. The unique index has always been
+ * `(number, repository.id, organizationId)` — the name was the wrong key, and
+ * `repository.name` is mutable besides (a renamed repository would miss too).
+ */
+describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR identity (issue #2059)', () => {
+    let service: PullRequestsService;
+    let pullRequestsRepository: any;
+
+    const stubRepository = {
+        id: 'repo-uuid-stable',
+        name: 'kody-format-probe-1822',
+    };
+    const stubOrg = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
+
+    beforeEach(() => {
+        pullRequestsRepository = {
+            create: jest.fn(),
+            update: jest.fn(),
+            findByNumberAndRepositoryId: jest.fn().mockResolvedValue(null),
+            findByNumberAndRepositoryName: jest.fn().mockResolvedValue(null),
+        };
+
+        service = new PullRequestsService(
+            pullRequestsRepository as any,
+            {} as any,
+        );
+
+        // Only the identity lookup is under test: the helpers the save path
+        // runs before and after it are stubbed out.
+        jest.spyOn(
+            service as any,
+            'prefetchUsersForExtraction',
+        ).mockResolvedValue(undefined);
+        jest.spyOn(service as any, 'extractUser').mockResolvedValue(null);
+        jest.spyOn(service as any, 'extractUsers').mockResolvedValue([]);
+        jest.spyOn(
+            service as any,
+            'handleInitialPullRequest',
+        ).mockResolvedValue(null);
+        jest.spyOn(service as any, 'update').mockResolvedValue(null);
+    });
+
+    function callSave(repository: any) {
+        return (service as any).aggregateAndSaveDataStructure(
+            { number: 2, user: { username: 'someone' } },
+            repository,
+            [],
+            [],
+            [],
+            PlatformType.BITBUCKET,
+            stubOrg,
+            [],
+        );
+    }
+
+    function callSaveWithSuggestions(repository: any, suggestions: any[]) {
+        return (service as any).aggregateAndSaveDataStructure(
+            { number: 2, user: { username: 'someone' } },
+            repository,
+            [],
+            [],
+            [],
+            PlatformType.BITBUCKET,
+            stubOrg,
+            [],
+            suggestions,
+        );
+    }
+
+    it('looks the existing PR up by repository.id and stops there when it matches', async () => {
+        const byId = { uuid: 'by-id' };
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            byId,
+        );
+
+        await callSave(stubRepository);
+
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryId,
+        ).toHaveBeenCalledWith(2, stubRepository.id, stubOrg);
+        // A name match is what merged two repositories into one record.
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryName,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('retries by name when the id lookup misses, so a legacy document is updated not duplicated', async () => {
+        // A document stored before the id column was populated matches by name;
+        // without the retry the save would create a second record for the same
+        // PR and split its suggestions across two (#2076 review).
+        const byName = { uuid: 'by-name' };
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            null,
+        );
+        pullRequestsRepository.findByNumberAndRepositoryName.mockResolvedValue(
+            byName,
+        );
+
+        await callSave(stubRepository);
+
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryName,
+        ).toHaveBeenCalledWith(2, stubRepository.name, stubOrg);
+        expect((service as any).update).toHaveBeenCalledWith(
+            byName,
+            expect.anything(),
+        );
+    });
+
+    it('falls back to the name only when the provider gave no repository id', async () => {
+        await callSave({ name: 'kody-format-probe-1822' });
+
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryName,
+        ).toHaveBeenCalledWith(2, 'kody-format-probe-1822', stubOrg);
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryId,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('never issues an unbounded name query when there is neither an id nor a name', async () => {
+        // `{number, organizationId}` alone can match a DIFFERENT repository's
+        // PR with the same number — the cross-repo contamination #2059 fixes.
+        await callSave({});
+
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryName,
+        ).not.toHaveBeenCalled();
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryId,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('passes a string id to the id lookup so a numeric provider id matches the stored value', async () => {
+        // The write paths store `repository.id?.toString()` on a Mixed path
+        // Mongoose does not cast; a raw numeric id would never match (#2076
+        // review).
+        await callSave({ id: 12345, name: 'kody-format-probe-1822' });
+
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryId,
+        ).toHaveBeenCalledWith(2, '12345', stubOrg);
+    });
+
+    it('rejects a name hit that belongs to another repository, creating instead of updating', async () => {
+        // Two repositories of one organization share a name: the id lookup
+        // misses and the name lookup returns the OTHER repository's document.
+        // Updating it would rewrite its `repository.id` from this payload and
+        // take this save's suggestions (#2076 review).
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            null,
+        );
+        pullRequestsRepository.findByNumberAndRepositoryName.mockResolvedValue({
+            uuid: 'other-repo-pr',
+            number: 2,
+            repository: {
+                id: 'other-repo-uuid',
+                name: 'kody-format-probe-1822',
+            },
+        });
+
+        await callSave(stubRepository);
+
+        expect((service as any).handleInitialPullRequest).toHaveBeenCalled();
+        expect((service as any).update).not.toHaveBeenCalled();
+    });
+
+    it('appends pr-level suggestions to the id-resolved record, never a name lookup', async () => {
+        const byId = {
+            uuid: 'by-id',
+            prLevelSuggestions: [{ id: 'old' }],
+        };
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            byId,
+        );
+
+        await callSaveWithSuggestions(stubRepository, [{ id: 'new' }]);
+
+        // The append targets the record the identity lookup resolved.
+        expect((service as any).update).toHaveBeenCalledWith(
+            byId,
+            expect.objectContaining({
+                prLevelSuggestions: [{ id: 'old' }, { id: 'new' }],
+            }),
+        );
+        // A fresh name lookup here could return a same-named foreign repo.
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryName,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('re-reads by id before appending so a concurrent append is preserved', async () => {
+        // `existingPR` is the snapshot from the identity lookup at the start of
+        // the save; the awaited update and network calls happen in between. If
+        // the append based on that snapshot it would `$set` the whole array and
+        // silently drop a suggestion a concurrent writer appended meanwhile
+        // (#2076 review). The append must start from a fresh document.
+        const snapshot = {
+            uuid: 'snapshot',
+            repository: { id: 'repo-uuid-stable' },
+            prLevelSuggestions: [{ id: 'old' }],
+        };
+        const fresher = {
+            uuid: 'fresher',
+            repository: { id: 'repo-uuid-stable' },
+            prLevelSuggestions: [{ id: 'old' }, { id: 'concurrent' }],
+        };
+        pullRequestsRepository.findByNumberAndRepositoryId
+            .mockResolvedValueOnce(snapshot)
+            .mockResolvedValueOnce(fresher);
+
+        await callSaveWithSuggestions(stubRepository, [{ id: 'new' }]);
+
+        // The re-read reloaded the document and the append kept BOTH the
+        // snapshot's suggestion and the concurrent writer's.
+        expect((service as any).update).toHaveBeenCalledWith(
+            fresher,
+            expect.objectContaining({
+                prLevelSuggestions: [
+                    { id: 'old' },
+                    { id: 'concurrent' },
+                    { id: 'new' },
+                ],
+            }),
+        );
+    });
+
+    it('keeps the snapshot array when the pre-append re-read misses', async () => {
+        // A re-read that returns null happens for the legacy documents the
+        // name lookup resolves; the append must still start from the
+        // snapshot's stored suggestions instead of `$set`ing just the new
+        // batch over them (#2076 review).
+        const snapshot = {
+            uuid: 'snapshot',
+            repository: { id: 'repo-uuid-stable' },
+            prLevelSuggestions: [{ id: 'old' }],
+        };
+        pullRequestsRepository.findByNumberAndRepositoryId
+            .mockResolvedValueOnce(snapshot)
+            .mockResolvedValueOnce(null);
+
+        await callSaveWithSuggestions(stubRepository, [{ id: 'new' }]);
+
+        expect((service as any).update).toHaveBeenCalledWith(
+            snapshot,
+            expect.objectContaining({
+                prLevelSuggestions: [{ id: 'old' }, { id: 'new' }],
+            }),
+        );
+    });
+
+    it('logs and continues when appending pr-level suggestions fails', async () => {
+        // The main save is already committed; a rejection on the append must
+        // not fail the webhook/review event (#2076 review).
+        const byId = { uuid: 'by-id', repository: { id: 'repo-uuid-stable' } };
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            byId,
+        );
+        jest.spyOn(
+            service as any,
+            'handleExistingPullRequest',
+        ).mockResolvedValue({ handled: true });
+        const loggerSpy = jest
+            .spyOn((service as any).logger, 'error')
+            .mockImplementation(() => {});
+        // First `update` is the main save (resolves); the append rejects.
+        (service as any).update
+            .mockResolvedValueOnce(null)
+            .mockRejectedValueOnce(new Error('mongo down'));
+
+        await expect(
+            callSaveWithSuggestions(stubRepository, [{ id: 'new' }]),
+        ).resolves.toBeDefined();
+
+        expect(loggerSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Failed to append PR level suggestions',
+            }),
+        );
+        expect((service as any).handleExistingPullRequest).toHaveBeenCalled();
     });
 });
