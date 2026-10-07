@@ -79,6 +79,57 @@ describe('WorkflowJobConsumer task protection', () => {
         expect(calls[calls.length - 1]).toBe('unprotect');
     });
 
+    it('coalesces calls while the ECS agent is slow instead of queuing one per job', async () => {
+        const gate = deferred();
+        const svc = (consumer as any).taskProtectionService;
+        svc.protectTask.mockImplementationOnce(async () => {
+            await gate.promise;
+            calls.push('protect');
+        });
+
+        const first = run('j0');
+        await new Promise(setImmediate);
+        // 20 more jobs arrive while the first protect is stuck at the agent
+        const rest = Array.from({ length: 20 }, (_, i) => run(`j${i + 1}`));
+        gate.resolve();
+        await new Promise(setImmediate);
+
+        // one in flight + one queued, not 21
+        expect(svc.protectTask).toHaveBeenCalledTimes(2);
+
+        for (const id of jobs.keys()) jobs.get(id)!.resolve();
+        await Promise.all([first, ...rest]);
+        expect(calls[calls.length - 1]).toBe('unprotect');
+    });
+
+    it('keeps refreshing protection as new jobs start on a busy worker', async () => {
+        const svc = (consumer as any).taskProtectionService;
+        const a = run('a');
+        await new Promise(setImmediate);
+        const b = run('b');
+        await new Promise(setImmediate);
+        const c = run('c');
+        await new Promise(setImmediate);
+
+        // every job start re-issues protect (refreshes the 60-min expiry)
+        expect(svc.protectTask).toHaveBeenCalledTimes(3);
+
+        for (const id of ['a', 'b', 'c']) jobs.get(id)!.resolve();
+        await Promise.all([a, b, c]);
+    });
+
+    it('a rejected protection call does not stall the next one', async () => {
+        const svc = (consumer as any).taskProtectionService;
+        svc.protectTask.mockRejectedValueOnce(new Error('agent exploded'));
+
+        const a = run('a');
+        await new Promise(setImmediate);
+        jobs.get('a')!.resolve();
+        await a;
+
+        expect(calls[calls.length - 1]).toBe('unprotect');
+    });
+
     it('ends protected when a job starts while the previous unprotect is in flight', async () => {
         const gate = deferred();
         const svc = (consumer as any).taskProtectionService;

@@ -42,6 +42,43 @@ describe('WorkerDrainService', () => {
         expect(amqpConnection.close).toHaveBeenCalled();
     });
 
+    it('still closes when a cancel never settles (half-open connection)', async () => {
+        jest.useFakeTimers();
+        try {
+            const amqpConnection = {
+                consumerTags: ['stuck'],
+                cancelConsumer: jest.fn(() => new Promise(() => {})),
+                close: jest.fn().mockResolvedValue(undefined),
+            };
+
+            const done = new WorkerDrainService(
+                amqpConnection as any,
+            ).onApplicationShutdown('SIGTERM');
+            await jest.advanceTimersByTimeAsync(5_000);
+            await done;
+
+            expect(amqpConnection.close).toHaveBeenCalled();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('still closes when reading the consumer registry throws', async () => {
+        const amqpConnection = {
+            get consumerTags(): string[] {
+                throw new Error('registry gone');
+            },
+            cancelConsumer: jest.fn(),
+            close: jest.fn().mockResolvedValue(undefined),
+        };
+
+        await new WorkerDrainService(amqpConnection as any).onApplicationShutdown(
+            'SIGTERM',
+        );
+
+        expect(amqpConnection.close).toHaveBeenCalled();
+    });
+
     it('is a no-op without an AMQP connection', async () => {
         await expect(
             new WorkerDrainService(undefined).onApplicationShutdown('SIGTERM'),

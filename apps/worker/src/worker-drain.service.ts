@@ -3,6 +3,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { Injectable, OnApplicationShutdown, Optional } from '@nestjs/common';
 
 const DEFAULT_DRAIN_TIMEOUT_MS = 25_000;
+const CANCEL_CONSUMERS_TIMEOUT_MS = 5_000;
 
 function parseDrainTimeoutMs(): number {
     const raw = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
@@ -79,19 +80,51 @@ export class WorkerDrainService implements OnApplicationShutdown {
      * consumers on the raw amqplib channel inside addSetup, so cancelAll()
      * cancels nothing and a draining worker keeps taking new jobs until
      * SIGKILL. Cancel them explicitly through golevelup's own registry.
+     *
+     * Best-effort and bounded: the amqplib cancel RPC has no timeout, and a
+     * half-open connection must not keep close() from running.
      */
     private async cancelConsumers(): Promise<void> {
-        const consumerTags = this.amqpConnection?.consumerTags ?? [];
+        const timeoutMs = Math.min(CANCEL_CONSUMERS_TIMEOUT_MS, this.drainTimeoutMs);
+        let timer: NodeJS.Timeout | undefined;
 
-        const results = await Promise.allSettled(
-            consumerTags.map((tag) => this.amqpConnection!.cancelConsumer(tag)),
-        );
-        const failed = results.filter((r) => r.status === 'rejected').length;
+        try {
+            const consumerTags = this.amqpConnection?.consumerTags ?? [];
 
-        this.logger.log({
-            message: 'Worker drain: RabbitMQ consumers cancelled',
-            context: WorkerDrainService.name,
-            metadata: { cancelled: consumerTags.length - failed, failed },
-        });
+            const results = await Promise.race([
+                Promise.allSettled(
+                    consumerTags.map((tag) =>
+                        this.amqpConnection!.cancelConsumer(tag),
+                    ),
+                ),
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(
+                        () =>
+                            reject(
+                                new Error(
+                                    `Consumer cancel timeout after ${timeoutMs}ms`,
+                                ),
+                            ),
+                        timeoutMs,
+                    );
+                }),
+            ]);
+            const failed = results.filter((r) => r.status === 'rejected').length;
+
+            this.logger.log({
+                message: 'Worker drain: RabbitMQ consumers cancelled',
+                context: WorkerDrainService.name,
+                metadata: { cancelled: consumerTags.length - failed, failed },
+            });
+        } catch (error) {
+            this.logger.error({
+                message:
+                    'Worker drain: failed to cancel RabbitMQ consumers; closing anyway',
+                context: WorkerDrainService.name,
+                error: error instanceof Error ? error : undefined,
+            });
+        } finally {
+            clearTimeout(timer);
+        }
     }
 }

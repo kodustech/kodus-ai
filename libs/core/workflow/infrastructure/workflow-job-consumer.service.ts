@@ -45,6 +45,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
     private readonly JOB_PROTECTION_MINUTES = 60;
     private activeJobs = 0;
     private protectionSync: Promise<void> = Promise.resolve();
+    private protectionSyncQueued = false;
 
     constructor(
         @Inject(JOB_PROCESSOR_SERVICE_TOKEN)
@@ -307,18 +308,42 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
      *
      * Calls are chained so protect/unprotect requests reach the ECS agent
      * in order, and each one reads `activeJobs` when it runs — the last
-     * request always reflects the current state.
+     * request always reflects the current state. Requests coalesce: while a
+     * call is queued but not started, later requests reuse it (it will read
+     * the newer state), so at most one call is in flight and one queued no
+     * matter how many jobs start or finish. Every job start still issues or
+     * joins a protect, which keeps refreshing the protection expiry.
      */
     private syncTaskProtection(): Promise<void> {
-        this.protectionSync = this.protectionSync
-            .catch(() => undefined)
-            .then(() =>
-                this.activeJobs > 0
-                    ? this.taskProtectionService.protectTask(
-                          this.JOB_PROTECTION_MINUTES,
-                      )
-                    : this.taskProtectionService.unprotectTask(),
-            );
+        if (this.protectionSyncQueued) {
+            return this.protectionSync;
+        }
+        this.protectionSyncQueued = true;
+
+        this.protectionSync = this.protectionSync.then(async () => {
+            this.protectionSyncQueued = false;
+            try {
+                if (this.activeJobs > 0) {
+                    await this.taskProtectionService.protectTask(
+                        this.JOB_PROTECTION_MINUTES,
+                    );
+                } else {
+                    await this.taskProtectionService.unprotectTask();
+                }
+            } catch (error) {
+                // The service logs its own HTTP failures; this only catches
+                // the unexpected, and keeps the chain alive for the next call.
+                this.logger.error({
+                    message: 'Failed to sync ECS task protection',
+                    context: WorkflowJobConsumer.name,
+                    error,
+                    metadata: {
+                        activeJobs: this.activeJobs,
+                        instanceId: this.instanceId,
+                    },
+                });
+            }
+        });
         return this.protectionSync;
     }
 
