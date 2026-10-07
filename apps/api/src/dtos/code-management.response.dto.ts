@@ -30,6 +30,38 @@ export class CodeManagementWebhookStatusResponseDto extends ApiResponseBaseDto {
     data: CodeManagementWebhookStatusDto;
 }
 
+export class CodeManagementWebhookCreationFailureDto {
+    @ApiProperty({
+        description:
+            'Reason the provider refused the webhook, as reported by the provider.',
+    })
+    reason: string;
+
+    @ApiProperty({ description: 'When the attempt failed (ISO 8601).' })
+    at: string;
+}
+
+export class CodeManagementWebhookCreationFailuresDataDto {
+    @ApiProperty({
+        type: 'object',
+        description:
+            'Repositories whose webhook could not be created during the last selection save, keyed by repository id.',
+        additionalProperties: {
+            type: 'object',
+            properties: {
+                reason: { type: 'string' },
+                at: { type: 'string' },
+            },
+        },
+    })
+    failures: Record<string, CodeManagementWebhookCreationFailureDto>;
+}
+
+export class CodeManagementWebhookCreationFailuresResponseDto extends ApiResponseBaseDto {
+    @ApiProperty({ type: CodeManagementWebhookCreationFailuresDataDto })
+    data: CodeManagementWebhookCreationFailuresDataDto;
+}
+
 export class CodeManagementRepositoryDto {
     @ApiProperty()
     id: string;
