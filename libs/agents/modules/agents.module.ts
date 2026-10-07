@@ -16,6 +16,9 @@ import { ConversationAgentUseCase } from '../application/use-cases/conversation-
 import { ConversationAgentProvider } from '../infrastructure/services/agents/conversation/conversationAgent';
 import { SkillLoaderService } from '../skills/skill-loader.service';
 import { BusinessValidationService } from '../business-validation/business-validation.service';
+import { BusinessValidationRunModelInstance } from '../business-validation/runs/validation-run.model';
+import { ValidationRunRepository } from '../business-validation/runs/validation-run.repository';
+import { BusinessLogicInsightsService } from '../business-validation/runs/insights.service';
 
 @Module({
     imports: [
@@ -26,13 +29,18 @@ import { BusinessValidationService } from '../business-validation/business-valid
         // Provides ByokErrorCounter so conversation/business report BYOK failures
         // (byok.llm_errors_threshold) — parity with code-review.
         forwardRef(() => NotificationModule),
-        MongooseModule.forFeature([AgentSessionModelInstance]),
+        MongooseModule.forFeature([
+            AgentSessionModelInstance,
+            BusinessValidationRunModelInstance,
+        ]),
     ],
     providers: [
         ConversationAgentUseCase,
         ConversationAgentProvider,
         SkillLoaderService,
         BusinessValidationService,
+        ValidationRunRepository,
+        BusinessLogicInsightsService,
         {
             provide: CONVERSATION_STORE_TOKEN,
             useClass: MongoConversationStore,
@@ -43,6 +51,8 @@ import { BusinessValidationService } from '../business-validation/business-valid
         ConversationAgentProvider,
         SkillLoaderService,
         BusinessValidationService,
+        ValidationRunRepository,
+        BusinessLogicInsightsService,
         CONVERSATION_STORE_TOKEN,
     ],
 })

@@ -18,6 +18,8 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
+            {} as any,
         );
         target = useCase as any;
     });
@@ -454,6 +456,116 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
             expect(() => target.mapPullRequestContext(pr, 'u')).toThrow(
                 'Repository data not found for the selected pull request.',
             );
+        });
+    });
+
+    describe('execute (local diff)', () => {
+        it('returns the verdict as text and JSON, records the run and writes nothing to a PR (UC-41)', async () => {
+            const outcome = {
+                kind: 'validated',
+                checks: [
+                    {
+                        task: {
+                            tracker: 'Azure DevOps',
+                            id: 'AB#8',
+                            title: 'Compact density toggle',
+                        },
+                        verdict: {
+                            needsMoreInfo: false,
+                            summary: 'x',
+                            requirements: [
+                                {
+                                    requirement: 'Defaults to comfortable',
+                                    source: 'AC #2',
+                                    state: 'missing',
+                                    evidence: [
+                                        {
+                                            file: 'src/settings/density.ts',
+                                            line: 6,
+                                        },
+                                    ],
+                                    note: 'Sets "compact".',
+                                    action: 'Change it to "comfortable".',
+                                    confidence: 'high',
+                                },
+                            ],
+                            outOfScope: [],
+                        },
+                        passed: false,
+                        readAt: '2026-10-05T00:00:00.000Z',
+                    },
+                ],
+                thinTasks: [],
+                passed: false,
+                unseenFiles: [],
+            };
+            const service = {
+                validate: jest.fn().mockResolvedValue({
+                    outcome,
+                    references: [],
+                    attempts: [],
+                    trackers: ['Azure DevOps'],
+                }),
+            };
+            const publisher = {
+                settingsFor: jest
+                    .fn()
+                    .mockResolvedValue({ failOn: ['missing'] }),
+                publish: jest.fn(),
+            };
+            const runs = { create: jest.fn().mockResolvedValue('run-1') };
+            const cli = new TriggerBusinessValidationUseCase(
+                {
+                    getTypeIntegration: jest.fn().mockResolvedValue('github'),
+                } as any,
+                {
+                    findIntegrationConfigFormatted: jest
+                        .fn()
+                        .mockResolvedValue([]),
+                } as any,
+                service as any,
+                publisher as any,
+                runs as any,
+            );
+
+            const result = await cli.execute({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                input: { diff: '+x', taskId: 'AB#8' },
+            });
+
+            expect(service.validate).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    door: 'cli',
+                    taskInput: 'AB#8',
+                    diff: '+x',
+                }),
+            );
+            expect(result.result).toContain('MISSING');
+            expect(result.result).toContain('src/settings/density.ts:6');
+            expect(result.result).toContain('status: issues_found');
+            expect(result.verdict).toMatchObject({
+                status: 'issues_found',
+                passed: false,
+                tasks: [
+                    expect.objectContaining({
+                        id: 'AB#8',
+                        requirements: [
+                            expect.objectContaining({ state: 'missing' }),
+                        ],
+                    }),
+                ],
+            });
+            expect(runs.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    door: 'cli',
+                    outcome: 'validated',
+                    passed: false,
+                }),
+            );
+            expect(publisher.publish).not.toHaveBeenCalled();
         });
     });
 });

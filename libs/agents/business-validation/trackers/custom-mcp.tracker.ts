@@ -23,6 +23,16 @@ const ID_PARAM =
 
 const MAX_TOOLS_TRIED = 2;
 
+/**
+ * Reads a task through one tool when the arguments can't be filled from the
+ * schema alone: an agent that sees only that tool (phase 6).
+ */
+export type AgentToolReader = (input: {
+    tool: MCPToolRaw;
+    reference: TaskReference;
+    call: (args: Record<string, unknown>) => Promise<unknown>;
+}) => Promise<unknown>;
+
 type Schema = {
     type?: string;
     properties?: Record<string, { type?: string; enum?: unknown[] }>;
@@ -38,9 +48,15 @@ type Schema = {
 export class CustomMcpTracker extends McpTaskTracker {
     private readers?: Promise<MCPToolRaw[]>;
 
+    /**
+     * @param tool The tool the org picked to read a task by its id. Without
+     *   one, tools are picked by name and schema.
+     */
     constructor(
         readonly name: string,
         session: McpToolSession,
+        private readonly tool?: string,
+        private readonly agentReader?: AgentToolReader,
     ) {
         super(session);
     }
@@ -63,17 +79,20 @@ export class CustomMcpTracker extends McpTaskTracker {
 
         for (const tool of readers.slice(0, MAX_TOOLS_TRIED)) {
             const args = buildReadArgs(tool, reference);
-            if (!args) {
-                continue;
-            }
             let payload: unknown;
             try {
-                payload = await this.session.call(tool.name, args);
+                payload = args
+                    ? await this.session.call(tool.name, args)
+                    : undefined;
             } catch (error) {
                 if (error instanceof TaskNotFoundError) {
                     continue;
                 }
                 throw error;
+            }
+            if (!mentions(payload, reference.id) && this.chosen(tool)) {
+                // The schema alone couldn't say how to ask for this id.
+                payload = await this.readWithAgent(tool, reference);
             }
             if (!mentions(payload, reference.id)) {
                 continue;
@@ -119,30 +138,83 @@ export class CustomMcpTracker extends McpTaskTracker {
         return { status: 'not_found' };
     }
 
+    private chosen(tool: MCPToolRaw): boolean {
+        return !!this.agentReader && tool.name === this.tool;
+    }
+
+    private async readWithAgent(
+        tool: MCPToolRaw,
+        reference: TaskReference,
+    ): Promise<unknown> {
+        try {
+            return await this.agentReader!({
+                tool,
+                reference,
+                call: (args) => this.session.call(tool.name, args),
+            });
+        } catch (error) {
+            if (error instanceof TaskNotFoundError) {
+                return undefined;
+            }
+            throw error;
+        }
+    }
+
     private loadReaders(): Promise<MCPToolRaw[]> {
         this.readers ??= this.session
             .tools()
-            .then((tools) => tools.filter(isSingleItemReader));
+            .then((tools) =>
+                this.tool
+                    ? tools.filter((t) => t.name === this.tool && isReadOnly(t))
+                    : tools.filter(isSingleItemReader),
+            );
         return this.readers;
     }
 }
 
-export function isSingleItemReader(tool: MCPToolRaw): boolean {
+/** Never marked or named as writing. The bar for a tool the org picked itself. */
+export function isReadOnly(tool: MCPToolRaw): boolean {
     const annotations = asRecord(tool.annotations);
+    return (
+        annotations.readOnlyHint !== false &&
+        annotations.destructiveHint !== true &&
+        !WRITE_VERB.test(tool.name)
+    );
+}
+
+export function isSingleItemReader(tool: MCPToolRaw): boolean {
     if (
-        annotations.readOnlyHint === false ||
-        annotations.destructiveHint === true
-    ) {
-        return false;
-    }
-    if (
-        WRITE_VERB.test(tool.name) ||
+        !isReadOnly(tool) ||
         !TASK_NOUN.test(tool.name) ||
         MANY.test(tool.name)
     ) {
         return false;
     }
     return idParam(asRecord(tool.inputSchema) as Schema) !== undefined;
+}
+
+/**
+ * The tools of a plugin an admin may pick to read a task by id, best first:
+ * single-item readers, then other read-only tools that take an id.
+ */
+export function rankReadTools(tools: MCPToolRaw[]): Array<{
+    name: string;
+    description?: string;
+    recommended: boolean;
+}> {
+    return tools
+        .filter(
+            (t) =>
+                isReadOnly(t) &&
+                idParam(asRecord(t.inputSchema) as Schema) !== undefined &&
+                !MANY.test(t.name),
+        )
+        .map((t) => ({
+            name: t.name,
+            description: t.description,
+            recommended: isSingleItemReader(t),
+        }))
+        .sort((a, b) => Number(b.recommended) - Number(a.recommended));
 }
 
 /** The arguments that read `reference`, or undefined when a required one can't be filled. */

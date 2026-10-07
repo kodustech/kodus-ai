@@ -8,6 +8,8 @@ import {
     replyFor,
 } from '@libs/agents/business-validation/command';
 import { formatPullRequestDiff } from '@libs/agents/business-validation/pull-request-diff';
+import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
+import { BusinessLogicReplies } from '@libs/platform/application/services/business-logic-replies.service';
 import { ConversationAgentUseCase } from '@libs/agents/application/use-cases/conversation-agent.use-case';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -252,6 +254,13 @@ export class ChatWithKodyFromGitUseCase {
         @Optional()
         @Inject(MESSAGE_CLAIM_SERVICE_TOKEN)
         private readonly messageClaimService?: IMessageClaimService,
+
+        // Puts Business Logic outcomes on the PR and handles replies to them.
+        // Optional so lean wirings and specs still construct the use case.
+        @Optional()
+        private readonly businessLogicPublisher?: BusinessLogicPublisher,
+        @Optional()
+        private readonly businessLogicReplies?: BusinessLogicReplies,
     ) {}
 
     async execute(params: WebhookParams): Promise<void> {
@@ -355,7 +364,26 @@ export class ChatWithKodyFromGitUseCase {
                 );
             }
 
-            if (commandType === CommandType.CONVERSATION) {
+            // A reply that waives or disputes a Business Logic finding is a
+            // decision on that comment, not a question for the chat.
+            const businessLogicReply =
+                commandType === CommandType.CONVERSATION &&
+                this.isGeneralComment(params)
+                    ? await this.handleBusinessLogicReply(
+                          params,
+                          repository,
+                          pullRequestNumber,
+                          pullRequestDescription,
+                          organizationAndTeamData,
+                          headRef,
+                          baseRef,
+                      )
+                    : false;
+
+            if (
+                commandType === CommandType.CONVERSATION &&
+                !businessLogicReply
+            ) {
                 outcome = await this.handleConversationFlow(
                     params,
                     repository,
@@ -585,6 +613,110 @@ export class ChatWithKodyFromGitUseCase {
         }
 
         return CommandType.CONVERSATION;
+    }
+
+    /** A comment on the PR itself, not on a line of code. */
+    private isGeneralComment(params: WebhookParams): boolean {
+        switch (params.platformType) {
+            case PlatformType.GITHUB:
+                return params.event !== 'pull_request_review_comment';
+            case PlatformType.GITLAB:
+                return params.payload?.object_attributes?.type !== 'DiffNote';
+            case PlatformType.BITBUCKET:
+                return !params.payload?.comment?.inline;
+            case PlatformType.AZURE_REPOS:
+                return !params.payload?.resource?.comment?.threadContext
+                    ?.filePath;
+            default:
+                return !params.payload?.comment?.path;
+        }
+    }
+
+    private getPullRequestAuthorLogin(
+        params: WebhookParams,
+    ): string | undefined {
+        const payload = params.payload;
+        return (
+            payload?.issue?.user?.login ??
+            payload?.pull_request?.user?.login ??
+            payload?.merge_request?.author?.username ??
+            payload?.pullrequest?.author?.nickname ??
+            payload?.resource?.pullRequest?.createdBy?.uniqueName ??
+            undefined
+        );
+    }
+
+    /** True when the comment was a Business Logic decision and got its answer. */
+    private async handleBusinessLogicReply(
+        params: WebhookParams,
+        repository: Repository,
+        pullRequestNumber: number,
+        pullRequestDescription: string,
+        organizationAndTeamData: OrganizationAndTeamData,
+        headRef?: string,
+        baseRef?: string,
+    ): Promise<boolean> {
+        const message = this.getCommentBody(params);
+        if (!message.trim() || !this.businessLogicReplies) {
+            return false;
+        }
+        const result = await this.businessLogicReplies
+            .handle({
+                request: {
+                    organizationAndTeamData,
+                    repository: {
+                        id: String(repository.id),
+                        name: repository.name,
+                        owner: repository.owner,
+                        fullName: repository.fullName,
+                    },
+                    pullRequest: {
+                        number: pullRequestNumber,
+                        title: this.getPullRequestTitle(params),
+                        body: pullRequestDescription,
+                        headRef,
+                        baseRef,
+                    },
+                    platformType: params.platformType,
+                    diff: async () =>
+                        formatPullRequestDiff(
+                            await this.codeManagementService.getFilesByPullRequestId(
+                                {
+                                    organizationAndTeamData,
+                                    repository: {
+                                        id: repository.id,
+                                        name: repository.name,
+                                    },
+                                    prNumber: pullRequestNumber,
+                                },
+                            ),
+                        ),
+                },
+                message,
+                sender: { login: this.getSender(params).login },
+                authorLogin: this.getPullRequestAuthorLogin(params),
+            })
+            .catch(() => ({ handled: false as const }));
+        if (!result.handled) {
+            return false;
+        }
+        await this.codeManagementService.createIssueComment({
+            organizationAndTeamData,
+            repository,
+            prNumber: pullRequestNumber,
+            body: result.reply,
+        });
+        return true;
+    }
+
+    private getCommentBody(params: WebhookParams): string {
+        return params.platformType === PlatformType.GITLAB
+            ? params.payload?.object_attributes?.note || ''
+            : params.platformType === PlatformType.BITBUCKET
+              ? params.payload?.comment?.content?.raw || ''
+              : params.platformType === PlatformType.AZURE_REPOS
+                ? params.payload?.resource?.comment?.content || ''
+                : params.payload?.comment?.body || '';
     }
 
     private async handleBusinessLogicFlow(
@@ -2522,8 +2654,12 @@ export class ChatWithKodyFromGitUseCase {
               }
             : undefined;
 
-        const result = await this.businessValidationService.validate({
-            door: 'command',
+        const settings = await this.businessLogicPublisher?.settingsFor(
+            organizationAndTeamData,
+            repository?.id,
+        );
+        const request = {
+            door: 'command' as const,
             organizationAndTeamData,
             repository,
             pullRequest: prNumber
@@ -2538,6 +2674,7 @@ export class ChatWithKodyFromGitUseCase {
             platformType: pc?.platformType,
             taskInput: commandArgument(pc?.userQuestion),
             customInstructions: pc?.customInstructions,
+            settings,
             diff: async () =>
                 repository && prNumber
                     ? formatPullRequestDiff(
@@ -2553,9 +2690,28 @@ export class ChatWithKodyFromGitUseCase {
                           ),
                       )
                     : '',
+        };
+        const result = await this.businessValidationService.validate(request);
+        if (!this.businessLogicPublisher) {
+            return replyFor(result.outcome, false);
+        }
+        // The same comment and check the review writes, edited in place (UC-34).
+        const published = await this.businessLogicPublisher.publish({
+            request,
+            result,
+            settings,
+            trigger: 'command',
+            headSha:
+                repository && prNumber
+                    ? await this.businessLogicPublisher.headShaOf(
+                          organizationAndTeamData,
+                          { id: repository.id, name: repository.name },
+                          prNumber,
+                          pc?.platformType,
+                      )
+                    : undefined,
         });
-
-        return replyFor(result.outcome);
+        return replyFor(published.outcome, published.comment !== 'none');
     }
 
     private async handleConversation(context: {

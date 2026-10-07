@@ -15,6 +15,7 @@ export interface AnalysisPromptInput {
     taskText: string;
     taskQuality: TaskQuality;
     diff: string;
+    unseenFiles?: string[];
     pullRequestBody?: string;
     userLanguage?: string;
 }
@@ -55,6 +56,13 @@ export function buildBusinessRulesAnalysisPrompt(
         '',
         'PR_DIFF:',
         formatPromptValue(input.diff, '(not available)'),
+        ...(input.unseenFiles?.length
+            ? [
+                  '',
+                  'FILES_NOT_SHOWN (changed in the PR, but too large to include):',
+                  input.unseenFiles.join('\n'),
+              ]
+            : []),
         '',
         'PR_DESCRIPTION:',
         formatPromptValue(input.pullRequestBody, '(not available)'),
@@ -65,12 +73,11 @@ export function buildBusinessRulesAnalysisPrompt(
         TASK_QUALITY_ANALYZER_POLICY,
         '',
         'INSTRUCTIONS:',
-        'Check EACH acceptance criterion against the PR_DIFF. For each one, determine: IMPLEMENTED, MISSING, or PARTIAL.',
-        'Then scan for any task requirements in FULL_TASK_CONTEXT not covered by the acceptance criteria list.',
-        'Write ALL generated prose in USER LANGUAGE.',
-        'Only requirement quotes copied from task context may remain in the original source language.',
-        'Do not mix languages in headings, status labels, findings, explanations, or suggested actions.',
-        'Follow the grounding rules and output format from your system prompt exactly. Submit the result with the submitValidation tool; set status and findings so they agree with the summary.',
+        'List EVERY requirement of the task in `requirements`: each acceptance criterion, then any requirement of FULL_TASK_CONTEXT the criteria leave out. For each, set `state`: met, partial, missing, or check_manually (a visual or flow requirement the code cannot prove).',
+        'Give `evidence` as file and line from PR_DIFF for met and partial, and for missing when a file shows the gap. Put what the code does or lacks in `note`, and the change to make in `action`.',
+        'Set `confidence` per requirement: low when you are guessing. List changes the task does not ask for in `outOfScope`.',
+        'Write `note`, `action`, `change`, `summary` and `missingInfo` in USER LANGUAGE. Quote `requirement` from the task as written.',
+        'Follow the grounding rules from your system prompt. Submit the result with the submitValidation tool.',
     );
 
     return sections.join('\n');

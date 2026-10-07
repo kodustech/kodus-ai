@@ -232,20 +232,42 @@ describe('ChatWithKodyFromGitUseCase', () => {
         expect(response).toMatch(/no task-management mcp/i);
     });
 
-    it('passes through a real business-logic result unchanged', async () => {
+    it('publishes a verdict through the publisher and points to the edited comment', async () => {
+        const outcome = {
+            kind: 'validated',
+            checks: [
+                {
+                    task: { tracker: 'Linear', id: 'PLAT-41' },
+                    verdict: { needsMoreInfo: false, summary: 'x' },
+                    passed: false,
+                    readAt: '2026-10-05T00:00:00.000Z',
+                },
+            ],
+            thinTasks: [],
+            passed: false,
+            unseenFiles: [],
+        };
         businessValidationService.validate.mockResolvedValueOnce({
-            outcome: {
-                kind: 'validated',
-                task: { tracker: 'Linear', id: 'PLAT-41' },
-                verdict: { needsMoreInfo: false, summary: 'x' },
-                report: '## Business Rules Validation\n\nStatus: Issues Found',
-            },
+            outcome,
             references: [],
             attempts: [],
+            trackers: ['Linear'],
         });
+        const publisher = {
+            settingsFor: jest.fn().mockResolvedValue({ failOn: ['missing'] }),
+            headShaOf: jest.fn().mockResolvedValue('abc1234'),
+            publish: jest
+                .fn()
+                .mockResolvedValue({ outcome, comment: 'updated' }),
+        };
+        (useCase as any).businessLogicPublisher = publisher;
 
         const response = await (useCase as any).handleBusinessLogicValidation({
-            prepareContext: { userQuestion: '@kody -v business-logic' },
+            prepareContext: {
+                userQuestion: '@kody -v business-logic',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                pullRequest: { pullRequestNumber: 132 },
+            },
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -253,9 +275,14 @@ describe('ChatWithKodyFromGitUseCase', () => {
             thread: undefined,
         });
 
-        expect(response).toBe(
-            '## Business Rules Validation\n\nStatus: Issues Found',
+        expect(publisher.publish).toHaveBeenCalledWith(
+            expect.objectContaining({
+                trigger: 'command',
+                headSha: 'abc1234',
+                request: expect.objectContaining({ door: 'command' }),
+            }),
         );
+        expect(response).toContain('comment on this pull request is updated');
     });
 
     describe('conversation plan gate', () => {

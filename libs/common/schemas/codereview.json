@@ -279,6 +279,64 @@
                 "required": ["repository"],
                 "additionalProperties": false
             }
+        },
+        "businessLogic": {
+            "type": "object",
+            "description": "How Kody checks each pull request against the task it references.",
+            "properties": {
+                "taskSource": {
+                    "type": "string",
+                    "default": "auto",
+                    "description": "'auto' reads from every connected task tracker; an integration id reads only from that plugin."
+                },
+                "taskSourceTool": {
+                    "type": "string",
+                    "default": "",
+                    "description": "For a custom plugin: the tool that reads one task by its id."
+                },
+                "criteriaLocation": {
+                    "type": "string",
+                    "enum": ["auto", "heading", "field"],
+                    "default": "auto",
+                    "description": "Where the task's acceptance criteria live."
+                },
+                "criteriaHeading": {
+                    "type": "string",
+                    "default": "",
+                    "description": "The heading the criteria sit under, when criteriaLocation is 'heading'."
+                },
+                "criteriaField": {
+                    "type": "string",
+                    "default": "",
+                    "description": "The field the criteria live in, when criteriaLocation is 'field'."
+                },
+                "failOn": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": ["missing", "partial", "not_in_task"]
+                    },
+                    "default": ["missing"],
+                    "description": "Which findings fail the kody/business-logic check. CHECK MANUALLY never does."
+                },
+                "teamGuidance": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "default": "",
+                    "description": "Added to what Kody follows. It can't change the verdict format or make Kody invent requirements."
+                },
+                "commentWhenMet": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Comment even when every requirement is met; off leaves only the green check."
+                },
+                "recheckOnPush": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Re-check on every push, editing the same comment."
+                }
+            },
+            "additionalProperties": false
         }
     },
     "required": [

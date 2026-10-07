@@ -188,6 +188,14 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
         ctaUrl: APP_LINKS.tokenUsage,
     }),
 
+    [NotificationEvent.BUSINESS_LOGIC_SOURCE_UNAVAILABLE]: (m) => ({
+        title: `Business Logic paused: ${m.tracker ?? 'the task tracker'} isn't answering`,
+        body: `Pull requests aren't being checked against their tasks while ${m.tracker ?? 'the task tracker'} is unavailable; they get a skipped check and no comment. Kody re-checks them once it answers again.${m.error ? ` Last error: ${m.error}` : ''}`,
+        ctaUrl: m.repositoryId
+            ? `/settings/code-review/${m.repositoryId}/business-logic`
+            : '/settings/code-review/global/business-logic',
+    }),
+
     [NotificationEvent.RULE_FILE_REFERENCES_INVALID]: (m) => {
         const count = m.invalidCount as number | undefined;
         const repo = m.repoName ?? 'a repository';

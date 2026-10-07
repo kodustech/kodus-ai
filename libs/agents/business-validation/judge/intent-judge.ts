@@ -16,6 +16,7 @@ import {
 import { parseBusinessRulesValidationResult } from './validation-result.parser';
 import type { TaskQuality, ValidationResult } from './validation.types';
 import {
+    deriveStatus,
     readValidationArtifact,
     submitValidationTool,
     VALIDATION_RESULT_TOOL,
@@ -24,6 +25,8 @@ import {
 const DEFAULT_LANGUAGE = 'en-US';
 const PARSER_FALLBACK_FRAGMENT = 'error parsing validation result';
 const MAX_OUTPUT_TOKENS = 20_000;
+/** Verify passes per validation; requirements past this keep the analyzer's state. */
+const MAX_VERIFIED_CLAIMS = 8;
 
 export interface JudgePolicy {
     analyzerTimeoutMs: number;
@@ -38,6 +41,8 @@ export interface JudgeInput {
     taskText: string;
     taskQuality: TaskQuality;
     diff: string;
+    /** Changed files left out of `diff` because it was over budget. */
+    unseenFiles?: string[];
     pullRequestBody?: string;
     userLanguage: string;
 }
@@ -72,6 +77,11 @@ export class IntentJudge {
         private readonly telemetry: JudgeTelemetry,
         private readonly onModelError?: ModelErrorReporter,
     ) {}
+
+    /** The model this judge runs on, for helpers that run on the same one. */
+    get modelSlot(): NormalizedModel | undefined {
+        return this.model;
+    }
 
     async judge(input: JudgeInput): Promise<ValidationResult> {
         const prompt = buildBusinessRulesAnalysisPrompt(input);
@@ -112,14 +122,20 @@ export class IntentJudge {
                     {
                         role: 'system',
                         content:
-                            'Rewrite the provided markdown for the end user in the requested USER LANGUAGE. Preserve markdown structure, code spans, links, and bullet lists. Preserve quoted requirement text exactly when it is explicitly quoted from task context. Do not add new information.',
+                            'Rewrite the provided markdown for the end user in the requested USER LANGUAGE. Preserve markdown structure, tables, HTML tags, code spans, links, @mentions and bullet lists. Keep the uppercase state labels (MET, PARTIAL, MISSING, CHECK MANUALLY, NOT IN TASK, ACCEPTED) as they are. Preserve quoted requirement text exactly when it is explicitly quoted from task context. Do not add new information. Answer with the rewritten markdown only.',
                     },
                     {
                         role: 'user',
                         content: `USER LANGUAGE: ${userLanguage}\n\nMESSAGE:\n${message}`,
                     },
                 ],
-                { maxTokens: 1200 },
+                // Room for the whole message: a requirement table runs long.
+                {
+                    maxTokens: Math.min(
+                        8000,
+                        Math.max(1200, Math.ceil(message.length / 2)),
+                    ),
+                },
                 'businessRulesUserFacingFormatter',
             );
             return content.trim() ? content.trim() : message;
@@ -204,18 +220,67 @@ export class IntentJudge {
                     provider: this.model?.provider,
                 },
             });
-            const { ctx, cleanup } = createAgentRunContext({
-                runId: 'business-rules:verify',
-                timeoutMs: this.policy.analyzerTimeoutMs,
-            });
-            try {
+            const verifyOne = async (claim: ValidationResult) => {
+                const { ctx, cleanup } = createAgentRunContext({
+                    runId: 'business-rules:verify',
+                    timeoutMs: this.policy.analyzerTimeoutMs,
+                });
+                try {
+                    return await verifier.verify(claim, ctx);
+                } finally {
+                    cleanup();
+                }
+            };
+            if (!result.requirements) {
                 return applyBusinessRulesVerdict(
                     result,
-                    await verifier.verify(result, ctx),
+                    await verifyOne(result),
                 );
-            } finally {
-                cleanup();
             }
+            // One claim per requirement: a refuted gap becomes MET, the rest stand.
+            const requirements = await Promise.all(
+                result.requirements.map(async (requirement, index) => {
+                    if (
+                        index >= MAX_VERIFIED_CLAIMS ||
+                        (requirement.state !== 'missing' &&
+                            requirement.state !== 'partial')
+                    ) {
+                        return requirement;
+                    }
+                    const verdict = await verifyOne({
+                        ...result,
+                        summary: [
+                            `Requirement: "${requirement.requirement}"`,
+                            `Claimed: ${requirement.state}`,
+                            requirement.note
+                                ? `Analyzer note: ${requirement.note}`
+                                : '',
+                        ]
+                            .filter(Boolean)
+                            .join('\n'),
+                    }).catch(
+                        () =>
+                            ({ keep: true }) as {
+                                keep: boolean;
+                                rationale?: string;
+                            },
+                    );
+                    return verdict.keep
+                        ? requirement
+                        : {
+                              ...requirement,
+                              state: 'met' as const,
+                              note:
+                                  verdict.rationale?.trim() || requirement.note,
+                              action: undefined,
+                          };
+                }),
+            );
+            return {
+                ...result,
+                requirements,
+                ...deriveStatus({ ...result, requirements }),
+            };
         } catch (error) {
             this.logger.warn({
                 message: `business-rules verify pass failed; keeping analyzer result: ${

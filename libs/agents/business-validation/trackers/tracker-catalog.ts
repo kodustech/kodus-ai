@@ -1,6 +1,7 @@
 import type { MCPServerConfig } from '@libs/mcp-server/mcp-adapter';
 
-import { CustomMcpTracker } from './custom-mcp.tracker';
+import { AUTO_TASK_SOURCE } from '../settings';
+import { type AgentToolReader, CustomMcpTracker } from './custom-mcp.tracker';
 import { GIT_ISSUES_TOOLS, GitIssuesTracker } from './git-issues.tracker';
 import { JIRA_TOOLS, JiraTracker } from './jira.tracker';
 import { LINEAR_TOOLS, LinearTracker } from './linear.tracker';
@@ -35,8 +36,28 @@ const CUSTOM_TRACKER_HINTS = [
     'githubissues',
 ];
 
-/** The task trackers among an organization's MCP connections, in connection order. */
-export function buildTaskTrackers(servers: MCPServerConfig[]): TaskTracker[] {
+export interface TaskSourceOptions {
+    /** `auto`, or the integration id of the one plugin the org reads tasks from. */
+    taskSource?: string;
+    /** The tool that reads a task by id, for a custom plugin. */
+    taskSourceTool?: string;
+    agentReader?: AgentToolReader;
+}
+
+/**
+ * The task trackers among an organization's MCP connections, in connection
+ * order. With a task source chosen, only that one (#1884): a custom plugin
+ * then needs no name hint, and reads with the tool the org picked.
+ */
+export function buildTaskTrackers(
+    servers: MCPServerConfig[],
+    options: TaskSourceOptions = {},
+): TaskTracker[] {
+    const source = options.taskSource ?? AUTO_TASK_SOURCE;
+    if (source !== AUTO_TASK_SOURCE) {
+        const server = servers.find((s) => s.integrationId === source);
+        return server ? [chosenTracker(server, options)] : [];
+    }
     const trackers: TaskTracker[] = [];
     for (const server of servers) {
         const managed = server.integrationId
@@ -53,6 +74,39 @@ export function buildTaskTrackers(servers: MCPServerConfig[]): TaskTracker[] {
         }
     }
     return trackers;
+}
+
+function chosenTracker(
+    server: MCPServerConfig,
+    options: TaskSourceOptions,
+): TaskTracker {
+    const managed = server.integrationId
+        ? MANAGED[server.integrationId]
+        : undefined;
+    if (managed) {
+        return managed(server);
+    }
+    const tool = options.taskSourceTool;
+    return new CustomMcpTracker(
+        server.name,
+        new McpToolSession(server, tool ? [tool] : undefined),
+        tool,
+        tool ? options.agentReader : undefined,
+    );
+}
+
+/** Whether a connection is one of the trackers Kodus reads natively. */
+export function isManagedTracker(server: MCPServerConfig): boolean {
+    return !!server.integrationId && server.integrationId in MANAGED;
+}
+
+/** Connections that can be a task source: managed trackers and every custom plugin. */
+export function taskSourceCandidates(
+    servers: MCPServerConfig[],
+): MCPServerConfig[] {
+    return servers.filter(
+        (s) => isManagedTracker(s) || s.provider === 'custom',
+    );
 }
 
 function isTaskPlugin(server: MCPServerConfig): boolean {

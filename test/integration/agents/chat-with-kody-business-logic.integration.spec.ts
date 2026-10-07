@@ -24,13 +24,13 @@ describe('ChatWithKodyFromGitUseCase business-logic integration', () => {
         businessValidationService = {
             validate: jest.fn().mockResolvedValue({
                 outcome: {
-                    kind: 'validated',
-                    task: { tracker: 'Jira', id: 'KC-1441' },
-                    verdict: { needsMoreInfo: false, summary: 'ok' },
-                    report: '## Validação de Regras de Negócio\n\nTudo certo.',
+                    kind: 'skipped',
+                    reason: 'task_not_found',
+                    message: '## 🤔 Tarefa não encontrada',
                 },
                 references: [],
                 attempts: [],
+                trackers: ['Jira'],
             }),
         };
         codeManagementService = {
@@ -53,6 +53,8 @@ describe('ChatWithKodyFromGitUseCase business-logic integration', () => {
             codeManagementService as any,
             { execute: jest.fn() } as any,
             businessValidationService as unknown as BusinessValidationService,
+            {} as any,
+            {} as any,
         );
     });
 
@@ -152,7 +154,7 @@ describe('ChatWithKodyFromGitUseCase business-logic integration', () => {
                     name: 'kodus-extension',
                 },
                 prNumber: 132,
-                body: '## Validação de Regras de Negócio\n\nTudo certo.',
+                body: '## 🤔 Tarefa não encontrada',
             }),
         );
         expect(

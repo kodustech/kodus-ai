@@ -1,4 +1,4 @@
-import { extractTaskReferences } from './task-references';
+import { extractTaskReferences, selectReferences } from './task-references';
 
 const ids = (sources: Parameters<typeof extractTaskReferences>[0]) =>
     extractTaskReferences(sources).map((r) => `${r.kind}:${r.id}`);
@@ -90,5 +90,69 @@ describe('extractTaskReferences', () => {
 
     it('returns nothing when nothing is referenced', () => {
         expect(ids({ title: 'chore: bump deps', body: '' })).toEqual([]);
+    });
+});
+
+describe('reference intent (UC-18)', () => {
+    const intents = (sources: Parameters<typeof extractTaskReferences>[0]) =>
+        extractTaskReferences(sources).map((r) => `${r.id}:${r.intent}`);
+
+    it('reads "Closes" as closing and "Part of" as a slice', () => {
+        expect(
+            intents({ body: 'Closes PLAT-1\nPart of PLAT-2\nRefs: PLAT-3' }),
+        ).toEqual(['PLAT-1:closes', 'PLAT-2:part_of', 'PLAT-3:part_of']);
+    });
+
+    it("treats a task in the title or branch as the PR's own, and one only mentioned in the body as a mention", () => {
+        expect(
+            intents({
+                title: 'feat(PLAT-1): x',
+                body: 'Uses the same cache as PLAT-9.',
+            }),
+        ).toEqual(['PLAT-1:closes', 'PLAT-9:mentions']);
+    });
+
+    it('keeps "part of" when the body says so about the title\'s task', () => {
+        expect(
+            intents({
+                title: 'feat(PLAT-1): x',
+                body: 'This is part of PLAT-1.',
+            }),
+        ).toEqual(['PLAT-1:part_of']);
+    });
+});
+
+describe('selectReferences (UC-17)', () => {
+    const refs = (sources: Parameters<typeof extractTaskReferences>[0]) =>
+        extractTaskReferences(sources);
+
+    it('prefers stated references over ones the body only mentions', () => {
+        const chosen = selectReferences(
+            refs({
+                title: 'feat(PLAT-1): x',
+                body: 'Needs node-22, UTF-8 and SHA-256 support.',
+            }),
+            3,
+        );
+        expect(chosen?.map((r) => r.id)).toEqual(['PLAT-1']);
+    });
+
+    it('gives up on a release that states more tasks than one validation covers', () => {
+        expect(
+            selectReferences(
+                refs({
+                    body: 'Closes PLAT-1\nCloses PLAT-2\nCloses PLAT-3\nCloses PLAT-4',
+                }),
+                3,
+            ),
+        ).toBeUndefined();
+    });
+
+    it('falls back to mentions when nothing is stated', () => {
+        expect(
+            selectReferences(refs({ body: 'Touches PLAT-7.' }), 3)?.map(
+                (r) => r.id,
+            ),
+        ).toEqual(['PLAT-7']);
     });
 });

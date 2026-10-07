@@ -25,6 +25,8 @@ import { CLI_DEVICE_SERVICE_TOKEN } from '@libs/organization/domain/cli-device/c
 import { TEAM_CLI_KEY_SERVICE_TOKEN } from '@libs/organization/domain/team-cli-key/contracts/team-cli-key.service.contract';
 import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
+import { ValidationRunRepository } from '@libs/agents/business-validation/runs/validation-run.repository';
+import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { TriggerBusinessValidationUseCase } from '@libs/platform/application/use-cases/codeManagement/trigger-business-validation.use-case';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -145,6 +147,16 @@ describe('CLI business-validation integration', () => {
                     useValue: mockBusinessProvider,
                 },
                 {
+                    provide: BusinessLogicPublisher,
+                    useValue: {
+                        settingsFor: jest.fn().mockResolvedValue(undefined),
+                    },
+                },
+                {
+                    provide: ValidationRunRepository,
+                    useValue: { create: jest.fn().mockResolvedValue('run-1') },
+                },
+                {
                     provide: JwtService,
                     useValue: { verify: jest.fn() },
                 },
@@ -178,12 +190,33 @@ describe('CLI business-validation integration', () => {
         mockBusinessProvider.validate.mockResolvedValue({
             outcome: {
                 kind: 'validated',
-                task: { tracker: 'Linear', id: 'KD-1234' },
-                verdict: { needsMoreInfo: false, summary: 'ok' },
-                report: '## Business Rules Validation\n\nLooks good.',
+                checks: [
+                    {
+                        task: { tracker: 'Linear', id: 'KD-1234' },
+                        verdict: {
+                            needsMoreInfo: false,
+                            summary: 'ok',
+                            requirements: [
+                                {
+                                    requirement: 'Validates the rule',
+                                    state: 'met',
+                                    evidence: [{ file: 'rule.ts', line: 3 }],
+                                    confidence: 'high',
+                                },
+                            ],
+                            outOfScope: [],
+                        },
+                        passed: true,
+                        readAt: '2026-10-05T00:00:00.000Z',
+                    },
+                ],
+                thinTasks: [],
+                passed: true,
+                unseenFiles: [],
             },
             references: [],
             attempts: [],
+            trackers: ['Linear'],
         });
         mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
             [{ id: 'repo-1', name: 'kodus-ai', organizationName: 'kodus-ai' }],
@@ -219,7 +252,13 @@ describe('CLI business-validation integration', () => {
             repositoryId: 'repo-1',
             repositoryName: 'kodus-ai',
             taskReference: 'KD-1234',
-            result: '## Business Rules Validation\n\nLooks good.',
+            result: expect.stringContaining(
+                'MET            Validates the rule rule.ts:3',
+            ),
+            verdict: expect.objectContaining({
+                status: 'compliant',
+                passed: true,
+            }),
         });
         expect(mockRateLimiter.checkRateLimit).toHaveBeenCalledWith('team-1');
         expect(mockBusinessProvider.validate).toHaveBeenCalledWith(
@@ -310,7 +349,13 @@ describe('CLI business-validation integration', () => {
             repositoryId: 'repo-1',
             repositoryName: 'kodus-ai',
             taskReference: 'KD-1234',
-            result: '## Business Rules Validation\n\nLooks good.',
+            result: expect.stringContaining(
+                'MET            Validates the rule rule.ts:3',
+            ),
+            verdict: expect.objectContaining({
+                status: 'compliant',
+                passed: true,
+            }),
         });
 
         const request = mockBusinessProvider.validate.mock.calls[0][0];

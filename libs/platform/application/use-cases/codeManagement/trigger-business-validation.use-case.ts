@@ -2,8 +2,16 @@ import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
-import { replyFor } from '@libs/agents/business-validation/command';
+import type { BusinessValidationOutcome } from '@libs/agents/business-validation/business-validation.types';
 import { formatPullRequestDiff } from '@libs/agents/business-validation/pull-request-diff';
+import { renderCliText } from '@libs/agents/business-validation/render';
+import {
+    buildRun,
+    toRunTasks,
+} from '@libs/agents/business-validation/runs/run-mapping';
+import type { RunTask } from '@libs/agents/business-validation/runs/validation-run.model';
+import { ValidationRunRepository } from '@libs/agents/business-validation/runs/validation-run.repository';
+import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -36,7 +44,24 @@ export interface TriggerBusinessValidationResult {
     repositoryId?: string;
     repositoryName?: string;
     taskReference?: string;
+    /** What a person or an agent reads: one line per requirement. */
     result: string;
+    /** The same verdict, structured (`--json`). */
+    verdict: CliBusinessVerdict;
+}
+
+/** The verdict a coding agent acts on before it opens the PR (UC-41). */
+export interface CliBusinessVerdict {
+    status:
+        | 'compliant'
+        | 'issues_found'
+        | 'skipped'
+        | 'task_too_thin'
+        | 'task_missing';
+    passed: boolean;
+    reason?: string;
+    message?: string;
+    tasks: RunTask[];
 }
 
 interface BusinessValidationRepositoryContext {
@@ -78,6 +103,8 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
         private readonly businessValidationService: BusinessValidationService,
+        private readonly businessLogicPublisher: BusinessLogicPublisher,
+        private readonly runs: ValidationRunRepository,
     ) {}
 
     async execute(params: {
@@ -105,8 +132,13 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                       taskReference,
                   });
 
-        const validation = await this.businessValidationService.validate({
-            door: 'cli',
+        const settings = await this.businessLogicPublisher.settingsFor(
+            organizationAndTeamData,
+            executionContext.repository?.id,
+        );
+        const request = {
+            door: 'cli' as const,
+            settings,
             organizationAndTeamData,
             repository: executionContext.repository
                 ? {
@@ -144,8 +176,16 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                                   },
                               ),
                           ),
-        });
-        const result = replyFor(validation.outcome);
+        };
+        const validation =
+            await this.businessValidationService.validate(request);
+        // Recorded like any other door; the CLI never writes to the PR.
+        await this.runs.create(buildRun(request, validation));
+        const result = renderCliText(validation.outcome);
+        const verdict = toCliVerdict(
+            validation.outcome,
+            toRunTasks(validation),
+        );
 
         if (executionContext.mode === 'pull_request') {
             return {
@@ -158,6 +198,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 repositoryName: executionContext.repository.name,
                 taskReference,
                 result,
+                verdict,
             };
         }
 
@@ -169,6 +210,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             repositoryName: executionContext.repository?.name,
             taskReference,
             result,
+            verdict,
         };
     }
 
@@ -541,5 +583,34 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
         }
 
         return owner;
+    }
+}
+
+function toCliVerdict(
+    outcome: BusinessValidationOutcome,
+    tasks: RunTask[],
+): CliBusinessVerdict {
+    switch (outcome.kind) {
+        case 'validated':
+            return {
+                status: outcome.passed ? 'compliant' : 'issues_found',
+                passed: outcome.passed,
+                tasks,
+            };
+        case 'skipped':
+            return {
+                status: 'skipped',
+                passed: false,
+                reason: outcome.reason,
+                message: outcome.message,
+                tasks,
+            };
+        default:
+            return {
+                status: outcome.kind,
+                passed: false,
+                message: outcome.message,
+                tasks,
+            };
     }
 }

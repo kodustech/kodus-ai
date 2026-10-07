@@ -1,4 +1,5 @@
 import type {
+    ReferenceIntent,
     ReferenceSource,
     TaskReference,
 } from './business-validation.types';
@@ -8,6 +9,18 @@ export type ReferenceSources = Partial<Record<ReferenceSource, string>>;
 const SOURCE_ORDER: ReferenceSource[] = ['command', 'title', 'branch', 'body'];
 
 type Match = { index: number; end: number; reference?: TaskReference };
+type Candidate = TaskReference extends infer R
+    ? R extends TaskReference
+        ? Omit<R, 'intent'>
+        : never
+    : never;
+
+/** Words right before a reference that say the PR finishes the task. */
+const CLOSES =
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|implement(?:s|ed)?|complete[sd]?)\b[\s:]*$/i;
+/** Words that say the PR delivers only a slice of it. */
+const PART_OF =
+    /\b(?:part\s+of|partially|partial|refs?|references?|related\s+to|relates\s+to|towards?|see|parte\s+de|relacionad[oa]\s+a)\b[\s:]*$/i;
 
 /**
  * Every task a PR could be pointing at, in the order a person would read
@@ -20,7 +33,7 @@ type Match = { index: number; end: number; reference?: TaskReference };
 export function extractTaskReferences(
     sources: ReferenceSources,
 ): TaskReference[] {
-    const seen = new Set<string>();
+    const byKey = new Map<string, TaskReference>();
     const references: TaskReference[] = [];
 
     for (const source of SOURCE_ORDER) {
@@ -34,14 +47,63 @@ export function extractTaskReferences(
                     ? `${reference.repository.owner}/${reference.repository.name}`
                     : ''
             }`;
-            if (!seen.has(key)) {
-                seen.add(key);
+            const earlier = byKey.get(key);
+            if (!earlier) {
+                byKey.set(key, reference);
                 references.push(reference);
+                continue;
             }
+            // "feat(SAA-96)" in the title and "Part of SAA-96" in the body:
+            // the PR said it delivers a slice, so that is what counts.
+            earlier.intent = strongerIntent(earlier.intent, reference.intent);
         }
     }
 
     return references;
+}
+
+function strongerIntent(
+    a: ReferenceIntent,
+    b: ReferenceIntent,
+): ReferenceIntent {
+    if (a === 'part_of' || b === 'part_of') {
+        return 'part_of';
+    }
+    return a === 'closes' || b === 'closes' ? 'closes' : 'mentions';
+}
+
+/**
+ * The references a validation should judge. Ones the PR states (in the
+ * command, title or branch, or after "Closes" / "Part of") win over ones the
+ * body only mentions. More than `max` of them is a release or a merge, not one
+ * task's work, and returns `undefined` (UC-17).
+ */
+export function selectReferences(
+    references: TaskReference[],
+    max: number,
+): TaskReference[] | undefined {
+    const stated = references.filter(
+        (r) => r.source !== 'body' || r.intent !== 'mentions',
+    );
+    const chosen = stated.length ? stated : references;
+    return chosen.length > max ? undefined : chosen;
+}
+
+function intentBefore(
+    text: string,
+    index: number,
+    source: ReferenceSource,
+): ReferenceIntent {
+    const lineStart = text.lastIndexOf('\n', index - 1) + 1;
+    const before = text.slice(Math.max(lineStart, index - 40), index);
+    if (PART_OF.test(before)) {
+        return 'part_of';
+    }
+    if (CLOSES.test(before)) {
+        return 'closes';
+    }
+    // A task named in the title, branch or command is the PR's own task.
+    return source === 'body' ? 'mentions' : 'closes';
 }
 
 function extractFromText(
@@ -53,7 +115,7 @@ function extractFromText(
         matches.some((m) => index < m.end && end > m.index);
     const collect = (
         pattern: RegExp,
-        toReference: (m: RegExpExecArray) => TaskReference | undefined,
+        toReference: (m: RegExpExecArray) => Candidate | undefined,
     ) => {
         for (const m of text.matchAll(pattern)) {
             const index = m.index ?? 0;
@@ -63,7 +125,17 @@ function extractFromText(
             }
             // A URL that is not a task still claims its text, so the `/70` of
             // a pull request link is never read again as `#70`.
-            matches.push({ index, end, reference: toReference(m) });
+            const candidate = toReference(m);
+            matches.push({
+                index,
+                end,
+                reference: candidate
+                    ? ({
+                          ...candidate,
+                          intent: intentBefore(text, index, source),
+                      } as TaskReference)
+                    : undefined,
+            });
         }
     };
 
@@ -108,10 +180,7 @@ function extractFromText(
         .filter((r): r is TaskReference => r !== undefined);
 }
 
-function fromUrl(
-    url: string,
-    source: ReferenceSource,
-): TaskReference | undefined {
+function fromUrl(url: string, source: ReferenceSource): Candidate | undefined {
     let parsed: URL;
     try {
         parsed = new URL(url);

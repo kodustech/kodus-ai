@@ -4,6 +4,9 @@ import { asRecord, safeJsonParse } from '../value-utils';
 
 import { ValidationResult } from './validation.types';
 import {
+    deriveStatus,
+    parseOutOfScope,
+    parseRequirements,
     parseValidationFindings,
     parseValidationStatus,
 } from './validation-verdict';
@@ -135,7 +138,8 @@ function tryParseValidationObject(
         'summary' in record ||
         'missingInfo' in record ||
         'mode' in record ||
-        'reason' in record;
+        'reason' in record ||
+        'requirements' in record;
     if (!hasKnownKeys) {
         return undefined;
     }
@@ -179,8 +183,17 @@ function tryParseValidationObject(
             ? record.confidence
             : undefined;
 
-    const status = parseValidationStatus(record.status);
-    const findings = parseValidationFindings(record.findings);
+    const requirements = parseRequirements(record.requirements);
+    const outOfScope = parseOutOfScope(record.outOfScope);
+    const scopeMismatch = record.scopeMismatch === true;
+    // The requirement list is the verdict; status and findings follow from it.
+    const derived =
+        requirements && record.needsMoreInfo !== true
+            ? deriveStatus({ requirements, outOfScope, scopeMismatch })
+            : undefined;
+    const status = derived?.status ?? parseValidationStatus(record.status);
+    const findings =
+        derived?.findings ?? parseValidationFindings(record.findings);
 
     return {
         needsMoreInfo: record.needsMoreInfo === true,
@@ -193,6 +206,9 @@ function tryParseValidationObject(
         summary,
         ...(status ? { status } : {}),
         ...(findings ? { findings } : {}),
+        ...(requirements ? { requirements } : {}),
+        ...(outOfScope ? { outOfScope } : {}),
+        ...(scopeMismatch ? { scopeMismatch } : {}),
     };
 }
 

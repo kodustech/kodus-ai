@@ -7,7 +7,12 @@ import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
 import { recordsIn, textField, toText } from './task-payload';
 import { McpTaskTracker } from './tracker';
 
-export const JIRA_TOOLS = ['getAccessibleAtlassianResources', 'getJiraIssue'];
+/** `getVisibleJiraProjects` only tells a typo from a version number; issues are never listed. */
+export const JIRA_TOOLS = [
+    'getAccessibleAtlassianResources',
+    'getJiraIssue',
+    'getVisibleJiraProjects',
+];
 
 /** Custom fields shorter than this are labels and ids, not requirements. */
 const MIN_CUSTOM_FIELD_TEXT = 20;
@@ -67,6 +72,8 @@ export class JiraTracker extends McpTaskTracker {
                 continue;
             }
             const fields = asRecord(issue.fields);
+            const named = longFields(fields, asRecord(issue.names));
+            const attachments = fields.attachment;
             return {
                 status: 'found',
                 task: {
@@ -80,10 +87,32 @@ export class JiraTracker extends McpTaskTracker {
                     url: site.url
                         ? `${site.url.replace(/\/$/, '')}/browse/${reference.id}`
                         : undefined,
+                    updatedAt:
+                        typeof fields.updated === 'string'
+                            ? fields.updated
+                            : undefined,
+                    hasAttachments:
+                        Array.isArray(attachments) && attachments.length > 0,
+                    ...(Object.keys(named).length ? { fields: named } : {}),
                 },
             };
         }
         return { status: 'not_found' };
+    }
+
+    protected async projectKeys(): Promise<string[]> {
+        const keys: string[] = [];
+        for (const site of (await this.loadSites()).slice(0, 3)) {
+            const payload = await this.session.call('getVisibleJiraProjects', {
+                cloudId: site.id,
+            });
+            for (const record of recordsIn(payload)) {
+                if (typeof record.key === 'string') {
+                    keys.push(record.key);
+                }
+            }
+        }
+        return keys;
     }
 
     private loadSites(): Promise<Array<{ id: string; url?: string }>> {
@@ -123,6 +152,31 @@ function customFieldText(fields: Record<string, unknown>): string | undefined {
                 text.length >= MIN_CUSTOM_FIELD_TEXT,
         );
     return texts.length ? `Other fields:\n${texts.join('\n\n')}` : undefined;
+}
+
+/**
+ * Long text fields by id and, when the payload names them, by name too, so a
+ * team can say "criteria live in Acceptance Criteria" or `customfield_10031`.
+ */
+function longFields(
+    fields: Record<string, unknown>,
+    names: Record<string, unknown>,
+): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(fields)) {
+        if (!key.startsWith('customfield_')) {
+            continue;
+        }
+        const text = toText(value);
+        if (typeof text !== 'string' || text.length < MIN_CUSTOM_FIELD_TEXT) {
+            continue;
+        }
+        out[key] = text;
+        if (typeof names[key] === 'string') {
+            out[names[key] as string] = text;
+        }
+    }
+    return out;
 }
 
 function joinSections(sections: Array<string | undefined>): string | undefined {

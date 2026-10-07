@@ -1,5 +1,4 @@
 import type { BusinessValidationOutcome } from '@libs/agents/business-validation/business-validation.types';
-import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -14,10 +13,23 @@ function build(outcome: BusinessValidationOutcome | Error) {
             if (outcome instanceof Error) {
                 throw outcome;
             }
-            return { outcome, references: [], attempts: [] };
+            return { outcome, references: [], attempts: [], trackers: [] };
         }),
     };
-    return { stage: new BusinessLogicValidationStage(service as any), service };
+    const publisher = {
+        publish: jest.fn(async (input: { result: { outcome: unknown } }) => ({
+            outcome: input.result.outcome,
+            comment: 'created',
+        })),
+    };
+    return {
+        stage: new BusinessLogicValidationStage(
+            service as any,
+            publisher as any,
+        ),
+        service,
+        publisher,
+    };
 }
 
 const context = (overrides: Partial<CodeReviewPipelineContext> = {}) =>
@@ -28,8 +40,9 @@ const context = (overrides: Partial<CodeReviewPipelineContext> = {}) =>
             number: 42,
             title: 'feat(PLAT-41): scale servings',
             body: 'Adds scaling.',
-            head: { ref: 'feat/plat-41' },
+            head: { ref: 'feat/plat-41', sha: 'abc1234' },
             base: { ref: 'main' },
+            user: { login: 'rafa' },
         },
         platformType: 'github',
         codeReviewConfig: {
@@ -38,24 +51,60 @@ const context = (overrides: Partial<CodeReviewPipelineContext> = {}) =>
             byokModelId: 'model-main',
         },
         changedFiles: [{ filename: 'a.ts', status: 'modified', patch: '+x' }],
+        prAllCommits: [
+            {
+                sha: 'abc1234',
+                commit: {
+                    author: {
+                        name: 'rafa',
+                        email: 'rafa@example.com',
+                        date: '',
+                    },
+                    message:
+                        'feat: scale\n\nCo-Authored-By: Claude <noreply@anthropic.com>',
+                },
+            },
+        ],
         pipelineMetadata: {},
         errors: [],
         ...overrides,
     } as unknown as CodeReviewPipelineContext);
 
-const verdict = (status: 'compliant' | 'issues_found', summary: string) =>
+const validated = (passed: boolean) =>
     ({
         kind: 'validated',
-        task: TASK,
-        verdict: { needsMoreInfo: false, status, findings: [], summary },
-        report: summary,
+        checks: [
+            {
+                task: TASK,
+                verdict: {
+                    needsMoreInfo: false,
+                    summary: 'x',
+                    status: passed ? 'compliant' : 'issues_found',
+                    requirements: [],
+                },
+                passed,
+                readAt: '2026-10-05T00:00:00.000Z',
+            },
+        ],
+        thinTasks: [],
+        passed,
+        unseenFiles: [],
     }) as BusinessValidationOutcome;
 
 describe('BusinessLogicValidationStage', () => {
-    it('sends the PR, its diff and the model override to the service', async () => {
-        const { stage, service } = build(verdict('compliant', 'ok'));
+    it('sends the PR, its diff, the model override and the settings to the service', async () => {
+        const { stage, service } = build(validated(true));
 
-        await stage.execute(context());
+        await stage.execute(
+            context({
+                codeReviewConfig: {
+                    reviewOptions: { business_logic: true },
+                    byokModel: 'gpt-5.4',
+                    byokModelId: 'model-main',
+                    businessLogic: { failOn: ['missing', 'partial'] },
+                },
+            } as any),
+        );
 
         expect(service.validate).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -74,6 +123,30 @@ describe('BusinessLogicValidationStage', () => {
                 diff: expect.stringContaining('=== FILE: a.ts ==='),
                 byokModel: 'gpt-5.4',
                 byokModelId: 'model-main',
+                settings: expect.objectContaining({
+                    failOn: ['missing', 'partial'],
+                }),
+            }),
+        );
+    });
+
+    it('publishes the outcome with the head commit, the trigger and the commits', async () => {
+        const { stage, publisher } = build(validated(true));
+
+        await stage.execute(context());
+
+        expect(publisher.publish).toHaveBeenCalledWith(
+            expect.objectContaining({
+                headSha: 'abc1234',
+                trigger: 'auto',
+                authorLogin: 'rafa',
+                commits: [
+                    expect.objectContaining({
+                        message: expect.stringContaining(
+                            'Co-Authored-By: Claude',
+                        ),
+                    }),
+                ],
             }),
         );
     });
@@ -92,11 +165,12 @@ describe('BusinessLogicValidationStage', () => {
             },
         ],
     ])('skips without calling the service: %s', async (reason, overrides) => {
-        const { stage, service } = build(verdict('compliant', 'ok'));
+        const { stage, service, publisher } = build(validated(true));
 
         const result = await stage.execute(context(overrides as any));
 
         expect(service.validate).not.toHaveBeenCalled();
+        expect(publisher.publish).not.toHaveBeenCalled();
         expect(result.businessLogicOutcome).toMatchObject({
             kind: 'skipped',
             reason,
@@ -104,10 +178,31 @@ describe('BusinessLogicValidationStage', () => {
         expect(result.businessLogicResults).toEqual([]);
     });
 
-    it('revalidates on @kody review --force, with door "force" and no rerun tip', async () => {
-        const { stage, service } = build(verdict('compliant', 'ok'));
+    it('re-checks a PR already validated when the team turned on re-check on every push (UC-35)', async () => {
+        const { stage, service, publisher } = build(validated(true));
 
-        const result = await stage.execute(
+        await stage.execute(
+            context({
+                codeReviewConfig: {
+                    reviewOptions: { business_logic: true },
+                    businessLogic: { recheckOnPush: true },
+                },
+                pipelineMetadata: {
+                    lastExecution: { businessLogicValidatedAt: 'x' },
+                },
+            } as any),
+        );
+
+        expect(service.validate).toHaveBeenCalled();
+        expect(publisher.publish).toHaveBeenCalledWith(
+            expect.objectContaining({ trigger: 'push' }),
+        );
+    });
+
+    it('revalidates on @kody review --force, with door "force"', async () => {
+        const { stage, service, publisher } = build(validated(true));
+
+        await stage.execute(
             context({
                 origin: 'command-force',
                 pipelineMetadata: {
@@ -119,10 +214,12 @@ describe('BusinessLogicValidationStage', () => {
         expect(service.validate).toHaveBeenCalledWith(
             expect.objectContaining({ door: 'force' }),
         );
-        expect(result.businessLogicResults[0].suggestionContent).toBe('ok');
+        expect(publisher.publish).toHaveBeenCalledWith(
+            expect.objectContaining({ trigger: 'force' }),
+        );
     });
 
-    it('posts nothing when the service skipped (no task, tracker down, ...)', async () => {
+    it('records a skip without marking the PR validated (no task, tracker down, ...)', async () => {
         const { stage } = build({
             kind: 'skipped',
             reason: 'tracker_unavailable',
@@ -139,18 +236,15 @@ describe('BusinessLogicValidationStage', () => {
         expect(result.businessLogicValidatedAt).toBeUndefined();
     });
 
-    it('posts the message when the task is too thin to judge', async () => {
+    it('marks the PR validated when the task is too thin to judge', async () => {
         const { stage } = build({
             kind: 'task_too_thin',
-            task: TASK,
+            tasks: [TASK],
             message: 'PLAT-41 has only a title',
         });
 
         const result = await stage.execute(context());
 
-        expect(result.businessLogicResults[0].suggestionContent).toContain(
-            'PLAT-41 has only a title',
-        );
         expect(result.businessLogicOutcome).toMatchObject({
             kind: 'skipped',
             reason: 'weak_task_context',
@@ -160,35 +254,17 @@ describe('BusinessLogicValidationStage', () => {
 
     // #2019: the verdict decides, whatever the report says and in any language.
     it.each([
-        [
-            'compliant',
-            '**Status:** Em conformidade',
-            'success',
-            SeverityLevel.LOW,
-        ],
-        [
-            'issues_found',
-            'no issues with naming, but AC #2 is missing',
-            'gap_found',
-            SeverityLevel.MEDIUM,
-        ],
-    ] as const)(
-        'maps a %s verdict to %s',
-        async (status, report, kind, severity) => {
-            const { stage } = build(verdict(status, report));
+        [true, 'success'],
+        [false, 'gap_found'],
+    ] as const)('maps a verdict that passed=%s to %s', async (passed, kind) => {
+        const { stage } = build(validated(passed));
 
-            const result = await stage.execute(context());
+        const result = await stage.execute(context());
 
-            expect(result.businessLogicOutcome).toMatchObject({ kind });
-            expect(result.businessLogicResults[0]).toMatchObject({ severity });
-            expect(result.businessLogicResults[0].suggestionContent).toContain(
-                report,
-            );
-            expect(result.businessLogicResults[0].suggestionContent).toContain(
-                '@kody -v business-logic',
-            );
-        },
-    );
+        expect(result.businessLogicOutcome).toMatchObject({ kind });
+        // The comment is the publisher's; nothing goes through PR-level suggestions.
+        expect(result.businessLogicResults).toEqual([]);
+    });
 
     it('records an error without aborting the pipeline when the service throws', async () => {
         const { stage } = build(new Error('boom'));
@@ -202,7 +278,7 @@ describe('BusinessLogicValidationStage', () => {
     it('leaves no timeout pending once the service has answered', async () => {
         jest.useFakeTimers();
         try {
-            const { stage } = build(verdict('compliant', 'ok'));
+            const { stage } = build(validated(true));
             await stage.execute(context());
             expect(jest.getTimerCount()).toBe(0);
         } finally {

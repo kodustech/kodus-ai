@@ -6,7 +6,8 @@ import { McpToolSession } from './mcp-tool-session';
 import { mentions, recordsIn, textField } from './task-payload';
 import { McpTaskTracker } from './tracker';
 
-export const LINEAR_TOOLS = ['get_issue'];
+/** `list_teams` only tells a typo (`SAA-999`) from a version number (`UTF-8`); tasks are never listed. */
+export const LINEAR_TOOLS = ['get_issue', 'list_teams'];
 
 /** Linear's remote MCP (`mcp.linear.app`). Reads one issue by its identifier. */
 export class LinearTracker extends McpTaskTracker {
@@ -42,6 +43,13 @@ export class LinearTracker extends McpTaskTracker {
                     title: textField(issue, ['title']),
                     description: textField(issue, ['description']),
                     url: textField(issue, ['url']),
+                    updatedAt:
+                        typeof issue.updatedAt === 'string'
+                            ? issue.updatedAt
+                            : undefined,
+                    hasAttachments:
+                        Array.isArray(issue.attachments) &&
+                        issue.attachments.length > 0,
                 },
             };
         }
@@ -59,5 +67,19 @@ export class LinearTracker extends McpTaskTracker {
             };
         }
         return { status: 'not_found' };
+    }
+
+    protected async projectKeys(): Promise<string[]> {
+        const payload = await this.session.call('list_teams', {});
+        const keys = recordsIn(payload)
+            .map((record) => record.key)
+            .filter((key): key is string => typeof key === 'string');
+        if (keys.length || typeof payload !== 'string') {
+            return keys;
+        }
+        // Markdown answer: keys appear as `Key: SAA` or `(SAA)`.
+        return [
+            ...payload.matchAll(/(?:\bkey\W+|\()([A-Z][A-Z0-9]{1,9})\b/gi),
+        ].map((m) => m[1].toUpperCase());
     }
 }

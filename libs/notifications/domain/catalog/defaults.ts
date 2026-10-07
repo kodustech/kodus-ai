@@ -9,11 +9,7 @@ import { NotificationEvent } from './events';
  * without React on the API side.
  */
 export type CatalogIcon =
-    | 'bell'
-    | 'shield-alert'
-    | 'zap'
-    | 'info'
-    | 'credit-card';
+    'bell' | 'shield-alert' | 'zap' | 'info' | 'credit-card';
 
 /**
  * Static metadata for each event in the catalog.
@@ -312,6 +308,17 @@ export const EVENT_DEFAULTS: Readonly<
         pageSeverity: true,
         actionLabel: 'Top up credits',
         defaultRoles: [Role.OWNER, Role.BILLING_MANAGER],
+    },
+
+    // ── Business Logic ─────────────────────────────────────────
+
+    [NotificationEvent.BUSINESS_LOGIC_SOURCE_UNAVAILABLE]: {
+        criticality: Criticality.TRANSACTIONAL,
+        category: 'review',
+        label: 'Business Logic Task Source Unavailable',
+        defaultChannels: new Set([NotificationChannel.IN_APP]),
+        icon: 'shield-alert',
+        defaultRoles: [Role.OWNER],
     },
 
     // ── Kody Rules (file reference validation) ────────────────

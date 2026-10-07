@@ -11,13 +11,39 @@ import type {
 
 const RERUN = '`@kody -v business-logic`';
 
-export function taskTooThinMessage(task: Task): string {
+export function taskTooThinMessage(tasks: Task[]): string {
+    const task = tasks[0];
+    const others = tasks.slice(1).map((t) => `**${t.id}**`);
     return `## 🤔 ${task.id} has only a title
 
-I read **${task.id}** in ${task.tracker}, but it doesn't say what "done" means, so there is nothing to compare this pull request with.
+I read **${task.id}** in ${task.tracker}${task.title ? ` (“${task.title}”)` : ''}, but it doesn't say what "done" means, so there is nothing to compare this pull request with.${others.length ? ` The same goes for ${others.join(', ')}.` : ''}
 
 ### 💡 Next step
-Add a description or acceptance criteria to ${task.id} and comment ${RERUN}.`;
+Add acceptance criteria to ${task.id} (for example: what the feature must do, which cases it covers, what it must not change) and comment ${RERUN}.`;
+}
+
+export function tooManyReferencesMessage(count: number): string {
+    return `## 🤔 Too many tasks referenced
+
+This pull request references ${count} tasks, which reads like a release or a merge rather than one task's work, so nothing was validated. Run ${RERUN} followed by the one task id to check it against this pull request.`;
+}
+
+/** A reference whose prefix is a real team or project, but no such task (UC-21). */
+export function taskMissingMessage(
+    reference: TaskReference,
+    tracker: string,
+    nearby: string[],
+): string {
+    const prefix = reference.id.split('-')[0];
+    const closest = nearby.length
+        ? ` The closest existing tasks are ${nearby.map((id) => `**${id}**`).join(' and ')}.`
+        : '';
+    return `## 🤔 ${reference.id} doesn't exist in ${tracker}
+
+${prefix} is a team in your ${tracker}, so \`${reference.raw}\` looks like a task id. Maybe a typo?${closest}
+
+### 💡 Next step
+Fix the reference in the title or description and comment ${RERUN}.`;
 }
 
 export function noReferenceMessage(): string {

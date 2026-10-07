@@ -25,7 +25,14 @@ import { ForgejoPullRequestHandler } from '../infrastructure/webhooks/forgejo/fo
 import { GitHubPullRequestHandler } from '../infrastructure/webhooks/github/githubPullRequest.handler';
 import { GitLabMergeRequestHandler } from '../infrastructure/webhooks/gitlab/gitlabPullRequest.handler';
 
+import { BusinessLogicPublisher } from '../application/services/business-logic-publisher.service';
+import { BusinessLogicReplies } from '../application/services/business-logic-replies.service';
+import { BusinessLogicRecheckService } from '../application/services/business-logic-recheck.service';
 import { OrganizationMemberListService } from '../application/services/organization-member-list.service';
+import { ChecksAdapterFactory } from '@libs/core/infrastructure/pipeline/services/checks-adapter.factory';
+import { NullChecksAdapter } from '@libs/core/infrastructure/pipeline/services/null-checks.adapter';
+import { ForgejoChecksService } from '../infrastructure/adapters/services/forgejo/forgejo-checks.service';
+import { GithubChecksService } from '../infrastructure/adapters/services/github/github-checks.service';
 import { WebhookContextService } from '../application/services/webhook-context.service';
 import { GetConnectionsUseCase } from '../application/use-cases/integrations/get-connections.use-case';
 import { GetOrganizationLanguageUseCase } from '../application/use-cases/organization/get-organization-language.use-case';
@@ -77,6 +84,15 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         GetOrganizationLanguageUseCase,
         OrganizationMemberListService,
         WebhookContextService,
+        // The business-logic check, outside the review pipeline too (the
+        // `@kody -v business-logic` command writes it).
+        GithubChecksService,
+        ForgejoChecksService,
+        NullChecksAdapter,
+        ChecksAdapterFactory,
+        BusinessLogicPublisher,
+        BusinessLogicReplies,
+        BusinessLogicRecheckService,
         AzureReposPullRequestHandler,
         GitHubPullRequestHandler,
         GitLabMergeRequestHandler,
@@ -111,6 +127,8 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         GetOrganizationLanguageUseCase,
         OrganizationMemberListService,
         WebhookContextService,
+        BusinessLogicPublisher,
+        BusinessLogicRecheckService,
         'AZURE_REPOS_WEBHOOK_HANDLER',
         'GITHUB_WEBHOOK_HANDLER',
         'GITLAB_WEBHOOK_HANDLER',

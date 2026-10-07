@@ -10,7 +10,14 @@
 import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
 import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 
-import type {
+import { asRecord } from '../value-utils';
+import {
+    REQUIREMENT_TOPICS,
+    type CodeLocation,
+    Confidence,
+    OutOfScopeChange,
+    RequirementState,
+    RequirementVerdict,
     ValidationFinding,
     ValidationResult,
     ValidationStatus,
@@ -30,43 +37,97 @@ const FINDING_SEVERITIES: readonly ValidationFinding['severity'][] = [
     'info',
 ];
 
+const LOCATION_SCHEMA: JSONSchema = {
+    type: 'object',
+    properties: {
+        file: { type: 'string' },
+        line: { type: 'number' },
+    },
+    required: ['file'],
+};
+
+export const REQUIREMENT_STATES: readonly RequirementState[] = [
+    'met',
+    'partial',
+    'missing',
+    'check_manually',
+];
+
+const CONFIDENCES: readonly Confidence[] = ['low', 'medium', 'high'];
+const REQUIREMENT_KINDS = ['behavior', 'visual', 'flow'] as const;
+
 export const VALIDATION_RESULT_SCHEMA: JSONSchema = {
     type: 'object',
     properties: {
         needsMoreInfo: { type: 'boolean' },
-        status: { type: 'string', enum: [...VALIDATION_STATUSES] },
-        findings: {
+        requirements: {
             type: 'array',
+            description:
+                'One entry per requirement of the task, in the order the task lists them.',
             items: {
                 type: 'object',
                 properties: {
-                    severity: { type: 'string', enum: [...FINDING_SEVERITIES] },
-                    title: { type: 'string' },
+                    requirement: {
+                        type: 'string',
+                        description:
+                            'The requirement, quoted from the task when possible.',
+                    },
+                    source: {
+                        type: 'string',
+                        description: 'Where in the task, e.g. "AC #2".',
+                    },
+                    state: { type: 'string', enum: [...REQUIREMENT_STATES] },
+                    kind: { type: 'string', enum: [...REQUIREMENT_KINDS] },
+                    topic: {
+                        type: 'string',
+                        enum: [...REQUIREMENT_TOPICS],
+                        description: 'The area the requirement is about.',
+                    },
+                    evidence: { type: 'array', items: LOCATION_SCHEMA },
+                    note: {
+                        type: 'string',
+                        description:
+                            'What the diff does or lacks for this requirement, in USER LANGUAGE.',
+                    },
+                    action: {
+                        type: 'string',
+                        description:
+                            'For partial or missing: the change to make, in USER LANGUAGE.',
+                    },
+                    confidence: { type: 'string', enum: [...CONFIDENCES] },
                 },
-                required: ['severity', 'title'],
+                required: ['requirement', 'state', 'confidence'],
             },
         },
-        mode: {
-            type: 'string',
-            enum: ['full_analysis', 'limitation_response'],
+        outOfScope: {
+            type: 'array',
+            description:
+                'Changes in the diff the task does not ask for. Leave out refactors and tests that serve a requirement.',
+            items: {
+                type: 'object',
+                properties: {
+                    change: { type: 'string' },
+                    evidence: { type: 'array', items: LOCATION_SCHEMA },
+                    action: { type: 'string' },
+                },
+                required: ['change'],
+            },
         },
-        reason: {
-            type: 'string',
-            enum: [
-                'analysis_ready',
-                'task_context_missing',
-                'task_context_weak',
-                'pr_diff_missing',
-            ],
+        scopeMismatch: {
+            type: 'boolean',
+            description:
+                'True when the whole diff works on a different domain than the task.',
         },
-        taskContextStatus: {
+        confidence: { type: 'string', enum: [...CONFIDENCES] },
+        missingInfo: {
             type: 'string',
-            enum: ['missing', 'weak', 'usable'],
+            description:
+                'When needsMoreInfo is true: what the task lacks, in USER LANGUAGE.',
         },
-        prDiffStatus: { type: 'string', enum: ['missing', 'usable'] },
-        confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
-        missingInfo: { type: 'string' },
-        summary: { type: 'string' },
+        summary: {
+            type: 'string',
+            description: 'One sentence on the result, in USER LANGUAGE.',
+        },
     },
     required: ['needsMoreInfo', 'summary'],
 };
@@ -140,4 +201,124 @@ export function resolveValidationStatus(
     )
         ? 'issues_found'
         : 'compliant';
+}
+
+export function parseRequirements(
+    value: unknown,
+): RequirementVerdict[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    return value.flatMap((item) => {
+        const record = asRecord(item);
+        const requirement = text(record.requirement);
+        const state = REQUIREMENT_STATES.find((s) => s === record.state);
+        if (!requirement || !state) {
+            return [];
+        }
+        const kind = REQUIREMENT_KINDS.find((k) => k === record.kind);
+        const topic = REQUIREMENT_TOPICS.find((t) => t === record.topic);
+        return [
+            {
+                requirement,
+                source: text(record.source),
+                state,
+                ...(kind ? { kind } : {}),
+                ...(topic ? { topic } : {}),
+                evidence: parseLocations(record.evidence),
+                note: text(record.note),
+                action: text(record.action),
+                confidence:
+                    CONFIDENCES.find((c) => c === record.confidence) ??
+                    'medium',
+            },
+        ];
+    });
+}
+
+export function parseOutOfScope(
+    value: unknown,
+): OutOfScopeChange[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    return value.flatMap((item) => {
+        const record = asRecord(item);
+        const change = text(record.change);
+        return change
+            ? [
+                  {
+                      change,
+                      evidence: parseLocations(record.evidence),
+                      action: text(record.action),
+                  },
+              ]
+            : [];
+    });
+}
+
+function parseLocations(value: unknown): CodeLocation[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value.flatMap((item) => {
+        const record = asRecord(item);
+        const file = text(record.file);
+        if (!file) {
+            return [];
+        }
+        const line = Number(record.line);
+        return [Number.isInteger(line) && line > 0 ? { file, line } : { file }];
+    });
+}
+
+function text(value: unknown): string | undefined {
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * The status and findings older readers expect, from the requirement list.
+ * A requirement someone accepted no longer counts against the PR.
+ */
+export function deriveStatus(
+    result: Pick<ValidationResult, 'requirements' | 'outOfScope' | 'status'> & {
+        scopeMismatch?: boolean;
+    },
+): { status: ValidationStatus; findings: ValidationFinding[] } {
+    const requirements = result.requirements ?? [];
+    const outOfScope = result.outOfScope ?? [];
+    const findings: ValidationFinding[] = [
+        ...requirements
+            .filter(
+                (r) =>
+                    !r.accepted &&
+                    (r.state === 'missing' || r.state === 'partial'),
+            )
+            .map((r) => ({
+                severity:
+                    r.state === 'missing'
+                        ? ('must_fix' as const)
+                        : ('suggestion' as const),
+                title: r.requirement,
+            })),
+        ...outOfScope
+            .filter((c) => !c.accepted)
+            .map((c) => ({ severity: 'suggestion' as const, title: c.change })),
+    ];
+    if (result.scopeMismatch) {
+        return {
+            status: 'scope_mismatch',
+            findings: [
+                {
+                    severity: 'must_fix',
+                    title: 'PR scope does not match the task scope',
+                },
+                ...findings,
+            ],
+        };
+    }
+    return {
+        status: findings.length ? 'issues_found' : 'compliant',
+        findings,
+    };
 }

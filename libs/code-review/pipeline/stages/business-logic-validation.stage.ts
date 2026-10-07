@@ -1,31 +1,33 @@
 import { Injectable } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
 
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
 import type { BusinessValidationOutcome } from '@libs/agents/business-validation/business-validation.types';
-import { resolveValidationStatus } from '@libs/agents/business-validation/judge/validation-verdict';
 import { formatPullRequestDiff } from '@libs/agents/business-validation/pull-request-diff';
-import { LabelType } from '@libs/common/utils/codeManagement/labels';
-import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
+import { RERUN_COMMAND } from '@libs/agents/business-validation/render';
+import {
+    type BusinessLogicConfig,
+    resolveBusinessLogicSettings,
+} from '@libs/agents/business-validation/settings';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { createLogger } from '@libs/core/log/logger';
-import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
-import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 /**
- * Checks the PR against the task it references, through BusinessValidationService.
+ * Checks the PR against the task it references, through BusinessValidationService,
+ * and puts the outcome on the PR through BusinessLogicPublisher.
  *
- * The review posts only what the author can act on: the verdict, or a task
- * too thin to judge. Everything else (no task referenced, a tracker that
- * can't read it, a tracker that is down) is silent on the PR and recorded as
- * the stage's outcome.
+ * The review posts only what the author can act on: the verdict, a task too
+ * thin to judge, or a reference that looks like a typo. Everything else (no
+ * task referenced, a tracker that can't read it, a tracker that is down) is
+ * silent on the PR: the check says "skipped" and the run records why.
  *
- * Automatic validation is one-shot per pull request. Later pushes stay silent;
- * `@kody -v business-logic` and `@kody review --force` re-run it on demand.
+ * Automatic validation runs on the first review, or on every push when the
+ * team turned that on. `@kody -v business-logic` and `@kody review --force`
+ * re-run it on demand. A re-run edits the same comment.
  */
 @Injectable()
 export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -37,12 +39,9 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
 
     private static readonly TIMEOUT_MS = 300_000; // 5 min
 
-    /** Command that re-runs the validation on demand. Matches the handler in
-     *  ChatWithKodyFromGitUseCase — keep the two in sync. */
-    private static readonly RERUN_COMMAND = '@kody -v business-logic';
-
     constructor(
         private readonly businessValidationService: BusinessValidationService,
+        private readonly publisher: BusinessLogicPublisher,
     ) {
         super();
     }
@@ -59,31 +58,50 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         }
 
         const explicitRun = context.origin === 'command-force';
+        const settings = this.settingsOf(context);
+        const rerun = !explicitRun && this.wasAlreadyValidated(context);
         try {
+            const request = {
+                door: explicitRun ? ('force' as const) : ('auto' as const),
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository: {
+                    id: String(context.repository.id),
+                    name: context.repository.name,
+                    fullName: context.repository.fullName,
+                },
+                pullRequest: {
+                    number: context.pullRequest.number,
+                    title: context.pullRequest.title,
+                    body: context.pullRequest.body,
+                    headRef: context.pullRequest.head?.ref,
+                    baseRef: context.pullRequest.base?.ref,
+                },
+                platformType: context.platformType,
+                diff: formatPullRequestDiff(context.changedFiles),
+                // Per-repo/directory model override resolved by ValidateConfigStage.
+                byokModel: context.codeReviewConfig?.byokModel,
+                byokModelId: context.codeReviewConfig?.byokModelId,
+                settings,
+            };
             const result = await this.withTimeout(
-                this.businessValidationService.validate({
-                    door: explicitRun ? 'force' : 'auto',
-                    organizationAndTeamData: context.organizationAndTeamData,
-                    repository: {
-                        id: String(context.repository.id),
-                        name: context.repository.name,
-                        fullName: context.repository.fullName,
-                    },
-                    pullRequest: {
-                        number: context.pullRequest.number,
-                        title: context.pullRequest.title,
-                        body: context.pullRequest.body,
-                        headRef: context.pullRequest.head?.ref,
-                        baseRef: context.pullRequest.base?.ref,
-                    },
-                    platformType: context.platformType,
-                    diff: formatPullRequestDiff(context.changedFiles),
-                    // Per-repo/directory model override resolved by ValidateConfigStage.
-                    byokModel: context.codeReviewConfig?.byokModel,
-                    byokModelId: context.codeReviewConfig?.byokModelId,
-                }),
+                this.businessValidationService.validate(request),
             );
-            return this.applyOutcome(context, result.outcome, explicitRun);
+            const published = await this.publisher.publish({
+                request,
+                result,
+                settings,
+                headSha: context.pullRequest.head?.sha,
+                trigger: explicitRun ? 'force' : rerun ? 'push' : 'auto',
+                commits: (context.prAllCommits ?? context.prCommits ?? []).map(
+                    (c) => ({
+                        message: c.commit?.message ?? '',
+                        authorName: c.commit?.author?.name,
+                        authorEmail: c.commit?.author?.email,
+                    }),
+                ),
+                authorLogin: context.pullRequest.user?.login,
+            });
+            return this.applyOutcome(context, published.outcome);
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error);
@@ -109,13 +127,21 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         }
     }
 
+    private settingsOf(context: CodeReviewPipelineContext) {
+        return resolveBusinessLogicSettings(
+            (
+                context.codeReviewConfig as {
+                    businessLogic?: BusinessLogicConfig;
+                }
+            )?.businessLogic,
+        );
+    }
+
+    /** The outcome as the review records it. The PR comment and check were already written. */
     private applyOutcome(
         context: CodeReviewPipelineContext,
         outcome: BusinessValidationOutcome,
-        explicitRun: boolean,
     ): CodeReviewPipelineContext {
-        const validatedAt = new Date().toISOString();
-
         if (outcome.kind === 'skipped') {
             return this.skipped(
                 context,
@@ -123,49 +149,38 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 `Skipped: ${outcome.reason.replace(/_/g, ' ')}.`,
             );
         }
-
-        if (outcome.kind === 'task_too_thin') {
-            return this.updateContext(context, (draft) => {
-                draft.businessLogicResults = [
-                    this.suggestion(
-                        this.withRerunHint(outcome.message, explicitRun),
-                        `${outcome.task.id} says too little to validate against.`,
-                        SeverityLevel.MEDIUM,
-                    ),
-                ];
-                draft.businessLogicValidatedAt = validatedAt;
-                draft.businessLogicOutcome = {
-                    kind: 'skipped',
-                    reason: 'weak_task_context',
-                    message: `Skipped: ${outcome.task.id} has too little to validate against.`,
-                };
-            });
-        }
-
-        // The verdict decides; the report's wording never does (#2019).
-        const compliant =
-            resolveValidationStatus(outcome.verdict) === 'compliant';
+        const validatedAt = new Date().toISOString();
         return this.updateContext(context, (draft) => {
-            draft.businessLogicResults = [
-                this.suggestion(
-                    this.withRerunHint(outcome.report, explicitRun),
-                    compliant
-                        ? 'Business logic validation passed — PR aligns with task requirements.'
-                        : 'Business logic gap detected based on PR requirements.',
-                    compliant ? SeverityLevel.LOW : SeverityLevel.MEDIUM,
-                ),
-            ];
+            draft.businessLogicResults = [];
             draft.businessLogicValidatedAt = validatedAt;
-            draft.businessLogicOutcome = compliant
-                ? {
-                      kind: 'success',
-                      message: `PR aligns with ${outcome.task.id}.`,
-                  }
-                : {
-                      kind: 'gap_found',
-                      message:
-                          'Business logic gap detected — see PR-level comment.',
-                  };
+            switch (outcome.kind) {
+                case 'task_too_thin':
+                    draft.businessLogicOutcome = {
+                        kind: 'skipped',
+                        reason: 'weak_task_context',
+                        message: `Skipped: ${outcome.tasks.map((t) => t.id).join(', ')} has too little to validate against.`,
+                    };
+                    break;
+                case 'task_missing':
+                    draft.businessLogicOutcome = {
+                        kind: 'skipped',
+                        reason: 'task_missing',
+                        message: `Skipped: ${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}.`,
+                    };
+                    break;
+                case 'validated': {
+                    // The verdict decides; the report's wording never does (#2019).
+                    const ids = outcome.checks.map((c) => c.task.id).join(', ');
+                    draft.businessLogicOutcome = outcome.passed
+                        ? { kind: 'success', message: `PR aligns with ${ids}.` }
+                        : {
+                              kind: 'gap_found',
+                              message:
+                                  'Business logic gap detected — see PR-level comment.',
+                          };
+                    break;
+                }
+            }
         });
     }
 
@@ -197,16 +212,18 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     'Business logic validation is disabled in the code review configuration.',
             };
         }
-        // `@kody review --force` is the only automatic path that revalidates a
-        // PR that already got a message. `forceFullRerun` is NOT that signal:
-        // a force-push and a retried partial review both set it.
+        // `@kody review --force`, or a team that asked for a re-check on every
+        // push, revalidates a PR that already got a message. `forceFullRerun`
+        // is NOT that signal: a force-push and a retried partial review both
+        // set it.
         if (
             context.origin !== 'command-force' &&
+            !this.settingsOf(context).recheckOnPush &&
             this.wasAlreadyValidated(context)
         ) {
             return {
                 reason: 'already_validated',
-                message: `Skipped: business logic was already validated for this pull request. Run \`${BusinessLogicValidationStage.RERUN_COMMAND}\` to validate it again.`,
+                message: `Skipped: business logic was already validated for this pull request. Run \`${RERUN_COMMAND}\` to validate it again.`,
             };
         }
         return null;
@@ -244,28 +261,6 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             draft.businessLogicResults = [];
             draft.businessLogicOutcome = { kind: 'skipped', reason, message };
         });
-    }
-
-    private suggestion(
-        content: string,
-        summary: string,
-        severity: SeverityLevel,
-    ): ISuggestionByPR {
-        return {
-            id: uuidv4(),
-            suggestionContent: content,
-            oneSentenceSummary: summary,
-            label: LabelType.BUSINESS_LOGIC,
-            severity,
-            deliveryStatus: DeliveryStatus.NOT_SENT,
-        };
-    }
-
-    private withRerunHint(result: string, explicitRun: boolean): string {
-        if (explicitRun) {
-            return result;
-        }
-        return `${result}\n\n---\n> 💡 This validation runs automatically only on the first review of a pull request. To run it again, comment \`${BusinessLogicValidationStage.RERUN_COMMAND}\`.`;
     }
 
     private async withTimeout<T>(promise: Promise<T>): Promise<T> {
