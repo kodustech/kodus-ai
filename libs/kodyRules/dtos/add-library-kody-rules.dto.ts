@@ -65,6 +65,17 @@ export class AddLibraryKodyRulesDto {
     @ApiPropertyOptional({ example: 'src/services' })
     path: string;
 
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description:
+            'Source language of the library rule (e.g. ruby, python). When ' +
+            '`path` is empty, the imported rule is scoped to a glob derived ' +
+            'from this language instead of applying to every file (#1832).',
+        example: 'ruby',
+    })
+    language?: string;
+
     @IsNotEmpty()
     @IsEnum(KodyRuleSeverity)
     @ApiProperty({ enum: KodyRuleSeverity, enumName: 'KodyRuleSeverity' })
