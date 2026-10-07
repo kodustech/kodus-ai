@@ -33,6 +33,8 @@ import {
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
+import type { FormatterDegradedReport } from '@libs/code-review/infrastructure/agents/engine/format-suggestion-content';
+import type { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { type LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -556,7 +558,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             this.logger.log({
                 message: `[AGENT][review-focus] steering PR#${prNumber} by directive: "${context.reviewDirective}"`,
                 context: this.stageName,
-                metadata: {
+metadata: {
                     prNumber,
                     reviewDirective: context.reviewDirective,
                     organizationId:
@@ -1290,6 +1292,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
 
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
+            // The formatter reports degradation through onDegraded; the callback
+            // only snapshots the report (never touches the context — a write
+            // there can throw and take the formatting down). The 'partial'
+            // record is made exactly once, after the publish, where a refused
+            // write can no longer cost the review output.
+            let degradedReport: FormatterDegradedReport | undefined;
             try {
                 const {
                     formatSuggestionContent,
@@ -1319,6 +1327,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             context.codeReviewConfig?.languageResultPrompt,
                         organizationId:
                             context.organizationAndTeamData?.organizationId,
+                        prNumber,
+                        // Degradation surfacing: the comments still ship (the
+                        // floor de-scaffolds), so this is a PARTIAL execution —
+                        // the run must not read as a clean success when a chunk
+                        // of the prose polish was lost. The callback runs
+                        // synchronously inside the formatter, within this
+                        // stage's try/catch, so it NEVER writes to the context:
+                        // a throw here (Immer produce, message construction)
+                        // would be caught as "formatting failed" and discard
+                        // the de-scaffolded map, shipping the raw WHAT/WHY/HOW.
+                        // It only snapshots the report; the stage records the
+                        // 'partial' error once, after the publish.
+                        onDegraded: (report: FormatterDegradedReport) => {
+                            degradedReport = report;
+                        },
                     },
                 );
                 for (const [i, fmt] of formatted) {
@@ -1541,7 +1564,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 return aSeverity - bSeverity;
             });
 
-            return this.updateContext(context, (draft) => {
+            const publishedContext = this.updateContext(context, (draft) => {
                 const byFile = new Map<string, Partial<CodeSuggestion>[]>();
                 for (const s of fileLevelSuggestions) {
                     const file = s.relevantFile || '';
@@ -1682,6 +1705,81 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 draft.validSuggestions = fileLevelSuggestions;
                 draft.discardedSuggestions = allDiscarded;
             });
+
+            // Record the formatter degradation as 'partial', AFTER the publish:
+            // a refused write here can no longer throw inside the publish
+            // producer and abort the review, so a lost record never costs
+            // fileAnalysisResults/validSuggestions. The message carries counts
+            // only — error.message prints verbatim on the PR-log surfaces, and
+            // distinctReasons holds raw provider/LLM strings (they stay in
+            // metadata and in the formatter's own logs).
+            if (degradedReport) {
+                const degradedEntry: PipelineError = {
+                    pipelineId: context.pipelineMetadata?.pipelineId,
+                    stage: this.stageName,
+                    substage: 'suggestion-formatter',
+                    error: new Error(
+                        `Suggestion formatting degraded: ${degradedReport.strippedMechanically}/${degradedReport.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally (${degradedReport.distinctReasons.length} distinct failure reason(s))`,
+                    ),
+                    severity: 'partial',
+                    metadata: {
+                        totalSuggestions: degradedReport.totalSuggestions,
+                        polishedByModel: degradedReport.polishedByModel,
+                        strippedMechanically:
+                            degradedReport.strippedMechanically,
+                        distinctReasons: degradedReport.distinctReasons,
+                        prNumber,
+                    },
+                };
+                try {
+                    return this.updateContext(publishedContext, (draft) => {
+                        // Same defensive guard the pipeline executor uses for
+                        // the errors write (pipeline-executor.service.ts:47-49).
+                        if (!Array.isArray(draft.errors)) {
+                            draft.errors = [];
+                        }
+                        draft.errors.push(degradedEntry);
+                    });
+                } catch (flushErr) {
+                    // The publish already happened, so a refused record can
+                    // never cost the review output — but losing the 'partial'
+                    // evidence must not read as a clean success (rule 14).
+                    // Try one Immer-free write on the published context first:
+                    // updateContext is produce(), and publish results live only
+                    // on the local publishedContext, so a bare rethrow here
+                    // would land in executeStage's outer catch, which rebuilds
+                    // from the pre-publish context with fileAnalysisResults = []
+                    // and discards the whole review.
+                    this.logger.warn({
+                        message: `[AGENT] Failed to record formatter degradation via context, rebuilding published context: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
+                        context: this.stageName,
+                        metadata: {
+                            organizationId:
+                                context.organizationAndTeamData?.organizationId,
+                            prNumber,
+                            bufferedDegradations: 1,
+                        },
+                    });
+                    try {
+                        return {
+                            ...publishedContext,
+                            errors: [
+                                ...(Array.isArray(publishedContext.errors)
+                                    ? publishedContext.errors
+                                    : []),
+                                degradedEntry,
+                            ],
+                        };
+                    } catch {
+                        // Even the Immer-free rebuild refused: surface the loss
+                        // (the run cannot read as a clean success), accepting
+                        // the stage catch marking it critical.
+                        throw flushErr;
+                    }
+                }
+            }
+
+            return publishedContext;
         } catch (error) {
             const durationMs = Date.now() - startTime;
             // Terminal BYOK (suspended key / no credit) → warn: user's provider
