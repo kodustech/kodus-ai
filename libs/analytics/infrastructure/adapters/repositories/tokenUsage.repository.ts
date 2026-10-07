@@ -348,13 +348,19 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         ];
         // Safety valve for unbounded dimensions (by-review): keep the heaviest
         // buckets and cap the payload so a huge window can't ship tens of
-        // thousands of rows. The cap counts LOGICAL buckets (model + the
-        // caller's group keys), not raw rows: a bucket is split into one row
-        // per input bracket, and capping raw rows could keep some of a
-        // bucket's brackets and drop the rest, under-reporting its total.
-        // Sorted by bucket total desc, so the top consumers (all the frontend
-        // charts/table show) survive intact, with every bracket row.
+        // thousands of rows. It selects WHOLE logical buckets (model + the
+        // caller's group keys): a bucket is split into one row per input
+        // bracket, and capping raw rows could keep some of a bucket's brackets
+        // and drop the rest, under-reporting its total. Each bucket expands to
+        // at most `distinct.length + 1` rows, so the bucket limit is sized to
+        // keep the returned rows <= maxRows. Sorted by bucket total desc with
+        // the bucket key as tiebreaker (a stable cut), so the top consumers
+        // (all the frontend charts/table show) survive intact.
         if (maxRows > 0) {
+            const bucketLimit = Math.max(
+                1,
+                Math.floor(maxRows / (distinct.length + 1)),
+            );
             const bucketId: Record<string, string> = { model: '$_id.model' };
             for (const key of Object.keys(groupById)) {
                 bucketId[key] = `$_id.${key}`;
@@ -369,15 +375,17 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                         rows: { $push: '$$ROOT' },
                     },
                 },
-                { $sort: { bucketTotal: -1 } },
-                { $limit: maxRows },
+                { $sort: { bucketTotal: -1, _id: 1 } },
+                { $limit: bucketLimit },
                 { $unwind: '$rows' },
                 { $replaceRoot: { newRoot: '$rows' } },
             );
         }
         const rows = await this.observabilityTelemetryModel
             .aggregate<RawAggRow>(pipeline as any)
-            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            // The $group stages hold one entry per (model, bracket, keys)
+            // group; let them spill on a huge window instead of failing.
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS, allowDiskUse: true })
             .exec();
         return this._withTiers(rows, thresholds, distinct);
     }

@@ -150,9 +150,15 @@ describe('TokenUsageRepository._tuRows row cap (by-review)', () => {
             review: '$_id.review',
             pr: '$_id.pr',
         });
-        expect(pipeline[3]).toEqual({ $sort: { bucketTotal: -1 } });
-        expect(pipeline[4]).toEqual({ $limit: 8000 });
-        expect(option).toHaveBeenCalledWith({ maxTimeMS: 50_000 });
+        // Stable cut: ties on bucketTotal are broken by the bucket key.
+        expect(pipeline[3]).toEqual({ $sort: { bucketTotal: -1, _id: 1 } });
+        // One distinct threshold → a bucket expands to at most 2 rows, so
+        // 4000 buckets keep the returned rows within the 8000-row cap.
+        expect(pipeline[4]).toEqual({ $limit: 4000 });
+        expect(option).toHaveBeenCalledWith({
+            maxTimeMS: 50_000,
+            allowDiskUse: true,
+        });
     });
 
     it('adds no cap stages when maxRows is 0', async () => {
