@@ -13,6 +13,7 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -125,7 +126,10 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
                             context.codeReviewConfig?.languageResultPrompt,
                             context.pullRequestMessagesConfig?.globalSettings
                                 ?.suggestionCopyPrompt,
-                            context.platformType,
+                            // The PR's own platform, not the org/team
+                            // integration: the marker gate depends on the
+                            // platform the comment lands on (#2055 review).
+                            context.platformType as PlatformType,
                             (error) => promptReplyErrors.push(error),
                         );
 
