@@ -19,6 +19,11 @@ const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith
 const SUFIXO = arg('sufixo'), POOLSV = arg('poolsv'), OUT = arg('out'), PAR = Number(arg('par', '4'));
 // --guard=tiered: o guarda completo de producao (lexico, embedding, desempate). Padrao 'content' (so lexico).
 const GUARD = arg('guard', 'content');
+// --codigo=<saida do ec-llm.js>: cada sugestao ganha o existingCode do LLM e o
+// dedup o ve no resumo; sugestao sem codigo e descartada antes do dedup.
+const CODIGO = arg('codigo') ? JSON.parse(fs.readFileSync(arg('codigo'), 'utf8')).prs : null;
+// --conferencia=<saida do conferencia-agente-unico.js>: sugestao com real=false sai antes do dedup.
+const CONF = arg('conferencia') ? JSON.parse(fs.readFileSync(arg('conferencia'), 'utf8')).prs : null;
 const MODELO = process.env.RECALL_MODEL;
 const assinatura = ['codex_subscription', 'claude_agent_sdk'].includes(TIER0[MODELO]?.provider);
 (async () => {
@@ -30,15 +35,23 @@ const assinatura = ['codex_subscription', 'claude_agent_sdk'].includes(TIER0[MOD
     let i = 0;
     const um = async (cid) => {
         try {
-            const cands = JSON.parse(fs.readFileSync(path.join(__dirname, 'pools', POOLSV, `${cid}.raw.txt`), 'utf8')).trace.preFilterCandidates;
-            const op = { guard: GUARD, prebuiltModel: prebuilt };
-            const r = await runDedup(cands, MODELO, op);
+            const todos = JSON.parse(fs.readFileSync(path.join(__dirname, 'pools', POOLSV, `${cid}.raw.txt`), 'utf8')).trace.preFilterCandidates;
+            if (CODIGO && (!CODIGO[cid] || CODIGO[cid].erro)) throw new Error('sem existingCode para o PR');
+            // Indices originais das sugestoes que entram no dedup.
+            if (CONF && (!CONF[cid] || CONF[cid].erro)) throw new Error('sem conferencia para o PR');
+            const orig = todos.map((_, j) => j)
+                .filter((j) => !CODIGO || String(CODIGO[cid].codigo[j] || '').trim())
+                .filter((j) => !CONF || CONF[cid].conferidas[j]?.real !== false);
+            const cands = orig.map((j) => (CODIGO ? { ...todos[j], existingCode: CODIGO[cid].codigo[j] } : todos[j]));
+            const op = { guard: GUARD, prebuiltModel: prebuilt, withCode: !!CODIGO };
+            const r0 = await runDedup(cands, MODELO, op);
+            const r = { ...r0, kept: (r0.kept || []).map((x) => orig[x]), unmentioned: (r0.unmentioned || []).map((x) => orig[x]), dropped: (r0.dropped || []).map((d) => ({ ...d, idx: orig[d.idx], keptInto: orig[d.keptInto] })) };
             // Como a producao (agent-review.stage, camada 3): o que o dedup nao classificou fica.
             const kept = [...new Set([...(r.kept || []), ...(r.unmentioned || [])])].sort((a, b) => a - b);
             // Quem foi fundido em quem (depois do guarda): o tamanho do grupo e o sinal de consenso.
             const membros = Object.fromEntries(kept.map((k) => [k, [k]]));
             for (const d of r.dropped || []) if (membros[d.keptInto]) membros[d.keptInto].push(d.idx);
-            res.prs[cid] = { antes: cands.length, kept, membros, depois: kept.length, noOp: !!r.noOp, guarda: op.guardReasons, ...(op.pairs ? { pares: op.pairs, keptPre: r.kept, unmentioned: r.unmentioned } : {}), textos: kept.map((k) => cands[k]?.suggestionContent).filter(Boolean) };
+            res.prs[cid] = { antes: todos.length, descartadosAntes: todos.length - orig.length, kept, membros, depois: kept.length, noOp: !!r.noOp, guarda: op.guardReasons, ...(op.pairs ? { pares: op.pairs, keptPre: r.kept, unmentioned: r.unmentioned } : {}), textos: kept.map((k) => todos[k]?.suggestionContent).filter(Boolean) };
         } catch (e) {
             res.prs[cid] = { erro: String(e?.message || e).slice(0, 300) };
         } finally {

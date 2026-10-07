@@ -113,7 +113,7 @@ PERGUNTA.agente = PERGUNTA.base;
 const prompt = (itens, diff, extra) => `A review of this pull request produced the findings below. Your job is to say how much each one is worth posting.
 
 <Diff>
-${String(diff || '').slice(0, 40000)}
+${String(diff || '')}
 </Diff>
 
 <Candidates>
@@ -128,7 +128,7 @@ function ferramentas(cmd) {
     const leitura = { type: 'object', properties: { path: { type: 'string' }, startLine: { type: 'number' }, endLine: { type: 'number' } }, required: ['path'], additionalProperties: false };
     return {
         grep: tool({ description: 'Search the repository for a regex pattern.', inputSchema: jsonSchema({ type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, glob: { type: 'string' } }, required: ['pattern'], additionalProperties: false }), execute: async ({ pattern, path: p, glob }) => { try { return String(await cmd.grep(pattern, p, glob)).slice(0, 6000); } catch (e) { return `grep failed: ${String(e.message || e).slice(0, 120)}`; } } }),
-        readFile: tool({ description: 'Read a file, optionally a line range.', inputSchema: jsonSchema(leitura), execute: async ({ path: p, startLine, endLine }) => { try { return String(await cmd.read(p, startLine, endLine)).slice(0, 12000); } catch (e) { return `readFile failed: ${String(e.message || e).slice(0, 120)}`; } } }),
+        readFile: tool({ description: 'Read a file, optionally a line range.', inputSchema: jsonSchema(leitura), execute: async ({ path: p, startLine, endLine }) => { try { const t = String(await cmd.read(p, startLine, endLine)); const b = Number(startLine) > 0 ? Number(startLine) : 1; return t.split('\n').map((l, k) => `${b + k}: ${l}`).join('\n').slice(0, 12000); } catch (e) { return `readFile failed: ${String(e.message || e).slice(0, 120)}`; } } }),
     };
 }
 

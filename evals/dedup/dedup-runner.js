@@ -64,7 +64,7 @@ async function runDedup(suggestions, modelKey = SECONDARY_BASELINE, opts = {}) {
 
     const object = await LLM.run({
         schema: jsonSchema(DEDUP_SCHEMA),
-        user: buildDedupPrompt(suggestions),
+        user: buildDedupPrompt(suggestions, { withCode: !!opts.withCode }),
         runName: 'code-review-dedup',
         spanName: 'code-review::dedup',
         // Rota de assinatura (Codex/SDK): o modelo pronto, senao o LLM.run cai no default do env.

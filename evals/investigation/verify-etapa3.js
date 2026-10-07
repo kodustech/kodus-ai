@@ -74,16 +74,30 @@ const REFUTACAO = {
     properties: { file: { type: 'string' }, startLine: { type: 'number' }, endLine: { type: 'number' }, code: { type: 'string', description: 'The exact lines, copied from what readFile returned (without the line numbers).' } },
     required: ['file', 'startLine', 'endLine', 'code'],
 };
+SYSTEM.mesa = `You check ONE code review finding on a pull request by DESK-CHECKING it.
+
+Use the tools to read the code. Then write the concrete test case that would expose the defect: the input or state, the calls in order, the result a correct program gives, and the result this code gives. Execute it in your head against the code you read, line by line, citing file:line for each step.
+
+Verdict:
+- keep = true only if your trace, done on the real code, reaches the wrong result.
+- keep = false if the trace shows the code produces the correct result, a guard or check stops the path, or no input you can build from the code reaches the claimed failure.
+
+Do not decide from the finding's wording; decide from the trace. If you run out of steps before finishing the trace, keep = true.`;
 const SUBMIT = {
+    mesa: { type: 'object', properties: { keep: { type: 'boolean' }, testCase: { type: 'string' }, trace: { type: 'string', description: 'The step-by-step execution, citing file:line, ending in the result the code gives.' } }, required: ['keep', 'testCase', 'trace'] },
     prod: { type: 'object', properties: { keep: { type: 'boolean' }, rationale: { type: 'string' } }, required: ['keep', 'rationale'] },
     cenario: { type: 'object', properties: { keep: { type: 'boolean' }, scenario: { type: 'string', description: 'keep=true: input/state -> wrong result, citing file:line. keep=false: what prevents it, or why there is no wrong outcome, citing file:line.' } }, required: ['keep', 'scenario'] },
 };
-const TIPO = VAR === 'cenario' || VAR === 'citacao' ? 'cenario' : 'prod';
+const TIPO = ['cenario', 'citacao', 'cenariocod'].includes(VAR) ? 'cenario' : VAR === 'mesa' ? 'mesa' : VAR === 'cego' ? 'cego' : 'prod';
+// --codigo=<saida do ec-llm.js>: existingCode do LLM por indice de candidato (variante cenariocod).
+const CODIGO = arg('codigo') ? JSON.parse(fs.readFileSync(arg('codigo'), 'utf8')).prs : null;
 const CITA = VAR === 'citacao';
 
 function promptDe(c, diff) {
     const bundle = bundleFor(c).split('\n').filter((l) => !l.startsWith('Severity:')).join('\n');
-    const pedido = CITA
+    const pedido = TIPO === 'mesa'
+        ? 'Submit with submitVerdict: {"keep": true|false, "testCase": "...", "trace": "..."}.'
+        : CITA
         ? 'Submit with submitVerdict: {"keep": true|false, "scenario": "...", "refutation": {...}}. When keep=false, "refutation" is REQUIRED: the file, startLine, endLine and the exact code you read that prevents the failure (a guard, a validation, an early return, a type), copied from the readFile output. A keep=false without that code is not accepted.'
         : TIPO === 'cenario'
         ? 'Submit with submitVerdict: {"keep": true|false, "scenario": "..."}.'
@@ -101,12 +115,87 @@ function ferramentas(cmd, lidos) {
         readFile: tool({
             description: 'Read a file, optionally a line range.',
             inputSchema: jsonSchema({ type: 'object', properties: { path: { type: 'string' }, startLine: { type: 'number' }, endLine: { type: 'number' } }, required: ['path'], additionalProperties: false }),
-            execute: async ({ path: p, startLine, endLine }) => { lidos.push(p); try { return String(await cmd.read(p, startLine, endLine)).slice(0, 12000); } catch (e) { return `readFile failed: ${String(e.message || e).slice(0, 120)}`; } },
+            execute: async ({ path: p, startLine, endLine }) => { lidos.push(p); try { const t = String(await cmd.read(p, startLine, endLine)); const b = Number(startLine) > 0 ? Number(startLine) : 1; return t.split('\n').map((l, k) => `${b + k}: ${l}`).join('\n').slice(0, 12000); } catch (e) { return `readFile failed: ${String(e.message || e).slice(0, 120)}`; } },
         }),
     };
 }
 
+// Claude por assinatura: a fachada do Agent SDK nao faz chamada de ferramenta,
+// entao a sessao roda pelo proprio Agent SDK, com Read/Grep/Glob no worktree e o
+// veredito como JSON no fim. Sem passo final forcado: o teto e o maxTurns.
+const PELO_SDK = require('../shared/tier0-models').TIER0[MODELO]?.provider === 'claude_agent_sdk';
+async function sessaoSdk(c, diff, dir) {
+    const { carregaSdk, envDoProcesso } = require('./claude-sdk-runner');
+    const sdk = await carregaSdk();
+    const texto = promptDe(c, diff)
+        .replace(/(Grep and readFile|grep \/ readFile)/g, 'Grep and Read')
+        .replace('4. Submit your verdict with submitVerdict.', '4. End with your verdict as a JSON object.')
+        .replace(/Submit (your verdict )?with submitVerdict: /, 'End your answer with ONLY this JSON object, no code fence: ');
+    const lidos = [];
+    let saida = '', turnos = 0;
+    try {
+        for await (const msg of sdk.query({
+            prompt: texto,
+            options: {
+                model: require('../shared/tier0-models').TIER0[MODELO].sdkModel,
+                systemPrompt: SYSTEM[TIPO] + '\n\nYou can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
+                tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'],
+                disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
+                settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso(),
+            },
+        })) {
+            if (msg.type === 'assistant') {
+                turnos++;
+                for (const b of msg.message.content || []) {
+                    if (b.type === 'text') saida += b.text + '\n';
+                    if (b.type === 'tool_use' && b.name === 'Read' && b.input?.file_path) lidos.push(path.relative(dir, path.resolve(dir, b.input.file_path)));
+                }
+            }
+            if (msg.type === 'result' && msg.result) saida += '\n' + msg.result;
+        }
+    } catch (e) {
+        // O SDK lanca ao bater o maxTurns depois de ja ter devolvido as mensagens.
+        if (!saida) throw e;
+    }
+    const veredito = extraiJson(saida);
+    const temVeredito = typeof veredito?.keep === 'boolean';
+    return { keep: temVeredito ? veredito.keep : true, temVeredito, passos: turnos, leuCitado: lidos.some((p) => mesmoArquivo(p, c.relevantFile)), texto: String(veredito?.rationale || veredito?.scenario || '').slice(0, 600) };
+}
+
+// Redescoberta as cegas: a sessao ve so o local (arquivo + linhas) e o diff, nunca
+// a sugestao, e lista os defeitos que achar ali; uma chamada separada compara
+// essa lista com a sugestao. Mantem se o modelo reencontrou o mesmo defeito.
+const SUBMIT_CEGO = { type: 'object', properties: { defects: { type: 'array', items: { type: 'string' }, description: 'One sentence per defect, citing file:line. Empty if none.' } }, required: ['defects'] };
+async function sessaoCego(model, cmd, c, diff) {
+    let enviado = null;
+    const lidos = [];
+    const tools = { ...ferramentas(cmd, lidos), submitDefects: tool({ description: 'Submit the defects you found. The only way to answer.', inputSchema: jsonSchema(SUBMIT_CEGO), execute: async (x) => { enviado = x; return 'recorded'; } }) };
+    const r = await generateText({
+        model,
+        system: 'You review code changed by a pull request. Read the code before answering. Report only real defects: something that fails, produces a wrong result, loses or corrupts data, or opens a security hole. Do not report style, naming or missing tests.',
+        prompt: `<PullRequestDiff>\n${diff}\n</PullRequestDiff>\n\nLook at ${c.relevantFile} lines ${c.relevantLinesStart ?? '?'}-${c.relevantLinesEnd ?? c.relevantLinesStart ?? '?'} (read around it and its callers as needed). Is there a defect in that code, as changed or exposed by this pull request? List each defect you find as one sentence citing file:line; return an empty list if there is none.\n\nYou have up to ${TETO} steps; the last one is your answer. Submit with submitDefects.`,
+        tools,
+        stopWhen: (x) => !!enviado || (x.steps?.length ?? 0) >= TETO,
+        prepareStep: ({ stepNumber, messages }) => stepNumber >= TETO - 1
+            ? { activeTools: ['submitDefects'], ...(semToolChoiceNomeado ? {} : { toolChoice: { type: 'tool', toolName: 'submitDefects' } }),
+                messages: [...messages, { role: 'user', content: 'Final step: submit the defects you found now.' }] }
+            : undefined,
+    });
+    if (!enviado) enviado = extraiJson(r.text || '');
+    const defeitos = Array.isArray(enviado?.defects) ? enviado.defects.filter(Boolean) : null;
+    if (defeitos === null) return { keep: true, temVeredito: false, passos: r.steps?.length ?? 0, leuCitado: true, texto: 'sem lista' };
+    let mesmo = false;
+    if (defeitos.length) {
+        const cmp = await generateText({ model, prompt: `A code review finding and a list of defects someone else found independently in the same code.\n\nFinding:\n${String(c.suggestionContent).slice(0, 1500)}\n\nDefects found independently:\n${defeitos.map((d, i) => `${i + 1}. ${d}`).join('\n')}\n\nDoes any defect in the list describe the SAME defect as the finding (same root cause in the same code), even if worded differently? Answer ONLY a JSON object: {"same": true|false}` });
+        const j = extraiJson(cmp.text || '');
+        mesmo = j?.same === true;
+    }
+    return { keep: mesmo, temVeredito: true, passos: r.steps?.length ?? 0, leuCitado: true, texto: `defeitos: ${defeitos.join(' | ')}`.slice(0, 600) };
+}
+
 async function sessao(model, cmd, c, diff, dir) {
+    if (TIPO === 'cego') return sessaoCego(model, cmd, c, diff);
+    if (PELO_SDK) return sessaoSdk(c, diff, dir);
     let veredito = null;
     const lidos = [];
     const schema = CITA ? { ...SUBMIT.cenario, properties: { ...SUBMIT.cenario.properties, refutation: REFUTACAO } } : SUBMIT[TIPO];
@@ -126,7 +215,7 @@ async function sessao(model, cmd, c, diff, dir) {
     });
     if (!veredito) veredito = extraiJson(r.text || '');
     const temVeredito = typeof veredito?.keep === 'boolean';
-    const out = { keep: temVeredito ? veredito.keep : true, temVeredito, passos: r.steps?.length ?? 0, leuCitado: lidos.some((p) => mesmoArquivo(p, c.relevantFile)), texto: String(veredito?.rationale || veredito?.scenario || '').slice(0, 600) };
+    const out = { keep: temVeredito ? veredito.keep : true, temVeredito, passos: r.steps?.length ?? 0, leuCitado: lidos.some((p) => mesmoArquivo(p, c.relevantFile)), texto: String(veredito?.rationale || veredito?.scenario || veredito?.trace || '').slice(0, 600) };
     if (CITA && out.keep === false) { out.refutacao = veredito?.refutation || null; out.citacao = confereCitacao(dir, out.refutacao); }
     return out;
 }
@@ -168,7 +257,7 @@ async function retry(fn) { let u; for (let t = 0; t < 3; t++) { try { return awa
         try {
             const v = JSON.parse(fs.readFileSync(path.join(__dirname, 'datasets', f), 'utf8'))[0].vars;
             let arr = v?.changedFilesFull; if (typeof arr === 'string') arr = JSON.parse(arr);
-            if (v?.caseId) { vars[v.caseId] = v; diffs[v.caseId] = (arr || []).map((x) => `--- ${x.filename}\n${x.patchWithLinesStr || x.patch || ''}`).join('\n\n').slice(0, 40000); }
+            if (v?.caseId) { vars[v.caseId] = v; diffs[v.caseId] = (arr || []).map((x) => `--- ${x.filename}\n${x.patchWithLinesStr || x.patch || ''}`).join('\n\n'); }
         } catch {}
     }
     const res = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')) : { modelo: MODELO, variante: VAR, prs: {} };
@@ -190,7 +279,7 @@ async function retry(fn) { let u; for (let t = 0; t < 3; t++) { try { return awa
                 await Promise.all(Array.from({ length: 4 }, async () => {
                     while (j < reps.length) {
                         const rep = reps[j++];
-                        const c = { ...cs[rep], suggestionContent: textoDe[rep] || cs[rep].suggestionContent, existingCode: undefined };
+                        const c = { ...cs[rep], suggestionContent: textoDe[rep] || cs[rep].suggestionContent, existingCode: VAR === 'cenariocod' ? (String(CODIGO?.[cid]?.codigo?.[rep] || '').trim() || undefined) : undefined };
                         const v1 = await retry(() => sessao(model, cmd, c, diffs[cid], h.dir));
                         const d = { v1 };
                         // Protecao 2: so o que a primeira sessao derrubou COM prova passa pela segunda.

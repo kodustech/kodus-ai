@@ -33,7 +33,7 @@ const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/^\.?\/+/, '').t
 const SYSTEM = buildVerifierPrompt('', 0).system;
 const diffDe = (v) => {
     let arr = v?.changedFilesFull; if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch { arr = []; } }
-    return (arr || []).map((x) => `--- ${x.filename}\n${x.patchWithLinesStr || x.patch || ''}`).join('\n\n').slice(0, 40000);
+    return (arr || []).map((x) => `--- ${x.filename}\n${x.patchWithLinesStr || x.patch || ''}`).join('\n\n');
 };
 
 function ferramentas(cmd) {
@@ -46,7 +46,7 @@ function ferramentas(cmd) {
         readFile: tool({
             description: 'Read a file, optionally a line range.',
             inputSchema: jsonSchema({ type: 'object', properties: { path: { type: 'string' }, startLine: { type: 'number' }, endLine: { type: 'number' } }, required: ['path'], additionalProperties: false }),
-            execute: async ({ path: p, startLine, endLine }) => { try { return String(await cmd.read(p, startLine, endLine)).slice(0, 12000); } catch (e) { return `readFile failed: ${String(e.message || e).slice(0, 120)}`; } },
+            execute: async ({ path: p, startLine, endLine }) => { try { const t = String(await cmd.read(p, startLine, endLine)); const b = Number(startLine) > 0 ? Number(startLine) : 1; return t.split('\n').map((l, k) => `${b + k}: ${l}`).join('\n').slice(0, 12000); } catch (e) { return `readFile failed: ${String(e.message || e).slice(0, 120)}`; } },
         }),
     };
 }

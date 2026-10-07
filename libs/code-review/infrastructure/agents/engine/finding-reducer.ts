@@ -91,9 +91,6 @@ export const REDUCER_WEIGHTS: Record<string, number> = {
     vies: -1.2458,
 };
 
-/** Quanto de diff cabe no prompt de cada estagio. */
-const DIFF_BUDGET = 40000;
-
 export type ReducerCandidate = {
     relevantFile?: string;
     relevantLinesStart?: number | string;
@@ -163,7 +160,7 @@ export function buildAttributorPrompt(
     return `A review of this pull request produced the candidate findings below. Several of them describe the same defect in different words. Your job is to group them and to say how much each group is worth posting.
 
 <Diff>
-${String(diff || '').slice(0, DIFF_BUDGET)}
+${String(diff || '')}
 </Diff>
 
 <Candidates>
@@ -248,7 +245,7 @@ export function buildVeracityPrompt(
     return `Below are findings a review produced on this pull request. Duplicates are already merged. For each one, give the probability that THE CLAIM IS TRUE OF THIS CODE.
 
 <Diff>
-${String(diff || '').slice(0, DIFF_BUDGET)}
+${String(diff || '')}
 </Diff>
 
 <Findings>

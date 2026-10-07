@@ -159,11 +159,14 @@ export function collapseNearDuplicates<T extends DedupSuggestionLike>(
  * the finder's self-declared severity is unreliable, and severity is assigned
  * later, at enrichment.
  */
-export function buildDedupSummaries(suggestions: DedupSuggestionLike[]): string {
+export function buildDedupSummaries(
+    suggestions: DedupSuggestionLike[],
+    opts?: { withCode?: boolean },
+): string {
     return suggestions
         .map(
             (s, i) =>
-                `[${i}] ${s.relevantFile || 'unknown'}:${s.relevantLinesStart}-${s.relevantLinesEnd} [${s.label || 'unknown'}]: ${s.oneSentenceSummary || s.suggestionContent?.substring(0, 200)}${s.improvedCode ? `\n    fix: ${s.improvedCode.substring(0, 100)}` : ''}`,
+                `[${i}] ${s.relevantFile || 'unknown'}:${s.relevantLinesStart}-${s.relevantLinesEnd} [${s.label || 'unknown'}]: ${s.oneSentenceSummary || s.suggestionContent?.substring(0, 200)}${s.improvedCode ? `\n    fix: ${s.improvedCode.substring(0, 100)}` : ''}${opts?.withCode && s.existingCode ? `\n    code: ${s.existingCode.substring(0, 400)}` : ''}`,
         )
         .join('\n');
 }
@@ -180,9 +183,10 @@ export function buildDedupSummaries(suggestions: DedupSuggestionLike[]): string 
  *  positive and reads as N redundant comments to the user. */
 export function buildDedupPrompt(
     suggestions: DedupSuggestionLike[],
-    opts?: { mergeRootCause?: boolean },
+    /** withCode (#1821 eval): each summary also shows the finding's existingCode. */
+    opts?: { mergeRootCause?: boolean; withCode?: boolean },
 ): string {
-    const summaries = buildDedupSummaries(suggestions);
+    const summaries = buildDedupSummaries(suggestions, { withCode: opts?.withCode });
     const rootCauseClass = opts?.mergeRootCause
         ? `
 
