@@ -110,9 +110,10 @@ export function shapeSuggestionBodyWithReport(params: {
     capSentences: boolean;
 }): ShapedSuggestionBody {
     const original = params.body ?? '';
-    const withoutFences = original.replace(/```[\s\S]*?```/g, ' ');
-    const removedFences = withoutFences !== original;
+    const withoutFences = tidyLayout(original.replace(/```[\s\S]*?```/g, ''));
+    const removedFences = /```[\s\S]*?```/.test(original);
     let sentences = splitSentences(withoutFences);
+    let text = withoutFences;
 
     let droppedTitleRepeat = false;
     if (
@@ -121,15 +122,19 @@ export function shapeSuggestionBodyWithReport(params: {
         restatesTitle(sentences[0], params.title)
     ) {
         sentences = sentences.slice(1);
+        text = withoutLeadingSentence(text);
         droppedTitleRepeat = true;
     }
+
+    // Only a cut rebuilds the body from its sentences; otherwise lists,
+    // tables and paragraphs keep their lines.
     let capped = false;
     if (params.capSentences && sentences.length > 2) {
-        sentences = sentences.slice(0, 2);
+        text = sentences.slice(0, 2).join(' ');
         capped = true;
     }
 
-    const shaped = sentences.join(' ').trim();
+    const shaped = text.trim();
     if (!shaped) {
         return {
             body: original,
@@ -139,6 +144,27 @@ export function shapeSuggestionBodyWithReport(params: {
         };
     }
     return { body: shaped, removedFences, droppedTitleRepeat, capped };
+}
+
+/** Trailing spaces off each line, at most one blank line in a row. */
+const tidyLayout = (text: string): string =>
+    text
+        .replace(/[ \t]+$/gm, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+/** The text without its first sentence, keeping the layout of the rest. */
+function withoutLeadingSentence(text: string): string {
+    const [first] = splitSentences(text);
+    if (!first) return text;
+    const pattern = first
+        .split(' ')
+        .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('\\s+');
+    const rest = text.replace(new RegExp(`^\\s*${pattern}`), '');
+    return rest === text
+        ? splitSentences(text).slice(1).join(' ')
+        : rest.trim();
 }
 
 export function shapeSuggestionBody(params: {

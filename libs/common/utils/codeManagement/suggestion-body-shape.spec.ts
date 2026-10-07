@@ -12,7 +12,7 @@ describe('shapeSuggestionBody', () => {
                 title: 'User can be null',
                 capSentences: true,
             }),
-        ).toBe('Reading name throws. Guard it.');
+        ).toBe('Reading name throws.\n\nGuard it.');
     });
 
     it('keeps inline code', () => {
@@ -118,6 +118,54 @@ describe('shapeSuggestionBody', () => {
                 capSentences: true,
             }),
         ).toBe('```ts\nuser?.name\n```');
+    });
+});
+
+describe('shapeSuggestionBody keeps the layout when nothing is cut', () => {
+    const LIST =
+        'The cache is never invalidated.\n- Affects getUser\n- Affects getOrg';
+    const TABLE =
+        'Two callers skip the check.\n\n| Caller | Line |\n| --- | --- |\n| getUser | 12 |\n| getOrg | 40 |';
+
+    it.each([
+        ['a list, team guidelines', LIST, false],
+        ['a list, default guidelines under the cap', LIST, true],
+        ['a table, team guidelines', TABLE, false],
+        ['paragraphs, team guidelines', 'First point.\n\nSecond point.\n\nThird point.', false],
+    ])('%s', (_name, body, capSentences) => {
+        expect(
+            shapeSuggestionBody({ body, title: 'Stale cache entries', capSentences }),
+        ).toBe(body);
+    });
+
+    it('removes a code fence and keeps the lines around it', () => {
+        expect(
+            shapeSuggestionBody({
+                body: 'The guard is missing.\n\n```ts\nif (!user) return;\n```\n\n- Affects getUser\n- Affects getOrg',
+                title: 'Missing guard',
+                capSentences: false,
+            }),
+        ).toBe('The guard is missing.\n\n- Affects getUser\n- Affects getOrg');
+    });
+
+    it('drops a title restatement and keeps the lines after it', () => {
+        expect(
+            shapeSuggestionBody({
+                body: 'The cache is never invalidated after a write.\nStale reads follow:\n- Affects getUser\n- Affects getOrg',
+                title: 'Cache is never invalidated after a write',
+                capSentences: false,
+            }),
+        ).toBe('Stale reads follow:\n- Affects getUser\n- Affects getOrg');
+    });
+
+    it('still cuts to two sentences when the default guidelines apply', () => {
+        expect(
+            shapeSuggestionBody({
+                body: 'Reading name throws.\nThe request fails.\nGuard it.',
+                title: 'User can be null',
+                capSentences: true,
+            }),
+        ).toBe('Reading name throws. The request fails.');
     });
 });
 

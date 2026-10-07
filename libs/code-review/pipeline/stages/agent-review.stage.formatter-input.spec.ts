@@ -188,7 +188,7 @@ describe('AgentReviewStage — body shape after the formatter', () => {
         );
 
         expect(s.suggestionContent).toBe(
-            'Reading name throws a 500. Guard it. Add a test. Log the miss.',
+            'Reading name throws a 500.\n\nGuard it. Add a test. Log the miss.',
         );
     });
 });
