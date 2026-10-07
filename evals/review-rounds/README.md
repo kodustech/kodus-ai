@@ -69,6 +69,10 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | R10, R11 | reversals replayed from this repository's own PRs | `if_delivered_linked` |
 | K1 | Kody Rules: a violation already posted, plus a new one in another function | repeat → `not_deliver`; new → `deliver` |
 | K2 | Kody Rules: the rule judge flags code Kody's own earlier suggestion produced | `if_delivered_linked` |
+| R12 | an applied suggestion in the history, and a new unrelated bug in another file | `deliver` (guard) |
+| R13 | the open suggestion's code moved to another file unchanged | repeat → `not_deliver` |
+| R14 | the earlier comment was a declined Kody Rule; the bug finder sees the same problem | repeat → `not_deliver` |
+| K4 | the bug finder raised it earlier and it was declined; the rule judge sees the same problem, plus a new site | repeat → `not_deliver`; new → `deliver` |
 
 The U cases belong to #2040, which this branch does not fix: they stay red on
 purpose until that issue's design is decided.
