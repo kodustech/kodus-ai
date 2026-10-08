@@ -31,6 +31,12 @@ describe('CreateRepositoriesUseCase', () => {
                 findIntegrationConfigFormatted: jest
                     .fn()
                     .mockResolvedValue([]),
+                findOneIntegrationConfigWithIntegrations: jest
+                    .fn()
+                    .mockResolvedValue({
+                        uuid: 'cfg-1',
+                        integration: { platform: 'github' },
+                    }),
             } as any,
             {
                 findOrCreate: jest
@@ -215,6 +221,12 @@ describe('CreateRepositoriesUseCase', () => {
                 findIntegrationConfigFormatted: jest
                     .fn()
                     .mockResolvedValue(overrides.persistedRepoIds),
+                findOneIntegrationConfigWithIntegrations: jest
+                    .fn()
+                    .mockResolvedValue({
+                        uuid: 'cfg-1',
+                        integration: { platform: 'github' },
+                    }),
             } as any,
             {
                 findOrCreate: jest.fn().mockResolvedValue({
@@ -282,5 +294,47 @@ describe('CreateRepositoriesUseCase', () => {
         await flushSetImmediate();
 
         expect(backfill.execute).not.toHaveBeenCalled();
+    });
+
+    it('passes the REPOSITORIES integration_config uuid (not the teamId) to findOrCreate', async () => {
+        // Regression: enqueueAstGraphBuilds previously wrote
+        // `orgTeam.teamId` into repositories.integration_config_id. That
+        // column must reference an integration_configs.uuid so the webhook
+        // handler can join repository -> integration_config -> integration.
+        // Writing the team id silently dropped every review event.
+        const findOrCreate = jest.fn().mockResolvedValue({
+            uuid: 'r',
+            astGraphStatus: 'pending',
+            defaultBranch: 'main',
+            fullName: 'kodus/beta',
+            platform: 'github',
+            externalId: 'repo-new',
+            name: 'beta',
+        });
+        const useCase = buildUseCase({
+            backfill: { execute: jest.fn().mockResolvedValue(undefined) },
+            persistedRepoIds: [],
+        });
+        // Swap in a findOrCreate spy so we can assert its args.
+        (useCase as any).repositoryService = { findOrCreate };
+
+        await useCase.execute({
+            organizationId: 'org-1',
+            teamId: 'team-epsilon',
+            type: 'replace',
+            repositories: [
+                { id: 'repo-new', name: 'beta', organizationName: 'kodus' },
+            ],
+        });
+
+        await flushSetImmediate();
+
+        expect(findOrCreate).toHaveBeenCalledTimes(1);
+        expect(findOrCreate.mock.calls[0][0].integrationConfigId).toBe(
+            'cfg-1',
+        );
+        expect(findOrCreate.mock.calls[0][0].integrationConfigId).not.toBe(
+            'team-epsilon',
+        );
     });
 });
