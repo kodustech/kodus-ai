@@ -431,7 +431,12 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
                 IntegrationConfigEntity,
             );
         } catch (error) {
-            console.log(error);
+            // Propagate DB errors so callers can distinguish a transient
+            // infrastructure failure from a genuine "no config found".
+            // Swallowing here (the previous `console.log(error); return
+            // undefined`) made a DB timeout look like "no config", which
+            // silently skipped repository persistence during onboarding.
+            throw error;
         }
     }
 

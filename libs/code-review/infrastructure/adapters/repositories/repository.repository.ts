@@ -16,6 +16,10 @@ export class RepositoryRepository implements IRepositoryRepository {
     /**
      * Find or create a repository record.
      * Looks up by (platform, externalId). If not found, creates with status PENDING.
+     * If found but the integrationConfigId differs from the passed value, heals
+     * the stale FK so previously-mislinked rows (e.g. created with a team id
+     * instead of an integration_config id) self-repair on the next onboarding
+     * save rather than requiring a manual data backfill.
      */
     async findOrCreate(params: {
         integrationConfigId: string;
@@ -33,6 +37,16 @@ export class RepositoryRepository implements IRepositoryRepository {
         });
 
         if (existing) {
+            if (
+                existing.integrationConfigId &&
+                existing.integrationConfigId !== params.integrationConfigId
+            ) {
+                await this.repo.update(
+                    { uuid: existing.uuid },
+                    { integrationConfigId: params.integrationConfigId },
+                );
+                existing.integrationConfigId = params.integrationConfigId;
+            }
             return existing;
         }
 

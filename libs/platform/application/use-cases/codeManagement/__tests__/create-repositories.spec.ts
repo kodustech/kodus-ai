@@ -191,6 +191,7 @@ describe('CreateRepositoriesUseCase', () => {
     const buildUseCase = (overrides: {
         backfill: any;
         persistedRepoIds: Array<{ id: string | number }>;
+        integrationConfig?: any;
     }) => {
         const teamService = {
             findById: jest.fn().mockResolvedValue({
@@ -223,10 +224,14 @@ describe('CreateRepositoriesUseCase', () => {
                     .mockResolvedValue(overrides.persistedRepoIds),
                 findOneIntegrationConfigWithIntegrations: jest
                     .fn()
-                    .mockResolvedValue({
-                        uuid: 'cfg-1',
-                        integration: { platform: 'github' },
-                    }),
+                    .mockResolvedValue(
+                        overrides.integrationConfig === undefined
+                            ? {
+                                  uuid: 'cfg-1',
+                                  integration: { platform: 'github' },
+                              }
+                            : overrides.integrationConfig,
+                    ),
             } as any,
             {
                 findOrCreate: jest.fn().mockResolvedValue({
@@ -336,5 +341,40 @@ describe('CreateRepositoriesUseCase', () => {
         expect(findOrCreate.mock.calls[0][0].integrationConfigId).not.toBe(
             'team-epsilon',
         );
+    });
+
+    it('does not call findOrCreate when the REPOSITORIES integration config is missing', async () => {
+        // Guards the `if (!integrationConfig?.uuid) { return; }` path in
+        // enqueueAstGraphBuilds. Without this test, the guard can be deleted
+        // while the suite stays green (the happy-path mock always returns
+        // cfg-1).
+        const findOrCreate = jest.fn().mockResolvedValue({
+            uuid: 'r',
+            astGraphStatus: 'pending',
+            defaultBranch: 'main',
+            fullName: 'kodus/beta',
+            platform: 'github',
+            externalId: 'repo-new',
+            name: 'beta',
+        });
+        const useCase = buildUseCase({
+            backfill: { execute: jest.fn().mockResolvedValue(undefined) },
+            persistedRepoIds: [],
+            integrationConfig: null,
+        });
+        (useCase as any).repositoryService = { findOrCreate };
+
+        await useCase.execute({
+            organizationId: 'org-1',
+            teamId: 'team-zeta',
+            type: 'replace',
+            repositories: [
+                { id: 'repo-new', name: 'beta', organizationName: 'kodus' },
+            ],
+        });
+
+        await flushSetImmediate();
+
+        expect(findOrCreate).not.toHaveBeenCalled();
     });
 });
