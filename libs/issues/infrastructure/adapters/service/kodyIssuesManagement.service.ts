@@ -495,6 +495,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             PriorityStatus.DISCARDED_BY_SAFEGUARD,
             PriorityStatus.DISCARDED_BY_KODY_FINE_TUNING,
             PriorityStatus.DISCARDED_BY_CODE_DIFF,
+            PriorityStatus.DISCARDED_BY_UNCHANGED_CODE,
         ];
 
         return prFiles.reduce((acc: any[], file) => {

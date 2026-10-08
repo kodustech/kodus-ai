@@ -30,7 +30,7 @@ export interface IPullRequestManagerService {
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { name: string; id: any; project?: { id: any } },
         pullRequest: any,
-        lastCommit?: string,
+        lastCommit?: string | { sha?: string },
     ): Promise<FileChange[]>;
 
     /**

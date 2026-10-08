@@ -257,7 +257,9 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             expect.anything(),
             expect.anything(),
             expect.anything(),
-            'old-head',
+            // The adapters resolve the base SHA from lastCommit.sha, so the
+            // stage must pass the object shape, never a bare SHA string.
+            { sha: 'old-head' },
         );
 
         const posted =
@@ -265,6 +267,108 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
         expect((posted as Array<{ path: string }>).map((c) => c.path)).toEqual([
             'src/changed.ts',
         ]);
+    });
+
+    it('fails open when the orphaned-base diff is empty, suppressing nothing (#2037)', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({ commentResults: [], lastAnalyzedCommit: 'new-head' });
+        // The adapter returns no files changed at all.
+        mockPullRequestManagerService.getChangedFilesMetadata = jest
+            .fn()
+            .mockResolvedValue([]);
+
+        const ctx = baseContext({
+            platformType: 'GITHUB' as never,
+            changedFiles: [
+                { filename: 'src/unchanged.ts', additions: 2, deletions: 1, changes: 3 } as never,
+            ],
+            validSuggestions: [
+                {
+                    relevantFile: 'src/unchanged.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Fix unchanged.',
+                    severity: 'high',
+                    label: 'bug',
+                },
+            ] as never,
+            pipelineMetadata: { forceFullRerun: true },
+            orphanedBaseCommit: {
+                previousSha: 'old-head',
+                currentHeadSha: 'new-head',
+                totalCommits: 2,
+            },
+        });
+
+        await stage.execute(ctx);
+
+        // An empty diff is indistinguishable from a failed diff, so it must
+        // never read as "nothing changed" (which would suppress every
+        // suggestion): the suggestion is still posted.
+        expect(
+            mockPullRequestManagerService.getChangedFilesMetadata,
+        ).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.anything(),
+            expect.anything(),
+            { sha: 'old-head' },
+        );
+        const posted =
+            mockCommentManagerService.createLineComments.mock.calls[0][3];
+        expect((posted as Array<{ path: string }>).map((c) => c.path)).toEqual([
+            'src/unchanged.ts',
+        ]);
+    });
+
+    it('records a swallowed orphaned-base diff error as partial, failing open (#2037)', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({ commentResults: [], lastAnalyzedCommit: 'new-head' });
+        mockPullRequestManagerService.getChangedFilesMetadata = jest
+            .fn()
+            .mockRejectedValue(new Error('adapter down'));
+
+        const ctx = baseContext({
+            platformType: 'GITHUB' as never,
+            changedFiles: [
+                { filename: 'src/unchanged.ts', additions: 1, deletions: 0, changes: 1 } as never,
+            ],
+            validSuggestions: [
+                {
+                    relevantFile: 'src/unchanged.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Fix.',
+                    severity: 'high',
+                    label: 'bug',
+                },
+            ] as never,
+            pipelineMetadata: { forceFullRerun: true },
+            orphanedBaseCommit: {
+                previousSha: 'old-head',
+                currentHeadSha: 'new-head',
+                totalCommits: 2,
+            },
+        });
+
+        const out = await stage.execute(ctx);
+
+        // Fail open: nothing suppressed, the suggestion is still posted.
+        const posted =
+            mockCommentManagerService.createLineComments.mock.calls[0][3];
+        expect((posted as Array<{ path: string }>).map((c) => c.path)).toEqual([
+            'src/unchanged.ts',
+        ]);
+        // And the swallowed error marks the run partial, not a clean success.
+        expect((out as { errors: unknown[] }).errors).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    severity: 'partial',
+                    error: expect.objectContaining({ message: 'adapter down' }),
+                }),
+            ]),
+        );
     });
 
     it('does not suppress without an orphaned base (normal incremental run)', async () => {

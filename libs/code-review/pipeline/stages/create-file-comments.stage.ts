@@ -307,6 +307,9 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 : undefined;
 
         let filesChangedSinceLastReview: Set<string> | undefined;
+        // Collected so executeStage can record the degradation as `partial`
+        // instead of letting the run finish as a clean success.
+        const unchangedCodeSuppressionErrors: Error[] = [];
         if (
             typeof orphanedPreviousSha === 'string' &&
             sortedPrioritizedSuggestions.length > 0
@@ -317,19 +320,46 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                         organizationAndTeamData,
                         repository,
                         pullRequest,
-                        orphanedPreviousSha,
+                        // The adapters resolve the base SHA from lastCommit.sha
+                        // (github/gitlab/azure/bitbucket all read lastCommit?.sha),
+                        // so pass the object shape, never a bare SHA string.
+                        { sha: orphanedPreviousSha },
                     );
-                filesChangedSinceLastReview = new Set(
-                    changed.map((file) => file.filename),
-                );
+                if (changed.length === 0) {
+                    // An empty diff is indistinguishable from a failed or
+                    // uncomputable diff where an adapter returned [] without
+                    // throwing. Never read it as "nothing changed": that would
+                    // suppress every suggestion wholesale. Fail open instead.
+                    filesChangedSinceLastReview = undefined;
+                    this.logger.warn({
+                        message: `Empty diff against the orphaned head (${orphanedPreviousSha}) - skipping unchanged-code suppression for PR#${pullRequest.number}`,
+                        context: this.stageName,
+                        metadata: {
+                            organizationAndTeamData,
+                            prNumber: pullRequest.number,
+                            previousSha: orphanedPreviousSha,
+                        },
+                    });
+                } else {
+                    filesChangedSinceLastReview = new Set(
+                        changed.map((file) => file.filename),
+                    );
+                }
             } catch (error) {
                 // Fail open: without a diff we cannot prove a file is unchanged,
-                // so we suppress nothing - behavior identical to today.
+                // so we suppress nothing - behavior identical to today. Record
+                // the degradation so the run finishes `partial`, not `success`.
                 filesChangedSinceLastReview = undefined;
+                unchangedCodeSuppressionErrors.push(error as Error);
                 this.logger.warn({
                     message: `Could not diff against the orphaned head (${orphanedPreviousSha}) - skipping unchanged-code suppression for PR#${pullRequest.number}`,
                     context: this.stageName,
                     error,
+                    metadata: {
+                        organizationAndTeamData,
+                        prNumber: pullRequest.number,
+                        previousSha: orphanedPreviousSha,
+                    },
                 });
             }
         }
@@ -375,6 +405,9 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             this.groupDiscardedByQuantitySuggestions(allDiscardedSuggestions);
 
         const promptReplyErrors: Error[] = [];
+        // A swallowed error in a review stage must set the execution to
+        // `partial` rather than finishing as a clean success.
+        promptReplyErrors.push(...unchangedCodeSuppressionErrors);
 
         // Create line comments
         const { commentResults, lastAnalyzedCommit } =

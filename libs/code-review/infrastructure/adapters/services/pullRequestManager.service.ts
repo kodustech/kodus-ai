@@ -296,7 +296,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { name: string; id: any },
         pullRequest: any,
-        lastCommit?: string,
+        lastCommit?: string | { sha?: string },
     ): Promise<FileChange[]> {
         try {
             let changedFiles: FileChange[];
