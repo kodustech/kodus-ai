@@ -401,33 +401,16 @@ function matchByMessage(lower: string): LlmErrorCategory {
         // review path has rebuilt the error from its text.
         lower.includes('service unavailable') ||
         lower.includes('bad gateway') ||
-        // Additional 5xx phrasings and bare status numbers that appear as text
-        // when no HTTP status reached the classifier (upstream outage over a
-        // passthrough or a RetryError whose embedded text carries no status);
-        // without these a real 5xx classifies UNKNOWN and the BYOK fallback is
-        // never tried (#1875).
+        // More 5xx phrasings, the text-only safety net for an upstream outage
+        // whose HTTP status never reached the classifier (a passthrough or a
+        // RetryError whose embedded text carries no status field). The real
+        // status now rides in via lastError (#1875), so a *bare* 5xx digit in
+        // a message body is deliberately not read as a status: a permanent
+        // 400/422 body can carry one (`max_tokens must be <= 503`,
+        // `530 credits remaining`, `id 503-abc`) and must not bill the BYOK
+        // fallback (#1898 review).
         lower.includes('gateway timeout') ||
-        lower.includes('internal server error') ||
-        // Status numbers can appear as text without a status field (Cloudflare's
-        // 530 over a 5xx, proxy passthrough). Guard so a standalone 5xx is not
-        // flanked by digits (a number "5032" is not a status), and allow a
-        // letter/separator adjacency ONLY when it sits behind an explicit
-        // status keyword (`HTTP_503`, `ERR_502`, `http504`, `code_503`,
-        // `code:503`, `status=503`, `"code":503`, `"statusCode":503`). The
-        // keyword carries the separator too (an optional quote for a JSON body,
-        // then `_`/`-`/`:`/`=`): `statuscode` is spelled out because the bare
-        // `code` tail of `statuscode` has no boundary to sit behind. A bare
-        // digit glued to arbitrary letters or a separator or annotation
-        // punctuation (`(503`, `#503`, `$503`, `=503`, `(`, `[`, `{`, `#`,
-        // `$`, `;`, `:`, `=`) is a request id, hash, URL path, base64 blob,
-        // issue number or a thousands-separated number (`req_a503b`,
-        // `req_503ab`, `trace-503x`, `...d503e...`, `/releases/503`,
-        // `1,503 tokens`, `+503`), NOT a status — matching it would
-        // mis-classify a permanent failure as TRANSIENT, wrongly cascade to the
-        // paid fallback and surface a wrong message (#1875, #1898 review).
-        /(?<![a-z0-9_.,+/$#;:=(\\[{-])(?:502|503|504|530)(?!\d)|(?<![a-z0-9])(?:http|err|error|statuscode|status|code)["']?[_-]?[:=]?(?:502|503|504|530)(?!\d)/.test(
-            lower,
-        )
+        lower.includes('internal server error')
     ) {
         return LlmErrorCategory.TRANSIENT;
     }

@@ -433,6 +433,15 @@ describe('classifyLLMError', () => {
             'vlan (503 on the edge switch is down',
             'selector value =503 was not found',
             'connection on port :503 refused',
+            // The #1898 review examples: a *standalone* 5xx in a permanent
+            // body is a value/count/limit, not a status — these must not bill
+            // the BYOK fallback.
+            'The request failed: max_tokens must be <= 503',
+            'retry in 503 ms and try again',
+            'you have 530 credits remaining',
+            'the model returned "limit": 504 in the payload',
+            'line 530 col 2 of the template',
+            'Request failed: id 503-abc is not a valid model',
         ])('bare digit inside a larger number (%s) → not TRANSIENT', (msg) => {
             const err = new Error(msg);
             expect(classifyLLMError(err).category).not.toBe(
@@ -441,25 +450,24 @@ describe('classifyLLMError', () => {
         });
 
         it.each([
-            // The status is often glued to letters or a separator rather than
-            // surrounded by whitespace. Word boundaries are defined over
-            // [A-Za-z0-9_], so `\b` rejected these and they fell back to
-            // UNKNOWN — which never triggers the BYOK fallback. A separator is
-            // only read as part of a status behind one of these keywords.
+            // A 5xx in message text tied to a keyword or another word is no
+            // longer read as a status: the real status now rides in via
+            // lastError (#1875), and a message body can mention a 5xx number
+            // for other reasons. Only a genuine upstream *phrase* (bad gateway
+            // / service unavailable / …) or a real HTTP status reaches
+            // TRANSIENT — these must stay UNKNOWN so a permanent failure does
+            // not wrongly bill the BYOK fallback (#1898 review).
             'upstream responded HTTP_503',
             'proxy hop failed: ERR_502',
             'gateway returned http504',
             'connect failed with 502badgateway via the mesh proxy',
-            // A JSON body (or a message) puts the separator -- and a quote --
-            // between the keyword and the digits; the keyword carries it, the
-            // bare alternative keeps refusing it (#1898 review).
             'the upstream returned code:503',
             'the upstream returned status=503',
             'a JSON body {"code":503} came back from the proxy',
             'a JSON body {"statusCode":503} came back from the proxy',
-        ])('status glued to a word (%s) → TRANSIENT', (msg) => {
+        ])('status keyword/word-glued 5xx without a real status (%s) → not TRANSIENT', (msg) => {
             const err = new Error(msg);
-            expect(classifyLLMError(err).category).toBe(
+            expect(classifyLLMError(err).category).not.toBe(
                 LlmErrorCategory.TRANSIENT,
             );
         });
