@@ -1,0 +1,316 @@
+<title>Revisão de duplicatas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a fixed queue on the left (model · repo · PR), the PR's groups on the right, each decision inline. */
+:root {
+  --bg: #f6f7f8; --panel: #ffffff; --fg: #1d2329; --muted: #5f6b76; --line: #dde2e7;
+  --accent: #0f6e74; --accent-soft: #e2f0f0;
+  --good: #2f7d32; --good-soft: #e5f2e5; --warn: #9a6a00; --warn-soft: #fbf1d9; --bad: #b3261e; --bad-soft: #f9e3e1;
+  --code-bg: #f0f2f4;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #13171b; --panel: #1b2126; --fg: #e3e7eb; --muted: #95a1ac; --line: #2c343b;
+  --accent: #5cc2c8; --accent-soft: #1d3436;
+  --good: #7cc47f; --good-soft: #1e2f1f; --warn: #e0b54f; --warn-soft: #33291a; --bad: #f08b83; --bad-soft: #3a2220;
+  --code-bg: #232a30; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #13171b; --panel: #1b2126; --fg: #e3e7eb; --muted: #95a1ac; --line: #2c343b;
+  --accent: #5cc2c8; --accent-soft: #1d3436;
+  --good: #7cc47f; --good-soft: #1e2f1f; --warn: #e0b54f; --warn-soft: #33291a; --bad: #f08b83; --bad-soft: #3a2220;
+  --code-bg: #232a30; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
+.wrap { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; padding-inline: 16px; padding-block: 16px; max-width: 1400px; margin: 0 auto }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr) } aside { position: static !important; max-height: none !important } }
+aside { position: sticky; top: env(safe-area-inset-top, 0px); align-self: start; max-height: calc(100vh - 32px); overflow: auto; display: flex; flex-direction: column; gap: 12px }
+h1 { font-size: 18px; font-weight: 600; margin: 0; text-wrap: balance }
+.sub { color: var(--muted); font-size: 12.5px }
+.progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden }
+.progress > i { display: block; height: 100%; background: var(--accent) }
+.filters { display: flex; flex-wrap: wrap; gap: 6px }
+select, textarea, button { font: inherit; color: var(--fg) }
+select { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px }
+.queue { display: flex; flex-direction: column; gap: 2px }
+.qi { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; text-align: left; background: none; border: 1px solid transparent; border-radius: 6px; padding: 6px 8px; cursor: pointer }
+.qi:hover { background: var(--panel) }
+.qi[aria-current="true"] { background: var(--panel); border-color: var(--line) }
+.qi .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px }
+.qi .m { font-size: 11px; color: var(--muted); letter-spacing: .02em }
+.qi .c { font: 500 11.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; align-self: center }
+.qi .c.done { color: var(--good) }
+main { min-width: 0; display: flex; flex-direction: column; gap: 14px }
+.head { display: flex; flex-direction: column; gap: 4px }
+.head h2 { font-size: 16px; margin: 0; font-weight: 600; overflow-wrap: anywhere }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
+.chip { font: 500 11px var(--mono); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap }
+.chip.high { color: var(--good); background: var(--good-soft); border-color: transparent }
+.chip.mid { color: var(--warn); background: var(--warn-soft); border-color: transparent }
+.chip.low { color: var(--bad); background: var(--bad-soft); border-color: transparent }
+.chip.acc { color: var(--accent); background: var(--accent-soft); border-color: transparent }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0 }
+.card.rv { border-left: 3px solid var(--accent) }
+.card.ok { border-left: 3px solid var(--good) }
+.card.wrong { border-left: 3px solid var(--bad) }
+.card h3 { margin: 0; font-size: 14px; font-weight: 600; text-wrap: balance }
+.sec { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600 }
+.sugs { display: flex; flex-direction: column; gap: 8px }
+.sug { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+.sug .loc { font: 12px var(--mono); color: var(--muted); overflow-wrap: anywhere }
+.sug .lab { font: 600 12px var(--mono); color: var(--accent) }
+.sug .sum { font-weight: 500 }
+.sug details summary { cursor: pointer; color: var(--muted); font-size: 12.5px }
+.sug details[open] summary { color: var(--accent) }
+.sug pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 var(--mono); background: var(--code-bg); padding: 8px; border-radius: 6px; margin: 6px 0 0; max-height: 420px; overflow: auto }
+.why { font-size: 13px; color: var(--muted) }
+.decide { display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed var(--line); padding-top: 10px }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 5px 12px; cursor: pointer }
+.btn:hover { border-color: var(--muted) }
+.btn.on-ok { background: var(--good-soft); color: var(--good); border-color: var(--good) }
+.btn.on-bad { background: var(--bad-soft); color: var(--bad); border-color: var(--bad) }
+.btn.primary { background: var(--accent); color: var(--panel); border-color: var(--accent) }
+.btn:focus-visible, select:focus-visible, textarea:focus-visible, .qi:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+textarea { width: 100%; min-height: 54px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; resize: vertical }
+label.cb { display: inline-flex; gap: 5px; align-items: center; font-size: 13px }
+.status { font-size: 12px; color: var(--muted) }
+.judges { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px }
+.judges > div { min-width: 0; font-size: 12.5px }
+.judges ul { margin: 4px 0 0; padding-left: 18px }
+.empty { color: var(--muted); padding: 40px 0; text-align: center }
+.check { font-size: 13px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 8px }
+.check.hit { color: var(--fg); background: var(--warn-soft); border: 1px solid var(--warn); border-radius: 8px; padding: 10px }
+.cand { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+.cand .lab { font: 600 12px var(--mono); color: var(--accent) }
+.cand details summary { cursor: pointer; color: var(--muted); font-size: 12.5px }
+.changed { font-size: 13px; background: var(--bad-soft); border: 1px solid var(--bad); border-radius: 8px; padding: 8px 10px }
+.changed ul { margin: 4px 0 0; padding-left: 18px }
+.card.chg { border-left: 3px solid var(--bad) }
+.banner { background: var(--warn-soft); color: var(--warn); padding: 8px 12px; border-radius: 8px; font-size: 13px }
+</style>
+
+<div class="wrap">
+  <aside>
+    <div>
+      <h1>Revisão de duplicatas</h1>
+      <div class="sub" id="scope">Carregando…</div>
+    </div>
+    <div class="progress" aria-hidden="true"><i id="bar" style="width:0%"></i></div>
+    <div class="sub" id="count"></div>
+    <div class="filters">
+      <select id="fModel" aria-label="Modelo"><option value="">Todos os modelos</option></select>
+      <select id="fRepo" aria-label="Repositório"><option value="">Todos os repositórios</option></select>
+      <select id="fState" aria-label="Situação"><option value="">Tudo</option><option value="pending">Pendentes</option><option value="done">Revisados</option><option value="changed">Mudaram com a regra nova</option></select>
+    </div>
+    <nav class="queue" id="queue" aria-label="PRs para revisar"></nav>
+  </aside>
+  <main id="main"><div class="empty">Carregando os grupos do piloto…</div></main>
+</div>
+
+<script>
+const DATA_FILE = 'pilot.json';
+const state = { data: null, unit: null, decisions: {}, db: null, me: null, drafts: {} };
+const $ = (s) => document.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else if (v !== false && v != null) n.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return n;
+};
+const docId = (u, target) => `${u.model}__${u.caseId}__${target}`;
+const KIND = { same_location: 'mesmo local', cross_location: 'locais diferentes, mesmo defeito', systemic_pattern: 'padrão repetido' };
+const WHY = { pilot: 'piloto', low: 'confiança baixa', 'audit-mid': 'auditoria (mid)', 'audit-high': 'auditoria (high)' };
+
+function labels(u) {
+  const m = {};
+  u.suggestions.forEach((s, i) => (m[s.id] = `S${i + 1}`));
+  return m;
+}
+function reviewedCount(u) { return u.review.filter((r) => state.decisions[docId(u, r.target)]?.verdict).length; }
+
+function renderQueue() {
+  const d = state.data; if (!d) return;
+  const fm = $('#fModel').value, fr = $('#fRepo').value, fs = $('#fState').value;
+  const q = $('#queue'); q.replaceChildren();
+  let total = 0, done = 0;
+  for (const u of d.units) {
+    const n = u.review.length, r = reviewedCount(u);
+    total += n; done += r;
+    if (fm && u.model !== fm) continue;
+    if (fr && u.repo !== fr) continue;
+    if (fs === 'pending' && r === n) continue;
+    if (fs === 'done' && r < n) continue;
+    const ch = u.review.filter((x) => x.change?.status === 'changed').length;
+    if (fs === 'changed' && !ch) continue;
+    q.append(el('button', { class: 'qi', 'aria-current': state.unit === u.key ? 'true' : 'false', onclick: () => { state.unit = u.key; renderQueue(); renderUnit(); } },
+      el('span', {}, el('div', { class: 'm' }, `${u.model} · ${u.repo}`), el('div', { class: 't', title: u.caseId }, u.caseId)),
+      el('span', { class: `c${r === n ? ' done' : ''}` }, ch ? `${r}/${n} · ${ch} mudou` : `${r}/${n}`)));
+  }
+  $('#bar').style.width = total ? `${(100 * done / total).toFixed(1)}%` : '0%';
+  $('#count').textContent = `${done} de ${total} decisões revisadas`;
+}
+
+function sugCard(s, lab) {
+  const summary = s.summaryPt || s.summary;
+  return el('div', { class: 'sug' },
+    el('div', { class: 'row' }, el('span', { class: 'lab' }, lab), el('span', { class: 'loc' }, `${s.file}:${s.start}-${s.end}`), el('span', { class: 'chip' }, s.by)),
+    summary ? el('div', { class: 'sum' }, summary) : null,
+    s.contentPt ? el('details', {}, el('summary', {}, 'Texto completo (pt-BR)'), el('pre', {}, s.contentPt)) : null,
+    s.content ? el('details', {}, el('summary', {}, s.contentPt ? 'Texto original (inglês)' : 'Texto completo da sugestão'), el('pre', {}, s.content)) : null);
+}
+
+function decisionBlock(u, target, kind, options) {
+  const id = docId(u, target);
+  const saved = state.decisions[id] || {};
+  const draft = state.drafts[id] || (state.drafts[id] = { verdict: saved.verdict || '', remove: saved.remove || [], mergeWith: saved.mergeWith || '', note: saved.note || '' });
+  const box = el('div', { class: 'decide' });
+  const paint = () => {
+    box.replaceChildren();
+    box.append(el('div', { class: 'row' },
+      el('span', { class: 'sec' }, kind === 'group' ? 'Este grupo está correto?' : 'Esta sugestão é mesmo única?'),
+      el('button', { class: `btn${draft.verdict === 'ok' ? ' on-ok' : ''}`, onclick: () => { draft.verdict = 'ok'; paint(); } }, 'Correto'),
+      el('button', { class: `btn${draft.verdict === 'wrong' ? ' on-bad' : ''}`, onclick: () => { draft.verdict = 'wrong'; paint(); } }, 'Incorreto')));
+    if (draft.verdict === 'wrong') {
+      if (kind === 'group') {
+        box.append(el('div', { class: 'row' }, el('span', { class: 'status' }, 'Tirar do grupo:'),
+          ...options.members.map((m) => el('label', { class: 'cb' },
+            el('input', { type: 'checkbox', id: `${id}-rm-${m}`, checked: draft.remove.includes(m), onchange: (e) => { draft.remove = e.target.checked ? [...draft.remove, m] : draft.remove.filter((x) => x !== m); } }),
+            options.labelOf[m]))));
+      }
+      const sel = el('select', { id: `${id}-merge`, onchange: (e) => (draft.mergeWith = e.target.value) },
+        el('option', { value: '' }, kind === 'group' ? 'Juntar com… (opcional)' : 'É duplicata de…'),
+        ...options.targets.map((t) => el('option', { value: t.value, selected: draft.mergeWith === t.value }, t.label)));
+      box.append(el('div', { class: 'row' }, sel));
+    }
+    const ta = el('textarea', { id: `${id}-note`, placeholder: 'Nota (opcional): por que está errado, o que deveria ser', oninput: (e) => (draft.note = e.target.value) });
+    ta.value = draft.note;
+    box.append(ta);
+    const st = el('span', { class: 'status' }, saved.verdict ? `Salvo: ${saved.verdict === 'ok' ? 'correto' : 'incorreto'}` : 'Ainda não revisado');
+    box.append(el('div', { class: 'row' },
+      el('button', { class: 'btn primary', disabled: !draft.verdict || !state.db, onclick: async (e) => {
+        e.target.disabled = true; st.textContent = 'Salvando…';
+        try {
+          await state.db.doc(`decisions/${id}`).set({ model: u.model, caseId: u.caseId, target, kind, verdict: draft.verdict, remove: draft.verdict === 'wrong' ? draft.remove : [], mergeWith: draft.verdict === 'wrong' ? draft.mergeWith : '', note: draft.note, by: state.me || '', at: new Date().toISOString() });
+          st.textContent = 'Salvo';
+        } catch (err) { st.textContent = `Não salvou (${err?.code || 'erro'}). Tente de novo.`; e.target.disabled = false; }
+      } }, 'Salvar decisão'), st));
+    if (!state.db) box.append(el('div', { class: 'banner' }, 'Esta visualização não consegue salvar decisões. Abra a página pelo claude.ai com a sua conta.'));
+  };
+  paint();
+  return box;
+}
+
+const withLabels = (text, labelOf) => text.replace(/s_[0-9a-f]{8}/g, (id) => labelOf[id] || id);
+const LIKE = { likely_duplicate: 'provável duplicata', borderline: 'limítrofe' };
+
+function secondCheckBlock(x, u, labelOf, byId) {
+  const others = u.suggestions.length - 1;
+  const box = el('div', { class: `check${x.secondCheck.length ? ' hit' : ''}` });
+  if (!x.secondCheck.length) {
+    box.append(el('span', {}, el('strong', {}, 'Segunda verificação (GPT-6 Astra): '), `comparada uma a uma com as outras ${others} sugestões deste PR, nenhuma possível duplicata.`));
+    return box;
+  }
+  box.append(el('div', {}, el('strong', {}, 'Segunda verificação (GPT-6 Astra): '), `possível duplicata entre as outras ${others} sugestões deste PR. Confira:`));
+  for (const c of x.secondCheck) {
+    box.append(el('div', { class: 'cand' },
+      el('div', { class: 'chips' }, el('span', { class: 'lab' }, labelOf[c.id]), el('span', { class: `chip ${c.likelihood === 'likely_duplicate' ? 'low' : 'mid'}` }, LIKE[c.likelihood] || c.likelihood)),
+      el('div', {}, withLabels(c.reasonPt, labelOf)),
+      el('details', {}, el('summary', {}, `Ver ${labelOf[c.id]}`), sugCard(byId[c.id], labelOf[c.id]))));
+  }
+  return box;
+}
+
+function changedBlock(r, labelOf) {
+  if (r?.change?.status !== 'changed') return null;
+  const V = { ok: 'você aprovou', wrong: 'você marcou incorreto' };
+  return el('div', { class: 'changed' }, el('strong', {}, 'Mudou com a regra nova (sugestão que é parte de outra conta como duplicata). Antes era: '),
+    el('ul', {}, ...r.change.before.map((b) => el('li', {}, `${b.members.map((m) => labelOf[m] || m).join(' + ')} · ${b.kind === 'group' ? 'grupo' : 'única'}${b.verdict ? ` · ${V[b.verdict] || b.verdict}` : ''}`))));
+}
+
+function judgeList(ans, labelOf) {
+  if (!ans) return el('div', { class: 'status' }, 'sem resposta');
+  return el('ul', {}, ...ans.groups.map((g) => el('li', {}, `${g.members.map((m) => labelOf[m] || m).join(' + ')} · ${KIND[g.kind] || g.kind} · ${g.confidence} — ${g.defect}`)),
+    el('li', {}, `Únicas: ${ans.unique.map((x) => `${labelOf[x.id]} (${x.confidence})`).join(', ') || 'nenhuma'}`));
+}
+
+function renderUnit() {
+  const m = $('#main');
+  const u = state.data?.units.find((x) => x.key === state.unit);
+  if (!u) { m.replaceChildren(el('div', { class: 'empty' }, 'Escolha um PR na lista.')); return; }
+  const labelOf = labels(u);
+  const byId = Object.fromEntries(u.suggestions.map((s) => [s.id, s]));
+  const rv = Object.fromEntries(u.review.map((r) => [r.target, r]));
+  const targets = [...u.groups.map((g) => ({ value: g.groupId, label: `Grupo ${g.groupId.slice(1)}: ${g.members.map((x) => labelOf[x]).join(' + ')}` })),
+    ...u.unique.map((x) => ({ value: x.id, label: `${labelOf[x.id]} (única)` }))];
+  const out = [el('div', { class: 'head' },
+    el('div', { class: 'chips' }, el('span', { class: 'chip acc' }, u.model), el('span', { class: 'chip' }, u.repo), el('span', { class: 'chip' }, `${u.suggestions.length} sugestões`), el('span', { class: 'chip' }, `${u.groups.length} grupos`)),
+    el('h2', {}, u.caseId),
+    el('div', { class: 'sub' }, `Este PR tem ${u.suggestions.length} sugestões do ${u.model}, todas nesta página (grupos e únicas). O dedup só compara sugestões do mesmo PR e do mesmo modelo, então esta é a lista completa a considerar.`))];
+  if (u.groups.length) out.push(el('div', { class: 'sec' }, 'Grupos de duplicatas'));
+  for (const g of u.groups) {
+    const dec = state.decisions[docId(u, g.groupId)];
+    const card = el('section', { class: `card${dec?.verdict === 'ok' ? ' ok' : dec?.verdict === 'wrong' ? ' wrong' : rv[g.groupId]?.change?.status === 'changed' ? ' chg' : rv[g.groupId] ? ' rv' : ''}` },
+      el('div', { class: 'chips' }, el('span', { class: `chip ${g.confidence}` }, `confiança ${g.confidence}`), el('span', { class: 'chip' }, KIND[g.kind] || g.kind),
+        g.needsUnifiedComment ? el('span', { class: 'chip acc' }, 'comentário unificado') : null,
+        el('span', { class: 'chip' }, g.resolvedBy === 'agreement' ? 'os dois juízes concordaram' : g.resolvedBy === 'human' ? 'decidido por você' : 'decidido pelo árbitro'),
+        rv[g.groupId] ? el('span', { class: 'chip' }, WHY[rv[g.groupId].why] || rv[g.groupId].why) : null,
+        rv[g.groupId]?.change?.status === 'changed' ? el('span', { class: 'chip low' }, 'mudou — revisar de novo') : null),
+      el('h3', {}, g.defect),
+      changedBlock(rv[g.groupId], labelOf),
+      g.arbiterReasoning ? el('div', { class: 'why' }, `Árbitro: ${g.arbiterReasoning}`) : null,
+      el('div', { class: 'sugs' }, ...g.members.map((id) => sugCard(byId[id], labelOf[id]))));
+    if (rv[g.groupId]) card.append(decisionBlock(u, g.groupId, 'group', { members: g.members, labelOf, targets: targets.filter((t) => t.value !== g.groupId) }));
+    out.push(card);
+  }
+  if (u.unique.length) out.push(el('div', { class: 'sec' }, 'Sugestões sem duplicata'));
+  for (const x of u.unique) {
+    const dec = state.decisions[docId(u, x.id)];
+    const card = el('section', { class: `card${dec?.verdict === 'ok' ? ' ok' : dec?.verdict === 'wrong' ? ' wrong' : rv[x.id] ? ' rv' : ''}` },
+      el('div', { class: 'chips' }, el('span', { class: `chip ${x.confidence}` }, `confiança ${x.confidence}`), rv[x.id] ? el('span', { class: 'chip' }, WHY[rv[x.id].why] || rv[x.id].why) : null,
+        rv[x.id]?.change?.status === 'changed' ? el('span', { class: 'chip low' }, 'mudou — revisar de novo') : null),
+      changedBlock(rv[x.id], labelOf),
+      sugCard(byId[x.id], labelOf[x.id]));
+    if (x.secondCheck) card.append(secondCheckBlock(x, u, labelOf, byId));
+    if (rv[x.id]) card.append(decisionBlock(u, x.id, 'unique', { labelOf, targets: targets.filter((t) => t.value !== x.id) }));
+    out.push(card);
+  }
+  out.push(el('section', { class: 'card' }, el('div', { class: 'sec' }, 'O que cada juiz disse (respostas originais)'),
+    el('div', { class: 'judges' }, el('div', {}, el('strong', {}, 'Opus 5.5'), judgeList(u.judges.opus, labelOf)), el('div', {}, el('strong', {}, 'GPT-6 Astra'), judgeList(u.judges.astra, labelOf)))));
+  m.replaceChildren(...out);
+}
+
+async function boot() {
+  try {
+    const r = await fetch(DATA_FILE);
+    state.data = await r.json();
+  } catch {
+    $('#main').replaceChildren(el('div', { class: 'empty' }, 'Não consegui carregar os dados da revisão.'));
+    return;
+  }
+  const d = state.data;
+  $('#scope').textContent = d.scope === 'pilot' ? 'Piloto: revise todas as decisões de cada PR.' : 'Confiança baixa e amostra de auditoria.';
+  for (const v of [...new Set(d.units.map((u) => u.model))]) $('#fModel').append(el('option', { value: v }, v));
+  for (const v of [...new Set(d.units.map((u) => u.repo))]) $('#fRepo').append(el('option', { value: v }, v));
+  for (const s of ['#fModel', '#fRepo', '#fState']) $(s).addEventListener('change', renderQueue);
+  state.unit = d.units[0]?.key;
+  renderQueue(); renderUnit();
+
+  const db = await window.claude?.use?.('db').catch(() => null);
+  const user = await window.claude?.use?.('user').catch(() => null);
+  if (user) { try { state.me = await user.id(); } catch {} }
+  if (!db) { renderUnit(); return; }
+  state.db = db;
+  db.collection('decisions').onSnapshot((snap) => {
+    state.decisions = Object.fromEntries(snap.docs.map((x) => [x.id, x.data()]));
+    renderQueue();
+    const active = document.activeElement;
+    if (!active || !['TEXTAREA', 'SELECT', 'INPUT'].includes(active.tagName)) renderUnit();
+  }, () => {});
+  renderUnit();
+}
+boot();
+</script>

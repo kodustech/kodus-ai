@@ -1,0 +1,55 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "f2a4ab188ea26305944c32be6d068f4906f5216f",
+  "attempt": 1,
+  "ms": 29899,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_49ba849a",
+          "s_3e9d106e",
+          "s_86d26218"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The join deadline breaks out of the worker loop, skipping cleanup of remaining workers.",
+        "rationale": "All three identify the same premature break at lines 338–341 and require cleanup to continue for every worker after the waiting deadline expires."
+      },
+      {
+        "members": [
+          "s_c04f59af",
+          "s_d1fa2794",
+          "s_b2d766be"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The process type guard skips killing hung spawn workers before starting their replacements.",
+        "rationale": "All three identify the same incompatible isinstance check at lines 254–255, which leaves the original worker alive while its handle is overwritten by a replacement."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_f04351bb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0a95ae5f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9a130555",
+        "confidence": "high"
+      },
+      {
+        "id": "s_768b9941",
+        "confidence": "high"
+      }
+    ],
+    "partialOverlap": []
+  }
+}

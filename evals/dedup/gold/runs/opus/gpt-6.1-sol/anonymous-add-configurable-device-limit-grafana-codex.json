@@ -1,0 +1,75 @@
+{
+  "judge": "opus",
+  "model": "gpt-6.1-sol",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "757a7308e67ad12f6a79d9fa3da12dd63dcebe02",
+  "attempt": 1,
+  "ms": 9078,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 11452,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 385,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 11452,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 385,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 11452,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 11452
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.099324,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_c4aad7e2",
+          "s_c22edcd3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The device-limit check counts devices and then inserts in a separate step, with no atomic operation or lock, so concurrent requests can push the count past the limit.",
+        "rationale": "Both describe the same check-then-insert race condition in CreateOrUpdateDevice."
+      },
+      {
+        "members": [
+          "s_26a094d0",
+          "s_445423dd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The device is written to the local cache before CreateOrUpdateDevice runs and is not removed when that call fails, so a device rejected by the limit gets through on retry.",
+        "rationale": "Both describe the same cache-before-persist bypass in TagDevice, and both fix it the same way."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_bacd4a32",
+        "confidence": "high"
+      }
+    ]
+  }
+}

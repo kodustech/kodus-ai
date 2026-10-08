@@ -1,0 +1,76 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "2a05c96d151652324522d0a8bea0ab0120d37b36",
+  "attempt": 1,
+  "ms": 37849,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_66268c55",
+          "s_b3979b1b",
+          "s_db9a5070",
+          "s_50672d90"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "AccessTokenContext checks grantType twice and leaves rawTokenId unvalidated.",
+        "rationale": "All four identify the same constructor copy-paste error. Changing the second requireNonNull argument to rawTokenId resolves every report."
+      },
+      {
+        "members": [
+          "s_f28d822f",
+          "s_2a4d8fa0",
+          "s_9862ac83",
+          "s_c4f3874e",
+          "s_cb4db53f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "isAccessTokenId reads the wrong grant-shortcut substring and inverts the equality check.",
+        "rationale": "All five report the same faulty matcher expression and require substring(4,6) with a negated equality check. Additional length guards and splitting recommendations are defensive refinements to the proposed fix."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_ce1639a8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6680bf61",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2e17a8b1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f12ae264",
+        "confidence": "high"
+      },
+      {
+        "id": "s_611afbf2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f886b821",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6ca46c57",
+        "confidence": "high"
+      }
+    ],
+    "partialOverlap": [
+      {
+        "container": "s_f886b821",
+        "contained": "s_611afbf2",
+        "rationale": "s_f886b821 includes the constructor's unchecked formParams dereference reported by s_611afbf2 and additionally reports stale grantType after setFormParams()."
+      }
+    ]
+  }
+}

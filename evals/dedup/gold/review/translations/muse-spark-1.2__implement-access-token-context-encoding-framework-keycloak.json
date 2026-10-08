@@ -1,0 +1,66 @@
+{
+ "s_b3979b1b": {
+  "summaryPt": "Null check copiado e colado valida grantType duas vezes e nunca valida rawTokenId",
+  "contentPt": "O QUÊ: O construtor chama Objects.requireNonNull(grantType) duas vezes; a segunda verificação deveria ser em rawTokenId, mas verifica grantType novamente (linha 73). POR QUÊ: Um rawTokenId nulo passa na validação e depois causa NPE ou um ID codificado terminando em \":null\" em vez de falhar rápido com uma mensagem clara. CORREÇÃO: Altere a linha 73 para Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")"
+ },
+ "s_2a4d8fa0": {
+  "summaryPt": "O matcher isAccessTokenId está invertido e com off-by-one, aceita grant errado e rejeita o grant correto",
+  "contentPt": "O QUÊ: O matcher retorna false quando a substring é igual a expectedGrantShortcut (invertido) e usa substring(3,5) em vez de (4,6) para o shortcut de grant de 2 caracteres. POR QUÊ: Tokens corretos (por exemplo, \"onrtac:uuid\" para o grant \"ac\") são rejeitados, grants errados são aceitos, mascarando regressões na codificação do ID do token. CORREÇÃO: Altere para if (!items[0].substring(4,6).equals(expectedGrantShortcut)) return false;"
+ },
+ "s_f886b821": {
+  "summaryPt": "Context faz cache de grantType na construção e nunca atualiza em setFormParams; também causa NPE se formParams for null",
+  "contentPt": "O QUÊ: O construtor define grantType = formParams.getFirst(...) sem null check e setFormParams() atualiza formParams mas não grantType. POR QUÊ: Se TokenEndpoint ou código de teste chamar setFormParams() com um novo grant_type, getGrantType() retorna um valor desatualizado → shortcut de grant errado codificado no ID do token; se formParams for null, o construtor lança NPE. CORREÇÃO: Adicione um null guard no construtor e atualize grantType dentro de setFormParams() (ou faça getGrantType() derivar de formParams atual)."
+ },
+ "s_6680bf61": {
+  "summaryPt": "Javadoc afirma shortcut de 3 letras, mas o código usa shortcuts de 2 letras",
+  "contentPt": "O Javadoc documenta o shortcut como 'usually like 3-letters', mas todas as implementações retornam shortcuts de 2 letras (ac, cc, ro, te, pg, pc, rt, ci, dg) e o encoder assume exatamente 2 caracteres (encodedContext de 6 caracteres = 2+2+2). Atualize a documentação para '2-letter shortcut' para corresponder ao código."
+ },
+ "s_db9a5070": {
+  "summaryPt": "A mensagem de erro diz rawTokenId, mas o código verifica grantType novamente",
+  "contentPt": "O construtor valida grantType duas vezes; a mensagem da segunda verificação diz Null rawTokenId, mas verifica grantType, deixando rawTokenId sem verificação. Altere a segunda verificação para Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+ },
+ "s_9862ac83": {
+  "summaryPt": "isAccessTokenId usa substring errada e verificação invertida, então nunca valida o tipo de grant",
+  "contentPt": "Corrija isAccessTokenId: o grant são os últimos 2 caracteres do contexto de 6 caracteres (índices 4,6), não (3,5), e a condição está invertida. Altere para if (!items[0].substring(4,6).equals(expectedGrantShortcut)) return false; e também proteja com items[0].length()==6 e use split com limit 2. Atualmente o matcher passa para qualquer grant, então as asserções de evento para code_to_token/device/ciba/refresh não detectam regressões de codificação com grant errado."
+ },
+ "s_f28d822f": {
+  "summaryPt": "O matcher isAccessTokenId usa offsets errados e verificação de grant invertida",
+  "contentPt": "O validador discorda do encoder sobre onde fica o shortcut de grant e sobre a polaridade do match. O encoder emite um prefixo de 6 caracteres com o grant em 4-6; o decoder espera 4-6. O matcher deve verificar substring(4,6) e falhar quando NÃO for igual. Corrija a condição invertida e o offset e adicione um length guard para evitar StringIndexOutOfBounds."
+ },
+ "s_50672d90": {
+  "summaryPt": "O construtor valida grantType duas vezes e nunca valida rawTokenId",
+  "contentPt": "Erro de copiar e colar: a segunda verificação valida grantType novamente. Altere para requireNonNull(rawTokenId). Isso restaura o null guard pretendido e torna a mensagem de falha precisa."
+ },
+ "s_c4f3874e": {
+  "summaryPt": "isAccessTokenId usa substring(3,5) com off-by-one e verificação equals invertida; o shortcut de grant está em 4-6.",
+  "contentPt": "Aritmética de limites e predicado invertidos em isAccessTokenId: items[0].substring(3,5).equals(expectedGrantShortcut) extrai a janela errada de 2 caracteres (índices 3-4 = último caractere de tokenType + primeiro caractere do grant) e retorna false quando HÁ correspondência. O ID codificado tem 6 caracteres 's0 s1 t0 t1 g0 g1', então o grant está em 4-6 (base 0). Corrija a janela e a inversão: `if (!items[0].substring(4,6).equals(expectedGrantShortcut)) return false;`"
+ },
+ "s_66268c55": {
+  "summaryPt": "requireNonNull duplicado verifica grantType duas vezes e nunca verifica rawTokenId",
+  "contentPt": "Corrija o copiar e colar: a segunda verificação deve ser em rawTokenId. O código atual permite criar AccessTokenContext com rawTokenId nulo, codificando para \"<ctx>:null\" e quebrando a unicidade/invariante do token."
+ },
+ "s_f12ae264": {
+  "summaryPt": "initToken agora lança exceção unchecked para grant/session desconhecido e NPE se o provider estiver ausente",
+  "contentPt": "Proteja contra provider null e trate IllegalStateException/IllegalArgumentException da codificação; preserve o fallback para o UUID bruto para que a criação do token não quebre para grants customizados desconhecidos ou tipos de sessão inesperados."
+ },
+ "s_2e17a8b1": {
+  "summaryPt": "getTokenContextFromTokenId lança exceção unchecked para entrada null/malformada",
+  "contentPt": "Valide null logo no início e converta as IllegalArgumentException de tamanho/shortcut desconhecido em um erro tratado (ou retorne um contexto UNKNOWN) para que token ids malformados resultem em 400/invalid_token em vez de um 500 não tratado."
+ },
+ "s_611afbf2": {
+  "summaryPt": "O construtor de Context desreferencia formParams sem null check",
+  "contentPt": "Adicione um null guard em formParams antes de getFirst, ou exija não nulo via Objects.requireNonNull com uma mensagem clara, para evitar NPE na nova linha de inicialização de grantType."
+ },
+ "s_6ca46c57": {
+  "summaryPt": "O novo getShortcut() abstrato quebra a compatibilidade binária/de código-fonte para providers OAuth2GrantTypeFactory customizados",
+  "contentPt": "Adicione uma implementação default para manter o contrato retrocompatível: `default String getShortcut() { return getId(); }` (ou retorne UNKNOWN=\"na\"). Alternativamente, proteja DefaultTokenContextEncoderProviderFactory.postInit/getShortcutByGrantType com instanceof/fallback e uma verificação via reflection para que a ausência do método não quebre postInit. Sem isso, todo grant type fora da árvore precisa ser recompilado."
+ },
+ "s_ce1639a8": {
+  "summaryPt": "Copy-constructor Context(Context) removido e grantType em cache desatualizado após setFormParams()",
+  "contentPt": "Restaure o copy-constructor (copiando também grantType) e mantenha o cache coerente: atualize `grantType` dentro de `setFormParams()` e forneça `setGrantType()` se necessário. Caso contrário, chamadores que alterarem formParams gerarão tokens com o shortcut de grant errado no tokenId codificado."
+ },
+ "s_cb4db53f": {
+  "summaryPt": "O validador de token ID verifica o offset errado e tem lógica invertida, divergindo do gt do encoder em 4,6.",
+  "contentPt": "O gerador (DefaultTokenContextEncoderProvider.encodeTokenId/getTokenContextFromTokenId) codifica/decodifica o prefixo de 6 caracteres como st[0:2]+tt[2:4]+gt[4:6]. O validador aqui lê gt em substring(3,5) e usa igualdade invertida `if (equals) return false`, então nunca verifica de fato o shortcut de grant que o produtor escreve. Corrija para `if (items[0].length()!=6 || !items[0].substring(4,6).equals(expectedGrantShortcut)) return false;` para corresponder ao layout e à lógica do produtor."
+ }
+}

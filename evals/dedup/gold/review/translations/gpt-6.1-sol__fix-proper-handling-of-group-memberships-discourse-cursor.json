@@ -1,0 +1,22 @@
+{
+ "s_6f3a72b3": {
+  "summaryPt": "Grupos com tamanho exato de página expõem uma página de paginação vazia extra.",
+  "contentPt": "O QUÊ: totalPages soma um a floor(user_count / limit) mesmo quando user_count é exatamente divisível por limit. POR QUÊ: um grupo com 50 membros e limit de 50 exibe 1/2, e então next requisita o offset 50 e renderiza uma página vazia inexistente (e, de forma similar, produz uma página extra para todo múltiplo exato). CORREÇÃO: calcule o número de páginas com arredondamento para cima, por exemplo Math.ceil(this.get(\"user_count\") / this.get(\"limit\")), mantendo a guarda para zero membros."
+ },
+ "s_a8a6d7ba": {
+  "summaryPt": "Excluir o último item de uma página posterior pode deixar a UI presa em uma página vazia.",
+  "contentPt": "O QUÊ: removeMember recarrega a página atual sem ajustar o offset após excluir um membro. POR QUÊ: quando o último membro de uma página que não é a primeira é removido, o offset existente pode ficar além do novo total, então a lista atualizada fica vazia em vez de voltar para a página anterior. CORREÇÃO: após a exclusão, reduza o offset em limit quando a página atual ficar vazia (ou recarregue os metadados e limite o offset à última página válida) antes de chamar findMembers."
+ },
+ "s_e03bda55": {
+  "summaryPt": "Múltiplos exatos de contagem de páginas criam uma página vazia fantasma porque totalPages usa floor(count/limit)+1.",
+  "contentPt": "totalPages soma um incondicionalmente após a divisão inteira, então um múltiplo exato de limit produz uma página vazia extra (para 100 usuários com limit 50, reporta 3 páginas). Use divisão com arredondamento para cima, como Math.ceil(user_count / limit), mantendo o caso zero; caso contrário, a ação Next requisita offset=user_count e exibe uma página vazia fantasma."
+ },
+ "s_76d835b4": {
+  "summaryPt": "Contagens de membros com tamanho exato de página atualmente expõem uma página vazia fantasma.",
+  "contentPt": "Calcule o número de páginas com arredondamento para cima, em vez de sempre somar um após a divisão inteira. Com exatamente 50 membros e limit de 50, o código atual reporta 2 páginas e permite navegar até uma segunda página vazia; use `Math.ceil(this.get(\"user_count\") / this.get(\"limit\"))` (ou aritmética inteira equivalente)."
+ },
+ "s_7ab91a84": {
+  "summaryPt": "Os testes de remove-member usam o verbo HTTP errado e, portanto, não protegem a rota DELETE.",
+  "contentPt": "Estes specs de remove-member usam PUT, embora a nova rota mapeie `delete \"members\"` para `groups#remove_member`. Como estão escritos, controller specs despacham a action diretamente e podem passar mesmo com o endpoint DELETE quebrado ou com roteamento incorreto. Invoque `xhr :delete, :remove_member` nos dois casos (ou adicione uma asserção de integração/request contra a rota DELETE) para que os testes cubram o comportamento que alegam cobrir."
+ }
+}

@@ -1,0 +1,50 @@
+{
+ "s_7c49b05b": {
+  "summaryPt": "TOCTOU race: inserts concorrentes podem exceder device_limit",
+  "contentPt": "O QUÊ: CountDevices seguido de CreateOrUpdateDevice/updateDevice é um check-then-act não atômico. POR QUÊ: Duas requisições TagDevice concorrentes para device_ids novos diferentes podem ambas ler count=limit-1 (ex.: 0 de 1) antes de qualquer uma inserir, e então ambas seguem para o caminho de UPSERT e inserem, excedendo o limite configurado. Nenhuma transação de DB, advisory lock ou unique constraint evita esse TOCTOU. COMO: Torne a verificação atômica: use uma única transação com SELECT ... FOR UPDATE ou confie em um INSERT condicional com verificação de contagem de linhas (ex.: INSERT ... SELECT WHERE (SELECT COUNT(*) ...) < limit) ou adicione um lock serializable em torno de count+insert."
+ },
+ "s_d63726ea": {
+  "summaryPt": "Cache antes da escrita envenena a verificação de limite e permite bypass no retry",
+  "contentPt": "O QUÊ: localCache é preenchido antes do sucesso no DB, e o novo return err na linha 147 torna ErrDeviceLimitReached observável por client.go. POR QUÊ: O primeiro TagDevice para um novo device quando o limite foi atingido define a chave no cache e depois falha no DB (updateDevice retorna ErrDeviceLimitReached). A segunda requisição para o mesmo device_id acerta o cache na linha 83 e retorna nil sem tocar no DB, então client.go autentica o device que deveria ter sido negado — bypass do limite após uma falha. COMO: Só chame SetDefault depois que CreateOrUpdateDevice tiver sucesso; em caso de erro não faça cache ou delete a chave explicitamente."
+ },
+ "s_c2c656d9": {
+  "summaryPt": "Device existente desatualizado é negado incorretamente quando o limite é atingido",
+  "contentPt": "O QUÊ: updateDevice usa WHERE updated_at BETWEEN now-30d AND now+1m e retorna ErrDeviceLimitReached quando rowsAffected==0. POR QUÊ: Um device existente cujo último updated_at é anterior a 30d (fora da janela de contagem em CountDevices) não é contado, mas seu UPDATE também afetará 0 linhas e será classificado erroneamente como 'limit reached', negando um device legítimo que está retornando e deveria poder renovar. COMO: O update deve casar apenas por device_id (ou fazer fallback para INSERT em 0 linhas quando o device está desatualizado) e só retornar ErrDeviceLimitReached quando o device realmente não existe e o limite é aplicado."
+ },
+ "s_f91fbc78": {
+  "summaryPt": "TagDevice síncrono bloqueia a autenticação anônima pela latência do DB",
+  "contentPt": "O QUÊ: TagDevice mudou de goroutine assíncrona com background context + timeout de 2m e panic recover para chamada síncrona no ctx da requisição. POR QUÊ: Toda nova autenticação anônima (cache miss) agora bloqueia em COUNT+UPDATE/INSERT; um DB lento ou indisponível atrasa/trava o login, e o cancelamento da requisição aborta a marcação do device. Antes a autenticação nunca era bloqueada e a marcação era best-effort. COMO: Restaure o modo assíncrono best-effort para erros que não sejam de limite e verifique o limite de forma síncrona apenas, ou use um background context desacoplado com timeout para a marcação."
+ },
+ "s_54c1028f": {
+  "summaryPt": "Comentário da interface tornado incorreto pela lógica de limite",
+  "contentPt": "Atualize a doc de AnonStore.CreateOrUpdateDevice (e considere renomear ou documentar o comportamento de limite) para informar que, quando um limite de devices está configurado, a criação é bloqueada e ErrDeviceLimitReached é retornado para device_id desconhecido. O texto atual 'creates or updates a device' agora é falso diante do caminho de limite adicionado em database.go:108-118."
+ },
+ "s_01a0543d": {
+  "summaryPt": "TOCTOU race entre CountDevices e insert permite bypass do limite",
+  "contentPt": "Count-then-insert sem atomicidade permite que novos devices concorrentes excedam o limite. Mova a verificação de limite para o DB de forma atômica via INSERT condicional, transação serializable ou advisory lock."
+ },
+ "s_34a7ef4b": {
+  "summaryPt": "Cache poisoning: entrada definida antes da escrita no DB persiste em ErrDeviceLimitReached",
+  "contentPt": "Defina o cache somente após CreateOrUpdateDevice ter sucesso ou delete a chave em caso de erro para evitar servir uma falha como sucesso."
+ },
+ "s_04b97fc7": {
+  "summaryPt": "O teste BeyondDeviceLimit só verifica a rejeição de um novo device, nunca que a atualização de um device existente tem sucesso no limite, então passa mesmo se updateDevice estiver quebrado.",
+  "contentPt": "TestIntegrationBeyondDeviceLimit só verifica que um novo device é rejeitado quando o limite é atingido, nunca que um device existente ainda pode ser atualizado. Um updateDevice quebrado (ex.: incompatibilidade da janela BETWEEN, sempre 0 linhas) ainda passaria. Adicione um caso positivo: após preencher limit=1, chame CreateOrUpdateDevice novamente com o mesmo DeviceID ('32mdo31deeqwes') e campos atualizados, exija NoError e verifique via ListDevices que a atualização teve sucesso, depois verifique que um terceiro device distinto ainda recebe ErrDeviceLimitReached."
+ },
+ "s_3a7464c4": {
+  "summaryPt": "Authenticate mudou de best-effort assíncrono para bloqueante síncrono que pode falhar a autenticação anônima",
+  "contentPt": "Quebra de contrato comportamental: TagDevice era best-effort fire-and-forget (goroutine em background, timeoutTag=2m, erro engolido). Agora Authenticate é síncrono no contexto da requisição e propaga ErrDeviceLimitReached para falhar a autenticação, e sempre paga a latência de CountDevices + UPDATE. Os chamadores de authn.ContextAwareClient.Authenticate (serviço authn / HTTP handlers) esperavam que o anônimo sempre tivesse sucesso quando habilitado; eles não foram atualizados para tratar o novo caso de recusa ou a latência extra. Mantenha a marcação assíncrona e aplique o limite out-of-band, ou versione explicitamente o contrato de Authenticate e atualize os chamadores para traduzir ErrDeviceLimitReached em um erro HTTP adequado sem bloquear toda requisição anônima."
+ },
+ "s_3fa4a2de": {
+  "summaryPt": "ProvideAnonDBStore ganhou o parâmetro obrigatório deviceLimit, quebrando consumidores de wire/DI",
+  "contentPt": "A mudança de assinatura adiciona o parâmetro obrigatório deviceLimit a ProvideAnonDBStore. Antes: ProvideAnonDBStore(sqlStore) - os chamadores dependem de 1 argumento. Depois: 2 argumentos. Embora este PR atualize impl.go e os testes, o provider set de AnonStore/AnonDBStore (wire) não aparece atualizado. Qualquer consumidor restante usando a forma antiga com 1 argumento quebrará a compilação/DI. Mantenha um wrapper retrocompatível `ProvideAnonDBStore(sqlStore) -> ProvideAnonDBStoreWithLimit(sqlStore, 0)` ou garanta que todos os bindings do wire sejam regenerados e que não reste injeção direta de anonStore."
+ },
+ "s_82da83fd": {
+  "summaryPt": "ProvideAnonymousDeviceService trocou o parâmetro anonStore por sqlStore, quebrando a DI",
+  "contentPt": "Contrato de parâmetro alterado: o 3º parâmetro mudou de anonStore AnonStore para sqlStore db.DB. Antes, os chamadores podiam injetar um fake/mock de AnonStore (os testes faziam isso). Depois, precisam injetar db.DB e perdem a capacidade de mock, e o wire deve ser atualizado para não fornecer AnonStore separadamente. Se qualquer outro chamador (enterprise, wire_gen.go, outros testes) ainda passar AnonStore, a compilação/DI falha. Atualize as definições do wire para fornecer sqlStore a este provider e remover o binding standalone de AnonStore, ou mantenha uma sobrecarga que aceite AnonStore para testabilidade."
+ },
+ "s_30ef29c9": {
+  "summaryPt": "TagDevice agora falha a requisição em qualquer erro de tag, antes era best-effort",
+  "contentPt": "Restrinja a propagação de erro apenas a ErrDeviceLimitReached. Antes, TagDevice nunca retornava erro para falhas de marcação (best-effort). Agora retorna qualquer erro. Os consumidores (client.Authenticate) foram atualizados apenas para ErrDeviceLimitReached, mas agora também veem erros transitórios de DB como falhas. Restrinja a `if errors.Is(err, anonstore.ErrDeviceLimitReached) { return err }` e mantenha o retorno nil best-effort para outros erros, preservando o contrato original."
+ }
+}

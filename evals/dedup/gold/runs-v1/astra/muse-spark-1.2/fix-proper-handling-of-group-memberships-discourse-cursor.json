@@ -1,0 +1,79 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "2b8cfdf1f77c8d5ae0405d304d13345b1ce855c6",
+  "attempt": 1,
+  "ms": 28860,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_44c02cb3",
+          "s_ec5c3c72",
+          "s_14f65a41"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Both membership endpoints require group_id while their routes supply id.",
+        "rationale": "All three describe the same routing/controller parameter mismatch in add_members and remove_member. A unified comment must cover both parameter reads."
+      },
+      {
+        "members": [
+          "s_69ee82ab",
+          "s_651b27bf",
+          "s_b4165a65",
+          "s_bfe39327"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "totalPages overcounts by one when user_count is an exact positive multiple of limit.",
+        "rationale": "All four identify the same floor-plus-one calculation and its phantom trailing page. Correcting that calculation addresses every report."
+      },
+      {
+        "members": [
+          "s_5a9e72ea",
+          "s_aaef7623"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "findMembers returns undefined instead of a promise when the group name is empty.",
+        "rationale": "Both identify the same bare return and the resulting broken thenable contract."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_c54ec8d2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f6758f64",
+        "confidence": "high"
+      },
+      {
+        "id": "s_831f85e5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_77d7a71e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4b680ce0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d903e063",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0820fd4f",
+        "confidence": "high"
+      }
+    ],
+    "partialOverlap": []
+  }
+}

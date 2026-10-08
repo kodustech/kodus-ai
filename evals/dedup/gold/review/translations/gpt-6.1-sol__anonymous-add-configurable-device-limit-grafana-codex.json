@@ -1,0 +1,22 @@
+{
+ "s_26a094d0": {
+  "summaryPt": "Verificações de limite que falham não devem deixar uma entrada de cache que suprima a aplicação futura do limite.",
+  "contentPt": "O QUÊ: uma escrita de limite de dispositivos que falha deixa o ID do dispositivo no localCache, porque a entrada de cache é definida antes de CreateOrUpdateDevice e o novo retorno de erro sai sem remover a entrada. POR QUÊ: depois que uma requisição é rejeitada com ErrDeviceLimitReached, a próxima requisição com o mesmo ID de dispositivo cai no caminho rápido do cache, pula a verificação de limite no banco de dados e é autenticada, contornando o limite configurado. CORREÇÃO: remova (evict) a chave do cache sempre que CreateOrUpdateDevice retornar um erro, ou só popule o cache após uma escrita bem-sucedida."
+ },
+ "s_c22edcd3": {
+  "summaryPt": "Operações separadas de contagem e escrita não aplicam o limite de dispositivos sob concorrência.",
+  "contentPt": "O QUÊ: a verificação de limite conta os dispositivos e depois executa o create/update em uma operação separada, sem serialização. POR QUÊ: requisições concorrentes podem ambas observar uma contagem abaixo de deviceLimit e ambas inserir novos IDs de dispositivo, de modo que o máximo configurado é excedido sob tráfego anônimo concorrente normal. CORREÇÃO: aplique a verificação e a inserção de forma atômica usando uma estratégia de transaction/locking ou um mecanismo de cota imposto pelo banco de dados."
+ },
+ "s_c4aad7e2": {
+  "summaryPt": "Operações separadas de contagem e inserção permitem que registros concorrentes excedam o limite de dispositivos.",
+  "contentPt": "A verificação de limite é uma contagem não atômica seguida de uma decisão de insert/update. Requisições concorrentes podem ambas observar count < deviceLimit e então ambas inserir, excedendo o limite de dispositivos configurado. Aplique o limite em uma transaction com locking apropriado, ou use um mecanismo atômico no lado do banco de dados/lock de coordenação em torno da contagem e da inserção."
+ },
+ "s_445423dd": {
+  "summaryPt": "Uma admissão de dispositivo que falhou no limite deixa uma entrada de cache semelhante a sucesso que contorna o limite em novas tentativas.",
+  "contentPt": "Defina a chave do local-cache somente após CreateOrUpdateDevice ter sucesso, ou remova-a quando a persistência falhar. Atualmente um novo dispositivo rejeitado é colocado no cache antes da chamada ao banco de dados; uma nova tentativa então cai no cache e retorna sem chamar o store, fazendo com que TagDevice/Authenticate tenha sucesso mesmo que o dispositivo nunca tenha sido admitido e o limite continue atingido."
+ },
+ "s_bacd4a32": {
+  "summaryPt": "O UPDATE de aplicação do limite bloqueia dispositivos conhecidos anteriormente depois que eles saem da janela ativa de 30 dias.",
+  "contentPt": "Quando o limite de dispositivos ativos é atingido, este UPDATE rejeita um dispositivo existente cujo `updated_at` anterior é mais antigo que 30 dias. Esse dispositivo não é incluído em `CountDevices`, então usuários recorrentes com um ID de dispositivo expirado/inativo são incorretamente negados com `ErrDeviceLimitReached` em vez de terem sua linha existente atualizada. Atualize por `device_id` sem restringir o timestamp anterior (ainda retornando o erro de limite quando nenhuma linha existir), ou então permita explicitamente dispositivos inativos conhecidos."
+ }
+}

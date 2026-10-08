@@ -1,0 +1,38 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "b12a7f8e813e79c24f7eedb005988c658b00201d",
+  "attempt": 1,
+  "ms": 35672,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_5454e119",
+          "s_cd0716d2",
+          "s_5bd24a7d",
+          "s_f5e7d9a5",
+          "s_0767cf64",
+          "s_5f605bbb",
+          "s_b26743e8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The access-token ID matcher inverts the expected-grant comparison and extracts the grant shortcut at the wrong offsets; extraction should also validate the prefix length.",
+        "rationale": "Every member reports the inverted comparison in the same matcher. Several additionally report the incorrect substring offsets, and s_cd0716d2 includes prefix-length validation, so the overlapping reports belong together and the merged comment must preserve these details."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_b5b8414e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4ecef7a9",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "judge": "opus",
+  "model": "muse-spark-1.2",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "90e3dc5a5f21de69761948b0a5bbecc0c0a88b04",
+  "attempt": 1,
+  "ms": 13837,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 28302,
+    "cache_read_input_tokens": 6564,
+    "output_tokens": 1033,
+    "output_tokens_details": {
+      "thinking_tokens": 300
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 28302,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1033,
+        "cache_read_input_tokens": 6564,
+        "cache_creation_input_tokens": 28302,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 28302
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.2483968,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_50672d90",
+          "s_db9a5070",
+          "s_b3979b1b",
+          "s_66268c55"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "In the AccessTokenContext constructor, grantType is null-checked twice and rawTokenId is never checked, because the second requireNonNull uses grantType by mistake.",
+        "rationale": "All four point at the same copy-paste requireNonNull error on the same lines and propose the same one-line fix."
+      },
+      {
+        "members": [
+          "s_9862ac83",
+          "s_c4f3874e",
+          "s_2a4d8fa0",
+          "s_f28d822f",
+          "s_cb4db53f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The isAccessTokenId matcher reads the grant shortcut from the wrong offset (substring(3,5) instead of (4,6)) and its equality check is inverted, so it does not validate the grant shortcut correctly.",
+        "rationale": "All five report the same wrong offset and the same inverted check in the same matcher. A few also suggest a length guard, which is part of the same fix."
+      },
+      {
+        "members": [
+          "s_611afbf2",
+          "s_ce1639a8",
+          "s_f886b821"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "OAuth2GrantType.Context throws an NPE in the constructor when formParams is null, keeps a stale cached grantType after setFormParams(), and no longer has its copy constructor.",
+        "rationale": "s_f886b821 reports both the NPE (shared with s_611afbf2) and the stale grantType (shared with s_ce1639a8), so the three overlap in a chain on the same Context code."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_f12ae264",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6680bf61",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6ca46c57",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2e17a8b1",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "07bf5ff0f379189be1e26b3550ce25ce580789cf",
+  "attempt": 1,
+  "ms": 41984,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_66268c55",
+          "s_b3979b1b",
+          "s_db9a5070",
+          "s_50672d90"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "AccessTokenContext checks grantType twice and never validates rawTokenId against null.",
+        "rationale": "All four identify the same constructor copy-paste error and the same replacement of the second null check."
+      },
+      {
+        "members": [
+          "s_f28d822f",
+          "s_2a4d8fa0",
+          "s_9862ac83",
+          "s_c4f3874e",
+          "s_cb4db53f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The access-token ID matcher extracts the wrong grant substring, inverts the equality check, and lacks prefix-length validation before substring extraction.",
+        "rationale": "Every member reports the same offset and polarity errors in isAccessTokenId; several also report the missing length guard. The merged comment must preserve these overlapping defects."
+      },
+      {
+        "members": [
+          "s_ce1639a8",
+          "s_611afbf2",
+          "s_f886b821"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "OAuth2GrantType.Context loses its copy constructor, leaves cached grantType stale after setFormParams(), and dereferences nullable formParams during construction.",
+        "rationale": "s_f886b821 overlaps s_ce1639a8 on stale grantType and s_611afbf2 on the constructor null dereference, joining all three transitively. The removed copy constructor is an additional defect that must survive consolidation."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_6680bf61",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2e17a8b1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f12ae264",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6ca46c57",
+        "confidence": "high"
+      }
+    ]
+  }
+}

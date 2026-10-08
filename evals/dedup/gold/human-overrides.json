@@ -1,0 +1,72 @@
+[
+  {
+    "model": "gpt-6.1-sol",
+    "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "replaceGroup": [
+      "s_3e9d106e",
+      "s_49ba849a",
+      "s_86d26218",
+      "s_b2d766be",
+      "s_c04f59af",
+      "s_d1fa2794"
+    ],
+    "with": [
+      {
+        "members": [
+          "s_b2d766be",
+          "s_c04f59af",
+          "s_d1fa2794"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "isinstance(process, multiprocessing.Process) does not match spawn-context SpawnProcess workers, so a hung worker is not killed before its replacement starts (flusher.py:254-255)."
+      },
+      {
+        "members": [
+          "s_3e9d106e",
+          "s_49ba849a",
+          "s_86d26218"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The deadline break in join() leaves the remaining workers without termination (flusher.py:338-341)."
+      }
+    ],
+    "note": "Split by human review: the join() suggestions only mention the spawn-compatible type check inside their fix; a shared defect must be reported as a problem, not mentioned in the fix."
+  },
+  {
+    "model": "muse-spark-1.2",
+    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+    "replaceGroup": [
+      "s_513389d3",
+      "s_663c3e53",
+      "s_73bf0bb8",
+      "s_9be369b2",
+      "s_9d50fd99",
+      "s_d5ce31d3"
+    ],
+    "with": [
+      {
+        "members": [
+          "s_513389d3",
+          "s_73bf0bb8",
+          "s_9be369b2",
+          "s_9d50fd99"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "sendAddGuestsEmails receives the raw guests array instead of the filtered uniqueGuests, so existing attendees get the wrong email template (addGuests.handler.ts:167-169)."
+      },
+      {
+        "members": [
+          "s_663c3e53",
+          "s_d5ce31d3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The server schema does not enforce unique guest emails, so duplicates reach createMany (addGuests.schema.ts)."
+      }
+    ],
+    "note": "Split by human review: S3 only mentions the schema gap as context in its explanation; a shared defect must be reported as a problem, not cited as context or inside the fix."
+  }
+]

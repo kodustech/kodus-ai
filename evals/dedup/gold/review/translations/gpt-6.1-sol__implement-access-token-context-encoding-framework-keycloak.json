@@ -1,0 +1,38 @@
+{
+ "s_b5b8414e": {
+  "summaryPt": "rawTokenId não é validado porque o construtor repete o null check de grantType.",
+  "contentPt": "O QUÊ: o construtor verifica `grantType` duas vezes e nunca verifica se `rawTokenId` é null. POR QUÊ: `new AccessTokenContext(..., null)` aceita um raw token ID inválido, e `encodeTokenId` então emite silenciosamente o sufixo literal `null` em vez de rejeitar o contexto malformado. CORREÇÃO: substitua o segundo `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` por `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+ },
+ "s_5f605bbb": {
+  "summaryPt": "O matcher do teste de eventos tem a comparação do grant shortcut invertida.",
+  "contentPt": "O QUÊ: `isAccessTokenId` retorna false quando o grant shortcut extraído é igual ao shortcut esperado. POR QUÊ: toda asserção de evento atualizada para um token codificado corretamente (por exemplo `...ac:<uuid>`) falha, porque o matcher rejeita exatamente o valor que deveria aceitar. CORREÇÃO: inverta a condição para retornar false quando o shortcut não for igual ao valor esperado, ou retorne diretamente o resultado da igualdade junto com a verificação do UUID."
+ },
+ "s_f5e7d9a5": {
+  "summaryPt": "O novo matcher de access-token ID inverte a verificação do grant esperado e rejeita IDs válidos.",
+  "contentPt": "O matcher rejeita o caso válido: a linha 483 retorna false quando o grant shortcut embutido é igual a expectedGrantShortcut. Como resultado, toda asserção de evento que usa isAccessTokenId(...) falha para token IDs codificados corretamente. Retorne true na igualdade (ou inverta a condição para rejeitar a desigualdade)."
+ },
+ "s_5bd24a7d": {
+  "summaryPt": "O matcher de grant esperado atualmente rejeita grant shortcuts que correspondem.",
+  "contentPt": "O matcher é documentado e nomeado como verificador do grant shortcut esperado, mas o branch de igualdade retorna false quando o shortcut corresponde. Isso faz as asserções de evento rejeitarem o token correto e aceitarem um token com grant diferente, contradizendo a descrição do matcher e seus chamadores."
+ },
+ "s_cd0716d2": {
+  "summaryPt": "O matcher de eventos lê e compara as posições erradas do token ID e inverte o resultado do grant esperado.",
+  "contentPt": "O matcher não valida o formato emitido por DefaultTokenContextEncoderProvider.encodeTokenId: o grant shortcut começa no índice 4, não no 3, e o branch de igualdade está invertido. Extraia `items[0].substring(4, 6)` e retorne true quando for igual a `expectedGrantShortcut` (após validar o tamanho do prefixo); caso contrário, todo evento de access-token codificado corretamente é rejeitado e um grant incorreto pode passar."
+ },
+ "s_5454e119": {
+  "summaryPt": "O matcher de evento de access-token lê o grant shortcut nas posições erradas e rejeita o valor correspondente.",
+  "contentPt": "O matcher usa substring(3, 5), mas os IDs codificados têm o layout de 2 caracteres de session + 2 caracteres de token + 2 caracteres de grant, então o grant shortcut é substring(4, 6). A comparação também está invertida: retorna false quando o valor extraído é igual ao shortcut esperado. Extraia os índices 4..6 e retorne true somente quando forem iguais ao shortcut esperado."
+ },
+ "s_0767cf64": {
+  "summaryPt": "O matcher de access-token ID rejeita o grant shortcut esperado em vez de exigi-lo.",
+  "contentPt": "O matcher inverte a verificação do grant esperado: retorna false quando o shortcut é igual a expectedGrantShortcut, então access-token IDs válidos nunca correspondem e um ID com shortcut errado pode corresponder. Altere a condição para retornar false quando o shortcut não for igual ao valor esperado (ou retorne o resultado da igualdade); caso contrário, todos os testes de evento que usam esse helper deixam de detectar codificação incorreta do grant."
+ },
+ "s_4ecef7a9": {
+  "summaryPt": "As exceções do parser expõem o token ID completo fornecido, incluindo seu identificador de access-token bruto, para consumidores de erro/log.",
+  "contentPt": "Não inclua o token ID codificado completo nas mensagens de IllegalArgumentException. O valor inclui o identificador bruto do access-token e pode ser propagado para um erro HTTP ou para logs do servidor ao fazer o parsing de token IDs controlados por um atacante. Informe apenas uma falha genérica de parsing e, se necessário, o componente limitado e não sensível (por exemplo, o tamanho esperado ou o type shortcut de dois caracteres), ou registre o valor em log somente por meio de um mecanismo adequadamente redigido (redacted)."
+ },
+ "s_b26743e8": {
+  "summaryPt": "O matcher de token de evento atualizado rejeita o grant shortcut esperado e aceita o errado.",
+  "contentPt": "O matcher aplica o novo contrato de access-token ID de forma invertida: quando o grant shortcut codificado é igual a expectedGrantShortcut ele retorna false, então todos os token IDs codificados corretamente falham nas asserções de evento, enquanto um grant shortcut diferente pode passar. Retorne o resultado da igualdade (e mantenha a verificação do UUID), por exemplo `return items[0].substring(4, 6).equals(expectedGrantShortcut) && isUUID().matches(items[1]);`."
+ }
+}

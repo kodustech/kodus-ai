@@ -1,0 +1,90 @@
+{
+  "judge": "opus",
+  "model": "gpt-6.1-sol",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "cf77a0027d0649ba827b99ccf0e1182d8d472a44",
+  "attempt": 1,
+  "ms": 12688,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 18587,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 845,
+    "output_tokens_details": {
+      "thinking_tokens": 340
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 18587,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 845,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 18587,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 18587
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.165604,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_b2d766be",
+          "s_c04f59af",
+          "s_d1fa2794"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The isinstance(process, multiprocessing.Process) guard is false for SpawnProcess workers, so hung workers are never killed before a replacement starts.",
+        "rationale": "All three point at lines 254-255 and describe the same wrong type check, which skips kill() for spawn-context workers. They also propose the same fix."
+      },
+      {
+        "members": [
+          "s_49ba849a",
+          "s_3e9d106e",
+          "s_86d26218"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "In join(), breaking out of the worker loop when the deadline expires means the remaining workers are never terminated.",
+        "rationale": "All three target lines 338-341 and describe the same early break that leaves later workers running. Each proposes the same fix: an unconditional termination pass."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_9a130555",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0a95ae5f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_768b9941",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f04351bb",
+        "confidence": "high"
+      }
+    ],
+    "partialOverlap": []
+  }
+}

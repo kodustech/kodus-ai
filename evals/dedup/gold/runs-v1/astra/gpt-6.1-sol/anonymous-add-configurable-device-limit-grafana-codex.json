@@ -1,0 +1,41 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "256f04f6bd1e62e76fa367d94c80e207d41f6d94",
+  "attempt": 1,
+  "ms": 17705,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_26a094d0",
+          "s_445423dd"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Failed device admission leaves a cache entry that lets subsequent requests bypass the device limit.",
+        "rationale": "Both describe caching the device before persistence succeeds and then skipping enforcement on retries. One points at error propagation and the other at cache population; fixing cache handling resolves both."
+      },
+      {
+        "members": [
+          "s_c22edcd3",
+          "s_c4aad7e2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Non-atomic device counting and insertion allow concurrent registrations to exceed the configured limit.",
+        "rationale": "Both identify the same count-then-write race in the same code block and require atomic enforcement of admission."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_bacd4a32",
+        "confidence": "high"
+      }
+    ],
+    "partialOverlap": []
+  }
+}

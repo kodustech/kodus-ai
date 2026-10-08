@@ -1,0 +1,49 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "component": [
+    "s_382d8521",
+    "s_513389d3",
+    "s_663c3e53",
+    "s_6b3b1759",
+    "s_73bf0bb8",
+    "s_9be369b2",
+    "s_9d50fd99",
+    "s_c99a8cda",
+    "s_d5ce31d3",
+    "s_f4c52829"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_513389d3",
+          "s_73bf0bb8",
+          "s_9be369b2",
+          "s_9d50fd99",
+          "s_663c3e53",
+          "s_d5ce31d3"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "defect": "The handler passes the raw guests array to sendAddGuestsEmails instead of the filtered uniqueGuests, so existing attendees get the wrong email template. Separately, the server schema has no uniqueness check, so duplicate guest emails can reach createMany. s_9d50fd99 reports both defects, which links the two sets of reports."
+      },
+      {
+        "members": [
+          "s_382d8521",
+          "s_6b3b1759",
+          "s_c99a8cda"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The blacklist and existing-attendee checks in the handler compare emails case-sensitively, even though the blacklist is lowercased. Changing the case of an email gets around both checks."
+      }
+    ],
+    "unique": [
+      "s_f4c52829"
+    ],
+    "decisive": false,
+    "reasoning": "This was a judgment call, so I did not mark it decisive.\n\n**Group 1 (email argument plus server schema):** Four suggestions (s_513389d3, s_73bf0bb8, s_9be369b2, s_9d50fd99) report the same bug: the raw guests list is passed to sendAddGuestsEmails instead of uniqueGuests. s_9d50fd99 also states a second defect: addGuests.schema.ts does not enforce unique emails, so duplicates reach createMany. That is the same defect s_663c3e53 and s_d5ce31d3 report. Under the overlap-chain rule, this merges the two sets into one group. Because they point at different places in two files and need two different edits, the group needs a unified comment.\n\n**Group 2 (case-sensitive checks):** s_382d8521, s_6b3b1759 and s_c99a8cda all cover the same handler filter lines. Each says the blacklist and existing-attendee comparisons are case-sensitive and gives the same fix. One remark in s_c99a8cda (\"deduplicate input case-insensitively\") is part of that fix, not a separate claim about the schema, so I kept this group apart from Group 1.\n\n**Left unique:** s_f4c52829 is about the client-side Set uniqueness check in AddGuestsDialog being case-sensitive. That is different code with a different fix. It only mentions server normalization in passing.\n\n**Why I disagreed with each judge:**\n- Judge 2 put all 10 suggestions into one group. That stretches weak links between topics into a single group.\n- Judge 1 missed the explicit overlap in s_9d50fd99 that links the email-argument and schema reports."
+  }
+}

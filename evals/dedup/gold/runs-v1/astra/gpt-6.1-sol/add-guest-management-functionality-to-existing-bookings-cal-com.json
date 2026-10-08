@@ -1,0 +1,68 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "promptSha": "7ef363aa5db676d691246a453533bf4858b357d6",
+  "attempt": 1,
+  "ms": 29764,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_282510ec",
+          "s_7d464dc6"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Passing the original guests list to sendAddGuestsEmails misclassifies existing attendees as newly added guests.",
+        "rationale": "Both identify the same argument at the same call site and propose passing uniqueGuests to align notification classification with the inserted attendees."
+      },
+      {
+        "members": [
+          "s_969329e8",
+          "s_0f78e9fc"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Case-sensitive guest comparisons allow blacklist bypasses and duplicate existing attendee identities through email casing variants.",
+        "rationale": "Both cover the same two comparisons in the guest filter: matching existing attendees and matching the normalized blacklist. Both request consistent email normalization."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_61eadbaa",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2eda8d39",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3b3887b4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_db3d4f7f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_11281640",
+        "confidence": "high"
+      }
+    ],
+    "partialOverlap": [
+      {
+        "container": "s_969329e8",
+        "contained": "s_2eda8d39",
+        "rationale": "The container includes the blacklist casing bypass and additionally reports case-sensitive matching against existing attendees. The contained suggestion focuses on the blacklist bypass; its duplicate-check normalization advice does not separately report that additional defect."
+      },
+      {
+        "container": "s_0f78e9fc",
+        "contained": "s_2eda8d39",
+        "rationale": "The container includes the blacklist casing bypass and additionally reports duplicate existing attendee identities caused by case-sensitive matching."
+      }
+    ]
+  }
+}

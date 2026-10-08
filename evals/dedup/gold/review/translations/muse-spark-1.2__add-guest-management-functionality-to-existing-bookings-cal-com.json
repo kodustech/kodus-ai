@@ -1,0 +1,74 @@
+{
+ "s_2a6ec553": {
+  "summaryPt": "A verificação de permissão de time usa && em vez de ||, negando acesso a usuários apenas ADMIN",
+  "contentPt": "O QUÊ: isTeamAdminOrOwner é calculado com (await isTeamAdmin(...) && await isTeamOwner(...)), o que exige os papéis ADMIN e OWNER simultaneamente. POR QUÊ: isTeamAdmin já retorna true para ADMIN ou OWNER (teams/index.ts:264) e isTeamOwner exige OWNER (teams/index.ts:286), então com && apenas OWNER passa e um ADMIN puro recebe FORBIDDEN incorretamente. COMO: Altere para || como feito em confirm.handler.ts:127-128 e outros handlers de time (ex.: membership.role === OWNER || ADMIN)."
+ },
+ "s_6b3b1759": {
+  "summaryPt": "As comparações de blacklist e de deduplicação de participantes diferenciam maiúsculas/minúsculas, permitindo bypass",
+  "contentPt": "O QUÊ: blacklistedGuestEmails está em minúsculas, mas é comparado com !blacklistedGuestEmails.includes(guest), onde guest não está em minúsculas, e a deduplicação de participantes usa guest === attendee.email com diferenciação de maiúsculas/minúsculas. POR QUÊ: Um atacante ou usuário pode burlar a blocklist BLACKLISTED_GUEST_EMAILS usando outra capitalização (ex.: Test@Blocked.com) e criar entradas duplicadas de participantes que diferem apenas pela capitalização. COMO: Normalize ambos os lados: !blacklistedGuestEmails.includes(guest.toLowerCase()) e !booking.attendees.some(a => a.email.toLowerCase() === guest.toLowerCase())."
+ },
+ "s_9d50fd99": {
+  "summaryPt": "sendAddGuestsEmails é chamado com guests não filtrados em vez de uniqueGuests",
+  "contentPt": "O QUÊ: O handler calcula uniqueGuests filtrando participantes existentes e a blocklist, mas depois chama sendAddGuestsEmails(evt, guests) com o array original sem filtro. POR QUÊ: email-manager.ts:541 usa newGuests.includes(attendee.email) para decidir entre AttendeeScheduledEmail e AttendeeAddGuestsEmail, então participantes existentes serão identificados como novos e entradas na blacklist/duplicadas poluem a decisão; o schema do servidor (addGuests.schema.ts:5) não impõe unicidade, então e-mails duplicados na requisição chegarão ao createMany e à lógica de e-mail incorretamente. COMO: Passe uniqueGuests: await sendAddGuestsEmails(evt, uniqueGuests)."
+ },
+ "s_02663bbb": {
+  "summaryPt": "Tooltip fixo no código ignora i18n",
+  "contentPt": "A string \"Remove email\" em MultiEmail.tsx:46 ignora o mecanismo de tradução usado pelo código ao redor (t(\"add_another\") na linha 69). Substitua por t(\"remove_email\") (adicione a chave aos locales) para que todo conteúdo voltado ao usuário passe por useLocale."
+ },
+ "s_be3938b1": {
+  "summaryPt": "O nome da flag indica OR, mas o código exige AND",
+  "contentPt": "O identificador isTeamAdminOrOwner indica semântica OR, mas controla com &&, exigindo que o usuário seja admin e owner ao mesmo tempo. Altere && para || para corresponder ao nome/contrato, ou renomeie para isTeamAdminAndOwner se AND era intencional."
+ },
+ "s_c99a8cda": {
+  "summaryPt": "As verificações de blacklist e de e-mail duplicado diferenciam maiúsculas/minúsculas enquanto a blacklist está em minúsculas, permitindo bypass por variação de capitalização.",
+  "contentPt": "Bypass por diferenciação de maiúsculas/minúsculas: blacklistedGuestEmails está em minúsculas, mas os valores guest comparados não. Um atacante pode burlar a blacklist e a verificação de participante duplicado com variações de capitalização (ex.: BAD@EXAMPLE.COM vs bad@example.com). Normalize ambos os lados com toLowerCase() (e trim) antes da comparação e deduplique os guests de entrada sem diferenciar maiúsculas/minúsculas. A mesma correção é necessária na verificação de participante existente (guest === attendee.email)."
+ },
+ "s_f4c52829": {
+  "summaryPt": "A validação de unicidade no cliente usa Set que diferencia maiúsculas/minúsculas, permitindo e-mails duplicados por variação de capitalização.",
+  "contentPt": "A verificação de unicidade diferencia maiúsculas/minúsculas. E-mails não diferenciam, então ['a@b.com','A@B.COM'] passa incorretamente. Normalize para lowerCase (trim) antes da comparação com Set e imponha a mesma normalização em ZAddGuestsInputSchema no servidor (addGuests.schema.ts)."
+ },
+ "s_513389d3": {
+  "summaryPt": "O handler passa guests brutos em vez de uniqueGuests filtrados ao envio de e-mail, classificando mal participantes existentes",
+  "contentPt": "Passe a lista filtrada (uniqueGuests) para sendAddGuestsEmails. Presume-se que o parâmetro newGuests do email manager seja exatamente os participantes recém-criados; passar a entrada bruta quebra esse contrato e causa o template de e-mail errado para participantes existentes reenviados na mesma requisição."
+ },
+ "s_d5ce31d3": {
+  "summaryPt": "O schema do backend não tem a verificação de unicidade que o frontend impõe, permitindo e-mails de convidados duplicados via API direta",
+  "contentPt": "Adicione ao schema do servidor o mesmo refinement de unicidade usado pelo dialog, para que ambos os lados concordem que e-mails duplicados em uma única requisição são inválidos. Sem isso, o backend aceita payloads que a UI rejeita, levando à criação de participantes duplicados."
+ },
+ "s_889f1bcc": {
+  "summaryPt": "A verificação de permissão de time usa && em vez de ||, exigindo que o usuário seja admin E owner",
+  "contentPt": "Altere && para || para que um admin OU owner do time passe. O AND atual exige ambos os papéis simultaneamente, o que nega acesso a admins/owners legítimos e quebra o invariante de permissão pretendido."
+ },
+ "s_663c3e53": {
+  "summaryPt": "O schema do servidor não impõe e-mails únicos, permitindo que convidados duplicados corrompam o estado ou gerem erro",
+  "contentPt": "Adicione um refine de unicidade no servidor (sem diferenciar maiúsculas/minúsculas) que corresponda à validação do cliente, e/ou deduplique uniqueGuests antes do createMany. Sem isso, o invariante de unicidade é imposto apenas no cliente e inserções duplicadas causam corrupção ou exceções de banco não tratadas."
+ },
+ "s_358a3c52": {
+  "summaryPt": "Requisições addGuests concorrentes podem passar pelo filtro e inserir participantes duplicados (race condition)",
+  "contentPt": "Normalize e-mails para minúsculas, deduplique dentro da requisição e proteja contra inserções concorrentes com uma unique constraint no banco em (bookingId,email), mais tratamento de P2002 ou o uso de uma transaction/interaction com SELECT FOR UPDATE. O padrão atual de leitura e depois escrita sem isolamento permite estado duplicado."
+ },
+ "s_382d8521": {
+  "summaryPt": "A verificação de blacklist diferencia maiúsculas/minúsculas, permitindo bypass e filtragem inconsistente",
+  "contentPt": "Converta guest para minúsculas antes das verificações de existência de participante e de blacklist, para que variações de capitalização não burlem o filtro nem violem as restrições de unicidade/blacklist."
+ },
+ "s_3d0f032a": {
+  "summaryPt": "A verificação de permissão usa && em vez de ||, negando acesso a admins/owners de time que possuem apenas um dos papéis",
+  "contentPt": "Altere `&&` para `||` em isTeamAdminOrOwner; o nome e o teste `!isTeamAdminOrOwner && !isOrganizer` exigem semântica OR. O código atual exige que o chamador seja admin E owner."
+ },
+ "s_73bf0bb8": {
+  "summaryPt": "Os e-mails são enviados com guests originais em vez de uniqueGuests filtrados, causando template de e-mail errado e vazando endereços filtrados para a classificação",
+  "contentPt": "Passe `uniqueGuests` (a lista filtrada, efetivamente inserida) para `sendAddGuestsEmails(evt, uniqueGuests)` em vez de `guests`. A escrita no banco usa `uniqueGuests`, então a lógica de notificação deve usar o mesmo valor."
+ },
+ "s_b2a8964e": {
+  "summaryPt": "Corrigir logo desalinhado com renderização correta do texto na tela de sucesso",
+  "contentPt": "Success on {l10nText} em vez de 'Success on Cal.com' para o alinhamento correto do logo."
+ },
+ "s_dd4aed43": {
+  "summaryPt": "isTeamAdminOrOwner usa && exigindo ambos os papéis em vez de ||",
+  "contentPt": "O predicado se chama isTeamAdminOrOwner, mas implementa AND. Isso muda o contrato de comportamento de permissivo (admin OR owner) para restritivo (admin AND owner) e quebra consumidores existentes de admin de time que não são também owners. Troque && por || para corresponder ao contrato pretendido e aos outros handlers."
+ },
+ "s_9be369b2": {
+  "summaryPt": "sendAddGuestsEmails é chamado com guests brutos em vez de uniqueGuests filtrados",
+  "contentPt": "O contrato da função de e-mail espera a lista de novos convidados efetivamente persistidos. Após filtrar para uniqueGuests, o handler ainda encaminha o array bruto guests na linha 168, então endereços duplicados/na blacklist que foram excluídos do banco ainda afetam a ramificação entre AttendeeScheduledEmail e AttendeeAddGuestsEmail. Passe uniqueGuests (pós-filtro, com comparações em minúsculas) para manter os contratos de quem chama e de quem é chamado alinhados."
+ }
+}

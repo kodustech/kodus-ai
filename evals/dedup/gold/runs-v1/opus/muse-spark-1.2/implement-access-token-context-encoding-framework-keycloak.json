@@ -1,0 +1,111 @@
+{
+  "judge": "opus",
+  "model": "muse-spark-1.2",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "95fc8e31358bfc3ab975c517cbfe4c7a1bd77d7c",
+  "attempt": 1,
+  "ms": 12182,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 28822,
+    "cache_read_input_tokens": 8977,
+    "output_tokens": 1088,
+    "output_tokens_details": {
+      "thinking_tokens": 440
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 28822,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1088,
+        "cache_read_input_tokens": 8977,
+        "cache_creation_input_tokens": 28822,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 28822
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.2541394,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_50672d90",
+          "s_db9a5070",
+          "s_b3979b1b",
+          "s_66268c55"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The AccessTokenContext constructor checks grantType for null twice and never checks rawTokenId.",
+        "rationale": "All four point at the same copy-paste error on line 73 and propose the same one-line fix."
+      },
+      {
+        "members": [
+          "s_9862ac83",
+          "s_c4f3874e",
+          "s_2a4d8fa0",
+          "s_f28d822f",
+          "s_cb4db53f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The isAccessTokenId matcher reads the grant shortcut at the wrong offset (substring(3,5) instead of (4,6)) and its equality check is inverted.",
+        "rationale": "All five describe the same wrong offset and inverted condition in the same matcher, and all propose the same fix."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_f12ae264",
+        "confidence": "high"
+      },
+      {
+        "id": "s_611afbf2",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_ce1639a8",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_6680bf61",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6ca46c57",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2e17a8b1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f886b821",
+        "confidence": "mid"
+      }
+    ],
+    "partialOverlap": [
+      {
+        "container": "s_f886b821",
+        "contained": "s_611afbf2",
+        "rationale": "s_f886b821 reports the same NPE when formParams is null. It also reports a second defect: grantType goes stale after setFormParams()."
+      }
+    ]
+  }
+}

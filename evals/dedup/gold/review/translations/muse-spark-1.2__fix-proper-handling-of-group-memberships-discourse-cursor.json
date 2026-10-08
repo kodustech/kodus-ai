@@ -1,0 +1,66 @@
+{
+ "s_b4165a65": {
+  "summaryPt": "totalPages com off-by-one cria página vazia fantasma",
+  "contentPt": "O QUÊ: totalPages calcula Math.floor(user_count/limit)+1, o que gera um off-by-one quando user_count é múltiplo exato de limit (ex.: 50/50 => 2 páginas em vez de 1). POR QUÊ: showingLast nunca se torna true, o botão next permanece habilitado e uma página extra vazia fica acessível. COMO: Use Math.ceil(user_count/limit) ou Math.floor((user_count-1)/limit)+1 com guarda para zero."
+ },
+ "s_c54ec8d2": {
+  "summaryPt": "usernames não passam por strip após o split",
+  "contentPt": "O QUÊ: add_members faz split dos usernames por vírgula sem remover espaços em branco, e depois chama User.find_by_username com espaços no início/fim. POR QUÊ: Uma entrada como \"alice, bob\" vinda do user-selector produz \" bob\", que falha na busca e é ignorado silenciosamente, então alguns usuários não são adicionados e não há nenhum erro. COMO: Aplique strip em cada token e rejeite vazios: usernames.split(',').map(&:strip).reject(&:empty?)."
+ },
+ "s_77d7a71e": {
+  "summaryPt": "delete ignora a limpeza de primary_group",
+  "contentPt": "O QUÊ: remove_member usa group.users.delete(user_id), que ignora a lógica de Group#remove e destroy_deletions. POR QUÊ: O delete direto em SQL deixa primary_group_id pendente em usuários cujo primary_group era este grupo, e pula callbacks/rastreamento de deleção que Group.save espera; o group.save posterior é redundante. COMO: Use o equivalente a group.remove(user) ou GroupUser.where(group_id: group.id, user_id: user_id).destroy_all e limpe primary_group_id."
+ },
+ "s_aaef7623": {
+  "summaryPt": "findMembers retorna undefined em vez de promise",
+  "contentPt": "O QUÊ: findMembers retorna undefined quando name está vazio, em vez de uma promise. POR QUÊ: Os chamadores next/previous fazem return group.findMembers() esperando um thenable; admin_group_route antes encadeava em afterModel, agora é fire-and-forget, mas next/previous ainda retornam o valor — undefined quebra qualquer encadeamento .then/.catch e esconde a guarda de name vazio. COMO: Retorne Ember.RSVP.resolve() ou Ember.RSVP.resolve([]) como antes."
+ },
+ "s_0820fd4f": {
+  "summaryPt": "limit sem limite superior permite DoS por payload grande",
+  "contentPt": "O QUÊ: a action members aceita o parâmetro limit arbitrário sem limite superior (limit = params[:limit].to_i). POR QUÊ: Requisitar limit=100000 ou 1_000_000 carrega usuários sem limite na memória e os serializa, regredindo em relação ao teto anterior de 200 para grupos automáticos e permitindo DoS via payload grande. COMO: Limite o valor, ex.: limit = [[params[:limit].to_i, 50].max, 200].min ou um máximo similar."
+ },
+ "s_69ee82ab": {
+  "summaryPt": "totalPages com off-by-one quando user_count é divisível por limit",
+  "contentPt": "Altere totalPages para Math.ceil(user_count / limit). O Math.floor(...)+1 atual conta uma página a mais quando user_count % limit == 0, mantendo next habilitado na última página e inflando a exibição de páginas (50 usuários, limit 50 mostra 1/2 em vez de 1/1)."
+ },
+ "s_d903e063": {
+  "summaryPt": "offset de next é limitado a user_count em vez do início da última página, produzindo página vazia/desalinhada",
+  "contentPt": "Limite o offset de next ao início da última página, não a user_count. Use maxOffset = (Math.ceil(total/limit)-1)*limit e Math.min(offset+limit, maxOffset). Caso contrário, múltiplos exatos caem em uma página vazia (offset==total) e não múltiplos caem fora de alinhamento (51 com limit 50 -> 51)."
+ },
+ "s_651b27bf": {
+  "summaryPt": "totalPages com off-by-one quando user_count é divisível por limit",
+  "contentPt": "totalPages usa floor+1, o que está errado quando total % limit ==0. Use Math.ceil(total/limit). Caso contrário, o paginador mostra 2/3 páginas para múltiplos exatos e permite navegar para uma última página vazia."
+ },
+ "s_14f65a41": {
+  "summaryPt": "A rota emite :id mas o controller exige :group_id",
+  "contentPt": "Alinhe a chave do parâmetro entre o roteamento e o controller. Altere o controller para params.require(:id) (e o mesmo para remove_member) ou declare as rotas explicitamente com param: :group_id / como collection com :group_id. A divergência atual faz ambos os endpoints retornarem 400 em produção, apesar dos testes passarem."
+ },
+ "s_4b680ce0": {
+  "summaryPt": "O teste automático de remove_member usa PUT em vez de DELETE",
+  "contentPt": "Altere xhr :put para xhr :delete no teste de grupo automático de remove_member para exercitar o mesmo verbo/rota (DELETE /admin/groups/:group_id/members) que a aplicação expõe. O código de produção em config/routes.rb:49 mapeia remove_member apenas para DELETE, então o teste deve usar DELETE para verificar o endpoint real."
+ },
+ "s_ec5c3c72": {
+  "summaryPt": "A rota de member fornece :id mas o controller exige :group_id – requisições reais retornarão 400",
+  "contentPt": "add_members/remove_member exigem :group_id, mas a rota `delete/put \"members\"` dentro de `resources :groups` é uma member route que fornece :id ( /admin/groups/:id/members.json ). A chamada JS Discourse.ajax('/admin/groups/'+id+'/members.json',{data:{usernames/user_id}}) não envia group_id, então params.require(:group_id) levantará ParameterMissing em produção, enquanto o spec passa por passar group_id manualmente. Altere o controller para `params[:id]` ou `params.require(:id)` (ou `params[:group_id] || params[:id]`) e atualize a rota para member/collection explícita, ou altere o JS para enviar group_id."
+ },
+ "s_831f85e5": {
+  "summaryPt": "Mutação de membros via PATCH descartada silenciosamente – chamadores acham que os membros mudaram",
+  "contentPt": "Remover update_patch quebra silenciosamente o contrato do PATCH. Antes, PATCH /admin/groups/:id com changes:{add,delete} alterava membros e bloqueava grupos automáticos (403). Agora update() ignora o parâmetro changes e retorna success_json sem aplicar mudanças de membros. Mantenha o branch update_patch (if request.patch?) e retorne erro para grupos automáticos, ou retorne explicitamente 405/400 para PATCH com instruções para usar PUT /members e DELETE /members. Não retorne sucesso silenciosamente."
+ },
+ "s_5a9e72ea": {
+  "summaryPt": "findMembers com name vazio agora retorna undefined em vez de uma promise",
+  "contentPt": "O contrato de retorno de findMembers() regrediu para name vazio. Antes retornava Ember.RSVP.resolve([]), então os chamadores sempre podiam usar .then(). Agora retorna undefined (return simples) quando name está vazio, quebrando as cadeias de promise em next()/previous() e qualquer chamador externo. Retorne Ember.RSVP.resolve() ou uma promise rejeitada, e continue retornando a promise do ajax para que os chamadores possam aguardá-la."
+ },
+ "s_44c02cb3": {
+  "summaryPt": "A rota fornece :id mas o controller exige :group_id – requisições de members falham com 500 por ParameterMissing",
+  "contentPt": "O gerador (config/routes.rb:49-50) fornece `params[:id]` para `PUT/DELETE /admin/groups/:id/members`, mas o validador/consumidor (admin/groups_controller.rb:66 e :85) exige `params[:group_id]`. Altere o controller para ler `params.require(:id)` (ou altere a rota para expor `:group_id`). Atualize o spec para enviar `id:` se você alterar o controller."
+ },
+ "s_bfe39327": {
+  "summaryPt": "totalPages com off-by-one cria página vazia fantasma",
+  "contentPt": "totalPages é Math.floor(user_count/limit)+1. Quando user_count é múltiplo exato de limit, resulta em uma página extra (ex.: 50/50 -> 2). A UI então permite que next() avance para uma página vazia (offset == user_count). Use Math.ceil(user_count/limit) e mantenha a guarda para zero."
+ },
+ "s_f6758f64": {
+  "summaryPt": "remove_member corrompe o estado: o delete executa antes da verificação do save",
+  "contentPt": "group.users.delete executa o SQL imediatamente, fora da verificação de group.save. Em caso de falha de validação, a mutação no banco não sofre rollback, deixando o cliente com uma resposta de erro, mas com o grupo alterado. Faça o stage da remoção via group.remove(user) (ou group_users.build/destroy) e dependa do save/transaction subsequente para confirmar, ou envolva em uma transaction e só delete após a validação bem-sucedida."
+ }
+}

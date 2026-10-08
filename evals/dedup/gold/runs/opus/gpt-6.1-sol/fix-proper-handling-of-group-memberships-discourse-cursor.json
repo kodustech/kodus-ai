@@ -1,0 +1,69 @@
+{
+  "judge": "opus",
+  "model": "gpt-6.1-sol",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "8a5c7d72f40c836abe426e7c6ef7a3ffd23f0d6d",
+  "attempt": 1,
+  "ms": 8263,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 17364,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 285,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 17364,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 285,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 17364,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 17364
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.14462,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_e03bda55",
+          "s_76d835b4",
+          "s_6f3a72b3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "totalPages uses floor(user_count/limit)+1, which creates a phantom empty page when user_count is an exact multiple of limit; Math.ceil should be used instead.",
+        "rationale": "All three suggestions point at the same lines and describe the same off-by-one page count, with the same ceiling fix."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_7ab91a84",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a8a6d7ba",
+        "confidence": "high"
+      }
+    ]
+  }
+}

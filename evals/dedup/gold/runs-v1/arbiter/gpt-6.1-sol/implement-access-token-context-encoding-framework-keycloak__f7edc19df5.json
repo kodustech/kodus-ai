@@ -1,0 +1,84 @@
+{
+  "model": "gpt-6.1-sol",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "component": [
+    "s_0767cf64",
+    "s_5454e119",
+    "s_5bd24a7d",
+    "s_5f605bbb",
+    "s_b26743e8",
+    "s_cd0716d2",
+    "s_f5e7d9a5"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0767cf64",
+          "s_5bd24a7d",
+          "s_5f605bbb",
+          "s_b26743e8",
+          "s_f5e7d9a5"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "In isAccessTokenId (AssertEvents line 483), the check is inverted: it returns false when the extracted grant shortcut equals expectedGrantShortcut, so correctly encoded IDs are rejected."
+      },
+      {
+        "members": [
+          "s_5454e119",
+          "s_cd0716d2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "isAccessTokenId has two defects. It reads the grant shortcut with substring(3,5), but the encoded layout is 2+2+2 characters, so it should be substring(4,6). It also inverts the equality check."
+      }
+    ],
+    "unique": [],
+    "partialOverlap": [
+      {
+        "container": "s_5454e119",
+        "contained": "s_0767cf64"
+      },
+      {
+        "container": "s_5454e119",
+        "contained": "s_5bd24a7d"
+      },
+      {
+        "container": "s_5454e119",
+        "contained": "s_5f605bbb"
+      },
+      {
+        "container": "s_5454e119",
+        "contained": "s_b26743e8"
+      },
+      {
+        "container": "s_5454e119",
+        "contained": "s_f5e7d9a5"
+      },
+      {
+        "container": "s_cd0716d2",
+        "contained": "s_0767cf64"
+      },
+      {
+        "container": "s_cd0716d2",
+        "contained": "s_5bd24a7d"
+      },
+      {
+        "container": "s_cd0716d2",
+        "contained": "s_5f605bbb"
+      },
+      {
+        "container": "s_cd0716d2",
+        "contained": "s_b26743e8"
+      },
+      {
+        "container": "s_cd0716d2",
+        "contained": "s_f5e7d9a5"
+      }
+    ],
+    "decisive": true,
+    "reasoning": "The diff shows two separate defects in the isAccessTokenId matcher. (A) Line 483 returns false when the shortcut equals the expected value, so the comparison is inverted. (B) It uses substring(3,5), but encodeTokenId writes the session type (2 chars), then the token type (2 chars), then the grant shortcut (2 chars), so the grant is at substring(4,6). s_0767cf64, s_5bd24a7d, s_5f605bbb, s_f5e7d9a5 and s_b26743e8 report only defect A. s_b26743e8's sample fix happens to use substring(4,6), but it never names the offset as a defect. s_5454e119 and s_cd0716d2 both explicitly report A and B, so they duplicate each other. Each of these two contains every A-only suggestion and adds the separate offset defect. That makes all 10 container/contained pairs partial overlaps. Judge 2 listed all of them; Judge 1 listed only s_f5e7d9a5. Both judges agree on the groups."
+  }
+}

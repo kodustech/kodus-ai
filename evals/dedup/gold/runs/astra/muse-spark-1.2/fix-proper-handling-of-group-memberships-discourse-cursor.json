@@ -1,0 +1,78 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "e79a315d14075a729eb4156bb89a311110b816f1",
+  "attempt": 1,
+  "ms": 50621,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_44c02cb3",
+          "s_ec5c3c72",
+          "s_14f65a41"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The membership endpoints require :group_id while their routes supply :id.",
+        "rationale": "All three report the same parameter-contract mismatch affecting both add_members and remove_member. Differences in predicted HTTP status and proposed fixes do not distinguish the defect."
+      },
+      {
+        "members": [
+          "s_69ee82ab",
+          "s_651b27bf",
+          "s_b4165a65",
+          "s_bfe39327"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "totalPages overcounts by one when user_count is an exact multiple of limit, allowing an empty trailing page.",
+        "rationale": "Every suggestion identifies the same floor-plus-one calculation and its pagination consequences."
+      },
+      {
+        "members": [
+          "s_5a9e72ea",
+          "s_aaef7623"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "findMembers returns undefined instead of a promise when the group name is empty.",
+        "rationale": "Both identify the same bare return and the resulting break in the method's promise contract."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_c54ec8d2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f6758f64",
+        "confidence": "high"
+      },
+      {
+        "id": "s_831f85e5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_77d7a71e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4b680ce0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d903e063",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0820fd4f",
+        "confidence": "high"
+      }
+    ]
+  }
+}

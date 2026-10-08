@@ -1,0 +1,80 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "441145000f370f4d1b5739f67bd2e3896870ab7a",
+  "attempt": 1,
+  "ms": 63717,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_42fabd92",
+          "s_4822045d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "When the join deadline expires, the outer loop breaks and skips cleanup of remaining workers.",
+        "rationale": "Both identify the same early break in join() and the resulting abandonment of later workers. Ensuring cleanup runs for every worker resolves both."
+      },
+      {
+        "members": [
+          "s_d3df5db3",
+          "s_8fdca476"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "mid",
+        "defect": "The global time.sleep monkeypatch makes the added flusher synchronization delay ineffective.",
+        "rationale": "One points at the ineffective delay and the other at the monkeypatch that disables it. The busy-loop observation describes another consequence of the same global sleep replacement."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_d08fbe49",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ca82d915",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5f4c49ca",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7a0c5d7b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bb59ca4f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_975b3a2a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f884b54a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1f69c642",
+        "confidence": "high"
+      }
+    ],
+    "partialOverlap": [
+      {
+        "container": "s_ca82d915",
+        "contained": "s_975b3a2a",
+        "rationale": "s_ca82d915 includes treating an explicit zero as an omitted limit, but also reports zero workers for empty shard assignments. Correcting the truthiness fallback alone does not resolve empty-assignment handling."
+      },
+      {
+        "container": "s_ca82d915",
+        "contained": "s_f884b54a",
+        "rationale": "Both report missing worker/buffer handling for empty shard assignments, but s_ca82d915 additionally flags explicit zero being treated as a missing limit. These are independently triggered problems."
+      }
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "component": [
+    "s_513389d3",
+    "s_663c3e53",
+    "s_73bf0bb8",
+    "s_9be369b2",
+    "s_9d50fd99",
+    "s_d5ce31d3"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_73bf0bb8",
+          "s_513389d3",
+          "s_9be369b2",
+          "s_9d50fd99"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The handler calls sendAddGuestsEmails(evt, guests) with the raw input instead of the filtered uniqueGuests. This breaks the choice between AttendeeScheduledEmail and AttendeeAddGuestsEmail."
+      },
+      {
+        "members": [
+          "s_663c3e53",
+          "s_d5ce31d3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The server-side ZAddGuestsInputSchema does not check that guest emails are unique, although the client dialog does, so duplicate attendees can be inserted."
+      }
+    ],
+    "unique": [],
+    "partialOverlap": [
+      {
+        "container": "s_9d50fd99",
+        "contained": "s_d5ce31d3"
+      }
+    ],
+    "decisive": false,
+    "reasoning": "Four suggestions (s_73bf0bb8, s_513389d3, s_9be369b2, s_9d50fd99) report the same problem: sendAddGuestsEmails gets `guests` instead of `uniqueGuests`. They give the same one-line fix at line 168. s_9be369b2 is anchored on the filter at lines 74-82, but it points to the call at line 168.\n\ns_9d50fd99's only fix (its HOW) is to pass uniqueGuests. It mentions the schema not enforcing uniqueness, but only as part of WHY the email logic goes wrong. So it belongs in the email group rather than standing as a separate container. Because it does name the schema gap, I recorded a partial overlap with s_d5ce31d3.\n\ns_663c3e53 and s_d5ce31d3 both ask for a server-side uniqueness check in addGuests.schema.ts, which is a separate problem.\n\nWhether s_9d50fd99 is grouped or treated as a container is a judgment call, so decisive is false."
+  }
+}

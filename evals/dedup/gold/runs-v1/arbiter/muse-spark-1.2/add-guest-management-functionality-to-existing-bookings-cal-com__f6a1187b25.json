@@ -1,0 +1,31 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "component": [
+    "s_382d8521",
+    "s_6b3b1759",
+    "s_c99a8cda",
+    "s_f4c52829"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_382d8521",
+          "s_6b3b1759",
+          "s_c99a8cda"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "In addGuests.handler.ts (lines 70-78), the blacklist check and the existing-attendee check compare the raw guest email without lowercasing it. The blacklist entries are lowercased and the stored attendee emails keep their own casing, so a guest email with different capitalization gets past both checks."
+      }
+    ],
+    "unique": [
+      "s_f4c52829"
+    ],
+    "partialOverlap": [],
+    "decisive": true,
+    "reasoning": "s_382d8521, s_6b3b1759 and s_c99a8cda all point at the same uniqueGuests filter in addGuests.handler.ts (lines 70-82). They describe the same defect: `blacklistedGuestEmails.includes(guest)` and `guest === attendee.email` compare without normalizing case. One edit fixes all three, which is to lowercase both sides in that filter. s_c99a8cda also suggests deduplicating the input case-insensitively and trimming. That is a small add-on to the same normalization fix in the same filter, not a separate defect.\n\ns_f4c52829 is about a different check in a different file. In AddGuestsDialog.tsx, the client-side Zod refine uses a case-sensitive Set to catch duplicates inside the submitted list itself, so ['a@b.com','A@B.COM'] passes. The handler suggestions are about comparing guests against the blacklist and the booking's existing attendees. The client check is about duplicates within the user's own input. Fixing the handler filter does not fix the dialog's Set check, and the reverse is also true. The two share a broad theme (email case normalization), but they are different concrete checks with different purposes, not a copy-pasted mistake repeated across places. So Judge 2's systemic_pattern grouping stretches the topic too far. s_c99a8cda's side note on server-side input dedup is not the same as the client Set validation, so no partialOverlap applies."
+  }
+}

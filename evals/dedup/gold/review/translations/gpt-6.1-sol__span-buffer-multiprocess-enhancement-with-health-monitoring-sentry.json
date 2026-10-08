@@ -1,0 +1,42 @@
+{
+ "s_b2d766be": {
+  "summaryPt": "O type guard de process impede que workers spawn travados sejam encerrados (kill) antes da substituição.",
+  "contentPt": "O novo guard isinstance(process, multiprocessing.Process) é falso para workers criados por self.mp_context.Process usando o contexto spawn. Assim, um worker travado permanece vivo enquanto seu substituto começa a fazer flush dos mesmos shards, permitindo flush sobreposto e produção duplicada se o worker antigo voltar a executar. Verifique contra multiprocessing.process.BaseProcess ou a classe Process do contexto spawn, e então faça kill e join do worker antigo antes de substituí-lo."
+ },
+ "s_86d26218": {
+  "summaryPt": "A expiração do deadline do join pula a limpeza dos demais workers flusher.",
+  "contentPt": "A verificação do deadline sai do loop de workers (break) antes de limpar o worker atual e os restantes. Se next_step.join esgotar o timeout ou um worker anterior travar até o deadline, os flushers seguintes permanecem vivos após o retorno do join e podem se sobrepor a workers criados após o rebalanceamento. Aplique o deadline apenas à espera e depois execute uma passagem de terminação incondicional sobre todos os processos, usando uma verificação de tipo de processo compatível com spawn."
+ },
+ "s_9a130555": {
+  "summaryPt": "",
+  "contentPt": "Este comentário diz que o sleep dá tempo para as threads flusher processarem, mas test_basic já fez monkeypatch de time.sleep para um no-op na linha 15. Portanto, a chamada adicionada não fornece nenhuma espera ou sincronização. Use um mecanismo de espera/sincronização sem patch, se for essa a intenção, ou remova o comentário enganoso e a chamada no-op."
+ },
+ "s_768b9941": {
+  "summaryPt": "",
+  "contentPt": "Um max_processes=0 explícito é tratado como limite omitido, então --flusher-processes=0 pode iniciar um worker por shard atribuído em vez de respeitar ou rejeitar o máximo solicitado. Apenas None deve acionar o padrão; valide limites explícitos como inteiros positivos (idealmente também com click.IntRange(min=1)) antes de construir o mapeamento de shards."
+ },
+ "s_c04f59af": {
+  "summaryPt": "",
+  "contentPt": "Os workers são criados via multiprocessing.get_context(\"spawn\").Process, cuja classe SpawnProcess não é subclasse da classe multiprocessing.Process de nível superior. Este guard isinstance, portanto, pula o kill para os workers reais de produção. Quando um worker trava, o código inicia um substituto e perde a referência ao original ainda em execução, permitindo flushers concorrentes para os mesmos shards e vazando processos em reinícios repetidos. Verifique contra multiprocessing.process.BaseProcess (ou a classe Process do contexto spawn) em vez disso."
+ },
+ "s_3e9d106e": {
+  "summaryPt": "",
+  "contentPt": "Não saia (break) da limpeza dos workers quando o deadline do join expirar. Com vários workers, se next_step.join consumir o timeout ou o primeiro worker consumir o tempo restante, este break deixa os workers seguintes sem sequer uma tentativa de terminação. Pule a espera após o deadline, mas ainda execute a limpeza para cada worker (e use uma verificação de tipo que reconheça SpawnProcess)."
+ },
+ "s_d1fa2794": {
+  "summaryPt": "",
+  "contentPt": "Verifique contra multiprocessing.process.BaseProcess (ou a classe de processo do contexto spawn), em vez de multiprocessing.Process. Os workers são criados com multiprocessing.get_context(\"spawn\").Process, cujas instâncias SpawnProcess não herdam da classe multiprocessing.Process do contexto padrão. Consequentemente, este guard pula o kill() de um worker de produção travado, depois inicia um substituto e sobrescreve o handle antigo. O worker antigo pode voltar a fazer flush junto com seu substituto, e travamentos repetidos acumulam workers não rastreados, violando o limite de workers configurado."
+ },
+ "s_49ba849a": {
+  "summaryPt": "",
+  "contentPt": "Não saia (break) do loop de limpeza quando o deadline do join expirar. Pare de esperar, mas ainda encerre todos os workers multiprocessing restantes. Se o primeiro worker consumir o timeout, este break pula todos os workers seguintes, deixando-os em execução após o retorno do join (inclusive durante a reatribuição de partições). Use uma passagem de terminação incondicional separada com a verificação correta do tipo de processo."
+ },
+ "s_0a95ae5f": {
+  "summaryPt": "",
+  "contentPt": "Contar as entradas de shard não verifica se todos os quatro shards atribuídos estão cobertos. Por exemplo, uma regressão no loop de distribuição que adicione o primeiro shard em toda iteração ainda produziria dois processos e quatro entradas de mapeamento, então este teste passaria enquanto três partições nunca seriam flushed. Faça assert de que o mapeamento achatado contém cada shard esperado exatamente uma vez (e, idealmente, envie spans para cada partição e verifique a saída do flush), em vez de apenas verificar seu tamanho."
+ },
+ "s_f04351bb": {
+  "summaryPt": "",
+  "contentPt": "A nova docstring diz que isso cria um processo por shard, mas num_processes é limitado por max_processes e os shards são atribuídos em round-robin a esses processos. Com o padrão da CLI igual a 1, todos os shards atribuídos compartilham um único processo. Descreva isso como a criação de até max_processes workers, com cada worker tratando um ou mais shards, para que os chamadores não sejam induzidos a erro sobre o modelo de concorrência."
+ }
+}

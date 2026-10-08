@@ -1,0 +1,50 @@
+{
+ "s_ca82d915": {
+  "summaryPt": "max_processes or len(...) trata 0 como falsy e cria 0 processos quando shards está vazio",
+  "contentPt": "O QUÊ: `self.max_processes = max_processes or len(buffer.assigned_shards)` na linha 51 trata 0 como falsy e, com assigned_shards vazio, resulta em `self.num_processes = min(0,0)=0`, criando zero processos de flusher. POR QUÊ: Regressão em relação à implementação de processo único, que sempre criava 1 processo; o consumer nunca fará flush e os loops de join/submit viram no-ops quando as partições ficam vazias durante o rebalance. CORREÇÃO: Use `max_processes if max_processes is not None else len(buffer.assigned_shards)` e garanta `max(1, min(...))` ou um tratamento explícito para shards vazios."
+ },
+ "s_42fabd92": {
+  "summaryPt": "break no timeout do join abandona os processos restantes sem terminate",
+  "contentPt": "O QUÊ: `join` itera `for process in processes` e faz `if remaining_time <=0: break` antes de aguardar/terminar os processos restantes. POR QUÊ: Se o deadline expira enquanto espera um processo inicial, os processos seguintes nunca são aguardados nem terminados, vazando processos/threads vivos após o rebalance do consumer. CORREÇÃO: Remova o break antecipado e deixe cada iteração verificar o deadline na condição do while, ou garanta que terminate seja chamado para todas as entradas restantes após o break."
+ },
+ "s_1f69c642": {
+  "summaryPt": "_ensure_processes_alive vaza a Thread antiga ao reiniciar",
+  "contentPt": "O QUÊ: O caminho de restart só encerra `multiprocessing.Process` (`if isinstance(process, multiprocessing.Process): process.kill()`) e imediatamente sobrescreve `self.processes[process_index]` com uma nova Thread. POR QUÊ: Quando `produce_to_pipe` está definido, os testes usam `threading.Thread`; a thread antiga travada nunca recebe join/stop e continua viva, competindo pelos Values compartilhados e produzindo no pipe, vazando threads a cada detecção de estado não saudável. CORREÇÃO: Faça join ou sinalize a thread antiga para sair antes de sobrescrever, ou trate a terminação de Thread de forma semelhante."
+ },
+ "s_bb59ca4f": {
+  "summaryPt": "get_memory_info chamado por shard-buffer duplica o INFO do cluster N vezes",
+  "contentPt": "O QUÊ: `for buffer in self.buffers.values(): memory_infos.extend(buffer.get_memory_info())` chama `iter_cluster_memory_usage(cluster.info())` N vezes (uma por processo de flusher), cada uma retornando o mapa completo do cluster. POR QUÊ: Soma `used`/`available` N vezes (a proporção permanece a mesma, mas faz N round-trips de INFO no Redis por `submit`, que está no caminho crítico de submit/poll) — overhead relevante e contagem dupla das métricas quando N >1. CORREÇÃO: Chame get_memory_info apenas uma vez a partir de um único buffer/client ou deduplique por id do nó."
+ },
+ "s_8fdca476": {
+  "summaryPt": "time.sleep mockado anula o sleep adicionado para o flusher estabilizar",
+  "contentPt": "O QUÊ: O teste faz patch de `time.sleep` para `lambda _: None` na linha 15 e depois, na linha 62, chama `time.sleep(0.1)` esperando um atraso real para as threads do flusher. POR QUÊ: O mock ainda está ativo, então o sleep adicionado é um no-op e o teste continua com race condition/flaky; o `time.sleep(1)` do próprio flusher no main também é mockado, causando um busy-loop intenso. CORREÇÃO: Use `time.sleep` do módulo real via `import time as real_time` ou remova o patch antes do sleep final, ou use uma condição de espera do `pytest` / loop de polling."
+ },
+ "s_7a0c5d7b": {
+  "summaryPt": "Chave de tag de métrica inconsistente: 'shard' vs 'shards' para a mesma dimensão shard_tag",
+  "contentPt": "Tag keys for shard dimension disagree: 'shard' (singula*** truncated ***"
+ },
+ "s_f884b54a": {
+  "summaryPt": "",
+  "contentPt": "Violação da invariante de zero shards: `max_processes = max_processes or len(buffer.assigned_shards)` resulta em 0 quando assigned_shards está vazio, então `num_processes = min(0,0)=0` e nenhum processo/buffer de flusher é criado. Depois, `submit()` itera sobre `self.buffers.values()` (vazio), de modo que `record_stored_segments`, backpressure e verificações de memória são ignorados. Proteja explicitamente a atribuição vazia: se not buffer.assigned_shards, defina num_processes=0 e faça short-circuit ou adie a criação, ou limite max_processes com `max_processes if max_processes is not None else len(...)` e garanta pelo menos 1 processo ou um tratamento explícito de no-op."
+ },
+ "s_4822045d": {
+  "summaryPt": "",
+  "contentPt": "Deadline do join tratado incorretamente com múltiplos processos: o loop calcula `remaining_time` apenas para dar `break` no for externo, o `while process.is_alive() and deadline>now` interno ainda usa o deadline absoluto, e se o primeiro processo esgota o timeout o `break` deixa os processos restantes sem serem aguardados nem terminados. Passe remaining_time para cada espera e sempre faça terminate/join de todos os processos (ou join com `remaining_time` por processo), por exemplo `for p in self.processes.values(): p.join(timeout=max(0, deadline-time.time()) if deadline else None); if p.is_alive(): p.terminate()`."
+ },
+ "s_d3df5db3": {
+  "summaryPt": "test_basic espera com time.sleep após fazer patch dele para no-op, então a espera do flusher é ineficaz e o teste sofre race",
+  "contentPt": "time.sleep é monkeypatched para um no-op na linha 15 e depois usado na linha 62 para esperar a thread do flusher. A espera retorna imediatamente, então o teste sofre race: a asserção na linha 66 roda antes de a thread em background possivelmente ter feito o flush. Substitua o sleep fixo por uma espera baseada em condição (polling das mensagens com timeout/até um predicado, ou join com verificação) e evite fazer patch do sleep usado para sincronização, ou use um helper de sleep/espera separado sem patch."
+ },
+ "s_5f4c49ca": {
+  "summaryPt": "test_flusher_processes_limit apenas verifica a contagem de processos, nunca que os spans realmente sofrem flush corretamente com processos limitados",
+  "contentPt": "O teste só verifica contagens internas (len(processes)==2, total_shards==4) e nunca exercita o flush sob o limite. Ele ainda passaria se o mapeamento shard-para-processo estivesse errado ou se o flush em processos compartilhados estivesse quebrado. Adicione uma verificação end-to-end: submeta spans cobrindo todos os shards, avance o drift, aguarde a condição e verifique as mensagens produzidas para cada shard (ou pelo menos que todos os spans submetidos sofreram flush)."
+ },
+ "s_975b3a2a": {
+  "summaryPt": "Use uma verificação explícita de None em vez de `or` para max_processes (0 é falsy).",
+  "contentPt": "O teste de truthiness trata 0 como ausente. Substitua `or` por uma verificação explícita de None: `self.max_processes = max_processes if max_processes is not None else len(buffer.assigned_shards)` (opcionalmente limite a >=1 se 0 deve significar 1)."
+ },
+ "s_d08fbe49": {
+  "summaryPt": "A docstring promete um processo por shard, mas o código compartilha shards quando max_processes limita o paralelismo.",
+  "contentPt": "A docstring diz \"Creates one process per shard for parallel processing\", mas a implementação compartilha shards entre processos quando max_processes < len(assigned_shards) (num_processes = min(max_processes, len(...)) e mapeamento round-robin). Com o padrão --flusher-processes=1, um único processo trata todos os shards. Atualize para corresponder ao código, por exemplo, \"Creates up to one process per shard (limited by max_processes) and distributes shards round-robin; when max_processes is 1 a single process handles all shards.\""
+ }
+}

@@ -1,0 +1,3098 @@
+{
+  "model": "gpt-6.1-sol",
+  "route": "codex-subscription",
+  "sourcePool": "01.10.26_f2_gpt61_sub-heavysv",
+  "labelVersion": 1,
+  "prs": {
+    "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+      "sourceSha": "01247b044be06a5efd0ca07c1d36fe73012b76a3",
+      "suggestions": [
+        {
+          "id": "s_d4b02182",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 119,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "The Google Meet fallback dereferences mainHostDestinationCalendar when destinationCalendar is null or empty. Booking creation with Google Meet and no destination calendar now throws instead of falling back to Cal Video. Restore optional chaining on mainHostDestinationCalendar.integration.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_6da68a46",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 170,
+          "relevantLinesEnd": 170,
+          "suggestionContent": "Video booking references now discard result.credentialId because isCalendarType is false. Cancellation requires the video reference's credentialId before calling deleteMeeting, so newly created dedicated video meetings are no longer deleted on cancellation. Preserve result.credentialId for video results as well.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_d2d1c6a5",
+          "sourceIndex": 2,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+          "relevantLinesStart": 73,
+          "relevantLinesEnd": 76,
+          "suggestionContent": "Office365 event creation always uses the first host's destination calendar rather than the destination matching the current credential. For collective bookings, EventManager invokes this service with each host's credential but the same full array, so secondary hosts write to the organizer's calendar ID and fail or target the wrong calendar; Lark and the base calendar service have the same first-element selection problem. Select the destination by credentialId, as Google creation does, and use that selection throughout provider creation.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_0bb6afb4",
+          "sourceIndex": 3,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 254,
+          "relevantLinesEnd": 256,
+          "suggestionContent": "The fallback searches for a destination whose externalId equals the absent externalCalendarId. For references without a stored calendar ID, this returns undefined even when a destination is available, causing updates to omit calendarId; the analogous delete fallback instead targets primary and leaves events in secondary calendars untouched. Restore a valid destination fallback when the reference has no externalCalendarId.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_9ed13737",
+          "sourceIndex": 4,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/features/bookings/lib/handleNewBooking.ts",
+          "relevantLinesStart": 1077,
+          "relevantLinesEnd": 1078,
+          "suggestionContent": "Secondary hosts' destination calendars are discarded when the organizer has no destination calendar because the append uses optional chaining on null. A collective booking with configured secondary hosts therefore creates none of their calendar events. Initialize destinationCalendar to an empty array before appending secondary destinations.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_7b14dd71",
+          "sourceIndex": 5,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+          "relevantLinesStart": 449,
+          "relevantLinesEnd": 457,
+          "suggestionContent": "Recurring cancellation repeats organizer-only deletion for every calendar reference instead of deleting the corresponding host's reference. For newly supported collective recurring bookings, secondary credentials fetched above are ignored and each occurrence's first reference is deleted repeatedly, leaving secondary hosts' events on their calendars. For each occurrence, select the reference matching the current credential and delete it with that credential's calendar service.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_60571361",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+          "relevantLinesStart": 73,
+          "relevantLinesEnd": 76,
+          "suggestionContent": "Select the destination matching the credential being used, not always the first destination. Collective bookings now pass the entire organizer-first destination array to each host's calendar service. For the second Office365 host, this constructs `/me/calendars/<organizer-calendar-id>/events` using the second host's authentication, so creation fails or targets the wrong calendar instead of that host's selected calendar. Accept the credential ID passed by CalendarManager and find its matching destination (or pass a destination-scoped event).",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_cf65a107",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 118,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "Preserve the nullable destination fallback by using `mainHostDestinationCalendar?.integration`. `handleNewBooking` explicitly supplies null when neither the event type nor organizer has a destination, and confirmation/payment handlers can supply an empty array. For a Google Meet location, destructuring either yields undefined and this condition now throws instead of falling back to Cal Video as the previous optional-chained condition did.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_23010781",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+          "relevantLinesStart": 73,
+          "relevantLinesEnd": 76,
+          "suggestionContent": "Select the destination belonging to the credential being used, rather than always taking the first element (accept the credentialId now passed by CalendarManager). Collective bookings now pass all hosts' destinations to each provider. For the second Office365 host this sends `/me/calendars/<first-host-calendar>/events` using the second host's credentials, usually failing with a calendar-not-found/access error; if creation succeeds against a shared calendar, the saved reference still records the second destination, so subsequent updates/deletes target a different calendar. Google’s implementation already matches the new credential-specific contract.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_8dd680d0",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+          "relevantLinesStart": 73,
+          "relevantLinesEnd": 76,
+          "suggestionContent": "Select the destination matching the credential used for this creation, rather than always taking the first destination. Collective bookings now call createEvent once per destination with the entire array. For the second Office365 host this sends the first host's calendar ID using the second host's token, typically failing creation; CalendarManager nevertheless labels the result with the second destination's externalId. Accept the credentialId passed by CalendarManager and use it to select the matching destination.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_a77731dd",
+          "sourceIndex": 10,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 119,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "Retain optional chaining on mainHostDestinationCalendar when checking its integration. When a Google Meet booking has no destination calendar, destructuring the empty array leaves no first element and this condition throws instead of switching the location to Cal Video. Use mainHostDestinationCalendar?.integration.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_97dfdc72",
+          "sourceIndex": 11,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 254,
+          "relevantLinesEnd": 256,
+          "suggestionContent": "Restore a real destination fallback when externalCalendarId is absent, and apply the same correction to deletion at lines 315-317. In the false branch externalCalendarId is already absent, so finding a calendar whose externalId equals that absent value cannot select a normal destination. Updates lose their calendar ID and deletions fall back to primary rather than the configured non-primary calendar, affecting references without a stored externalCalendarId.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_41c96050",
+          "sourceIndex": 12,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+          "relevantLinesStart": 73,
+          "relevantLinesEnd": 76,
+          "suggestionContent": "Select the destination belonging to the credential used for this service, rather than always taking the first destination. handleNewBooking.ts:992-993 and 1077-1078 now append collective hosts' calendars, and EventManager.ts:339-370 invokes creation for each host while passing the same full event. CalendarManager.ts:236 supplies the current credential ID, but this adapter ignores it. Consequently a second Office365 host sends a request authenticated as that host to `/me/calendars/<first host's calendar>/events`, typically failing because that calendar is not in their mailbox. Accept the credential ID and match destinationCalendar by it (with an appropriate default), as the Google adapter now does.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_7d89e4f9",
+          "sourceIndex": 13,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 118,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "Keep the optional guard on the first destination when deciding whether to fall back from Google Meet: use `mainHostDestinationCalendar?.integration`. The changed producer in handleNewBooking.ts:1063-1067 explicitly emits null when neither the event type nor organizer has a destination calendar, and the CalendarEvent contract continues to permit null or an empty array. For a Google Meet booking in that state, destructuring produces no first element and this access throws instead of falling back to Cal Video.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_8cb55fd3",
+          "sourceIndex": 14,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 119,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "Preserve optional chaining on mainHostDestinationCalendar.integration. When Google Meet is selected without a destination calendar, destructuring produces undefined and this condition throws instead of falling back to Cal Video.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_6a0ae591",
+          "sourceIndex": 15,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+          "relevantLinesStart": 73,
+          "relevantLinesEnd": 76,
+          "suggestionContent": "Select the destination matching the credential used for this create call, rather than always selecting the first destination. The new collective creation loop passes the full destination array to every host's provider. For a second Office365 host this sends their authenticated request to the first host's calendar, so creation fails or targets the wrong calendar; the saved reference nevertheless identifies the second destination.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com": {
+      "sourceSha": "4d05fb545f419c37de13dbf8c1aa9650aa03f59c",
+      "suggestions": [
+        {
+          "id": "s_11281640",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 46,
+          "relevantLinesEnd": 48,
+          "oneSentenceSummary": "Team admins are incorrectly denied unless they are also team owners.",
+          "suggestionContent": "WHAT: The `isTeamAdminOrOwner` permission check requires the user to be both a team admin and the team owner because it uses `&&` between `isTeamAdmin` and `isTeamOwner`. WHY: Team admins who are not owners fail the subsequent permission guard and cannot add guests, despite the variable and feature permission implying either role should be allowed. HOW: Combine the role checks with `||` (and retain the organizer/attendee alternatives).",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_2eda8d39",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 70,
+          "relevantLinesEnd": 77,
+          "oneSentenceSummary": "Case-sensitive comparison lets guests bypass the normalized blacklist.",
+          "suggestionContent": "WHAT: The handler lowercases configured blacklist entries but compares them with the guest email's original casing. WHY: A blacklisted address such as `blocked@example.com` can be submitted as `Blocked@example.com` and pass the blacklist filter, causing the supposedly blocked guest to be created and notified. HOW: Normalize the submitted guest before comparison, e.g. compare `guest.toLowerCase()` with the normalized blacklist (and use the normalized value consistently for duplicate checks).",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_0f78e9fc",
+            "s_969329e8"
+          ],
+          "groupId": "g_56b30a",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_7d464dc6",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 167,
+          "relevantLinesEnd": 168,
+          "oneSentenceSummary": "Use the filtered inserted guest list for notification classification.",
+          "suggestionContent": "Pass `uniqueGuests` rather than the original `guests` to `sendAddGuestsEmails`. The database inserts only `uniqueGuests`, but the current call makes the email manager treat duplicate existing attendees (and any filtered addresses) as newly added, producing incorrect attendee notifications.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_282510ec"
+          ],
+          "groupId": "g_717ecf",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_0f78e9fc",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "security",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 70,
+          "relevantLinesEnd": 78,
+          "oneSentenceSummary": "Case-sensitive guest comparisons let casing variants bypass blacklists and duplicate existing attendee identities.",
+          "suggestionContent": "Normalize submitted guest addresses before comparing them with normalized blacklist and attendee addresses. As written, the blacklist is lowercased but `guest` is not, so `Blocked@Example.com` bypasses a `blocked@example.com` blacklist entry; the case-sensitive attendee comparison also permits duplicate identities under casing variants. Use a canonical form such as `guest.trim().toLowerCase()` consistently for blacklist checks, duplicate checks, persistence, and downstream new-guest classification.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_2eda8d39",
+            "s_969329e8"
+          ],
+          "groupId": "g_56b30a",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_61eadbaa",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "packages/ui/form/MultiEmail.tsx",
+          "relevantLinesStart": 44,
+          "relevantLinesEnd": 48,
+          "oneSentenceSummary": "Hard-coded removal tooltip bypasses localization for non-English users.",
+          "suggestionContent": "The tooltip is a user-facing string hard-coded as `Remove email`, unlike the other newly added UI text which uses `t(...)`. Add a translation key (for example `remove_email`) to the locale files and render it with `t(\"remove_email\")` so this control is localized.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_282510ec",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 167,
+          "relevantLinesEnd": 168,
+          "oneSentenceSummary": "The email consumer is given the requested guests instead of the guests actually added, so duplicate attendees are misclassified.",
+          "suggestionContent": "Pass `uniqueGuests` to `sendAddGuestsEmails` rather than the original `guests` input. The handler only inserts `uniqueGuests`; passing the unfiltered list causes existing attendees whose emails were included in the request to be treated as newly added and receive the wrong email/calendar notification.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_7d464dc6"
+          ],
+          "groupId": "g_717ecf",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_db3d4f7f",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-data-exposure",
+          "label": "security",
+          "relevantFile": "packages/emails/templates/organizer-add-guests-email.ts",
+          "relevantLinesStart": 23,
+          "relevantLinesEnd": 25,
+          "oneSentenceSummary": "Do not expose every attendee email in the Reply-To header sent to organizers and team members.",
+          "suggestionContent": "The organizer/team-member notification's Reply-To header is built from the organizer plus every attendee email. Because this email is sent to each team member by `sendAddGuestsEmails`, it discloses the complete attendee list to all recipients through email metadata. Avoid putting all attendee addresses in Reply-To (use only the organizer or a controlled reply address, and use Bcc/other approved delivery semantics if multi-recipient replies are required).",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_969329e8",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 74,
+          "relevantLinesEnd": 78,
+          "oneSentenceSummary": "Case-sensitive email existence and blacklist checks misclassify case variants at the add-guests boundary.",
+          "suggestionContent": "Normalize guest and stored emails (for example, trim and lowercase) before both comparisons. The current strict comparisons treat `Existing@Example.com` as absent when `existing@example.com` is already an attendee, and fail to match uppercase variants against the lowercased blacklist, allowing duplicate attendees and blacklist bypasses.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_0f78e9fc",
+            "s_2eda8d39"
+          ],
+          "groupId": "g_56b30a",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_3b3887b4",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 74,
+          "relevantLinesEnd": 78,
+          "oneSentenceSummary": "The server can insert duplicate attendees because it never deduplicates guest emails supplied to the mutation.",
+          "suggestionContent": "Deduplicate and normalize the incoming guest emails before creating attendees (or enforce uniqueness in the schema/database). As written, `guests: [\"a@example.com\", \"a@example.com\"]` passes validation, both values survive this filter because neither is an existing attendee, and `createMany` inserts duplicate attendees for the same booking.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        }
+      ],
+      "groups": [
+        {
+          "members": [
+            "s_282510ec",
+            "s_7d464dc6"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "sendAddGuestsEmails receives the raw guests input instead of uniqueGuests, so guests who were filtered out are still treated as newly added.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_717ecf",
+          "humanReview": {
+            "verdict": "ok",
+            "note": "",
+            "at": "2026-10-08T11:49:04.003Z"
+          }
+        },
+        {
+          "members": [
+            "s_0f78e9fc",
+            "s_2eda8d39",
+            "s_969329e8"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "mid",
+          "defect": "In the guest filter in addGuests.handler.ts (lines 74-78), guest emails are compared case-sensitively against the lowercased blacklist and the existing attendee emails. A guest email in different casing can get past the blacklist and can be added again as a duplicate of an existing attendee. The fix is to normalize guest emails (trim and lowercase) before comparing.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "adjudication",
+          "arbiterReasoning": "All three suggestions point at the same filter in addGuests.handler.ts (lines 70-78) and name the same root cause: `guest` is never normalized before it is compared with the lowercased blacklist and with `attendee.email`. The fix is the same for all three: normalize the guest email once. s_2eda8d39 focuses on the blacklist bypass, but it also says to use the normalized value for duplicate checks. s_0f78e9fc and s_969329e8 each cover both the blacklist bypass and the duplicate-attendee case on their own. So no single comment needs more than s_0f78e9fc or s_969329e8 already says, and one edit in one place fixes everything. That is why needsUnifiedComment is false, which matches Judge 2.",
+          "groupId": "g_56b30a",
+          "humanReview": {
+            "verdict": "ok",
+            "note": "",
+            "at": "2026-10-08T11:49:28.475Z"
+          }
+        }
+      ],
+      "uniqueConfidence": {
+        "s_11281640": "high",
+        "s_61eadbaa": "high",
+        "s_db3d4f7f": "high",
+        "s_3b3887b4": "mid"
+      },
+      "partialOverlap": [],
+      "humanReviewUnique": {
+        "s_11281640": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:07:49.855Z"
+        },
+        "s_61eadbaa": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:07:54.760Z"
+        },
+        "s_db3d4f7f": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:07:57.437Z"
+        },
+        "s_3b3887b4": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:08:03.642Z"
+        }
+      }
+    },
+    "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+      "sourceSha": "6d1f3b54a456438b6d48361a60701b655a0ea347",
+      "suggestions": [
+        {
+          "id": "s_758c1e0e",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 94,
+          "relevantLinesEnd": 96,
+          "oneSentenceSummary": "Google refresh crashes because the new sync wrapper returns Fetch Response while the caller reads `res.data`.",
+          "suggestionContent": "WHAT: the sync-enabled Google refresh path treats the Fetch `Response` returned by `refreshOAuthTokens` as if it had an Axios-style `data` property. WHY: `res.data` is undefined for a Fetch response, so `token.access_token` throws and Google credential refresh fails whenever credential syncing is enabled. HOW: await and parse the Fetch response body in this path (or make `refreshOAuthTokens` return a consistent parsed token shape) before reading the access token and expiry.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_9ec54363",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 97,
+          "relevantLinesEnd": 100,
+          "oneSentenceSummary": "Google credential persistence now stores the Zod safeParse wrapper instead of the parsed token object.",
+          "suggestionContent": "WHAT: `parseRefreshTokenResponse` returns the `safeParse` result wrapper, but the changed Google code persists that wrapper directly as the credential key. WHY: the credential key becomes `{ success, data }` instead of the token object expected by `googleCredentialSchema` and subsequent Google auth code, causing later refreshes/API calls to read missing token fields. HOW: persist `key.data` after a successful parse, or change the helper to return the parsed data rather than the safeParse result.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_a724fc12",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+          "relevantLinesStart": 5,
+          "relevantLinesEnd": 15,
+          "oneSentenceSummary": "Credential sync returns fetch Response while Zoho Bigin consumes an Axios response, so synchronized token refresh cannot be read.",
+          "suggestionContent": "The sync-enabled branch returns a native fetch Response, but Zoho Bigin's changed caller expects an Axios-shaped response with the token payload in `.data` (and other consumers may likewise rely on their provider-specific response shape). Normalize the sync endpoint response to the contract expected by each caller, or make the callers parse `Response.json()` before accessing token data; otherwise enabling credential sync breaks Bigin token refresh at `tokenInfo.data`.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_6c846a7d",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 97,
+          "relevantLinesEnd": 100,
+          "oneSentenceSummary": "The Google refresh path persists the Zod parse-result wrapper instead of its parsed credential data.",
+          "suggestionContent": "`parseRefreshTokenResponse` returns Zod's safe-parse wrapper, not the parsed credential object. Persist `key: key.data` (after checking success, or change the helper to return `.data`) so the credential remains shaped as `{ access_token, expiry_date, refresh_token, ... }`; storing the wrapper breaks all later OAuth credential reads.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_a6b7494b",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+          "relevantLinesStart": 8,
+          "relevantLinesEnd": 15,
+          "oneSentenceSummary": "Credential-sync refresh returns a fetch Response even to callers expecting Axios-style `.data` responses.",
+          "suggestionContent": "The sync branch always returns the native `fetch` Response, but callers such as HubSpot and Zoho consume refresh results as Axios responses (`tokenInfo.data`). Normalize the sync response to the same response shape expected by each caller, or make all callers parse the native Response before reading `.data`; otherwise enabled credential sharing causes token refreshes to use undefined token fields.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_6776d59e",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 94,
+          "relevantLinesEnd": 98,
+          "oneSentenceSummary": "Google stores the safeParse result wrapper as the credential key instead of the parsed token data.",
+          "suggestionContent": "`parseRefreshTokenResponse` returns `safeParse(...)`'s wrapper, not the parsed credential object. Assigning `data: { key }` stores `{ success: true, data: {...tokens} }` in the credential, so later Google auth reads `credential.key.access_token`/`refresh_token` from the wrong level. Store `key.data` after validating success, or make the helper return the parsed data (and update all callers consistently).",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_f18b98f6",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+          "relevantLinesStart": 8,
+          "relevantLinesEnd": 15,
+          "oneSentenceSummary": "Credential-sync refresh returns fetch Response while migrated consumers still require provider response objects with token data.",
+          "suggestionContent": "The sync-enabled branch returns a native `fetch` `Response`, but this helper replaced provider-specific refresh calls whose consumers expect their original shapes. For example, Google immediately reads `res.data`, and Axios-based HubSpot/Bigin consumers read `tokenInfo.data`; a fetch `Response` has no `.data`, so enabling credential sync causes token parsing or field access to fail. Normalize the sync response to the same token shape expected by each caller (or make every consumer parse `Response` consistently).",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_3c819eb4",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 97,
+          "relevantLinesEnd": 100,
+          "oneSentenceSummary": "Google refresh persists the Zod safeParse wrapper instead of the credential payload, corrupting stored OAuth credentials.",
+          "suggestionContent": "`parseRefreshTokenResponse` returns a Zod safe-parse wrapper, but this code persists that wrapper as the credential key. Store the parsed payload (`key.data`) after checking success, or change the helper to return `data`, so the credential remains shaped as `{ access_token, refresh_token, expiry_date, ... }` rather than `{ success, data }`.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_e1d09a1c",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "security",
+          "relevantFile": "apps/web/pages/api/webhook/app-credential.ts",
+          "relevantLinesStart": 23,
+          "relevantLinesEnd": 28,
+          "oneSentenceSummary": "Replace the direct webhook-secret equality check with a constant-time comparison and fail closed when the secret is absent.",
+          "suggestionContent": "Do not compare the webhook secret with `!==`, since ordinary string comparison can leak prefix information through timing. Validate that the configured secret and incoming header are strings of the expected encoding/length, then compare equal-length buffers with Node's `crypto.timingSafeEqual`; reject missing configuration rather than allowing an authentication path with an absent secret.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_71c70b35",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "security",
+          "relevantFile": "apps/web/pages/api/webhook/app-credential.ts",
+          "relevantLinesStart": 56,
+          "relevantLinesEnd": 59,
+          "oneSentenceSummary": "Fail closed on a missing credential-encryption key instead of silently substituting an empty key.",
+          "suggestionContent": "Do not pass an empty string when CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY is missing. Empty-string fallback weakens/fails unpredictably and turns a missing critical key into a runtime decryption attempt. Validate this environment variable at startup or explicitly return a server configuration error before accepting credential payloads.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "sms-workflow-reminder-retry-count-tracking-cal-com": {
+      "sourceSha": "b7653b36fdba4cfe98997154c5a56c9e84280d58",
+      "suggestions": [
+        {
+          "id": "s_a55aac5f",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 184,
+          "relevantLinesEnd": 184,
+          "oneSentenceSummary": "Concurrent failed attempts overwrite retry increments.",
+          "suggestionContent": "Both failure paths assign retryCount from the reminder snapshot instead of incrementing the persisted value atomically. If two cron runs fetch retryCount = 0 and both fail scheduling, both write 1, so two failed attempts do not reach the deletion threshold and additional scheduling attempts continue. Use Prisma's retryCount: { increment: 1 } in both failure updates.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_c123b6c9",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 190,
+          "relevantLinesEnd": 197,
+          "oneSentenceSummary": "The retry update can throw out of the per-reminder catch and abort the batch.",
+          "suggestionContent": "The new database update inside catch is not protected against a failure of its own. If a reminder is deleted while scheduling is in flight, this update fails because the row no longer exists, escapes the catch, and prevents all subsequent reminders in the batch from being processed. Handle retry-persistence failures separately, including an already-deleted reminder, so the loop can continue.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_de9f9f9c",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 190,
+          "relevantLinesEnd": 197,
+          "suggestionContent": "Keep retry-count persistence best-effort inside this catch block. Previously, a scheduling failure was logged and the loop continued; now, if this update rejects (for example because the reminder was deleted concurrently, or the database failure that caused the original error persists), the rejection escapes the catch and aborts the request and all remaining reminders. Protect this update with its own error handling so recording a failed attempt cannot defeat the existing per-reminder failure isolation.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_b96ddd5a",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 38,
+          "relevantLinesEnd": 42,
+          "suggestionContent": "Scope retry-exhaustion deletion to unscheduled SMS reminders, rather than deleting every row with retryCount > 1. The successful scheduling branch does not reset retryCount: if overlapping invocations allow a reminder with two recorded failures to subsequently schedule successfully, this predicate still deletes its future scheduled row, losing the reference needed to manage that SMS. The predicate also applies to non-SMS rows despite this being SMS cleanup. Keep method: SMS outside the OR and require isScheduled: false for the retry-exhaustion branch (or reset the counter on success).",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_869f5ab5",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 184,
+          "relevantLinesEnd": 184,
+          "suggestionContent": "Both failure paths write an increment computed from the earlier findMany snapshot. If two overlapping scheduler requests read retryCount = 0 and both fail, both write 1, losing one failure and allowing more attempts than the retry limit. Use Prisma's atomic `retryCount: { increment: 1 }` in both updates instead of assigning `reminder.retryCount + 1`.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_1c7da030",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 190,
+          "relevantLinesEnd": 197,
+          "suggestionContent": "The retry update inside catch can itself reject when another scheduler invocation deletes this reminder. For example, overlapping runs select a reminder at retryCount 1; one records its second failure, a subsequent run deletes the row via the new cleanup predicate, and the other run's retry update fails with a record-not-found error. Its catch then repeats the same update outside any protection, aborting the handler and skipping remaining reminders. Use an atomic updateMany scoped to the ID (which tolerates a concurrently deleted row), or explicitly handle record-not-found in the failure bookkeeping.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_a04e9a65",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 38,
+          "relevantLinesEnd": 42,
+          "suggestionContent": "Update the cleanup comment to describe the new independent retry-limit deletion as well. It currently says this deletes scheduled SMS reminders whose dates have passed, but this OR branch also deletes future or unscheduled reminders with retryCount > 1, without restricting their method to SMS. The comment now misrepresents the scope of this destructive operation; document both conditions and the method-independent scope (or align the predicate with the intended documented scope).",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feat-2fa-backup-codes-cal-com": {
+      "sourceSha": "13fd87684847740c22be6835845fe2427f8ebb2f",
+      "suggestions": [
+        {
+          "id": "s_72b1da29",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+          "relevantLinesStart": 148,
+          "relevantLinesEnd": 155,
+          "oneSentenceSummary": "Consume backup codes atomically to preserve their one-use contract.",
+          "suggestionContent": "Backup-code consumption overwrites the array read earlier without checking whether it has changed. Two simultaneous logins with the same code can both succeed, and simultaneous logins with different codes can restore a code consumed by the other request. Use an atomic compare-and-set against the original encrypted backupCodes value and retry validation on conflicts, or serialize consumption with a database row lock.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_7c7c3238",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+          "relevantLinesStart": 134,
+          "relevantLinesEnd": 136,
+          "oneSentenceSummary": "Refresh the enabled state even when the backup-code dialog is dismissed without its Close button.",
+          "suggestionContent": "The enable success branch now defers onEnable until the backup-code screen's explicit Close button is clicked. Dismissing that screen through the dialog's normal dismissal path leaves viewer.me cached as disabled even though the server has enabled 2FA, so the switch opens the enable flow again and setup fails with TwoFactorAlreadyEnabled. Separate the enabled-state cache refresh from closing the modal, and refresh it when the enable request succeeds or when the completed dialog is dismissed.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_ed0e31d7",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "security",
+          "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+          "relevantLinesStart": 139,
+          "relevantLinesEnd": 145,
+          "oneSentenceSummary": "Backup-code login uses direct string equality with early exit for an authentication secret, exposing timing information.",
+          "suggestionContent": "Do not authenticate backup codes with `backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"))`. Normalize the submitted code, validate its exact length, and compare it against every stored code using a constant-time byte comparison (for example, `crypto.timingSafeEqual` on equal-length buffers), without early-exiting on the first match. Preserve the matched index only after all comparisons complete.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_9602943b",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "security",
+          "relevantFile": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+          "relevantLinesStart": 58,
+          "relevantLinesEnd": 63,
+          "oneSentenceSummary": "The backup-code path for disabling 2FA directly compares the authentication secret with `indexOf`, leaking comparison timing.",
+          "suggestionContent": "Replace the direct `Array.indexOf` comparison with a constant-time comparison against every stored backup code. Normalize and length-check the input, use `crypto.timingSafeEqual` over equal-length buffers, and avoid returning on the first matching/mismatching candidate until all comparisons have run.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_0ace72fe",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "apps/web/playwright/login.2fa.e2e.ts",
+          "relevantLinesStart": 50,
+          "relevantLinesEnd": 53,
+          "oneSentenceSummary": "The 2FA-enabled assertion checks the truthiness of an unresolved Promise instead of the switch state.",
+          "suggestionContent": "Await the `isChecked()` result (or assert the switch's `data-state=\"checked\"`) before passing it to the matcher. As written, `isChecked()` returns a Promise and `toBeTruthy()` always passes, so the test does not detect failure to enable 2FA.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_b0ff443d",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+          "relevantLinesStart": 143,
+          "relevantLinesEnd": 155,
+          "oneSentenceSummary": "Concurrent logins can reuse the same backup code because validation and deletion are separate operations.",
+          "suggestionContent": "Backup-code validation and consumption are not atomic. Concurrent authorize calls can both find the same code in the decrypted array and both proceed to create sessions before either replacement update is visible, violating the documented one-time-use invariant. Consume the code with an atomic database operation/transaction (or serialize per user and re-read under a lock) so only one request can validate and persist removal.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_6bd3ee84",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "apps/web/components/auth/BackupCode.tsx",
+          "relevantLinesStart": 7,
+          "relevantLinesEnd": 7,
+          "oneSentenceSummary": "The new backup-code component retains the old `TwoFactor` function name.",
+          "suggestionContent": "Rename the function from `TwoFactor` to `BackupCode` so the component identifier agrees with the file, import, and rendered backup-code content. Keeping the old name misstates what this component controls and can make component names/React diagnostics misleading.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+      "sourceSha": "0bd0063ff11fdfecc4ca136774729590c11749e7",
+      "suggestions": [],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+      "sourceSha": "eeccd79a93c85d879a93179433fbeb78c12807bd",
+      "suggestions": [
+        {
+          "id": "s_95a4cffc",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/views/embed/best.html.erb",
+          "relevantLinesStart": 6,
+          "relevantLinesEnd": 6,
+          "suggestionContent": "The header conditional ends with `end if` without a condition, which is invalid Ruby syntax in the generated ERB template. Every embed request that finds an existing topic fails while rendering `best` instead of showing comments. Replace this tag with `<%- end %>`.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_b2fec2e9",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+          "relevantLinesStart": 35,
+          "relevantLinesEnd": 35,
+          "suggestionContent": "The poller unconditionally calls `scrub` on `i.content`, although a valid RSS item can provide its body only in `description`. Such an item yields nil content and aborts the entire polling run before importing that item or any later items. Select the available body field, including `description`, and handle an absent body before calling `scrub`.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_d66938c6",
+          "sourceIndex": 2,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/models/topic_embed.rb",
+          "relevantLinesStart": 64,
+          "relevantLinesEnd": 71,
+          "suggestionContent": "URL absolutization treats protocol-relative URLs as paths on the article host and leaves directory-relative URLs unchanged. An image such as `//cdn.example.com/image.png` becomes `https://article.example.com/cdn.example.com/image.png`, while `images/image.png` resolves against the Discourse page rather than the imported article, breaking imported links and images. Resolve href and src values against the full article URL using URI joining instead of concatenating the host prefix.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_d64d4f89",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "app/views/embed/best.html.erb",
+          "relevantLinesStart": 14,
+          "relevantLinesEnd": 14,
+          "oneSentenceSummary": "The embed date bypasses localization by hard-coding an English strftime format.",
+          "suggestionContent": "The displayed post date uses the hard-coded `strftime(\"%e %b %Y\")`, which forces English month names and a fixed date format in every locale. Use the application's localized date helper/format instead so the embed respects the viewer's locale.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_ecbe8ddb",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "security",
+          "relevantFile": "app/models/topic_embed.rb",
+          "relevantLinesStart": 13,
+          "relevantLinesEnd": 13,
+          "oneSentenceSummary": "Imported feed URLs are inserted into raw rendered HTML without escaping.",
+          "suggestionContent": "The feed URL is interpolated directly into an HTML anchor inside the translated text, and the resulting content is later rendered raw in the embed view. A URL containing quotes or markup can break out of the href and inject HTML/script into the discussion. Escape the URL for HTML attribute/text context (or pass a safe, separately generated link through the view) before storing/rendering it.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_15ac66d7",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "app/models/topic_embed.rb",
+          "relevantLinesStart": 15,
+          "relevantLinesEnd": 29,
+          "oneSentenceSummary": "Concurrent imports can violate the unique embed invariant and fail with a duplicate-key exception after creating duplicate content.",
+          "suggestionContent": "The check-then-create sequence is racy: concurrent imports of the same embed_url can both create a post/topic, after which the unique index on topic_embeds.embed_url causes one TopicEmbed.create! to raise. That failed transaction does not undo the post creation if it is outside the Topic transaction's effective rollback scope, and in any case the queued retrieval fails. Serialize imports or handle the unique-key conflict and re-fetch the existing embed before creating/retaining the topic.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_6eca779f",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "app/views/layouts/embed.html.erb",
+          "relevantLinesStart": 9,
+          "relevantLinesEnd": 12,
+          "oneSentenceSummary": "The layout sends postMessage to a full referer URL instead of an origin, so iframe resizing fails.",
+          "suggestionContent": "Use only the embedding page's origin as postMessage's targetOrigin, not `request.referer` in its entirety. `postMessage` rejects a target containing a path/query, preventing the `discourse-resize` message from reaching embed.js and leaving the iframe incorrectly sized.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_c31ce8c2",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "app/views/layouts/embed.html.erb",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 11,
+          "oneSentenceSummary": "Using the full referer URL as postMessage's target origin prevents iframe resize messages from being delivered.",
+          "suggestionContent": "The `postMessage` target is built from `request.referer`, which is typically a full URL such as `http://example.com/article`; `targetOrigin` must be only the origin (`scheme://host[:port]`). This makes the resize message fail for normal embeds, leaving the iframe at its initial height. Parse the referer and pass its origin, or use the configured embeddable origin.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_f0aa2978",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/embed.js",
+          "relevantLinesStart": 19,
+          "relevantLinesEnd": 22,
+          "oneSentenceSummary": "A zero iframe height is treated as missing because the resize handler relies on truthiness.",
+          "suggestionContent": "The truthiness check drops a legitimate `height: 0` message, leaving the iframe at its previous height when the embedded document becomes empty. Check that the value is present/type-valid (for example, `typeof e.data.height === 'number'`) rather than requiring it to be truthy, then assign zero as well.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+      "sourceSha": "c924527ad692a845bb79141a1ad15521abb5f93f",
+      "suggestions": [
+        {
+          "id": "s_ee0c2eb0",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/controllers/admin/embeddable_hosts_controller.rb",
+          "relevantLinesStart": 9,
+          "relevantLinesEnd": 16,
+          "oneSentenceSummary": "Missing embeddable-host ids crash update and destroy instead of producing a controlled response.",
+          "suggestionContent": "WHAT: update and destroy dereference the result of a lookup that can be nil. WHY: requests for a deleted, stale, or nonexistent embeddable-host id call save_host(nil) or host.destroy and raise NoMethodError instead of returning a normal not-found/error response. HOW: require the record and render an appropriate 404/error before calling save_host or destroy.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_d6a91e5d",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "app/models/embeddable_host.rb",
+          "relevantLinesStart": 5,
+          "relevantLinesEnd": 8,
+          "oneSentenceSummary": "Missing host values crash during validation because normalization calls sub! on nil.",
+          "suggestionContent": "The before_validation callback assumes host is a non-nil string and calls sub! unconditionally. Creating or updating a record with a missing host reaches this callback and raises NoMethodError before validates_format_of can report the invalid value. Guard the normalization (for example, only call sub! when host.present?) or use a nil-safe normalization so absent/falsy input follows the normal validation-error path.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_79ef5edc",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "app/models/embeddable_host.rb",
+          "relevantLinesStart": 14,
+          "relevantLinesEnd": 17,
+          "oneSentenceSummary": "The case-insensitive hostname check only normalizes the stored side, causing valid mixed-case hostnames to be rejected.",
+          "suggestionContent": "Normalize the parsed hostname before comparing it with the normalized database value. The query currently uses `lower(host) = ?` but passes `uri.host` unchanged, so an uppercase referer such as `https://EVILTROUT.COM/...` can fail to match an allowed `eviltrout.com` record and incorrectly return an invalid-host result.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_7b556db8",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "test/javascripts/helpers/create-pretender.js.es6",
+          "relevantLinesStart": 42,
+          "relevantLinesEnd": 44,
+          "oneSentenceSummary": "The fixture's new color_ids shape does not match the consumer's expected related records.",
+          "suggestionContent": "The fixture changed fruit id 2 to return color_ids [3], while the find-embedded consumer asserts that fruit id 2 has two colors with IDs 1 and 2. Update the consumer assertion to match the new response (one color, ID 3), or use the fruit record whose color_ids are [1,2].",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_ad0aab9e",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "app/controllers/admin/embeddable_hosts_controller.rb",
+          "relevantLinesStart": 9,
+          "relevantLinesEnd": 17,
+          "oneSentenceSummary": "Invalid or concurrently deleted host IDs crash the admin update/destroy endpoints.",
+          "suggestionContent": "Handle a missing host before dereferencing it. `where(...).first` can return nil for an invalid or concurrently deleted id, causing update to call `save_host(nil)` and destroy to call `nil.destroy`, both of which raise an unhandled exception. Return a not-found/error response (or use a lookup that is consistently rescued) instead.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_05f2f501",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "test/javascripts/models/store-test.js.es6",
+          "relevantLinesStart": 111,
+          "relevantLinesEnd": 117,
+          "oneSentenceSummary": "The single-record store test receives a hard-coded fruit 1 response while requesting fruit 2, so it does not test ID-specific lookup.",
+          "suggestionContent": "This test calls `store.find('fruit', 2)`, but the changed Pretender `/fruits/:id` handler always returns `fruits[0]`, regardless of the requested ID. The assertions therefore validate the hard-coded apple payload rather than lookup of fruit 2, and would still pass if the store ignored the requested ID or returned the wrong record. Make the handler select the requested fixture (or assert the returned fruit's ID/name) so the test fails on an incorrect single-record lookup.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_72f624a1",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "spec/models/topic_spec.rb",
+          "relevantLinesStart": 1403,
+          "relevantLinesEnd": 1405,
+          "oneSentenceSummary": "The blank-host test never reaches the host condition because the topic has no embed.",
+          "suggestionContent": "The test called `is false if embeddable_host is blank` does not establish a topic embed: `has_topic_embed?` remains false by default. Consequently `expandable_first_post?` is false because of the second predicate regardless of whether any embeddable host exists, and this test would still pass if the host check were removed or malfunctioned. Stub `has_topic_embed?` to true and set `embed_truncate` true before asserting the blank-host case.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_9ba3dcbe",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "spec/models/embeddable_host_spec.rb",
+          "relevantLinesStart": 23,
+          "relevantLinesEnd": 23,
+          "oneSentenceSummary": "The spec description uses the old method name instead of the newly introduced `host_allowed?`.",
+          "suggestionContent": "The example description names `allows_embeddable_host`, but the method under test is `EmbeddableHost.host_allowed?`. Update the description to match the new API so the test documentation does not advertise a nonexistent/old method name.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+      "sourceSha": "0eea2c97505e85360acad4a42a2ae1c589f0ca72",
+      "suggestions": [],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feature-automatically-downsize-large-images-discourse-cursor": {
+      "sourceSha": "6231de26749f06780a67508b0d2e594d32e7065a",
+      "suggestions": [
+        {
+          "id": "s_72e910b1",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/models/optimized_image.rb",
+          "relevantLinesStart": 149,
+          "relevantLinesEnd": 151,
+          "oneSentenceSummary": "The replacement downsize signature breaks the existing ResizeEmoji caller at runtime.",
+          "suggestionContent": "WHAT: the new `downsize(from, to, dimensions, opts={})` definition replaces the existing five-argument `downsize(from, to, max_width, max_height, opts={})` instead of overloading it. WHY: Ruby keeps only the last definition, so `Jobs::ResizeEmoji` still calling `OptimizedImage.downsize(path, path, 100, 100, opts)` now raises `ArgumentError` and prevents emoji resizing jobs from completing. HOW: preserve the numeric width/height API (for example by converting it inside a single variadic/signature-compatible method) while also accepting the dimensions-string form used by uploads.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_82c35c19",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "app/models/optimized_image.rb",
+          "relevantLinesStart": 145,
+          "relevantLinesEnd": 151,
+          "oneSentenceSummary": "A duplicate `downsize` definition overwrites the legacy signature and breaks callers that provide width and height.",
+          "suggestionContent": "The new `downsize(from, to, dimensions, opts={})` definition overwrites the existing `downsize(from, to, max_width, max_height, opts={})` definition in Ruby. Any existing caller passing separate width and height arguments now raises `ArgumentError` instead of being converted to a dimensions string. Rename the new entry point or merge both calling conventions into one method so the old signature remains supported.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_6d66fb8e",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "app/models/optimized_image.rb",
+          "relevantLinesStart": 149,
+          "relevantLinesEnd": 153,
+          "oneSentenceSummary": "The new downsize overload is not an overload in Ruby and breaks existing five-argument callers.",
+          "suggestionContent": "This second `downsize` definition overrides the preceding `(from, to, max_width, max_height, opts={})` method in Ruby. Existing callers using the old five-argument signature will now raise `ArgumentError: wrong number of arguments`; preserve the old API or update every caller before changing the signature.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_5a3bcb7f",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/discourse/lib/utilities.js",
+          "relevantLinesStart": 182,
+          "relevantLinesEnd": 184,
+          "oneSentenceSummary": "The client tells users the limit is always 10 MB even though the server's configured upload limit can differ.",
+          "suggestionContent": "The error message now always interpolates 10240 KB (10 MB), but the server still uses the configurable `SiteSetting.max_image_size_kb` and can reject or resize at a different limit. Users on installations with a non-default setting will be told the wrong maximum; use the configured setting (or otherwise pass the actual server limit) when constructing this message.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_ba068ffa",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/discourse/lib/utilities.js",
+          "relevantLinesStart": 246,
+          "relevantLinesEnd": 247,
+          "oneSentenceSummary": "The 413 message hard-codes a maximum that may not match the server's configured image limit.",
+          "suggestionContent": "The 413 error message always reports 10 MB, although the server's accepted image size remains configurable via `SiteSetting.max_image_size_kb`. A 413 response caused by a smaller or larger configured limit will therefore show an incorrect maximum; use the configured limit supplied by the application instead of a hard-coded value.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_835cc57c",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "app/controllers/uploads_controller.rb",
+          "relevantLinesStart": 67,
+          "relevantLinesEnd": 67,
+          "oneSentenceSummary": "The upload caller passes percentage-only dimensions to a changed downsize consumer that now expects explicit dimensions.",
+          "suggestionContent": "Pass explicit maximum dimensions to OptimizedImage.downsize rather than the percentage string \"80%\". The changed OptimizedImage implementation forwards this argument directly as the dimensions operand, so this caller's percentage-only value does not satisfy the new dimensions contract and can produce an invalid or ineffective image downsize command.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor": {
+      "sourceSha": "3345b2b14fe473d8f01027da839bcc29cd44442c",
+      "suggestions": [
+        {
+          "id": "s_6f3a72b3",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 14,
+          "oneSentenceSummary": "Exact page-sized groups expose an extra empty pagination page.",
+          "suggestionContent": "WHAT: totalPages adds one to floor(user_count / limit) even when user_count is exactly divisible by limit. WHY: a group with 50 members and a limit of 50 displays 1/2, then next requests offset 50 and renders a nonexistent empty page (and similarly produces an extra page for every exact multiple). HOW: calculate the ceiling page count, for example Math.ceil(this.get(\"user_count\") / this.get(\"limit\")), while retaining the zero-member guard.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_76d835b4",
+            "s_e03bda55"
+          ],
+          "groupId": "g_e48f9d",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_a8a6d7ba",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/discourse/models/group.js",
+          "relevantLinesStart": 45,
+          "relevantLinesEnd": 48,
+          "oneSentenceSummary": "Deleting the final item on a later page can strand the UI on an empty page.",
+          "suggestionContent": "WHAT: removeMember reloads the current page without adjusting offset after deleting a member. WHY: when the last member on a non-first page is removed, the existing offset can be beyond the new total, so the refreshed list is empty instead of moving back to the preceding page. HOW: after deletion, reduce offset by limit when the current page becomes empty (or reload metadata and clamp offset to the last valid page) before calling findMembers.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_e03bda55",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 14,
+          "oneSentenceSummary": "Exact page-count multiples create a phantom empty page because totalPages uses floor(count/limit)+1.",
+          "suggestionContent": "totalPages adds one after floor division unconditionally, so an exact multiple of limit produces an extra empty page (for 100 users with limit 50, it reports 3 pages). Use ceiling division, such as Math.ceil(user_count / limit), while retaining the zero case; otherwise the Next action requests offset=user_count and displays an empty phantom page.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_6f3a72b3",
+            "s_76d835b4"
+          ],
+          "groupId": "g_e48f9d",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_76d835b4",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 14,
+          "oneSentenceSummary": "Exact page-size member counts currently expose a phantom empty page.",
+          "suggestionContent": "Compute the ceiling number of pages rather than always adding one after floor division. With exactly 50 members and a limit of 50, the current code reports 2 pages and permits navigation to an empty second page; use `Math.ceil(this.get(\"user_count\") / this.get(\"limit\"))` (or equivalent integer arithmetic).",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_6f3a72b3",
+            "s_e03bda55"
+          ],
+          "groupId": "g_e48f9d",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_7ab91a84",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "spec/controllers/admin/groups_controller_spec.rb",
+          "relevantLinesStart": 114,
+          "relevantLinesEnd": 125,
+          "oneSentenceSummary": "Remove-member tests use the wrong HTTP verb and therefore do not protect the DELETE route.",
+          "suggestionContent": "These remove-member specs use PUT even though the new route maps `delete \"members\"` to `groups#remove_member`. As written, controller specs dispatch the action directly and can pass while the DELETE endpoint is broken or incorrectly routed. Invoke `xhr :delete, :remove_member` in both cases (or add an integration/request assertion against the DELETE route) so the tests cover the behavior they claim.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        }
+      ],
+      "groups": [
+        {
+          "members": [
+            "s_6f3a72b3",
+            "s_76d835b4",
+            "s_e03bda55"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "totalPages uses floor(user_count/limit)+1, which creates a phantom empty page when user_count is an exact multiple of limit; Math.ceil should be used instead.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_e48f9d",
+          "humanReview": {
+            "verdict": "ok",
+            "note": "",
+            "at": "2026-10-08T12:08:49.991Z"
+          }
+        }
+      ],
+      "uniqueConfidence": {
+        "s_a8a6d7ba": "high",
+        "s_7ab91a84": "high"
+      },
+      "partialOverlap": [],
+      "humanReviewUnique": {
+        "s_a8a6d7ba": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:09:49.784Z"
+        },
+        "s_7ab91a84": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:09:53.361Z"
+        }
+      }
+    },
+    "feature-localization-fallbacks-server-side-discourse-cursor": {
+      "sourceSha": "b38a55b28b55d75fb7c45d3eef53a55713b4754d",
+      "suggestions": [],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "anonymous-add-configurable-device-limit-grafana-codex": {
+      "sourceSha": "ed0b267ecf417a3fb7f0b51ddecf969c63e3464e",
+      "suggestions": [
+        {
+          "id": "s_26a094d0",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+          "relevantLinesStart": 144,
+          "relevantLinesEnd": 147,
+          "oneSentenceSummary": "Failed limit checks must not leave a cache entry that suppresses future enforcement.",
+          "suggestionContent": "WHAT: a failed device-limit write leaves the device ID in localCache because the cache entry is set before CreateOrUpdateDevice and the new error return exits without eviction. WHY: after one request is rejected with ErrDeviceLimitReached, the next request carrying the same device ID hits the cache fast path, skips the database limit check, and is authenticated, bypassing the configured limit. HOW: evict the cache key whenever CreateOrUpdateDevice returns an error, or only populate the cache after a successful write.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_445423dd"
+          ],
+          "groupId": "g_b54ebd",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_c22edcd3",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+          "relevantLinesStart": 109,
+          "relevantLinesEnd": 116,
+          "oneSentenceSummary": "Separate count and write operations do not enforce the device cap under concurrency.",
+          "suggestionContent": "WHAT: the limit check counts devices and then performs the create/update in a separate operation without serialization. WHY: concurrent requests can both observe a count below deviceLimit and both insert new device IDs, so the configured maximum is exceeded under normal concurrent anonymous traffic. HOW: enforce the check-and-insert atomically using a transaction/locking strategy or a database-enforced quota mechanism.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_c4aad7e2"
+          ],
+          "groupId": "g_f0ccdc",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_c4aad7e2",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+          "relevantLinesStart": 108,
+          "relevantLinesEnd": 117,
+          "oneSentenceSummary": "Separate count and insert operations allow concurrent registrations to exceed the device limit.",
+          "suggestionContent": "The limit check is a non-atomic count followed by an insert/update decision. Concurrent requests can both observe count < deviceLimit and then both insert, exceeding the configured device limit. Enforce the limit in a transaction with appropriate locking, or use an atomic database-side mechanism/coordination lock around the count and insert.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_c22edcd3"
+          ],
+          "groupId": "g_f0ccdc",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_445423dd",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+          "relevantLinesStart": 80,
+          "relevantLinesEnd": 95,
+          "oneSentenceSummary": "A failed device-limit admission leaves a success-like cache entry that bypasses the limit on retries.",
+          "suggestionContent": "Set the local-cache key only after CreateOrUpdateDevice succeeds, or remove it when persistence fails. Currently a rejected new device is cached before the database call; a retry then hits the cache and returns without calling the store, causing TagDevice/Authenticate to succeed even though the device was never admitted and the limit remains reached.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_26a094d0"
+          ],
+          "groupId": "g_b54ebd",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_bacd4a32",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+          "relevantLinesStart": 72,
+          "relevantLinesEnd": 82,
+          "oneSentenceSummary": "The limit-enforcement UPDATE blocks previously known devices after they age out of the 30-day active window.",
+          "suggestionContent": "When the active-device limit is reached, this UPDATE rejects an existing device whose previous `updated_at` is older than 30 days. Such a device is not included in `CountDevices`, so returning users with an expired/inactive device ID are incorrectly denied with `ErrDeviceLimitReached` instead of having their existing row refreshed. Update by `device_id` without restricting the previous timestamp (while still returning the limit error when no row exists), or otherwise explicitly allow known inactive devices.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        }
+      ],
+      "groups": [
+        {
+          "members": [
+            "s_c22edcd3",
+            "s_c4aad7e2"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "The device-limit check counts devices and then inserts in a separate step, with no atomic operation or lock, so concurrent requests can push the count past the limit.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_f0ccdc",
+          "humanReview": {
+            "verdict": "ok",
+            "note": "",
+            "at": "2026-10-08T11:53:15.440Z"
+          }
+        },
+        {
+          "members": [
+            "s_26a094d0",
+            "s_445423dd"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "mid",
+          "defect": "The device ID is written to the local cache before CreateOrUpdateDevice runs and is never removed when that call fails (for example with ErrDeviceLimitReached). A retry then hits the cache fast path, skips the database limit check and authenticates, which bypasses the device limit.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "adjudication",
+          "arbiterReasoning": "Both suggestions describe the same defect in the same file, impl.go, inside the same tagging flow. The cache entry is set before the store call and stays in place when the call fails, so a rejected device gets past the limit on its next request. Both propose the same fix: fill the cache only after a successful write, or remove the entry on error. One points at the new error return (lines 144-147) and the other at the cache-setting logic (lines 80-95). Both line ranges are in the same file and the same code path, and one edit fixes both, so the kind is same_location rather than cross_location. Each member reports only this one defect, so a unified comment is not needed.",
+          "groupId": "g_b54ebd",
+          "humanReview": {
+            "verdict": "ok",
+            "note": "",
+            "at": "2026-10-08T12:10:43.185Z"
+          }
+        }
+      ],
+      "uniqueConfidence": {
+        "s_bacd4a32": "high"
+      },
+      "partialOverlap": [],
+      "humanReviewUnique": {
+        "s_bacd4a32": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T11:54:09.748Z"
+        }
+      }
+    },
+    "frontend-asset-optimization-grafana-codex": {
+      "sourceSha": "0754a9a92b3bfe289f22dd12bbe020a8021cc2dd",
+      "suggestions": [
+        {
+          "id": "s_d788d88a",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/api/webassets/webassets.go",
+          "relevantLinesStart": 48,
+          "relevantLinesEnd": 49,
+          "oneSentenceSummary": "Recheck the cache after acquiring the write lock to prevent every concurrent waiter from reloading assets.",
+          "suggestionContent": "WHAT: the write-lock path does not recheck entryPointAssetsCache after waiting for another request to populate it. WHY: concurrent non-Dev callers that all observe a nil cache serialize on this lock and each rereads assets-manifest.json (and may repeat CDN work), causing a startup request burst to perform redundant I/O instead of using the newly populated cache. HOW: after acquiring the write lock, re-read the cache and return it when cfg.Env is not setting.Dev and it is non-nil before loading the manifest.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_b93643f2",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "pkg/api/webassets/webassets.go",
+          "relevantLinesStart": 41,
+          "relevantLinesEnd": 49,
+          "oneSentenceSummary": "The write-lock path must re-check the cache to prevent concurrent callers from rebuilding it repeatedly.",
+          "suggestionContent": "After acquiring entryPointAssetsCacheMu.Lock, re-check entryPointAssetsCache (and cfg.Env) before rebuilding the assets. Without this second check, concurrent callers that all observe a nil cache before the lock serialize but each still performs the expensive asset discovery and overwrites the cache, defeating the synchronization and allowing duplicate initialization work.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+      "sourceSha": "e37754bc16609a6d3eaa3ff969064aea05553f6d",
+      "suggestions": [
+        {
+          "id": "s_76186e72",
+          "sourceIndex": 0,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+          "relevantLinesStart": 44,
+          "relevantLinesEnd": 50,
+          "oneSentenceSummary": "The metric help text says returned sizes although the middleware measures incoming request payloads.",
+          "suggestionContent": "The `plugin_request_size_bytes` metric is observed with the incoming QueryData JSON and CallResource body, but its Prometheus help text says “histogram of plugin request sizes returned,” which describes response sizes and misleads metric consumers. Change the text to indicate that incoming/request payload sizes are measured.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_c4bfaaf2",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+          "relevantLinesStart": 144,
+          "relevantLinesEnd": 162,
+          "oneSentenceSummary": "New metrics instrumentation dereferences nullable plugin requests and introduces nil-pointer panics.",
+          "suggestionContent": "Guard nil requests before accessing req.Queries, req.Body, or req.PluginContext, and forward them to the next client (as LoggerMiddleware does). With the new middleware installed before the logger, QueryData(nil) and CallResource(nil) currently panic during metrics collection instead of preserving the existing nil-request behavior.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_7118acb2",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "pkg/plugins/log/fake.go",
+          "relevantLinesStart": 46,
+          "relevantLinesEnd": 48,
+          "oneSentenceSummary": "The fake implementation loses all logs produced through the newly required FromContext path.",
+          "suggestionContent": "TestLogger.FromContext returns a fresh logger, so LoggerMiddleware's new m.logger.FromContext(ctx).Info call records the message in an unreferenced TestLogger and silently drops it from the injected logger's Logs. Return the receiver (or a contextual logger sharing the receiver's log storage) so the new interface method preserves the fake's observable logging behavior.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_a2ef7a52",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-data-exposure",
+          "label": "security",
+          "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+          "relevantLinesStart": 27,
+          "relevantLinesEnd": 36,
+          "oneSentenceSummary": "Request-wide contextual logging exposes user and datasource identifiers in all downstream plugin logs.",
+          "suggestionContent": "Do not attach `uname`, `dsName`, and `dsUID` to the logger context for the entire plugin request. These identifiers are now inherited by every log emitted downstream during the request, whereas they were previously added only to the request-completed event. Keep the fields scoped to the specific completion log (or explicitly sanitize/allowlist them) to avoid broadening sensitive data exposure.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_29d4df72",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+          "relevantLinesStart": 144,
+          "relevantLinesEnd": 175,
+          "oneSentenceSummary": "Metrics middleware dereferences nil request pointers at the client boundary and can panic before forwarding them.",
+          "suggestionContent": "Guard nil requests before reading request fields (and forward them to the next client without instrumentation, or otherwise handle them consistently). QueryData and CallResource currently dereference req, while the existing LoggerMiddleware explicitly supports nil requests; a nil request therefore panics after this middleware is installed.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_87ece20e",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+          "relevantLinesStart": 39,
+          "relevantLinesEnd": 56,
+          "oneSentenceSummary": "Contextual logger middleware dereferences nil unary request pointers while constructing context.",
+          "suggestionContent": "Add nil-request guards before accessing req.PluginContext, forwarding nil requests directly to the next client. The middleware currently assumes every unary request pointer is non-nil, so installing it makes nil requests panic even though the downstream-facing LoggerMiddleware explicitly supports nil requests.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_ca7aeab6",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+          "relevantLinesStart": 39,
+          "relevantLinesEnd": 56,
+          "oneSentenceSummary": "Nil plugin requests now panic in the new contextual middleware.",
+          "suggestionContent": "These methods dereference req.PluginContext without checking req for nil. The existing LoggerMiddleware explicitly supports nil requests by forwarding them unchanged, but this middleware runs earlier in the chain and will panic before the downstream client can handle a nil request. Add nil guards (or otherwise avoid instrumentation) for nil requests.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_46745551",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+          "relevantLinesStart": 127,
+          "relevantLinesEnd": 138,
+          "oneSentenceSummary": "The milliseconds histogram truncates sub-millisecond request durations to zero.",
+          "suggestionContent": "The milliseconds observation uses integer Duration division before converting to float, truncating every sub-millisecond duration to 0 ms. Convert using elapsed.Seconds()*1000 (or float64(elapsed)/float64(time.Millisecond)) in both exemplar and non-exemplar branches so the metric reflects the actual operation duration and its fractional-ms buckets are usable.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "dual-storage-architecture-grafana-codex": {
+      "sourceSha": "f7764326707be3927ba7ee72b3115f6f9f105cb9",
+      "suggestions": [
+        {
+          "id": "s_faba93e0",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 50,
+          "relevantLinesEnd": 57,
+          "oneSentenceSummary": "Legacy writes are canceled with the request instead of surviving the response.",
+          "suggestionContent": "WHAT: the asynchronous legacy create derives its timeout context from the incoming request context. WHY: the request context is canceled as soon as the unified-storage request returns, which cancels this child before Legacy.Create can complete and defeats mode 3's promised legacy write. HOW: create the background async context independently of the request cancellation while explicitly preserving only the required context values/logging fields, then apply the 10-second timeout.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_a9049b82",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 126,
+          "relevantLinesEnd": 140,
+          "oneSentenceSummary": "Legacy Update recomputes the update instead of applying the unified-store result.",
+          "suggestionContent": "WHAT: mode 3 forwards the original UpdatedObjectInfo to the asynchronous legacy update instead of the object/result produced by the unified-storage update. WHY: UpdatedObject is evaluated separately by the two storage implementations, so callbacks that generate a new object, depend on the old object, or are one-shot can yield different data (or fail) in legacy, leaving the two stores inconsistent. HOW: materialize the update once and pass legacy an update wrapper containing the unified-storage result, as the previous mode implementations do.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_0469979e",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 50,
+          "relevantLinesEnd": 57,
+          "oneSentenceSummary": "The asynchronous legacy create inherits the request context, so returning the API response cancels the legacy write.",
+          "suggestionContent": "Detach the background legacy operation from the request cancellation (while preserving only the needed request values), or enqueue it through a lifecycle-managed worker. `WithTimeoutCause(ctx, ...)` does not help when `ctx` is already canceled: the goroutine can begin after the handler returns and `Legacy.Create` immediately observes cancellation, leaving the object present only in Storage. Apply the same fix to the asynchronous Delete, Update, and DeleteCollection paths.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_11922f88",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 43,
+          "relevantLinesEnd": 46,
+          "oneSentenceSummary": "Create failure timing is attributed to LegacyStorage instead of Storage.",
+          "suggestionContent": "When Storage.Create fails, this timing covers the storage operation, but it is emitted via recordLegacyDuration. Record it with recordStorageDuration so the failure metric is attributed to the backend actually called.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_6cb9049c",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 125,
+          "relevantLinesEnd": 130,
+          "oneSentenceSummary": "Update failure timing is attributed to LegacyStorage instead of Storage.",
+          "suggestionContent": "This timer surrounds d.Storage.Update, so an error must be recorded with recordStorageDuration. Using recordLegacyDuration sends Storage update failures into the legacy metric series.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_68108285",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 99,
+          "relevantLinesEnd": 106,
+          "oneSentenceSummary": "Successful delete timing uses the object name instead of the kind label.",
+          "suggestionContent": "The successful Storage.Delete timing uses `name` as the metric's resource argument, while the error path and all other operations use `options.Kind`. This emits the object name in the kind/resource label and makes successful delete metrics inconsistent and potentially high-cardinality.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_b490b494",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 161,
+          "relevantLinesEnd": 167,
+          "oneSentenceSummary": "Legacy DeleteCollection timing is emitted as Storage timing.",
+          "suggestionContent": "The goroutine times d.Legacy.DeleteCollection, but records that elapsed time with recordStorageDuration. Use recordLegacyDuration so the metric identifies the backend actually measured.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_3af77dc3",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+          "relevantLinesStart": 28,
+          "relevantLinesEnd": 28,
+          "oneSentenceSummary": "The Create test name claims storage-only behavior while mode 3 also writes LegacyStorage.",
+          "suggestionContent": "This test name says the object is created “only in the unified store,” but mode 3's Create implementation at dualwriter_mode3.go:50-57 also asynchronously calls LegacyStorage.Create. Rename the case to describe dual writing (or otherwise reflect that the legacy write is expected), so the test's human-readable contract does not contradict the code.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_751ded27",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+          "relevantLinesStart": 145,
+          "relevantLinesEnd": 145,
+          "oneSentenceSummary": "The List test name says the operation is unimplemented even though the changed method implements it.",
+          "suggestionContent": "This test name says listing in the unified store “is not implemented,” but the changed List method now delegates to d.Storage.List and returns its result at dualwriter_mode3.go:78-91. Rename the case to describe the expected list error instead of asserting/documenting that the operation is unimplemented.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_5a02bd8a",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+          "relevantLinesStart": 17,
+          "relevantLinesEnd": 76,
+          "oneSentenceSummary": "The mode-3 unit tests do not synchronize with or assert the asynchronous legacy writes, so they pass even when dual writing is broken.",
+          "suggestionContent": "This Create test claims to cover mode-3 dual writing, but it only asserts the synchronous Storage result. The Legacy Create expectation at lines 30-31 is never asserted, and the implementation starts it in a goroutine, so the test can pass if the legacy write is removed or never scheduled. Wait for the legacy call using a synchronization channel/mock callback and explicitly assert that it occurred (and assert mock expectations). The same pattern is repeated by the Delete, Update, and DeleteCollection tests.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_b8b19a32",
+          "sourceIndex": 10,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 134,
+          "relevantLinesEnd": 140,
+          "oneSentenceSummary": "Mode 3 no longer forwards Storage's persisted update result to LegacyStorage, breaking the prior dual-write consistency contract.",
+          "suggestionContent": "The legacy update now receives the original `objInfo` after Storage has already evaluated and persisted it. Previously this path wrapped `objInfo` with the exact object returned by Storage, ensuring both stores received the same admitted object. Re-evaluating the updater asynchronously can produce a different object (or observe a different old version), leaving LegacyStorage inconsistent with Storage. Preserve/pass the Storage result via an update wrapper when invoking LegacyStorage.Update.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "unified-storage-performance-optimizations-grafana-codex": {
+      "sourceSha": "d7bbc61b0c38cab509f1dbbdf8dacc81d7dcb73b",
+      "suggestions": [
+        {
+          "id": "s_d8daa441",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/storage/unified/search/bleve.go",
+          "relevantLinesStart": 137,
+          "relevantLinesEnd": 139,
+          "oneSentenceSummary": "Preserve same-key build synchronization while allowing distinct indexes to build concurrently.",
+          "suggestionContent": "Locking only cache publication allows GetIndex to return nil while an index for the same key is already being built, causing concurrent callers to build and publish separate indexes for that key. Concurrent searches or a search racing a write event can therefore replace an index that another caller is updating, losing those updates from the cached search index. Use per-key synchronization spanning the cache check and build, and recheck the cache after acquiring that synchronization.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_60785058",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/storage/unified/resource/search.go",
+          "relevantLinesStart": 216,
+          "relevantLinesEnd": 216,
+          "oneSentenceSummary": "Synchronize TotalDocs before invoking it alongside the active index event consumer.",
+          "suggestionContent": "The new startup log calls TotalDocs after launching the event consumer, but Bleve TotalDocs iterates its cache map without holding cacheMu. A write event for a resource without an index can publish a new cache entry during that iteration, causing a data race or a fatal concurrent map iteration and map write during startup. Add a cacheMu read lock around TotalDocs cache iteration.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "notification-rule-processing-engine-grafana-codex": {
+      "sourceSha": "2e048f160b989184c7ba6c2a89fe3476e52c0173",
+      "suggestions": [
+        {
+          "id": "s_4c7c7829",
+          "sourceIndex": 0,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+          "relevantLinesStart": 5,
+          "relevantLinesEnd": 11,
+          "oneSentenceSummary": "Update the stale GrafanaGroupLoader documentation after removing its Ruler request.",
+          "suggestionContent": "The loader no longer uses the Ruler endpoint, but the component documentation still says it loads from both Prometheus and Ruler endpoints. Update the docstring to say that it loads rules from the Prometheus endpoint only, so callers are not misled about the data source and refresh behavior.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_60a14d18",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+          "relevantLinesStart": 51,
+          "relevantLinesEnd": 59,
+          "oneSentenceSummary": "The new prom-only caller passes undefined to a ruler ability hook whose cross-file signature still requires a ruler rule.",
+          "suggestionContent": "`RuleActionsButtons` now permits a prom-only rule, but still passes its optional `rule` to `useRulerRuleAbility`, whose declaration requires `RulerRuleDTO`. This violates the hook contract for every `GrafanaRuleListItem` call (which supplies only `promRule`); make the singular ruler hook accept/skip undefined, or avoid calling it for prom-only items and use the Grafana ability hook instead.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_174860f6",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+          "relevantLinesStart": 65,
+          "relevantLinesEnd": 82,
+          "oneSentenceSummary": "The “ruler and prom rule exist” test never exercises the ruler side of the scenario.",
+          "suggestionContent": "This test claims to cover the case where both ruler and Prometheus rules exist, but it only seeds the Prometheus mock (`setGrafanaPromRules`) and never sets up or asserts any ruler response or matching behavior. It would pass even if the ruler request/matching path were broken or absent. Rename it to describe the Prometheus-only behavior, or restore a fixture/assertion that independently verifies the ruler counterpart is loaded and matched.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_965ccb15",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+          "relevantLinesStart": 155,
+          "relevantLinesEnd": 162,
+          "oneSentenceSummary": "The Grafana filtered-list branch drops the stable row key, producing incorrect reconciliation when results change.",
+          "suggestionContent": "Pass the stable iterator key to GrafanaRuleListItem (for example, add `key={key}`). The datasource and unknown branches preserve this key, but the new Grafana branch omits it, causing React to reconcile rows by index when filtered results change and potentially associate a rule's action/menu subtree with another rule.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_31df1725",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+          "relevantLinesStart": 53,
+          "relevantLinesEnd": 59,
+          "oneSentenceSummary": "The new optional `rule` prop is passed to a singular hook whose contract was not widened.",
+          "suggestionContent": "`rule` is optional for the new `promRule`-only call path, but `useRulerRuleAbility` still expects a `RulerRuleDTO`; passing `rule` unconditionally breaks the hook's parameter contract. Use a skip-token/optional-safe singular ruler hook, or update the hook signature and return a neutral ability when no ruler rule is supplied, before combining it with the Grafana ability.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "implement-access-token-context-encoding-framework-keycloak": {
+      "sourceSha": "54a700ced245807bf3c3263e2d8b61dd03b451ea",
+      "suggestions": [
+        {
+          "id": "s_b5b8414e",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+          "relevantLinesStart": 69,
+          "relevantLinesEnd": 77,
+          "oneSentenceSummary": "rawTokenId is not validated because the constructor repeats the grantType null check.",
+          "suggestionContent": "WHAT: the constructor checks `grantType` twice and never checks `rawTokenId` for null. WHY: `new AccessTokenContext(..., null)` accepts an invalid raw token ID, and `encodeTokenId` then silently emits the literal `null` suffix instead of rejecting the malformed context. HOW: replace the second `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` with `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_5f605bbb",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 479,
+          "relevantLinesEnd": 484,
+          "oneSentenceSummary": "The event-test matcher has the grant-shortcut comparison inverted.",
+          "suggestionContent": "WHAT: `isAccessTokenId` returns false when the extracted grant shortcut equals the expected shortcut. WHY: every updated event assertion for a correctly encoded token (for example `...ac:<uuid>`) fails because the matcher rejects the exact value it is meant to accept. HOW: invert the condition to return false when the shortcut does not equal the expected value, or directly return the equality result together with the UUID check.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_0767cf64",
+            "s_5454e119",
+            "s_5bd24a7d",
+            "s_b26743e8",
+            "s_cd0716d2",
+            "s_f5e7d9a5"
+          ],
+          "groupId": "g_f7edc1",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_f5e7d9a5",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 476,
+          "relevantLinesEnd": 485,
+          "oneSentenceSummary": "The new access-token ID matcher inverts the expected grant check and rejects valid IDs.",
+          "suggestionContent": "The matcher rejects the valid case: line 483 returns false when the embedded grant shortcut equals expectedGrantShortcut. As a result, every event assertion using isAccessTokenId(...) fails for correctly encoded token IDs. Return true for equality (or invert the condition to reject inequality).",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_0767cf64",
+            "s_5454e119",
+            "s_5bd24a7d",
+            "s_5f605bbb",
+            "s_b26743e8",
+            "s_cd0716d2"
+          ],
+          "groupId": "g_f7edc1",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_5bd24a7d",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 476,
+          "relevantLinesEnd": 485,
+          "oneSentenceSummary": "The expected-grant matcher currently rejects matching grant shortcuts.",
+          "suggestionContent": "The matcher is documented and named as checking for the expected grant shortcut, but the equality branch returns false when the shortcut matches. This makes event assertions reject the correct token and accept a token with a different grant, contradicting the matcher description and its callers.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_0767cf64",
+            "s_5454e119",
+            "s_5f605bbb",
+            "s_b26743e8",
+            "s_cd0716d2",
+            "s_f5e7d9a5"
+          ],
+          "groupId": "g_f7edc1",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_cd0716d2",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 476,
+          "relevantLinesEnd": 485,
+          "oneSentenceSummary": "The event matcher reads and compares the wrong token-ID positions and inverts the expected-grant result.",
+          "suggestionContent": "The matcher does not validate the format emitted by DefaultTokenContextEncoderProvider.encodeTokenId: the grant shortcut starts at index 4, not index 3, and the equality branch is inverted. Extract `items[0].substring(4, 6)` and return true when it equals `expectedGrantShortcut` (after validating the prefix length), otherwise every correctly encoded access-token event is rejected and an incorrect grant may pass.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_0767cf64",
+            "s_5454e119",
+            "s_5bd24a7d",
+            "s_5f605bbb",
+            "s_b26743e8",
+            "s_f5e7d9a5"
+          ],
+          "groupId": "g_f7edc1",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_5454e119",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 476,
+          "relevantLinesEnd": 485,
+          "oneSentenceSummary": "The access-token event matcher reads the grant shortcut at the wrong positions and rejects the matching value.",
+          "suggestionContent": "The matcher uses substring(3, 5), but encoded IDs are laid out as 2-character session + 2-character token + 2-character grant, so the grant shortcut is substring(4, 6). The comparison is also inverted: it returns false when the extracted value equals the expected shortcut. Extract indices 4..6 and return true only when they equal the expected shortcut.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_0767cf64",
+            "s_5bd24a7d",
+            "s_5f605bbb",
+            "s_b26743e8",
+            "s_cd0716d2",
+            "s_f5e7d9a5"
+          ],
+          "groupId": "g_f7edc1",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_0767cf64",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 476,
+          "relevantLinesEnd": 485,
+          "oneSentenceSummary": "The access-token ID matcher rejects the expected grant shortcut instead of requiring it.",
+          "suggestionContent": "The matcher reverses the expected-grant check: it returns false when the shortcut equals expectedGrantShortcut, so valid access-token IDs never match and an ID with a wrong shortcut can match. Change the condition to return false when the shortcut does not equal the expected value (or return the equality result), otherwise all event tests using this helper fail to detect incorrect grant encoding.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_5454e119",
+            "s_5bd24a7d",
+            "s_5f605bbb",
+            "s_b26743e8",
+            "s_cd0716d2",
+            "s_f5e7d9a5"
+          ],
+          "groupId": "g_f7edc1",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_4ecef7a9",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-data-exposure",
+          "label": "security",
+          "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+          "relevantLinesStart": 74,
+          "relevantLinesEnd": 93,
+          "oneSentenceSummary": "Parser exceptions disclose the complete supplied token ID, including its raw access-token identifier, to error/log consumers.",
+          "suggestionContent": "Do not include the full encoded token ID in IllegalArgumentException messages. The value includes the raw access-token identifier and may be propagated to an HTTP error or server logs when parsing attacker-controlled token IDs. Report only a generic parsing failure and, if needed, the bounded non-sensitive component (for example the expected length or the two-character type shortcut), or log the value only through an appropriately redacted mechanism.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_b26743e8",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 476,
+          "relevantLinesEnd": 484,
+          "oneSentenceSummary": "The updated event-token matcher rejects the expected grant shortcut and accepts the wrong one.",
+          "suggestionContent": "The matcher applies the new access-token ID contract backwards: when the encoded grant shortcut equals expectedGrantShortcut it returns false, so all correctly encoded token IDs fail the event assertions, while a different grant shortcut can pass. Return the equality result (and retain the UUID check), e.g. `return items[0].substring(4, 6).equals(expectedGrantShortcut) && isUUID().matches(items[1]);`.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_0767cf64",
+            "s_5454e119",
+            "s_5bd24a7d",
+            "s_5f605bbb",
+            "s_cd0716d2",
+            "s_f5e7d9a5"
+          ],
+          "groupId": "g_f7edc1",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": []
+        }
+      ],
+      "groups": [
+        {
+          "members": [
+            "s_0767cf64",
+            "s_5454e119",
+            "s_5bd24a7d",
+            "s_5f605bbb",
+            "s_b26743e8",
+            "s_cd0716d2",
+            "s_f5e7d9a5"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": true,
+          "confidence": "high",
+          "defect": "isAccessTokenId inverts the grant-shortcut comparison, returning false when the shortcut matches, so valid IDs are rejected and wrong ones can pass. It also reads the grant shortcut with substring(3,5) when it is actually at indices 4..6.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_f7edc1",
+          "humanReview": {
+            "verdict": "ok",
+            "note": "",
+            "at": "2026-10-08T13:38:49.405Z"
+          }
+        }
+      ],
+      "uniqueConfidence": {
+        "s_b5b8414e": "high",
+        "s_4ecef7a9": "high"
+      },
+      "partialOverlap": [],
+      "humanReviewUnique": {
+        "s_b5b8414e": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:11:05.791Z"
+        },
+        "s_4ecef7a9": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:11:02.063Z"
+        }
+      }
+    },
+    "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+      "sourceSha": "0bf277dd6b987d6e07ce9befafadeb729768fcd4",
+      "suggestions": [
+        {
+          "id": "s_dc7f347e",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+          "relevantLinesStart": 155,
+          "relevantLinesEnd": 157,
+          "oneSentenceSummary": "Join the concurrent reader before asserting so late exceptions cannot be missed.",
+          "suggestionContent": "WHAT: the concurrency test asserts caughtExceptions before joining the reader thread after setting deletedAll. WHY: the reader can still be executing (and can add an exception after the assertion), allowing the test to pass without observing a failure and leaving a background thread running beyond the test. HOW: retain the Thread, signal termination, join it (with interruption handling), and assert only after the reader has stopped.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_3e52a596",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+          "relevantLinesStart": 136,
+          "relevantLinesEnd": 157,
+          "oneSentenceSummary": "The test asserts asynchronous exceptions without joining the reader thread, so it can pass despite a concurrent read failure.",
+          "suggestionContent": "Synchronize with the reader thread before asserting: retain the Thread returned by new Thread, signal it to stop, then join it (with appropriate interruption/timeout handling) before checking caughtExceptions. As written, the assertion races the asynchronous request and can pass before a failure is captured.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "add-html-sanitizer-for-translated-message-resources-keycloak": {
+      "sourceSha": "abb30aa267622b0fd5d41f67f81c0ec25cf0e1a2",
+      "suggestions": [
+        {
+          "id": "s_70350e56",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+          "relevantLinesStart": 94,
+          "relevantLinesEnd": 95,
+          "oneSentenceSummary": "Unescaping sanitized output restores forbidden HTML and lets unsafe translations evade verification.",
+          "suggestionContent": "WHAT: the verifier unescapes the sanitizer result, converting escaped disallowed markup such as `&lt;script&gt;` back into `<script>` before comparing it with the translation. WHY: a translation containing an otherwise-forbidden HTML tag can therefore compare equal to the original value and pass verification, defeating the new HTML-safety check. HOW: do not unescape the sanitizer output; instead normalize/placeholder legitimate numeric-token syntax before sanitization or compare against a correctly normalized representation without decoding escaped unsafe markup.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_a221d835",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+          "relevantLinesStart": 101,
+          "relevantLinesEnd": 101,
+          "oneSentenceSummary": "The Lithuanian account bundle now displays Italian text.",
+          "suggestionContent": "This is an Italian sentence in the Lithuanian (`lt`) message bundle. Replace it with a Lithuanian translation so the TOTP setup step remains localized for Lithuanian users.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_a34eab52",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+          "relevantLinesStart": 71,
+          "relevantLinesEnd": 71,
+          "oneSentenceSummary": "The Lithuanian login bundle now displays Italian text.",
+          "suggestionContent": "This is an Italian sentence in the Lithuanian (`lt`) login message bundle. Replace it with a Lithuanian translation so Lithuanian users receive localized TOTP setup instructions.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+      "sourceSha": "943c64bc2343fd0c8519bbe401dbc5ac8240f76a",
+      "suggestions": [
+        {
+          "id": "s_bd0cbb6b",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+          "relevantLinesStart": 78,
+          "relevantLinesEnd": 79,
+          "suggestionContent": "canView(ClientModel) short-circuits on the global fine-grained view permission before evaluating client-specific permissions. A caller granted view on all Clients can therefore still view a client with an explicit client-level view denial, unlike the resource-specific override semantics used by UserPermissionsV2. Keep the built-in admin-role shortcut, but evaluate fine-grained view against the client resource and fall back to the Clients resource only when no client resource exists.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_7b271f70",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+          "relevantLinesStart": 86,
+          "relevantLinesEnd": 87,
+          "suggestionContent": "canView() does not recognize the all-Clients manage permission, although canView(ClientScopeModel) explicitly recognizes it. An administrator granted only global manage can create and manage client scopes but cannot list them: the inherited list guard returns false without a query role, and the collection returns an empty stream even with that role. Include the global manage permission in canView() so collection-level visibility matches the per-scope checks.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_52703d76",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+          "relevantLinesStart": 77,
+          "relevantLinesEnd": 82,
+          "suggestionContent": "Do not short-circuit individual client authorization with the V2 all-clients VIEW check. With an all-clients VIEW grant and an explicit negative VIEW permission on one client, canView() returns true here and the individual client's policy is never evaluated. This makes client-specific exclusions ineffective (unlike the all-users/individual-user precedence exercised by UserResourceTypeEvaluationTest). Restrict the initial shortcut to the default administrative roles, then evaluate the individual resource through hasPermission(client, VIEW), which already falls back to the all-clients resource when no individual resource exists.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_b4e86fdf",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+          "relevantLinesStart": 147,
+          "relevantLinesEnd": 152,
+          "suggestionContent": "Fetch the default client-scope fixture using realm.admin() before entering this denial assertion, then invoke removeDefaultClientScope directly with that ID. Currently getDefaultClientScopes() throws ForbiddenException first for the unprivileged caller, so the removal request is never sent. The test still passes if removal incorrectly permits callers without MANAGE permission.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_5401b348",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+          "relevantLinesStart": 268,
+          "relevantLinesEnd": 271,
+          "suggestionContent": "Assert CREATED on the creation response and use its returned location/ID to verify the new client. Merely closing the Response does not fail on an HTTP error. The subsequent hasSize(1) assertion tests listing after granting MANAGE, not that creation succeeded: an error response that nevertheless leaves a client behind would pass. Checking the status makes the positive creation contract explicit.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_06f85daf",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+          "relevantLinesStart": 95,
+          "relevantLinesEnd": 103,
+          "suggestionContent": "Both new comments describe these methods as returning true, but requireView() and requireViewClientScopes() return void and enforce access by throwing ForbiddenException. Document them as throwing ForbiddenException when canView() or canViewClientScopes(), respectively, returns false, consistent with the other require* methods in this interface. The current prose gives callers the wrong return and failure contract.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_d9eefa97",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+          "relevantLinesStart": 86,
+          "relevantLinesEnd": 87,
+          "suggestionContent": "Preserve the MANAGE_CLIENTS role in the V2 canView() check. ClientPermissionEvaluator.java:64-69 explicitly declares that either MANAGE_CLIENTS or VIEW_CLIENTS grants this operation, whereas this override checks only canViewClientDefault() plus a fine-grained VIEW permission. A caller with only MANAGE_CLIENTS and no fine-grained policy can therefore fail global view checks despite satisfying the interface contract. Include canManageClientsDefault() (or explicitly check both admin roles) before evaluating the fine-grained permission.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "fixing-re-authentication-with-passkeys-keycloak": {
+      "sourceSha": "5dda08868d9f02272e9bd664ecdb979dc8d6998a",
+      "suggestions": [],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+      "sourceSha": "a5ff749d32d8f0b37c3ec133405f0274091926e3",
+      "suggestions": [
+        {
+          "id": "s_82c5ef29",
+          "sourceIndex": 0,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+          "relevantLinesStart": 244,
+          "relevantLinesEnd": 254,
+          "oneSentenceSummary": "Cached getForLogin results bypass the organization-aware wrapper used by the fallback path.",
+          "suggestionContent": "The cache-hit path returns the raw models from session.identityProviders().getById(), while both cache-miss and invalidation fallbacks map through createOrganizationAwareIdentityProviderModel. Consumers therefore receive different model shapes depending on whether the login query is cached; organization-linked providers lose the organization-aware wrapper on cache hits, which can change organization-specific behavior in login rendering. Map the cached models through createOrganizationAwareIdentityProviderModel before returning, consistently with the fallback paths.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "replays-self-serve-bulk-delete-system-sentry": {
+      "sourceSha": "b10d21b69783718dbadd5f70349b2e3bb94f4958",
+      "suggestions": [
+        {
+          "id": "s_d9bac71d",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+          "relevantLinesStart": 107,
+          "relevantLinesEnd": 119,
+          "oneSentenceSummary": "Missing nodestore entries shift error metadata onto the wrong event IDs.",
+          "suggestionContent": "WHAT: `fetch_error_details` pairs `error_ids` with `events.values()` rather than looking each returned node up by its requested node ID. WHY: `get_multi` omits missing nodes, so if any earlier error event is absent, every subsequent event is shifted onto the wrong error ID and the replay summary contains incorrect error details/timestamps. HOW: build a node-id-to-event mapping and iterate the requested `(error_id, node_id)` pairs, selecting `events.get(node_id)` for each.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_856eb85a",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+          "relevantLinesStart": 50,
+          "relevantLinesEnd": 60,
+          "oneSentenceSummary": "Falsy age/timestamp values bypass the presence validation and allow mutually exclusive fields together.",
+          "suggestionContent": "The mutual-exclusion checks use truthiness (`self.initial_data.get(\"age\")` and `.get(\"timestamp\")`). This fails for valid falsy values: `{timestamp: 0, age: 1}` bypasses `validate_timestamp`, and `{age: 0, timestamp: 1}` bypasses `validate_age`, allowing a report containing both spec formats. Check key presence explicitly (for example, `\"age\" in self.initial_data` / `\"timestamp\" in self.initial_data`) instead.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_d67909de",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "static/app/views/dashboards/widgetCard/chart.tsx",
+          "relevantLinesStart": 164,
+          "relevantLinesEnd": 173,
+          "oneSentenceSummary": "The new dashboard visualization is fed an intentionally empty table, making all feature-enabled table widgets blank.",
+          "suggestionContent": "The feature-enabled branch discards the query result and passes an empty table to `TableWidgetVisualization`, so dashboard table widgets show no columns or rows whenever `use-table-widget-visualization` is enabled. Pass the current `result.data` and `result.meta` (and map the existing fields/aliases as needed) into `tableData` instead of constructing empty values.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_9905bdbc",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/source_code_management/commit_context.py",
+          "relevantLinesStart": 142,
+          "relevantLinesEnd": 143,
+          "oneSentenceSummary": "The new environment annotation adds hard-coded English user-facing text to external PR comments.",
+          "suggestionContent": "The merged-PR comment template introduces the user-visible literal `in` before the environment name. This text is sent directly to GitHub/GitLab and bypasses Sentry's translation mechanism, so localized users receive a partially untranslated comment. Either translate the phrase at the point where the comment is rendered or avoid embedding localized prose in this shared template.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_e0999225",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/sentry/replays/test_project_replay_summarize_breadcrumbs.py",
+          "relevantLinesStart": 272,
+          "relevantLinesEnd": 276,
+          "oneSentenceSummary": "The disabled-error-context test allows an empty logs payload and therefore does not prove breadcrumbs are still included.",
+          "suggestionContent": "This test verifies only that error strings are absent. If `analyze_recording_segments` or the disabled-context path accidentally drops every log, `not any(...)` still passes and the test does not verify the intended behavior of retaining breadcrumbs. Assert that the payload contains the ordinary breadcrumb (for example, a log containing `Logged: hello`) while asserting the error details are absent.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_509ab8e8",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+          "relevantLinesStart": 50,
+          "relevantLinesEnd": 60,
+          "oneSentenceSummary": "Zero-valued age/timestamp fields bypass the added mutually-exclusive format validation.",
+          "suggestionContent": "The mutual-exclusion checks use `self.initial_data.get(...)`, which is false for legitimate zero values. A report containing `timestamp: 0` and `age: 1` skips `validate_age`, and one containing `age: 0` and a timestamp skips `validate_timestamp`, allowing both spec formats at once. Check field presence (for example, `\"timestamp\" in self.initial_data`) rather than truthiness so zero-valued fields are still rejected.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_a0a50caa",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "static/app/components/feedback/list/useFeedbackSummary.tsx",
+          "relevantLinesStart": 61,
+          "relevantLinesEnd": 65,
+          "oneSentenceSummary": "Disabled feedback-summary queries can leave `data` undefined, causing the hook to crash before the component's feature guard runs.",
+          "suggestionContent": "The hook dereferences `data` unconditionally after the disabled-query path. `FeedbackSummary` calls this hook even when the organization lacks `user-feedback-ai-summaries`, so a disabled query can leave `data` undefined and throw while evaluating `data.summary`/`data.numFeedbacksUsed`. Return a safe empty state when `data` is absent (or enable the query only behind a hook-level fallback).",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_4dffb6b1",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-data-exposure",
+          "label": "security",
+          "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+          "relevantLinesStart": 109,
+          "relevantLinesEnd": 114,
+          "oneSentenceSummary": "Invalid browser reports are now copied wholesale into logs, exposing attacker-controlled report data.",
+          "suggestionContent": "The validation-failure log includes the complete `raw_report`. Browser reports are unauthenticated, attacker-controlled input and their body/URL can contain sensitive data; this writes that data into application logs whenever validation fails. Log only the report type and sanitized validation keys (or omit the raw report) to avoid data exfiltration through logs.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_69b85b59",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "static/app/components/feedback/list/useFeedbackSummary.tsx",
+          "relevantLinesStart": 61,
+          "relevantLinesEnd": 65,
+          "suggestionContent": "`data` is undefined when the query is disabled by the feature flag (and can also be undefined before a successful response), but this branch dereferences it unconditionally. Return a safe disabled/empty result when `data` is absent, or guard `data` before reading `summary` and `numFeedbacksUsed`; otherwise FeedbackSummary can crash even though it intends to return null for organizations without the feature.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+      "sourceSha": "4bfbd2a788360ef1bdbe76e33064743ab0f49f64",
+      "suggestions": [
+        {
+          "id": "s_b2d766be",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 254,
+          "relevantLinesEnd": 255,
+          "oneSentenceSummary": "The process type guard prevents hung spawn workers from being killed before replacement.",
+          "suggestionContent": "The new isinstance(process, multiprocessing.Process) guard is false for workers created by self.mp_context.Process using the spawn context. A hung worker is therefore left alive while its replacement starts flushing the same shards, allowing overlapping flushing and duplicate production if the old worker resumes. Check against multiprocessing.process.BaseProcess or the spawn-context Process class, then kill and join the old worker before replacing it.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_c04f59af",
+            "s_d1fa2794"
+          ],
+          "groupId": "g_69529e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_86d26218",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 338,
+          "relevantLinesEnd": 341,
+          "oneSentenceSummary": "Expiring the join deadline skips cleanup of the remaining flusher workers.",
+          "suggestionContent": "The deadline check breaks out of the worker loop before cleaning up the current and remaining workers. If next_step.join exhausts the timeout or an earlier worker hangs until the deadline, later flushers remain alive after join returns and can overlap with workers created after rebalancing. Apply the deadline only to waiting, then run an unconditional termination pass over every process using a spawn-compatible process type check.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_3e9d106e",
+            "s_49ba849a"
+          ],
+          "groupId": "g_a446b8",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_9a130555",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "tests/sentry/spans/consumers/process/test_consumer.py",
+          "relevantLinesStart": 61,
+          "relevantLinesEnd": 62,
+          "suggestionContent": "This comment says the sleep gives flusher threads time to process, but test_basic has already monkeypatched time.sleep to a no-op at line 15. The added call therefore provides no waiting or synchronization. Use an unpatched wait/synchronization mechanism if that is intended, or remove the misleading comment and no-op call.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_768b9941",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 51,
+          "relevantLinesEnd": 51,
+          "suggestionContent": "An explicit max_processes=0 is treated as an omitted limit, so --flusher-processes=0 can start one worker per assigned shard instead of respecting or rejecting the requested maximum. Only None should trigger the default; validate explicit limits as positive integers (ideally also with click.IntRange(min=1)) before constructing the shard mapping.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_c04f59af",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 254,
+          "relevantLinesEnd": 255,
+          "suggestionContent": "Workers are created via multiprocessing.get_context(\"spawn\").Process, whose SpawnProcess class is not a subclass of the top-level multiprocessing.Process class. This isinstance guard therefore skips kill for actual production workers. When a worker hangs, the code starts a replacement and loses the reference to the still-running original, allowing concurrent flushers for the same shards and leaking processes on repeated restarts. Check against multiprocessing.process.BaseProcess (or the spawn context's Process class) instead.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_b2d766be",
+            "s_d1fa2794"
+          ],
+          "groupId": "g_69529e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_3e9d106e",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 338,
+          "relevantLinesEnd": 341,
+          "suggestionContent": "Do not break out of worker cleanup when the join deadline expires. With multiple workers, if next_step.join consumes the timeout or the first worker consumes the remaining time, this break leaves subsequent workers without even an attempted termination. Skip waiting after the deadline but still run cleanup for every worker (and use a type check that recognizes SpawnProcess).",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_49ba849a",
+            "s_86d26218"
+          ],
+          "groupId": "g_a446b8",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_d1fa2794",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 254,
+          "relevantLinesEnd": 255,
+          "suggestionContent": "Check against multiprocessing.process.BaseProcess (or the spawn-context process class), rather than multiprocessing.Process. Workers are created with multiprocessing.get_context(\"spawn\").Process, whose SpawnProcess instances do not inherit from the default-context multiprocessing.Process class. Consequently this guard skips kill() for a hung production worker, then starts a replacement and overwrites the old handle. The old worker can resume flushing alongside its replacement, and repeated hangs accumulate untracked workers, violating the configured worker limit.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_b2d766be",
+            "s_c04f59af"
+          ],
+          "groupId": "g_69529e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_49ba849a",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 338,
+          "relevantLinesEnd": 341,
+          "suggestionContent": "Do not break out of the cleanup loop when the join deadline expires. Stop waiting, but still terminate every remaining multiprocessing worker. If the first worker consumes the timeout, this break skips all subsequent workers, leaving them running after join returns (including across partition reassignment). Use a separate unconditional termination pass with the correct process-type check.",
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_3e9d106e",
+            "s_86d26218"
+          ],
+          "groupId": "g_a446b8",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_0a95ae5f",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/sentry/spans/consumers/process/test_consumer.py",
+          "relevantLinesStart": 119,
+          "relevantLinesEnd": 121,
+          "suggestionContent": "Counting shard entries does not verify that all four assigned shards are covered. For example, a regression in the distribution loop that appends the first shard for every iteration would still produce two processes and four mapping entries, so this test would pass while three partitions never get flushed. Assert that the flattened mapping contains each expected shard exactly once (and ideally send spans for each partition and verify their flushed output), rather than only asserting its length.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        },
+        {
+          "id": "s_f04351bb",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 31,
+          "relevantLinesEnd": 32,
+          "suggestionContent": "The new docstring says this creates one process per shard, but num_processes is capped by max_processes and shards are assigned round-robin to those processes. With the CLI default of 1, all assigned shards share a single process. Describe this as creating up to max_processes workers, with each worker handling one or more shards, so callers are not misled about the concurrency model.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
+        }
+      ],
+      "groups": [
+        {
+          "members": [
+            "s_b2d766be",
+            "s_c04f59af",
+            "s_d1fa2794"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "isinstance(process, multiprocessing.Process) does not match spawn-context SpawnProcess workers, so a hung worker is not killed before its replacement starts (flusher.py:254-255).",
+          "votes": {
+            "opus": "same",
+            "astra": "different"
+          },
+          "resolvedBy": "human",
+          "humanNote": "Split by human review: the join() suggestions only mention the spawn-compatible type check inside their fix; a shared defect must be reported as a problem, not mentioned in the fix.",
+          "groupId": "g_69529e",
+          "humanReview": {
+            "verdict": "ok",
+            "note": "Separado a pedido do revisor: kill guard (flusher.py:254-255) é um defeito diferente do deadline do join().",
+            "at": "2026-10-08T14:00:00.000Z"
+          }
+        },
+        {
+          "members": [
+            "s_3e9d106e",
+            "s_49ba849a",
+            "s_86d26218"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "The deadline break in join() leaves the remaining workers without termination (flusher.py:338-341).",
+          "votes": {
+            "opus": "same",
+            "astra": "different"
+          },
+          "resolvedBy": "human",
+          "humanNote": "Split by human review: the join() suggestions only mention the spawn-compatible type check inside their fix; a shared defect must be reported as a problem, not mentioned in the fix.",
+          "groupId": "g_a446b8",
+          "humanReview": {
+            "verdict": "ok",
+            "note": "Separado a pedido do revisor: deadline do join() (flusher.py:338-341); a checagem de tipo só aparece na correção.",
+            "at": "2026-10-08T14:00:00.000Z"
+          }
+        }
+      ],
+      "uniqueConfidence": {
+        "s_9a130555": "high",
+        "s_768b9941": "high",
+        "s_0a95ae5f": "high",
+        "s_f04351bb": "high"
+      },
+      "partialOverlap": [],
+      "humanReviewUnique": {
+        "s_9a130555": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:13:21.065Z"
+        },
+        "s_768b9941": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:13:16.363Z"
+        },
+        "s_0a95ae5f": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:13:12.363Z"
+        },
+        "s_f04351bb": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T12:13:07.976Z"
+        }
+      }
+    },
+    "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+      "sourceSha": "c0997023d2f6202eb17f6fcef1c0efebe8a4e058",
+      "suggestions": [
+        {
+          "id": "s_18960249",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/services/assignment_source.py",
+          "relevantLinesStart": 14,
+          "relevantLinesEnd": 18,
+          "oneSentenceSummary": "Create a fresh queued timestamp for each AssignmentSource instance.",
+          "suggestionContent": "WHAT: `AssignmentSource.queued` uses `timezone.now()` as a direct dataclass default, which is evaluated once at module import rather than per instance. WHY: every inbound assignment source created by `from_integration()` receives the same stale timestamp, so queued-time context is incorrect for later webhook/task events. HOW: use `field(default_factory=timezone.now)` so each `AssignmentSource` gets a fresh timestamp.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_c58572a1",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/services/assignment_source.py",
+          "relevantLinesStart": 27,
+          "relevantLinesEnd": 28,
+          "oneSentenceSummary": "AssignmentSource task payload contains a raw datetime and can fail Celery JSON serialization.",
+          "suggestionContent": "`to_dict()` returns `queued` as a `datetime`. This dict is passed as `assignment_source_dict` to `sync_assignee_outbound.apply_async`, whose task payload is JSON-encoded by Celery; the datetime is not JSON serializable, so every assignment carrying an AssignmentSource can raise during task enqueue rather than reaching the integration. Serialize `queued` to a JSON-safe representation (for example ISO 8601) and parse it back in `from_dict`, or omit it from the task payload.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "github-oauth-security-enhancement-sentry": {
+      "sourceSha": "854a8de744e4495fcdc040fb173c8f4cbb9a9579",
+      "suggestions": [
+        {
+          "id": "s_6ff88df6",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/github/integration.py",
+          "relevantLinesStart": 423,
+          "relevantLinesEnd": 434,
+          "oneSentenceSummary": "Invalid GitHub OAuth responses can escape the installation failure handling and return a 500.",
+          "suggestionContent": "WHAT: OAuth token exchange and authenticated-user lookup are allowed to raise uncaught HTTP/network exceptions. WHY: an expired, rejected, or otherwise invalid GitHub authorization code can make safe_urlopen or get_user_info raise (get_user_info calls raise_for_status), producing a server error instead of the intended invalid-installation response and leaving the installation pipeline without a controlled failure page. HOW: wrap the token exchange and get_user_info call in the failure handling path and return error(request, self.active_organization) for request, transport, and non-2xx responses.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_4e685465",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/github/integration.py",
+          "relevantLinesStart": 129,
+          "relevantLinesEnd": 141,
+          "oneSentenceSummary": "New short failure messages bypass gettext extraction and will not be localized.",
+          "suggestionContent": "The new user-facing `error_short` messages are translated dynamically with `_(error_short)`. Because the literals are supplied through a function parameter at the call sites rather than appearing as literal arguments to gettext, translation extraction will not include them, so the payload shown to users remains English. Define each short message as a module-level translated constant (like the existing ERR_* constants) or otherwise ensure the literals are statically extracted, then pass the translated value through.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_2a28a379",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "security",
+          "relevantFile": "src/sentry/integrations/github/integration.py",
+          "relevantLinesStart": 412,
+          "relevantLinesEnd": 413,
+          "oneSentenceSummary": "Use constant-time comparison for the OAuth state token.",
+          "suggestionContent": "Compare the OAuth `state` using a constant-time comparison (for example `secrets.compare_digest`, ensuring both operands are strings of compatible type) instead of `!=`. The state is the credential protecting the callback against CSRF and direct comparison can leak prefix information through timing.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+      "sourceSha": "3683230ea03ba56ee043c5cb15ada36fb0e5ea46",
+      "suggestions": [
+        {
+          "id": "s_a9cb3ea0",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 12,
+          "oneSentenceSummary": "The registered metric-alert handler is left abstract and cannot be instantiated.",
+          "suggestionContent": "WHAT: MetricAlertDetectorHandler is changed to an empty subclass of StatefulDetectorHandler even though it does not implement the abstract counter/state extraction and occurrence-building methods. WHY: Detector.detector_handler will try to instantiate this registered handler for the metric_alert_fire group type and Python will raise TypeError because the class remains abstract, preventing metric-alert detectors from being processed. HOW: Implement all StatefulDetectorHandler abstract methods (including build_occurrence_and_event_data), or keep this group type on a concrete handler until those implementations exist.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_addb3ff9",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 12,
+          "oneSentenceSummary": "The new stateful base contract makes the empty metric-alert handler non-instantiable.",
+          "suggestionContent": "`MetricAlertDetectorHandler` now subclasses `StatefulDetectorHandler`, but the empty class does not implement the abstract stateful hooks (`counter_names`, `get_dedupe_value`, `get_group_key_values`, and `build_occurrence_and_event_data`) declared in `detector.py`. It therefore remains abstract and cannot be instantiated when the metric-alert group type selects this handler. Implement all required stateful methods, or keep this handler on the non-stateful base until those methods exist.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_144b01e9",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 12,
+          "oneSentenceSummary": "The registered metric-alert handler is abstract and crashes on instantiation because it does not implement the newly required occurrence hook.",
+          "suggestionContent": "MetricAlertDetectorHandler now inherits StatefulDetectorHandler, whose new abstract build_occurrence_and_event_data method is not implemented here. Instantiating the registered handler for a metric-alert detector raises TypeError ('Can't instantiate abstract class ... with abstract method build_occurrence_and_event_data'), so detector processing cannot start. Implement the hook (including occurrence/event-data construction) or keep this handler on a non-abstract base until it is implemented.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_4edcb19f",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 10,
+          "relevantLinesEnd": 12,
+          "oneSentenceSummary": "The metric alert handler was switched to an abstract stateful base without implementing its required methods.",
+          "suggestionContent": "MetricAlertDetectorHandler now inherits StatefulDetectorHandler, whose abstract methods include counter_names, get_dedupe_value, get_group_key_values, and build_occurrence_and_event_data, but this class implements none of them. It is therefore abstract and cannot be instantiated by the detector handler lookup, causing metric-alert detector processing to fail rather than evaluate alerts. Implement the required stateful detector hooks (or keep this example on the non-stateful base until they exist).",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_752d6b1b",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/sentry/workflow_engine/processors/test_detector.py",
+          "relevantLinesStart": 190,
+          "relevantLinesEnd": 191,
+          "oneSentenceSummary": "The multi-group test expects group_2's occurrence using group_1's value, so it cannot catch per-group value forwarding bugs.",
+          "suggestionContent": "The expected occurrence for group_2 is built with value=6 even though the packet supplies group_2=10. Because the occurrence helper does not expose the value elsewhere, this test would still pass if evaluation forwarded group_1's value to the group_2 occurrence builder. Build the expected second occurrence with 10, and preferably make the mock occurrence/event include the value so the argument forwarding is observable.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_e7faf21d",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/workflow_engine/processors/detector.py",
+          "relevantLinesStart": 226,
+          "relevantLinesEnd": 233,
+          "oneSentenceSummary": "The evaluate docstring still promises a list although the method now returns a group-keyed dictionary.",
+          "suggestionContent": "Update the evaluate docstring to describe the new dictionary return shape (keyed by DetectorGroupKey) instead of saying it returns a list. Callers now iterate over `detector_results.values()` and the method constructs `results` as a dict, so the current documentation misstates the API contract.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_90079911",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 10,
+          "relevantLinesEnd": 12,
+          "oneSentenceSummary": "The stale TODO says the metric alert handler will become stateful even though it now extends StatefulDetectorHandler.",
+          "suggestionContent": "Remove or revise the TODO saying this will become a stateful detector: `MetricAlertDetectorHandler` now already subclasses `StatefulDetectorHandler`, so the comment contradicts the class declaration and misleads maintainers about the implementation state.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_aa4af8aa",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 10,
+          "relevantLinesEnd": 12,
+          "oneSentenceSummary": "Switching the metric-alert handler to the stateful interface leaves it abstract and unusable.",
+          "suggestionContent": "MetricAlertDetectorHandler now inherits StatefulDetectorHandler but remains an empty class. It therefore remains abstract because it does not implement the required stateful hooks (including build_occurrence_and_event_data), and any detector using this group type will fail when detector_handler instantiates the handler. Either implement all required hooks or keep this handler on the non-stateful base until those behaviors exist.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+      "sourceSha": "19deb80d13bb30d01ac9138d3ff2b4d70cfe749b",
+      "suggestions": [
+        {
+          "id": "s_64427fe7",
+          "sourceIndex": 0,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "src/sentry/monitors/logic/incident_occurrence.py",
+          "relevantLinesStart": 159,
+          "relevantLinesEnd": 168,
+          "oneSentenceSummary": "Return the transformed config so the schedule_type display conversion is actually used.",
+          "suggestionContent": "The function computes an enriched `config` copy and converts `schedule_type` to its display value, but returns the original monitor config at line 168. Occurrence consumers therefore receive the raw schedule type and the transformation is dead; return the local `config` instead.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_f66df8a9",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "src/sentry/monitors/logic/incidents.py",
+          "relevantLinesStart": 40,
+          "relevantLinesEnd": 48,
+          "oneSentenceSummary": "The threshold window is nondeterministic when check-ins share a timestamp because the sliced query has no tie-break ordering.",
+          "suggestionContent": "Add a deterministic tie-breaker to the ordering before slicing, such as `.order_by(\"-date_added\", \"-id\")` (and preserve the corresponding chronological order after reversing). With equal `date_added` values, the current query can select an arbitrary subset of check-ins, omit the failed check-in that triggered this call, or include an unrelated successful check-in, producing an incorrect incident threshold decision.",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        },
+        {
+          "id": "s_8a2ece02",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/monitors/logic/incident_occurrence.py",
+          "relevantLinesStart": 130,
+          "relevantLinesEnd": 137,
+          "oneSentenceSummary": "The function documentation contains a typo and an inaccurate singular-result example.",
+          "suggestionContent": "Correct the docstring: “humam readible” is a typo, and the singular example does not describe the function's actual output. For one supported failed check-in, `get_failure_reason` returns a status-specific translated message (for example, “A missed check-in was detected”), not the generic “A failed check-in was detected.”",
+          "isDuplicate": false,
+          "duplicateIds": [],
+          "groupId": null,
+          "needsUnifiedComment": false
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    }
+  }
+}

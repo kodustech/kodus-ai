@@ -1,0 +1,34 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "f6fc0ce9a8bb096825243686a178326042861279",
+  "attempt": 1,
+  "ms": 25497,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_e03bda55",
+          "s_6f3a72b3",
+          "s_76d835b4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "totalPages uses floor(count / limit) + 1, creating an extra empty page when the member count is an exact multiple of the page size.",
+        "rationale": "All three identify the same calculation at the same lines and propose ceiling division. One edit resolves all three reports."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_7ab91a84",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a8a6d7ba",
+        "confidence": "high"
+      }
+    ]
+  }
+}

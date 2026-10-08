@@ -1,0 +1,31 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "component": [
+    "s_2a4d8fa0",
+    "s_9862ac83",
+    "s_c4f3874e",
+    "s_cb4db53f",
+    "s_f28d822f"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_2a4d8fa0",
+          "s_9862ac83",
+          "s_c4f3874e",
+          "s_cb4db53f",
+          "s_f28d822f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "defect": "isAccessTokenId reads the grant shortcut with substring(3,5) when it should use substring(4,6), and its equality check is inverted (it returns false on a match), so the matcher never actually checks the grant. Some members also ask for a length guard on the 6-char prefix, to avoid a StringIndexOutOfBounds, and for split with a limit."
+      }
+    ],
+    "unique": [],
+    "decisive": false,
+    "reasoning": "All five suggestions are duplicates: each one reports the same wrong offset and the same inverted check in the same isAccessTokenId matcher (AssertEvents.java, lines 476-492). That part of the grouping is clear.\n\nThe judges only disagreed on needsUnifiedComment. Three members (s_9862ac83, s_cb4db53f, s_f28d822f) also ask for a length guard on items[0]. s_f28d822f says why: without it the matcher can throw a StringIndexOutOfBounds. s_9862ac83 also suggests splitting with a limit. These are small robustness additions that build on the main defect, not just a different way to fix it. Under the overlap rule, a merged comment should keep them, so I set the flag to true.\n\nCalling the length guard a separate defect is a judgment call, so decisive is false."
+  }
+}

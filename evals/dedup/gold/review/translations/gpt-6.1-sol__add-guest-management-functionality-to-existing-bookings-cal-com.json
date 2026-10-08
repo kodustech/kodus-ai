@@ -1,0 +1,38 @@
+{
+ "s_11281640": {
+  "summaryPt": "Administradores de equipe são incorretamente negados, a menos que também sejam donos da equipe.",
+  "contentPt": "O QUÊ: A verificação de permissão `isTeamAdminOrOwner` exige que o usuário seja ao mesmo tempo admin da equipe e dono da equipe, porque usa `&&` entre `isTeamAdmin` e `isTeamOwner`. POR QUÊ: Admins de equipe que não são donos falham no guard de permissão seguinte e não conseguem adicionar convidados, apesar de a variável e a permissão da funcionalidade indicarem que qualquer um dos papéis deveria ser permitido. CORREÇÃO: Combine as verificações de papel com `||` (e mantenha as alternativas de organizer/attendee)."
+ },
+ "s_2eda8d39": {
+  "summaryPt": "A comparação case-sensitive permite que convidados contornem a blacklist normalizada.",
+  "contentPt": "O QUÊ: O handler converte para minúsculas as entradas configuradas da blacklist, mas as compara com o e-mail do convidado na capitalização original. POR QUÊ: Um endereço na blacklist como `blocked@example.com` pode ser enviado como `Blocked@example.com` e passar pelo filtro da blacklist, fazendo com que o convidado supostamente bloqueado seja criado e notificado. CORREÇÃO: Normalize o convidado enviado antes da comparação, por exemplo comparando `guest.toLowerCase()` com a blacklist normalizada (e use o valor normalizado de forma consistente nas verificações de duplicidade)."
+ },
+ "s_7d464dc6": {
+  "summaryPt": "Use a lista filtrada de convidados inseridos para a classificação das notificações.",
+  "contentPt": "Passe `uniqueGuests` em vez de `guests` original para `sendAddGuestsEmails`. O banco de dados insere apenas `uniqueGuests`, mas a chamada atual faz o email manager tratar attendees existentes duplicados (e quaisquer endereços filtrados) como recém-adicionados, produzindo notificações incorretas para os attendees."
+ },
+ "s_0f78e9fc": {
+  "summaryPt": "Comparações case-sensitive de convidados permitem que variações de capitalização contornem blacklists e dupliquem identidades de attendees existentes.",
+  "contentPt": "Normalize os endereços de convidados enviados antes de compará-los com a blacklist normalizada e com os endereços dos attendees. Do jeito que está, a blacklist está em minúsculas mas `guest` não, então `Blocked@Example.com` contorna uma entrada `blocked@example.com` da blacklist; a comparação case-sensitive de attendees também permite identidades duplicadas com variações de capitalização. Use uma forma canônica como `guest.trim().toLowerCase()` de forma consistente nas verificações de blacklist, nas verificações de duplicidade, na persistência e na classificação posterior de novos convidados."
+ },
+ "s_61eadbaa": {
+  "summaryPt": "O tooltip de remoção hard-coded ignora a localização para usuários que não falam inglês.",
+  "contentPt": "O tooltip é uma string voltada ao usuário hard-coded como `Remove email`, ao contrário dos outros textos de UI recém-adicionados que usam `t(...)`. Adicione uma chave de tradução (por exemplo `remove_email`) aos arquivos de locale e renderize com `t(\"remove_email\")` para que este controle seja localizado."
+ },
+ "s_282510ec": {
+  "summaryPt": "O email consumer recebe os convidados solicitados em vez dos convidados realmente adicionados, então attendees duplicados são classificados incorretamente.",
+  "contentPt": "Passe `uniqueGuests` para `sendAddGuestsEmails` em vez da entrada original `guests`. O handler insere apenas `uniqueGuests`; passar a lista não filtrada faz com que attendees existentes cujos e-mails foram incluídos na requisição sejam tratados como recém-adicionados e recebam a notificação de e-mail/calendário errada."
+ },
+ "s_db3d4f7f": {
+  "summaryPt": "Não exponha o e-mail de todos os attendees no header Reply-To enviado a organizers e membros da equipe.",
+  "contentPt": "O header Reply-To da notificação para organizer/membros da equipe é construído a partir do organizer mais o e-mail de cada attendee. Como este e-mail é enviado a cada membro da equipe por `sendAddGuestsEmails`, ele revela a lista completa de attendees a todos os destinatários por meio dos metadados do e-mail. Evite colocar todos os endereços de attendees no Reply-To (use apenas o organizer ou um endereço de resposta controlado, e use Bcc/outra semântica de entrega aprovada caso respostas para múltiplos destinatários sejam necessárias)."
+ },
+ "s_969329e8": {
+  "summaryPt": "Verificações case-sensitive de existência de e-mail e de blacklist classificam incorretamente variações de capitalização na fronteira de add-guests.",
+  "contentPt": "Normalize os e-mails dos convidados e os armazenados (por exemplo, trim e lowercase) antes de ambas as comparações. As comparações estritas atuais tratam `Existing@Example.com` como ausente quando `existing@example.com` já é um attendee, e falham ao casar variantes em maiúsculas com a blacklist em minúsculas, permitindo attendees duplicados e bypass da blacklist."
+ },
+ "s_3b3887b4": {
+  "summaryPt": "O servidor pode inserir attendees duplicados porque nunca deduplica os e-mails de convidados fornecidos à mutation.",
+  "contentPt": "Deduplique e normalize os e-mails de convidados recebidos antes de criar os attendees (ou imponha unicidade no schema/banco de dados). Do jeito que está, `guests: [\"a@example.com\", \"a@example.com\"]` passa na validação, ambos os valores sobrevivem a este filtro porque nenhum é um attendee existente, e `createMany` insere attendees duplicados para o mesmo booking."
+ }
+}

@@ -1,0 +1,45 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "99243f1fe38a2223c5e5d62db18778e4f7eebe9b",
+  "attempt": 1,
+  "ms": 47631,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_49ba849a",
+          "s_c04f59af",
+          "s_3e9d106e",
+          "s_d1fa2794",
+          "s_b2d766be",
+          "s_86d26218"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Spawn-incompatible process type guards skip worker termination during replacement and shutdown, while the join deadline break additionally skips cleanup of remaining workers.",
+        "rationale": "The restart suggestions report the incorrect process type guard; the shutdown suggestions report the deadline break and also require correcting the same guard at the shutdown location. These overlapping reports form one group covering both guard locations and the additional deadline defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_f04351bb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0a95ae5f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9a130555",
+        "confidence": "high"
+      },
+      {
+        "id": "s_768b9941",
+        "confidence": "high"
+      }
+    ]
+  }
+}

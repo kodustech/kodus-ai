@@ -1,0 +1,99 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "be82802401bc1351a484f5c1fc9fb330237759aa",
+  "attempt": 1,
+  "ms": 36652,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_5454e119",
+          "s_cd0716d2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The access-token matcher extracts the grant shortcut at the wrong offset and inverts the equality check.",
+        "rationale": "Both suggestions explicitly report the same two errors in the same matcher: substring(3, 5) instead of substring(4, 6), and rejection on equality."
+      },
+      {
+        "members": [
+          "s_5bd24a7d",
+          "s_f5e7d9a5",
+          "s_0767cf64",
+          "s_5f605bbb",
+          "s_b26743e8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The access-token matcher rejects an extracted grant shortcut when it equals the expected value.",
+        "rationale": "All five describe the inverted equality condition on the same line. Although s_b26743e8 also corrects the substring offset in its proposed replacement, its reported defect is the inverted comparison."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_b5b8414e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4ecef7a9",
+        "confidence": "high"
+      }
+    ],
+    "partialOverlap": [
+      {
+        "container": "s_5454e119",
+        "contained": "s_5bd24a7d",
+        "rationale": "The container reports the inverted comparison plus the distinct substring-offset error; the contained suggestion reports only the inverted comparison."
+      },
+      {
+        "container": "s_5454e119",
+        "contained": "s_f5e7d9a5",
+        "rationale": "The container reports the inverted comparison plus the distinct substring-offset error; the contained suggestion reports only the inverted comparison."
+      },
+      {
+        "container": "s_5454e119",
+        "contained": "s_0767cf64",
+        "rationale": "The container reports the inverted comparison plus the distinct substring-offset error; the contained suggestion reports only the inverted comparison."
+      },
+      {
+        "container": "s_5454e119",
+        "contained": "s_5f605bbb",
+        "rationale": "The container reports the inverted comparison plus the distinct substring-offset error; the contained suggestion reports only the inverted comparison."
+      },
+      {
+        "container": "s_5454e119",
+        "contained": "s_b26743e8",
+        "rationale": "Both report the inverted comparison, but the container additionally identifies the wrong substring offset as a defect."
+      },
+      {
+        "container": "s_cd0716d2",
+        "contained": "s_5bd24a7d",
+        "rationale": "The container reports the inverted comparison plus the distinct substring-offset error; the contained suggestion reports only the inverted comparison."
+      },
+      {
+        "container": "s_cd0716d2",
+        "contained": "s_f5e7d9a5",
+        "rationale": "The container reports the inverted comparison plus the distinct substring-offset error; the contained suggestion reports only the inverted comparison."
+      },
+      {
+        "container": "s_cd0716d2",
+        "contained": "s_0767cf64",
+        "rationale": "The container reports the inverted comparison plus the distinct substring-offset error; the contained suggestion reports only the inverted comparison."
+      },
+      {
+        "container": "s_cd0716d2",
+        "contained": "s_5f605bbb",
+        "rationale": "The container reports the inverted comparison plus the distinct substring-offset error; the contained suggestion reports only the inverted comparison."
+      },
+      {
+        "container": "s_cd0716d2",
+        "contained": "s_b26743e8",
+        "rationale": "Both report the inverted comparison, but the container additionally identifies the wrong substring offset as a defect."
+      }
+    ]
+  }
+}

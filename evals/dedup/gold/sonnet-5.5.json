@@ -1,0 +1,2278 @@
+{
+  "model": "sonnet-5.5",
+  "route": "agent-sdk-subscription",
+  "sourcePool": "01.10.26_f2_sonnet55_sdk-heavysv",
+  "labelVersion": 1,
+  "prs": {
+    "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+      "sourceSha": "d3f7ef70750262b11dd72db846fecc0e598a237d",
+      "suggestions": [
+        {
+          "id": "s_6881012d",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 118,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "WHAT: `mainHostDestinationCalendar.integration` is read without optional chaining. WHY: when destinationCalendar is null or an empty array (the new default for many callers), the destructured value is undefined and the Google Meet fallback throws a TypeError, which breaks booking creation. HOW: use `mainHostDestinationCalendar?.integration`."
+        },
+        {
+          "id": "s_0d466bb9",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 253,
+          "relevantLinesEnd": 317,
+          "suggestionContent": "WHAT: the fallback in updateEvent and deleteEvent runs only when externalCalendarId is falsy, and it then calls `find((cal) => cal.externalId === externalCalendarId)`, which compares against that same falsy value. WHY: the find never matches, so the fallback always yields undefined instead of the destination calendar's externalId, which is a regression from the previous behaviour. HOW: fall back to `event.destinationCalendar?.[0]?.externalId`."
+        },
+        {
+          "id": "s_0cb37a15",
+          "sourceIndex": 2,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 145,
+          "relevantLinesEnd": 154,
+          "suggestionContent": "WHAT: createEvent now takes a required `credentialId` and picks the calendar by matching credentialId. WHY: destination calendars that have no credentialId (the integration-only branch in EventManager) never match, so the event goes to 'primary' instead of the selected calendar. The other implementations (Office365, Lark, CalDAV) ignore the new argument, so the interface change is inconsistent. HOW: fall back to the first destination calendar's externalId when no credentialId matches."
+        },
+        {
+          "id": "s_a6c93c38",
+          "sourceIndex": 3,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/features/bookings/lib/handleNewBooking.ts",
+          "relevantLinesStart": 1077,
+          "relevantLinesEnd": 1079,
+          "suggestionContent": "WHAT: `evt.destinationCalendar?.push(...)` is a no-op when destinationCalendar is null. WHY: the evt is built with null when neither the event type nor the organizer has a destination calendar, so a collective event silently drops all team members' destination calendars. Separately, teamDestinationCalendars is filled inside async map callbacks, which is fragile."
+        },
+        {
+          "id": "s_6996fe8e",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 253,
+          "relevantLinesEnd": 317,
+          "suggestionContent": "In updateEvent and deleteEvent, the fallback runs only when externalCalendarId is falsy. It then calls `destinationCalendar.find(cal => cal.externalId === externalCalendarId)`, comparing against that same falsy value. This almost never matches, so the fallback always yields undefined. Before this change it returned destinationCalendar.externalId. Use the first destination calendar instead, for example `event.destinationCalendar?.[0]?.externalId`, or match on credentialId."
+        },
+        {
+          "id": "s_fc6a067d",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 117,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "`mainHostDestinationCalendar` is undefined when destinationCalendar is null or empty. Many handlers now set it to [] and handleNewBooking can set it to null. `mainHostDestinationCalendar.integration` then throws a TypeError for a Google Meet location. The original code used `?.`. Use `mainHostDestinationCalendar?.integration`."
+        },
+        {
+          "id": "s_cbaba39f",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 118,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "`mainHostDestinationCalendar.integration` throws a TypeError when `destinationCalendar` is null or empty, because the destructured value is undefined. Several call sites now pass `[]`. Use optional chaining: `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+        },
+        {
+          "id": "s_0e8ac11d",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 253,
+          "relevantLinesEnd": 256,
+          "suggestionContent": "The fallback branch only runs when `externalCalendarId` is falsy, and it looks for `cal.externalId === externalCalendarId`. That comparison can never match, so the result is always undefined. The same pattern appears in deleteEvent at lines 315-317. Fall back to the first destination calendar's externalId instead."
+        },
+        {
+          "id": "s_56da48b0",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 118,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "`mainHostDestinationCalendar` is `undefined` when `evt.destinationCalendar` is null or an empty array. Both are now produced, for example by handleNewBooking when there is no calendar and by the `[]` fallbacks in other handlers. `mainHostDestinationCalendar.integration` then throws a TypeError for a Google Meet location. Use `mainHostDestinationCalendar?.integration`."
+        },
+        {
+          "id": "s_e8f11cef",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 253,
+          "relevantLinesEnd": 317,
+          "suggestionContent": "In the fallback branch `externalCalendarId` is falsy. `find((cal) => cal.externalId === externalCalendarId)` therefore compares against undefined, null or an empty string, and almost never matches. The destination-calendar fallback is now dead in both updateEvent (line 256) and deleteEvent (line 317). Fall back to the first destination calendar instead: `event.destinationCalendar?.[0]?.externalId`."
+        },
+        {
+          "id": "s_b364bc36",
+          "sourceIndex": 10,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "packages/features/bookings/lib/handleNewBooking.ts",
+          "relevantLinesStart": 1063,
+          "relevantLinesEnd": 1079,
+          "suggestionContent": "`evt.destinationCalendar` can be `null` when neither the event type nor the organizer has a destination calendar. `evt.destinationCalendar?.push(...teamDestinationCalendars)` then does nothing, so a collective event drops all team members' calendars even when they have them. Initialize it to `[]` and push into that, or build the array in one step."
+        },
+        {
+          "id": "s_3383b620",
+          "sourceIndex": 11,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 118,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "`destinationCalendar` is now an array that handleNewBooking, and the other handlers, can set to null or []. Destructuring `[mainHostDestinationCalendar]` then yields undefined, and `mainHostDestinationCalendar.integration` throws a TypeError for any Google Meet booking where the user has no destination calendar. The previous code used `?.`. Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+        },
+        {
+          "id": "s_8752109f",
+          "sourceIndex": 12,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/core/EventManager.ts",
+          "relevantLinesStart": 118,
+          "relevantLinesEnd": 119,
+          "suggestionContent": "Use optional chaining: `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+        },
+        {
+          "id": "s_c779c607",
+          "sourceIndex": 13,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 253,
+          "relevantLinesEnd": 317,
+          "suggestionContent": "In the fallback branch use the first destination calendar's externalId, e.g. `event.destinationCalendar?.[0]?.externalId`. Do not search by `externalCalendarId`, which is falsy in that branch."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com": {
+      "sourceSha": "4ff3c79d85d93f4651104d67476a7c07b10cbb13",
+      "suggestions": [
+        {
+          "id": "s_cc6b5fef",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 46,
+          "relevantLinesEnd": 56,
+          "suggestionContent": "WHAT: isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&. WHY: a team admin who is not also an owner is denied, so the permission check is wrong. Separately, any attendee matched by email can add guests, which is a looser permission than the organizer/admin model. HOW: use || between the two team checks, and consider limiting attendee access."
+        },
+        {
+          "id": "s_66ed9605",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 70,
+          "relevantLinesEnd": 81,
+          "suggestionContent": "WHAT: the dedupe and blacklist comparisons are case-sensitive. The blacklist is lowercased but the guest is not, and the existing-attendee check compares raw strings. WHY: Foo@x.com bypasses the blacklist and duplicates an existing foo@x.com attendee. Duplicates inside the submitted list are also not removed server-side. HOW: lowercase each guest before comparing, and dedupe the list."
+        },
+        {
+          "id": "s_c03cd3b4",
+          "sourceIndex": 2,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 165,
+          "relevantLinesEnd": 171,
+          "suggestionContent": "WHAT: sendAddGuestsEmails(evt, guests) receives the raw input guests instead of the filtered uniqueGuests. WHY: blacklisted or duplicate guests are treated as new and get the 'scheduled' email, and existing attendees whose email is in the input also get that email. Also, updateCalendarAttendees is not wrapped in error handling, so a calendar failure happens after the DB write and leaves the attendees added but the request returning an error. HOW: pass uniqueGuests and handle calendar errors."
+        },
+        {
+          "id": "s_dc76b747",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "security",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 70,
+          "relevantLinesEnd": 78,
+          "suggestionContent": "The blacklist is lowercased but the guest email is not, so the check is bypassed by changing case (e.g. 'Blocked@Example.com'). The attendee dedupe has the same problem. Normalize both sides: compare guest.toLowerCase() against the lowercased, trimmed blacklist entries, and compare attendee.email.toLowerCase() in the dedupe filter. Also lowercase the isAttendee comparison at line 52 (attendee.email.toLowerCase() === user.email.toLowerCase())."
+        },
+        {
+          "id": "s_d430022b",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 168,
+          "relevantLinesEnd": 168,
+          "suggestionContent": "The handler computes `uniqueGuests` (existing attendees and blacklisted emails removed) but passes the raw `guests` to sendAddGuestsEmails. Any submitted email that was filtered out, such as an existing attendee or a blacklisted address, is still in `newGuests`. If it matches an attendee, that attendee gets the 'scheduled' email instead of the 'guests added' notice. Pass `uniqueGuests` instead."
+        },
+        {
+          "id": "s_88211022",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 46,
+          "relevantLinesEnd": 48,
+          "suggestionContent": "isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&. Only a user who passes both checks is authorized through this path, so team admins who are not owners are wrongly rejected. The variable name and intent call for ||."
+        },
+        {
+          "id": "s_bdaa90a8",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 74,
+          "relevantLinesEnd": 78,
+          "suggestionContent": "The blacklist entries are lowercased, but the guest email is compared without lowercasing. A blacklisted address submitted in mixed case, such as Foo@x.com, bypasses the blacklist. Compare `guest.toLowerCase()`."
+        },
+        {
+          "id": "s_4206cf1f",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "packages/emails/templates/organizer-add-guests-email.ts",
+          "relevantLinesStart": 26,
+          "relevantLinesEnd": 30,
+          "suggestionContent": "The subject uses `attendees[0].name`, which assumes the original booker is first in the list. The attendee list comes from a prisma include with no orderBy, and new guests are created with name \"\". If a new guest ends up at index 0, the subject has an empty name. Order the attendees explicitly, or take the name from the original booking's first attendee."
+        },
+        {
+          "id": "s_7a5dc6fd",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 74,
+          "relevantLinesEnd": 78,
+          "suggestionContent": "Server-side uniqueness is not enforced within the input list: duplicate emails in `guests` all pass the filter and createMany inserts duplicate attendees (only the client dialog checks uniqueness). The blacklist check is also case-sensitive (guest is not lowercased). Normalize the guests to lowercase and dedupe with a Set before filtering. Also pass uniqueGuests, not guests, to sendAddGuestsEmails."
+        },
+        {
+          "id": "s_72a13bc3",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 92,
+          "relevantLinesEnd": 165,
+          "suggestionContent": "The attendees are committed to the DB before eventManager.updateCalendarAttendees runs, and that call is not wrapped in try/catch. If it throws, the user sees an error but the guests are already persisted and the calendar event is not updated. A retry then fails with emails_must_be_unique_valid. Handle the failure (catch and log or compensate), or do the calendar update before the persist, or make the two steps atomic."
+        },
+        {
+          "id": "s_b87c3cd2",
+          "sourceIndex": 10,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 46,
+          "relevantLinesEnd": 48,
+          "suggestionContent": "isTeamAdminOrOwner uses && between isTeamAdmin and isTeamOwner, so it is only true for users who pass both checks. Team admins who are not owners are wrongly denied. Use ||."
+        },
+        {
+          "id": "s_ddc0673e",
+          "sourceIndex": 11,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "apps/web/components/dialog/AddGuestsDialog.tsx",
+          "relevantLinesStart": 42,
+          "relevantLinesEnd": 45,
+          "suggestionContent": "The error toast is built as `${err.data?.code}: ${t(err.message)}`. That string is always truthy, so the `|| t(\"unable_to_add_guests\")` fallback can never run, and the unable_to_add_guests key added in common.json is dead. Users also see a raw tRPC code such as 'BAD_REQUEST: ...'. Show only the translated message, and fall back to unable_to_add_guests when the message is empty."
+        },
+        {
+          "id": "s_bd0c0912",
+          "sourceIndex": 12,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+          "relevantLinesStart": 46,
+          "relevantLinesEnd": 48,
+          "suggestionContent": "isTeamAdminOrOwner combines the two checks with &&, so it means 'admin AND owner' while the name says 'admin OR owner'. Use || so the name and the behaviour match. Separately, the FORBIDDEN message 'you_do_not_have_permission' was not found in en/common.json, so the dialog toast may show the raw key."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+      "sourceSha": "265278fde71192374d00ea921e2228431a867564",
+      "suggestions": [
+        {
+          "id": "s_cc3a56f7",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 97,
+          "relevantLinesEnd": 100,
+          "suggestionContent": "WHAT: parseRefreshTokenResponse returns a zod SafeParseReturnType ({success, data}), not the parsed key. The result is written directly as `key` in prisma.credential.update. WHY: the credential key is overwritten with {success:true,data:{...}}, which breaks all later Google auth parsing for that credential. HOW: use `.data` of the parsed result, after checking `.success`."
+        },
+        {
+          "id": "s_0167462a",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+          "relevantLinesStart": 5,
+          "relevantLinesEnd": 15,
+          "suggestionContent": "WHAT: in sync mode the function returns the raw fetch Response, but callers expect the shape of their normal refresh function. Google reads `res?.data`, and axios-based callers (zoho-bigin, zohocrm) read `.data.error`. WHY: a fetch Response has no `.data`, so these callers throw or misbehave whenever credential sync is enabled. HOW: normalize the return value, for example by parsing the JSON and wrapping it in the expected shape. Also add a content-type header, a timeout, and an `ok` check on the response."
+        },
+        {
+          "id": "s_94f40051",
+          "sourceIndex": 2,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+          "relevantLinesStart": 263,
+          "relevantLinesEnd": 264,
+          "suggestionContent": "WHAT: parseRefreshTokenResponse throws on failure, so `tokenResponse.success` is always true by the time it is read. The previous non-throwing behaviour and the error logging were removed. WHY: a malformed refresh response now throws instead of being tolerated, which is a regression."
+        },
+        {
+          "id": "s_83d108a2",
+          "sourceIndex": 3,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/app-store/salesforce/lib/CalendarService.ts",
+          "relevantLinesStart": 75,
+          "relevantLinesEnd": 99,
+          "suggestionContent": "WHAT: a direct token refresh was added in the connection getter. It runs on every connection, with no expiry check and no refreshOAuthTokens wrapper. WHY: it adds an extra network call to every use of the service and ignores credential sync. The `.success` check on parseRefreshTokenResponse is redundant because that function throws on failure. The refresh also does not use the sync endpoint."
+        },
+        {
+          "id": "s_751abf53",
+          "sourceIndex": 4,
+          "producedBy": "generalist-base",
+          "label": "security",
+          "relevantFile": "apps/web/pages/api/webhook/app-credential.ts",
+          "relevantLinesStart": 24,
+          "relevantLinesEnd": 59,
+          "suggestionContent": "WHAT: the webhook secret is compared with `!==`, which is not constant-time. A header value that is an array also passes through this comparison unchecked. The code also calls zod `.parse`, JSON.parse and symmetricDecrypt without try/catch, and it never validates that the decrypted keys are an object. WHY: invalid input produces a 500 instead of a 4xx, and the non-constant-time compare may allow timing attacks. HOW: use crypto.timingSafeEqual and wrap the parsing and decryption in try/catch that returns 400."
+        },
+        {
+          "id": "s_146b2eeb",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "security",
+          "relevantFile": "apps/web/pages/api/webhook/app-credential.ts",
+          "relevantLinesStart": 24,
+          "relevantLinesEnd": 29,
+          "suggestionContent": "The webhook secret is compared with !==, which leaks timing information. Use crypto.timingSafeEqual on equal-length buffers. Also handle array-valued headers and reject a missing header explicitly. This endpoint can write arbitrary credentials for any userId, so a leaked secret is high impact."
+        },
+        {
+          "id": "s_1e6afc97",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+          "relevantLinesStart": 85,
+          "relevantLinesEnd": 94,
+          "suggestionContent": "refreshOAuthTokens's third parameter is `userId` and is sent to the sync endpoint as `calcomUserId`. This call passes `credentialId`, so the name and the value disagree. When credential sync is enabled, the endpoint receives a credential id as a user id. Pass the credential's userId (credential.userId) instead."
+        },
+        {
+          "id": "s_3c4702d6",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+          "relevantLinesStart": 5,
+          "relevantLinesEnd": 11,
+          "suggestionContent": "The comments say \"any property with a number is the expiry\" and \"allow other properties\". The computed keys `[z.string().toString()]` evaluate to a fixed string like \"ZodString\", so the schema does not do either. It requires a literal key and does not match any numeric property. Use `.passthrough()` and an explicit expiry field, or fix the comments to match what the schema does."
+        },
+        {
+          "id": "s_c52b0e89",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 97,
+          "relevantLinesEnd": 100,
+          "suggestionContent": "parseRefreshTokenResponse returns a zod safeParse result ({success, data}), not the parsed credentials. The old code stored the output of googleCredentialSchema.parse(...). Now `key` is the wrapper object, so the credential row is saved as {success:true,data:{...}} and later reads of access_token/refresh_token break. Use `parseRefreshTokenResponse(...).data` as the key. Also, when credential sync is enabled refreshOAuthTokens returns a fetch Response, so `res?.data` is undefined."
+        },
+        {
+          "id": "s_f54d5082",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+          "relevantLinesStart": 85,
+          "relevantLinesEnd": 94,
+          "suggestionContent": "refreshOAuthTokens's third parameter is userId, but credentialId is passed. With credential sync enabled this sends a credential id as calcomUserId, so the sync endpoint refreshes the wrong user's tokens, or none. Pass the credential's userId. Also, in sync mode the helper returns a fetch Response, while this code reads tokenInfo.data (an axios shape), so it breaks."
+        },
+        {
+          "id": "s_1e21d54f",
+          "sourceIndex": 10,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 97,
+          "relevantLinesEnd": 100,
+          "suggestionContent": "parseRefreshTokenResponse returns a zod SafeParseReturnType ({success, data}), not the parsed data. Assigning it to `key` and saving it to prisma stores `{success, data}` as the credential key, which breaks the Google credentials. Use `parseRefreshTokenResponse(...).data`. Also, when credential sync is on, refreshOAuthTokens returns a fetch Response, so `res?.data` is undefined and `token.access_token` throws."
+        },
+        {
+          "id": "s_b03866bc",
+          "sourceIndex": 11,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+          "relevantLinesStart": 5,
+          "relevantLinesEnd": 27,
+          "suggestionContent": "The computed keys `[z.string().toString()]` and `[z.string().optional().toString()]` evaluate to fixed strings such as '[object Object]'. They are not wildcard keys. The schema therefore requires a literal bogus numeric property and always fails, so sync mode always throws 'Invalid refreshed tokens were returned'. The schema should use passthrough with an optional expiry. Also, `refresh_token` is overwritten with the literal string 'refresh_token' whenever it is missing, and that placeholder gets persisted."
+        },
+        {
+          "id": "s_d0b474b6",
+          "sourceIndex": 12,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+          "relevantLinesStart": 85,
+          "relevantLinesEnd": 94,
+          "suggestionContent": "The third parameter of refreshOAuthTokens is userId, but `credentialId` is passed. Credential sync would then send a credential id as calcomUserId to the sync endpoint. Pass the credential's userId instead."
+        },
+        {
+          "id": "s_0cadeb06",
+          "sourceIndex": 13,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 97,
+          "relevantLinesEnd": 100,
+          "suggestionContent": "parseRefreshTokenResponse returns the zod SafeParse result ({success, data}), not the parsed credentials. It is assigned to `key` and written to prisma.credential.update, so the stored Google credential becomes {success:true,data:{...}} and loses its top-level access_token and refresh_token. Every later refresh and API call then breaks. Use `.data` from the result. Also, parseRefreshTokenResponse is given the already-merged googleCredentials rather than the refresh response, so in sync mode it validates the wrong object."
+        },
+        {
+          "id": "s_1e566d8d",
+          "sourceIndex": 14,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+          "relevantLinesStart": 5,
+          "relevantLinesEnd": 27,
+          "suggestionContent": "Two problems. (1) `[z.string().toString()]: z.number()` evaluates to a fixed junk key string, not 'any numeric property'. The minimum schema therefore requires a nonexistent numeric key and always fails in sync mode, so the helper throws 'Invalid refreshed tokens were returned'. (2) `refresh_token = 'refresh_token'` is injected whenever the response lacks a refresh token. Callers that spread `data` into the stored credential (Office365 at CalendarService.ts:264, Zoom) overwrite the real refresh token with the literal placeholder. Apply the placeholder only in sync mode, and use a passthrough schema with explicit expiry handling."
+        },
+        {
+          "id": "s_afc19080",
+          "sourceIndex": 15,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+          "relevantLinesStart": 85,
+          "relevantLinesEnd": 94,
+          "suggestionContent": "refreshOAuthTokens is passed `credentialId` where it expects the user id. In sync mode it POSTs calcomUserId=<credential id>, so credentials for the wrong user are fetched. In sync mode it also returns a fetch Response, but the axios-based code reads `tokenInfo.data.error`, which throws a TypeError because `data` is undefined. The same Response-versus-axios mismatch exists in the Zoho CRM and HubSpot callers. Pass the real user id, and normalise the sync response into the shape the callers expect."
+        },
+        {
+          "id": "s_fe509f7a",
+          "sourceIndex": 16,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+          "relevantLinesStart": 86,
+          "relevantLinesEnd": 97,
+          "suggestionContent": "parseRefreshTokenResponse returns a zod SafeParse result ({success, data}), but it is used here as the credential key. Before this change googleCredentialSchema.parse returned the plain data. The credential's key is now saved as {success, data}, which corrupts the stored credential. Also, in credential-sync mode refreshOAuthTokens returns a fetch Response, so `res?.data` is undefined and `token.access_token` throws. Fix: use `.data` from the parsed result, and normalize the Response by calling .json() in sync mode."
+        },
+        {
+          "id": "s_af2d6511",
+          "sourceIndex": 17,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+          "relevantLinesStart": 85,
+          "relevantLinesEnd": 94,
+          "suggestionContent": "refreshOAuthTokens' third parameter is the cal.com userId, but this caller passes credentialId (the credential's id). With credential sync enabled, the sync endpoint is asked for the wrong user's credentials. Also, in sync mode the helper returns a fetch Response, which has no `.data`, so `tokenInfo.data.error` throws. Pass the real userId and normalize the response."
+        },
+        {
+          "id": "s_2d17f71d",
+          "sourceIndex": 18,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+          "relevantLinesStart": 263,
+          "relevantLinesEnd": 264,
+          "suggestionContent": "Behaviour contract change. This code used safeParse and, on failure, logged the error and continued. parseRefreshTokenResponse now throws 'Invalid refreshed tokens were returned' on failure, so refresh failures propagate and abort the caller. The error logging was also removed. Handle or catch the throw if the old tolerance is intended."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "sms-workflow-reminder-retry-count-tracking-cal-com": {
+      "sourceSha": "34500ae3e25e39e6a1d1db4388f0517b30fa735f",
+      "suggestions": [
+        {
+          "id": "s_1d7d17c1",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 31,
+          "relevantLinesEnd": 43,
+          "suggestionContent": "The `retryCount: { gt: 1 }` branch of the OR has no `method: WorkflowMethods.SMS` filter. The SMS cron job can therefore delete non-SMS reminders (email, WhatsApp) whose retryCount exceeds 1. Fix: put the method in an outer AND, for example `where: { method: WorkflowMethods.SMS, OR: [{ scheduledDate: { lte: dayjs().toISOString() } }, { retryCount: { gt: 1 } }] }`."
+        },
+        {
+          "id": "s_a5b002c4",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 189,
+          "relevantLinesEnd": 198,
+          "suggestionContent": "The `prisma.workflowReminder.update` inside the catch block is not guarded. If it throws, the exception escapes the catch and aborts the loop, so the remaining reminders in that cron run are skipped and the error log on the following line never runs. Fix: wrap the update in its own try/catch, or use `.catch()` to log the failure and continue."
+        },
+        {
+          "id": "s_085b2df5",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 28,
+          "relevantLinesEnd": 43,
+          "suggestionContent": "The comment says this deletes SMS reminders whose scheduled date has passed. The new `retryCount > 1` branch of the OR has no `method: WorkflowMethods.SMS` filter and no date condition. It therefore also deletes non-SMS reminders (email, WhatsApp) that have exceeded retries, and future SMS reminders. The comment is now untrue. Either scope the branch with `method: WorkflowMethods.SMS` and update the comment to mention retry-exhausted reminders, or update the comment to say what is really deleted."
+        },
+        {
+          "id": "s_eb6c867b",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 31,
+          "relevantLinesEnd": 43,
+          "suggestionContent": "The SMS cron's deleteMany was previously restricted to method SMS. The new OR branch `retryCount > 1` has no method filter, so it can delete non-SMS reminders (email/WhatsApp) with retryCount > 1. Move the method condition outside the OR: `where: { method: WorkflowMethods.SMS, OR: [{ scheduledDate: { lte: ... } }, { retryCount: { gt: 1 } }] }`."
+        },
+        {
+          "id": "s_9ff75425",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 31,
+          "relevantLinesEnd": 43,
+          "suggestionContent": "The retry-exhaustion clause `retryCount: { gt: 1 }` has no `method: WorkflowMethods.SMS` filter, unlike the first OR clause. This SMS cleanup job can therefore delete non-SMS workflow reminders (email, WhatsApp) once they have retryCount > 1. Scope it to SMS: `{ method: WorkflowMethods.SMS, retryCount: { gt: 1 } }`."
+        },
+        {
+          "id": "s_d87c9c97",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 31,
+          "relevantLinesEnd": 43,
+          "suggestionContent": "The new `retryCount: { gt: 1 }` clause in the OR has no `method: WorkflowMethods.SMS` filter. This SMS cron job will therefore delete any WorkflowReminder, including EMAIL and WHATSAPP ones, whose retryCount is above 1. Scope it with `{ method: WorkflowMethods.SMS, retryCount: { gt: 1 } }`."
+        },
+        {
+          "id": "s_c8538465",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+          "relevantLinesStart": 190,
+          "relevantLinesEnd": 197,
+          "suggestionContent": "The `prisma.workflowReminder.update` inside the catch block is not guarded. If it throws, for example because the reminder was deleted concurrently or the DB is unavailable, the exception escapes the loop. The rest of the reminders are then skipped and the handler returns a 500. Wrap the update in its own try/catch, or use `updateMany`. Also use `{ retryCount: { increment: 1 } }` instead of `reminder.retryCount + 1`, which is a stale read-then-write."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feat-2fa-backup-codes-cal-com": {
+      "sourceSha": "40036d1de225e1ed9ba121b7dfd670ff21d23b6f",
+      "suggestions": [
+        {
+          "id": "s_d02f32dc",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+          "relevantLinesStart": 134,
+          "relevantLinesEnd": 136,
+          "suggestionContent": "WHAT: After a successful enable call the modal moves to the DisplayBackupCodes step, and onEnable() is only called from the Close button. Dialog onOpenChange only calls the parent handler and does not reset the step or notify the parent that 2FA is now enabled. WHY: If the user dismisses the dialog by clicking the overlay or pressing Esc, 2FA is already enabled server-side but the settings UI is not refreshed through onEnable(). The step stays at DisplayBackupCodes, so reopening shows the old backup codes without the password flow. HOW: Wrap onOpenChange so that it calls resetState(), and calls onEnable() when the step is DisplayBackupCodes. Alternatively, make the dialog not dismissible on that step."
+        },
+        {
+          "id": "s_50511f10",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+          "relevantLinesStart": 143,
+          "relevantLinesEnd": 156,
+          "suggestionContent": "Backup code consumption is a non-atomic read-modify-write. Two concurrent logins with the same backup code both read the same encrypted array, both find the code, and both succeed, so a 'single-use' code can be used more than once. The last writer also overwrites the other's update. Make the consume step atomic: use a transaction with row lock, or an optimistic update (updateMany where id and backupCodes equal the originally read ciphertext) and fail the login if count is 0."
+        },
+        {
+          "id": "s_ea0eea49",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "apps/web/components/auth/BackupCode.tsx",
+          "relevantLinesStart": 7,
+          "relevantLinesEnd": 7,
+          "suggestionContent": "The default export in BackupCode.tsx is named `TwoFactor`. It was copied from TwoFactor.tsx but renders the backup code input. This clashes with the real TwoFactor component and is misleading in stack traces and devtools. Rename it to `BackupCode`."
+        },
+        {
+          "id": "s_c160c3f1",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+          "relevantLinesStart": 49,
+          "relevantLinesEnd": 52,
+          "suggestionContent": "The error log says \"cannot proceed with backup code login\", but this is the disable-2FA endpoint, not login. The message was copied from next-auth-options.ts. Change it to something like \"cannot proceed with backup code disable\"."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+      "sourceSha": "e9bad7264b05afcaa0411a1df79859aee865e55b",
+      "suggestions": [
+        {
+          "id": "s_8bd9fc88",
+          "sourceIndex": 0,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "packages/lib/server/service/insightsBooking.ts",
+          "relevantLinesStart": 72,
+          "relevantLinesEnd": 80,
+          "suggestionContent": "getAuthorizationConditions() always returns a non-null Prisma.Sql, so `authConditions` is always truthy. The `else if (authConditions)` branch is only reached when filterConditions is null. The `else if (filterConditions)` and final `else` branches can never run. Simplify to: `return filterConditions ? Prisma.sql`(${authConditions}) AND (${filterConditions})` : authConditions;`"
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+      "sourceSha": "f3fc9f71c5d1b4cdacde89544fe742cb55f3c83c",
+      "suggestions": [
+        {
+          "id": "s_7271a207",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/embed.js",
+          "relevantLinesStart": 17,
+          "relevantLinesEnd": 17,
+          "suggestionContent": "WHAT: the origin check uses `discourseUrl.indexOf(e.origin) === -1`, a substring match. WHY: any origin that is a substring of discourseUrl passes, and an empty origin string also matches, so a foreign window can send 'discourse-resize' messages and set the iframe height. HOW: compare for exact equality against the origin parsed from discourseUrl."
+        },
+        {
+          "id": "s_22702472",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/models/topic_embed.rb",
+          "relevantLinesStart": 13,
+          "relevantLinesEnd": 13,
+          "suggestionContent": "WHAT: `contents << ...` mutates the caller's string in place. WHY: it raises on a frozen string and appends the footer to the caller's copy, so a caller that reuses the string gets the footer twice. HOW: use `contents = contents + ...`."
+        },
+        {
+          "id": "s_f7f4f905",
+          "sourceIndex": 2,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/controllers/embed_controller.rb",
+          "relevantLinesStart": 26,
+          "relevantLinesEnd": 26,
+          "suggestionContent": "WHAT: the embed access check relies on the client-supplied Referer header. WHY: non-browser clients can spoof the Referer, and `embed_url` is attacker-controlled, so anyone can enqueue RetrieveTopic jobs that fetch pages from the embeddable host. HOW: do not treat the Referer as an authorization boundary."
+        },
+        {
+          "id": "s_6c00b667",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "security",
+          "relevantFile": "app/assets/javascripts/embed.js",
+          "relevantLinesStart": 17,
+          "relevantLinesEnd": 17,
+          "suggestionContent": "Origin validation uses a substring check (discourseUrl.indexOf(e.origin) === -1), so any origin that is a substring of discourseUrl is accepted, such as a truncated hostname or the string 'null' if it appears in the URL. Compare for exact equality against the parsed origin of discourseUrl instead, e.g. build an anchor element or use new URL(discourseUrl).origin, then require e.origin === expectedOrigin."
+        },
+        {
+          "id": "s_10811b6b",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+          "relevantLinesStart": 20,
+          "relevantLinesEnd": 22,
+          "suggestionContent": "feed_key computes a 'feed-modified:<sha1>' key but nothing reads or writes it. poll_feed re-fetches and re-imports the whole feed every hour with no modified-check, so the declared key is dead code. Either use it for a conditional-fetch check or remove it."
+        },
+        {
+          "id": "s_b3b472f5",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+          "relevantLinesStart": 31,
+          "relevantLinesEnd": 37,
+          "suggestionContent": "`i.content` can be nil for feed items that carry only a description or summary. `i.content.scrub` then raises NoMethodError and aborts the whole feed import. Fall back to the description, skip items with no content, and rescue per-item errors so one bad item does not stop the loop. Example: `raw = i.content || i.description; next if raw.blank?; content = CGI.unescapeHTML(raw.scrub)`."
+        },
+        {
+          "id": "s_7e6858e5",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "app/models/topic_embed.rb",
+          "relevantLinesStart": 15,
+          "relevantLinesEnd": 30,
+          "suggestionContent": "Check-then-create race on `embed_url`. Concurrent imports of the same URL (PollFeed running alongside RetrieveTopic) both see no embed and both create a topic. The loser raises ActiveRecord::RecordNotUnique from `create!` on the unique index. Rescue RecordNotUnique and re-read the existing embed, or take a lock keyed on the URL."
+        },
+        {
+          "id": "s_778e09a3",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "app/models/topic_embed.rb",
+          "relevantLinesStart": 13,
+          "relevantLinesEnd": 13,
+          "suggestionContent": "The `imported_from` link interpolates `url` into HTML (both the href attribute and the link text) without escaping. The post is stored as raw_html and rendered with `raw`, so a feed or URL containing `'`, `<` or `&` breaks the markup or injects HTML. Escape the URL (`ERB::Util.html_escape(url)`) in both places. The line also mutates the caller's `contents` string with `<<`; build a new string instead."
+        },
+        {
+          "id": "s_70c49f8e",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "spec/jobs/poll_feed_spec.rb",
+          "relevantLinesStart": 18,
+          "relevantLinesEnd": 28,
+          "suggestionContent": "The 'requires feed_polling_url' and 'requires embed_by_username' tests don't stub feed_polling_enabled? to true. It defaults to false, so poll_feed is never called whatever the other conditions do. Both tests pass even if the url/username checks are removed from Jobs::PollFeed#execute. Stub feed_polling_enabled? to true, plus the other two settings, in each test and blank only the one setting being tested."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+      "sourceSha": "530d339c93f547be74a122c34561c1a1eea79140",
+      "suggestions": [
+        {
+          "id": "s_c715ef0c",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+          "relevantLinesStart": 9,
+          "relevantLinesEnd": 16,
+          "suggestionContent": "WHAT: `execute(...)[0]['id']` runs on an empty result when no category name matches the embed_category setting, or when that setting row is missing. `[0]` returns nil and `nil['id']` raises NoMethodError. The same happens at line 15 if the uncategorized_category_id row is missing. WHY: this is the default case on a fresh install or a site that never set embed_category, so the migration crashes. HOW: use `row = result.first; category_id = row ? row['id'].to_i : 0`, and guard the uncategorized lookup the same way. Also escape the host value in the INSERT, because the interpolated `'#{h}'` breaks on a quote or a blank line."
+        },
+        {
+          "id": "s_8d184fdd",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/controllers/admin/embeddable_hosts_controller.rb",
+          "relevantLinesStart": 9,
+          "relevantLinesEnd": 18,
+          "suggestionContent": "WHAT: `EmbeddableHost.where(id: ...).first` can return nil, and update and destroy use the result without a nil check. WHY: an unknown or already-deleted id raises NoMethodError and returns a 500 instead of a 404. HOW: use `find` or raise Discourse::NotFound. Separately, the model's before_validation calls `host.sub!` on a possibly nil host, so a request missing `embeddable_host[host]` also raises NoMethodError."
+        },
+        {
+          "id": "s_7882dbd4",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "spec/fabricators/embeddable_host_fabricator.rb",
+          "relevantLinesStart": 1,
+          "relevantLinesEnd": 27,
+          "suggestionContent": "File names and contents are swapped. embeddable_host_fabricator.rb now holds the :category, :diff_category, :happy_category and :private_category fabricators. category_fabricator.rb now holds Fabricator(:embeddable_host). Fabricators still load, but anyone looking for a fabricator by file name will look in the wrong place. Move the category fabricators back to category_fabricator.rb and keep only Fabricator(:embeddable_host) (host 'eviltrout.com', category) in embeddable_host_fabricator.rb."
+        },
+        {
+          "id": "s_5fd8900b",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "bug",
+          "relevantFile": "app/models/embeddable_host.rb",
+          "relevantLinesStart": 14,
+          "relevantLinesEnd": 17,
+          "suggestionContent": "The lookup compares lower(host) in the DB against uri.host, which is not lowercased. A referer with a mixed-case host, such as http://EvilTrout.com, will not match its own stored host. Normalize both sides: `host = uri.host.downcase` before the query. This fails closed rather than opening a bypass, so the impact is low."
+        },
+        {
+          "id": "s_0d169170",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "spec/models/topic_spec.rb",
+          "relevantLinesStart": 1403,
+          "relevantLinesEnd": 1405,
+          "suggestionContent": "The test 'is false if embeddable_host is blank' does not check what its name says. The topic does not stub has_topic_embed? and embed_truncate is not enabled, so expandable_first_post? is false no matter what hosts exist. Stub has_topic_embed? to true and enable embed_truncate inside this test. Then assert the result is true once a host exists, so the test shows the host state is what changes the outcome. If the host check was deliberately removed, delete the test."
+        },
+        {
+          "id": "s_0fd17a9d",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+          "relevantLinesStart": 9,
+          "relevantLinesEnd": 16,
+          "suggestionContent": "The migration indexes `[0]` on query results without checking that any rows came back. If `embed_category` is unset (the default, so no site_settings row exists) or names no matching category, the first query returns zero rows. `[0]` is then nil and `nil['id']` raises NoMethodError, which aborts the migration. The `uncategorized_category_id` fallback query has the same problem. Use `.first`, guard for nil, and fall back, for example `row = execute(...).first; category_id = row ? row['id'].to_i : 0`."
+        },
+        {
+          "id": "s_1b696765",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+          "relevantLinesStart": 9,
+          "relevantLinesEnd": 16,
+          "suggestionContent": "The migration indexes `[0]['id']` and `[0]['value']` on query results without checking for empty rows. If no `embed_category` setting row exists, which is the default, `execute(...)[0]` is nil and the migration raises NoMethodError. The same failure happens if `uncategorized_category_id` is not in site_settings. Guard with `.first` and nil checks, or use `cmd_tuples > 0`, and fall back to the uncategorized category."
+        },
+        {
+          "id": "s_e721f2fc",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "spec/fabricators/category_fabricator.rb",
+          "relevantLinesStart": 1,
+          "relevantLinesEnd": 4,
+          "suggestionContent": "The fabricator contents are swapped between files. `category_fabricator.rb` now defines `:embeddable_host`, and `embeddable_host_fabricator.rb` (lines 1-27) holds the `:category`, `:diff_category`, `:happy_category` and `:private_category` fabricators. Each file name no longer matches what it defines. Put the category fabricators back in `category_fabricator.rb` and the `:embeddable_host` fabricator in `embeddable_host_fabricator.rb`."
+        },
+        {
+          "id": "s_5d6ec13d",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "app/models/embeddable_host.rb",
+          "relevantLinesStart": 17,
+          "relevantLinesEnd": 17,
+          "suggestionContent": "The query compares `lower(host)` against `uri.host` without downcasing it. A referer such as `http://EvilTrout.com` has `uri.host` of `EvilTrout.com` (URI may or may not normalize the case, depending on the Ruby version). It would never match the lowercased column. Use `host.downcase` in the comparison."
+        },
+        {
+          "id": "s_dca123ba",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+          "relevantLinesStart": 9,
+          "relevantLinesEnd": 16,
+          "suggestionContent": "The migration indexes `execute(...)[0]['id']` with no nil check. If there is no `embed_category` row in site_settings, which is the default on installs that never changed it, `[0]` is nil and the migration raises NoMethodError. The same applies to the `uncategorized_category_id` lookup, because that row may not exist yet. Guard both: use `.first`, check for nil, and fall back to the default category. Also, `INSERT ... '#{h}'` interpolates raw setting values, so a host containing a quote breaks the insert, and values should be stripped and escaped."
+        },
+        {
+          "id": "s_2a55c64a",
+          "sourceIndex": 10,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "app/models/embeddable_host.rb",
+          "relevantLinesStart": 5,
+          "relevantLinesEnd": 8,
+          "suggestionContent": "before_validation calls `self.host.sub!` with no nil check. `EmbeddableHost.new` (the create action) with a missing `params[:embeddable_host][:host]` leaves host nil, so validation raises NoMethodError and returns a 500 instead of a validation error. Use `self.host = host.to_s.sub(...)` guarded by `host.present?`. Also, `record_for_host` compares `lower(host) = ?` against `uri.host` without downcasing it, so mixed-case referers are rejected."
+        },
+        {
+          "id": "s_7958039f",
+          "sourceIndex": 11,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "app/controllers/admin/embeddable_hosts_controller.rb",
+          "relevantLinesStart": 9,
+          "relevantLinesEnd": 18,
+          "suggestionContent": "`update` and `destroy` use `.where(id:).first`, which returns nil for an unknown id. `save_host(nil)` and `host.destroy` then raise NoMethodError. Use `find`, or return a 404 when the host is missing. `params[:embeddable_host]` being nil would also raise in `save_host`."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+      "sourceSha": "0eea2c97505e85360acad4a42a2ae1c589f0ca72",
+      "suggestions": [],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feature-automatically-downsize-large-images-discourse-cursor": {
+      "sourceSha": "866de63f494b158ba02c96b4d0475c54bc80badc",
+      "suggestions": [
+        {
+          "id": "s_ba5fb2e8",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/models/optimized_image.rb",
+          "relevantLinesStart": 145,
+          "relevantLinesEnd": 151,
+          "suggestionContent": "WHAT: `self.downsize` is defined twice, and the second definition (from, to, dimensions, opts) overrides the first (from, to, max_width, max_height, opts). WHY: the existing caller resize_emoji.rb:14, `OptimizedImage.downsize(path, path, 100, 100, opts)`, passes 5 arguments and now raises ArgumentError, which breaks emoji resizing. HOW: remove the 4-argument definition and update resize_emoji.rb to pass \"100x100\", or keep a single method that accepts either form."
+        },
+        {
+          "id": "s_054a4ca7",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/discourse/lib/utilities.js",
+          "relevantLinesStart": 182,
+          "relevantLinesEnd": 184,
+          "suggestionContent": "The file_too_large message now reports a hard-coded 10240 KB, not the configured per-type limit (max_<type>_size_kb). Non-image uploads such as attachments still have their own site-setting limit. Users will see a limit that does not match the real one, or the check will let oversized files through to be rejected by the server. The same applies to the 413 handler at line 246, where the number is made up. Keep reading the site setting for non-image types, and for images use the 10 MB pre-upload cap only if the message says so. Avoid quoting max_image_size_kb for a file that will be auto-downsized."
+        },
+        {
+          "id": "s_82bc776a",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "app/models/optimized_image.rb",
+          "relevantLinesStart": 145,
+          "relevantLinesEnd": 151,
+          "suggestionContent": "The new `self.downsize(from, to, dimensions, opts={})` overrides the earlier `self.downsize(from, to, max_width, max_height, opts={})` because Ruby keeps the last definition. The existing caller app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)`. That is 5 arguments against 3 required plus an optional hash, so it raises ArgumentError and emoji resizing breaks. Fix: update the caller to `downsize(path, path, \"100x100\", opts)`, or remove the new overload and keep one signature that both callers can use."
+        },
+        {
+          "id": "s_a0c4295e",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "app/models/optimized_image.rb",
+          "relevantLinesStart": 145,
+          "relevantLinesEnd": 151,
+          "suggestionContent": "Two `def self.downsize` definitions exist; the later (from, to, dimensions, opts) replaces the earlier (from, to, max_width, max_height, opts). The existing caller app/jobs/regular/resize_emoji.rb:14 `OptimizedImage.downsize(path, path, 100, 100, opts)` passes 5 arguments and now raises ArgumentError, breaking emoji resizing. Fix: keep a single downsize that takes a dimensions string, and update resize_emoji.rb to pass \"100x100\" (or make the method accept both forms)."
+        },
+        {
+          "id": "s_ac42de81",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "app/models/optimized_image.rb",
+          "relevantLinesStart": 144,
+          "relevantLinesEnd": 151,
+          "suggestionContent": "`downsize` is defined twice. The second definition, (from, to, dimensions, opts), replaces the first, (from, to, max_width, max_height, opts), so the first is dead code. The existing caller app/jobs/regular/resize_emoji.rb:14 calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 arguments. That now raises ArgumentError and breaks emoji resizing. Fix: update the caller to `downsize(path, path, \"100x100\", opts)`, and remove the dead first definition."
+        },
+        {
+          "id": "s_bd97a81c",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "app/models/optimized_image.rb",
+          "relevantLinesStart": 145,
+          "relevantLinesEnd": 151,
+          "oneSentenceSummary": "The second `downsize` definition replaces the first, so the existing caller in resize_emoji.rb that passes width and height now raises ArgumentError.",
+          "suggestionContent": "Remove the duplicate definition. Keep a single downsize(from, to, dimensions, opts={}) and update resize_emoji.rb to call OptimizedImage.downsize(path, path, \"100x100\", opts). Alternatively, give the two forms different method names so neither overrides the other."
+        },
+        {
+          "id": "s_c23a39bb",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "app/models/optimized_image.rb",
+          "relevantLinesStart": 145,
+          "relevantLinesEnd": 151,
+          "suggestionContent": "OptimizedImage.downsize is defined twice. The second definition, (from, to, dimensions, opts), silently replaces the first, (from, to, max_width, max_height, opts). Any remaining caller that passes width and height as separate arguments will now pass the height where opts is expected. That raises an ArgumentError or sends wrong dimensions to the resize command. I did not verify whether such callers exist. Keep a single definition and update every caller to the new signature, or rename the new method."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor": {
+      "sourceSha": "977a973a43369153572eced8a88f9278443239be",
+      "suggestions": [
+        {
+          "id": "s_86f24f93",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 14,
+          "suggestionContent": "totalPages is computed as floor(user_count / limit) + 1. When user_count is an exact multiple of limit (for example 50 members and limit 50) this reports 2 pages, so showingLast never becomes true on the real last page and 'next' navigates to an empty page. Use Math.ceil(user_count / limit)."
+        },
+        {
+          "id": "s_459f0102",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/controllers/groups_controller.rb",
+          "relevantLinesStart": 22,
+          "relevantLinesEnd": 26,
+          "suggestionContent": "limit comes straight from params and has no upper bound or lower bound. A request with limit=1000000 loads and serializes every member of a large group. A negative limit raises a database error. Clamp it, for example with [[limit, 1].max, 200].min, and clamp offset to be >= 0."
+        },
+        {
+          "id": "s_f97dfd05",
+          "sourceIndex": 2,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "app/controllers/admin/groups_controller.rb",
+          "relevantLinesStart": 22,
+          "relevantLinesEnd": 25,
+          "suggestionContent": "create ignores params[:alias_level]. The client's asJSON sends alias_level on create, but create never assigns it, so a new group is always created with the default alias level."
+        },
+        {
+          "id": "s_258d0746",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 14,
+          "suggestionContent": "totalPages uses Math.floor(user_count / limit) + 1, which overcounts by one when user_count is an exact multiple of limit (e.g. 50 members, limit 50 gives 2 pages). showingLast is then false on the real last page, and 'next' navigates to an empty page at offset == user_count. Use Math.ceil(user_count / limit)."
+        },
+        {
+          "id": "s_976a034f",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 14,
+          "suggestionContent": "totalPages is computed as Math.floor(user_count / limit) + 1, which is wrong when user_count is an exact multiple of limit. With 50 members and limit 50 it reports 2 pages, though the real count is 1. On the last page currentPage (1) never equals totalPages (2), so showingLast stays false and the 'next' control stays enabled. Clicking next sets offset = user_count and loads an empty page. Use Math.ceil(user_count / limit) instead."
+        },
+        {
+          "id": "s_ead68308",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 14,
+          "suggestionContent": "totalPages uses Math.floor(user_count / limit) + 1. When user_count is an exact multiple of limit (e.g. 50 members with limit 50, or 100), this gives one page too many. Example: 50 members gives totalPages = 2. showingLast is false on page 1, so 'next' stays enabled. Clicking it sets offset = min(0+50, 50) = 50, and findMembers returns an empty page labelled 2/2. Use Math.ceil(user_count / limit) instead."
+        },
+        {
+          "id": "s_0a6218a2",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "spec/controllers/admin/groups_controller_spec.rb",
+          "relevantLinesStart": 114,
+          "relevantLinesEnd": 117,
+          "suggestionContent": "The test uses `xhr :put, :remove_member`, but the route is `delete \"members\" => \"groups#remove_member\"`. Use `xhr :delete, :remove_member, group_id: 1, user_id: 42` so the test matches the real request. The guard runs either way, so the test would not catch a change to the verb mapping."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feature-localization-fallbacks-server-side-discourse-cursor": {
+      "sourceSha": "69c660202cf38ef7f166e71a1a721f7faade2ab4",
+      "suggestions": [
+        {
+          "id": "s_a0a3d1b7",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "lib/freedom_patches/translate_accelerator.rb",
+          "relevantLinesStart": 62,
+          "relevantLinesEnd": 65,
+          "suggestionContent": "WHAT: fallback locales are only loaded when ApplicationController calls I18n.fallbacks.ensure_loaded!, while translate still loads only config.locale (line 68). WHY: in jobs, mailers and other code that sets I18n.locale outside a controller request, the fallback locales (the site default and :en) are never loaded, so a missing key produces 'translation missing' even though a fallback translation exists. HOW: in translate, call I18n.fallbacks.ensure_loaded! (or load every locale from fallbacks[config.locale]) instead of loading only config.locale."
+        },
+        {
+          "id": "s_df1a20da",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "lib/freedom_patches/translate_accelerator.rb",
+          "relevantLinesStart": 62,
+          "relevantLinesEnd": 65,
+          "suggestionContent": "Fallbacks are now enabled globally, but the fallback locales (site default and :en) are loaded only by the explicit I18n.fallbacks.ensure_loaded! call in ApplicationController (line 159). translate (line 67 onward) still loads only config.locale. Code that sets a locale outside a controller request (jobs, mailers, with_locale, console) will not have the fallback locales loaded. A key missing in the current locale then yields 'translation missing' instead of falling back to English. Make translate load the fallback locales itself, for example by calling I18n.fallbacks.ensure_loaded! inside translate or inside load_locale, instead of relying on the controller."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "anonymous-add-configurable-device-limit-grafana-codex": {
+      "sourceSha": "d1228df0e4f6c3347ab6c07a268752fad8368529",
+      "suggestions": [
+        {
+          "id": "s_f3ed8c70",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+          "relevantLinesStart": 87,
+          "relevantLinesEnd": 95,
+          "suggestionContent": "WHAT: tagDeviceUI writes the device to localCache (line 87) before CreateOrUpdateDevice runs, and it does not remove the entry when that call returns ErrDeviceLimitReached. WHY: after the first rejection the same device ID hits the cache for 29 minutes, so tagDeviceUI returns nil and the limit is silently bypassed. The device is then admitted without being recorded, and the new error path in client.go only rejects it once. HOW: set the cache entry only after CreateOrUpdateDevice succeeds, or delete the key when it returns an error."
+        },
+        {
+          "id": "s_9c3809e7",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+          "relevantLinesStart": 52,
+          "relevantLinesEnd": 54,
+          "suggestionContent": "WHAT: ProvideAnonDBStore now takes an extra int64 deviceLimit parameter, but pkg/server/wire.go:374 still lists it as a wire provider. WHY: wire cannot supply a bare int64, so wire generation or build fails. The provider is also unused now that ProvideAnonymousDeviceService builds the store itself. HOW: remove anonstore.ProvideAnonDBStore and the AnonStore Bind from wire.go, or have wire provide the store and keep injecting it."
+        },
+        {
+          "id": "s_3b443542",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+          "relevantLinesStart": 52,
+          "relevantLinesEnd": 54,
+          "suggestionContent": "ProvideAnonDBStore now requires an extra int64 deviceLimit argument. pkg/server/wire.go:374-375 still registers it as a wire provider and binds anonstore.AnonStore to *AnonDBStore, and that file was not updated. Wire has no provider for a bare int64, so wire generation or the build will fail. Remove the provider and Bind from wire.go, since impl.go now constructs the store itself. Alternatively, keep the provider's original signature and read the limit from cfg inside it, for example by taking *setting.Cfg."
+        },
+        {
+          "id": "s_52be6958",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+          "relevantLinesStart": 144,
+          "relevantLinesEnd": 147,
+          "suggestionContent": "tagDeviceUI puts the device key in the local cache (SetDefault, line 87) before the DB write. When the write now fails with ErrDeviceLimitReached, the key stays cached for 29 minutes. Later requests from the rejected device hit the cache, return early without an error, and are authenticated as anonymous, so the device limit is bypassed after the first rejection. Fix: set the cache entry only after CreateOrUpdateDevice succeeds, or delete the key when it returns an error."
+        },
+        {
+          "id": "s_2f5725cb",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+          "relevantLinesStart": 105,
+          "relevantLinesEnd": 118,
+          "suggestionContent": "The device limit is enforced with a check-then-act sequence. CountDevices runs, then the insert runs in a separate statement with no transaction, lock or constraint. Concurrent requests from new devices can all see count < limit and all insert, so the limit is exceeded. The PR also removed the async goroutine, so requests now tag in parallel. Fix: do the count and insert atomically, for example in one transaction with a lock, or with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*) ...) < limit, or serialize through a server lock."
+        },
+        {
+          "id": "s_df37064d",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+          "relevantLinesStart": 144,
+          "relevantLinesEnd": 148,
+          "suggestionContent": "The local cache key is set (impl.go:87) before the store write. If tagDeviceUI fails, including with ErrDeviceLimitReached, the key stays cached, so the device is probably treated as already tagged for the cache TTL (29 minutes) and later requests are not re-evaluated. The cache entry should be removed, or only set after a successful write."
+        },
+        {
+          "id": "s_4c4e75d7",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+          "relevantLinesStart": 52,
+          "relevantLinesEnd": 54,
+          "suggestionContent": "ProvideAnonDBStore now requires a deviceLimit int64 parameter, but pkg/server/wire.go:374-375 still registers it as a wire provider and binds anonstore.AnonStore to *AnonDBStore. Wire cannot supply a bare int64, so wire generation or compilation fails. Nothing consumes that binding any more, because ProvideAnonymousDeviceService now constructs the store itself from db.DB and cfg.AnonymousDeviceLimit. Remove those two entries from wire.go, or have ProvideAnonDBStore take *setting.Cfg."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "frontend-asset-optimization-grafana-codex": {
+      "sourceSha": "7c3197f7bd887c3d6d047fe1d2040b5018b47f74",
+      "suggestions": [
+        {
+          "id": "s_0cbe997b",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/api/webassets/webassets.go",
+          "relevantLinesStart": 48,
+          "relevantLinesEnd": 70,
+          "suggestionContent": "WHAT: No double-checked cache test is done after taking the write lock, and the cache is overwritten even when the read fails. WHY: Concurrent first requests all redo the manifest read serially, and a transient error stores nil in the cache, replacing a previously valid value. HOW: After Lock(), re-check `if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`. Only assign the cache when err == nil."
+        },
+        {
+          "id": "s_b82e1353",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "pkg/api/webassets/webassets.go",
+          "relevantLinesStart": 48,
+          "relevantLinesEnd": 49,
+          "suggestionContent": "After taking the write lock, re-check the cache (`if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`) so concurrent first callers do not each rebuild. Also, the assignment `entryPointAssetsCache = result` (line ~69) must only happen when err == nil. If `result` can be nil or partial on error, a failed load is stored in the cache and served to every later reader in non-dev mode. I did not read the function body between the lock and that assignment, so I could not confirm this path is reachable."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+      "sourceSha": "1562921fbf0841cf8e967f634b781a027f3bf942",
+      "suggestions": [
+        {
+          "id": "s_ef0c4fe2",
+          "sourceIndex": 0,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+          "relevantLinesStart": 101,
+          "relevantLinesEnd": 109,
+          "suggestionContent": "The shouldInstrumentRequestSize=false cases (CheckHealth, CollectMetrics) never assert that the request size metric is absent. If those endpoints began recording size, the test would still pass. Add an else branch: require.Equal(t, 0, testutil.CollectAndCount(promRegistry, metricRequestSize))."
+        },
+        {
+          "id": "s_f77e936d",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "pkg/plugins/log/ifaces.go",
+          "relevantLinesStart": 22,
+          "relevantLinesEnd": 23,
+          "suggestionContent": "The FromContext doc comment is copied from New(): it says the method 'returns a new contextual Logger that has this logger's context plus the given context'. The implementation instead derives the logger from the contextual attributes stored in ctx, which the ContextualLoggerMiddleware adds. The grafanaInfraLogWrapper falls back to a plain New() when the underlying logger is not a *ConcreteLogger. Reword the comment, e.g. 'FromContext returns a new Logger enriched with the contextual attributes (plugin id, endpoint, trace id, etc.) stored in ctx.'"
+        },
+        {
+          "id": "s_3d80f86d",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+          "relevantLinesStart": 27,
+          "relevantLinesEnd": 37,
+          "suggestionContent": "LoggerMiddleware no longer adds traceID to the 'Plugin Request Completed' log. The PR removed that code from logger_middleware.go and dropped the tracing import. The replacement, instrumentContext, adds endpoint, pluginId, dsName, dsUID and uname but never adds traceID. Unless ConcreteLogger.FromContext adds it, which I did not verify, plugin request logs lose trace correlation. Fix: in instrumentContext, add `if traceID := tracing.TraceIDFromContext(ctx, false); traceID != \"\" { p = append(p, \"traceID\", traceID) }`."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "dual-storage-architecture-grafana-codex": {
+      "sourceSha": "86e328e92533bd09d8d2e2de8f07b08ffcc186da",
+      "suggestions": [
+        {
+          "id": "s_d8b196b6",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 50,
+          "relevantLinesEnd": 57,
+          "suggestionContent": "WHAT: the async legacy writes (Create at lines 50-57, Delete at 108-114, Update at 134-141, DeleteCollection at 161-167) derive their context from the request ctx via context.WithTimeoutCause(ctx, ...). WHY: the request ctx is cancelled as soon as the handler returns, which happens right after the goroutine is started, so the legacy write is often cancelled before it completes and legacy storage silently drifts from unified storage. HOW: build a detached context for the goroutine, for example context.WithoutCancel(ctx) (Go 1.21+) or context.Background() with the logger re-attached, and apply the timeout to that."
+        },
+        {
+          "id": "s_6c9586da",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 161,
+          "relevantLinesEnd": 167,
+          "suggestionContent": "WHAT: metrics are recorded under the wrong series in several places. DeleteCollection's legacy goroutine calls recordStorageDuration (line 166). Create (line 45) and Update (line 129) call recordLegacyDuration when the unified-storage call fails. Delete's success path (line 106) passes `name` where the other calls pass options.Kind. WHY: legacy and storage latency and error metrics are conflated and mislabeled. HOW: use recordLegacyDuration in DeleteCollection's goroutine, recordStorageDuration in the Create and Update error paths, and options.Kind in Delete."
+        },
+        {
+          "id": "s_62248494",
+          "sourceIndex": 2,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 96,
+          "relevantLinesEnd": 97,
+          "suggestionContent": "WHAT: Delete computes the contextual `log` with name, kind and method but attaches `d.Log` to ctx (`klog.NewContext(ctx, d.Log)`). WHY: downstream storage logs lose the name, kind and method context that the other methods propagate. HOW: use klog.NewContext(ctx, log)."
+        },
+        {
+          "id": "s_44d5c92b",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 45,
+          "relevantLinesEnd": 45,
+          "suggestionContent": "In Create, a failure of the Storage call is recorded with recordLegacyDuration(true, ...). It should be recordStorageDuration(true, ...). Storage failures are counted as legacy errors, and the storage error metric is never emitted."
+        },
+        {
+          "id": "s_74c42d79",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 129,
+          "relevantLinesEnd": 129,
+          "suggestionContent": "In Update, a failure of d.Storage.Update is recorded with recordLegacyDuration. It should be recordStorageDuration."
+        },
+        {
+          "id": "s_982700c2",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 166,
+          "relevantLinesEnd": 166,
+          "suggestionContent": "In DeleteCollection, the goroutine that calls Legacy.DeleteCollection records its timing with recordStorageDuration. It should be recordLegacyDuration. The legacy call's duration is attributed to storage."
+        },
+        {
+          "id": "s_56f46701",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 97,
+          "relevantLinesEnd": 106,
+          "suggestionContent": "In Delete, the context is built with klog.NewContext(ctx, d.Log) instead of the enriched `log`, so the name, kind and method values are dropped. The success metric at line 106 also passes `name` where options.Kind belongs, which gives a high-cardinality label that does not match the other call sites."
+        },
+        {
+          "id": "s_a6abf2b7",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+          "relevantLinesStart": 17,
+          "relevantLinesEnd": 78,
+          "suggestionContent": "The Mode3 tests never verify the legacy write that Mode3 now does asynchronously. Create, Update, Delete and DeleteCollection set up legacy expectations (or none), but nothing asserts that legacy was called, and nothing waits for the goroutine. Removing the legacy write entirely would still pass. Fix: use a shared mock, wait on a channel or use assert.Eventually, then call m.AssertCalled for the legacy method. Also, the Create error case registers its failure via setupLegacyFn on the shared mock, so it does not isolate a unified-store failure. Register the error on the storage side and assert that legacy is not called."
+        },
+        {
+          "id": "s_52fd068c",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 50,
+          "relevantLinesEnd": 57,
+          "suggestionContent": "The async legacy writes derive their context from the request ctx, which is cancelled when the handler returns. The same pattern is in Delete (108-114), Update (134-141) and DeleteCollection (161-167). The legacy write is then aborted or fails, so legacy storage silently diverges from unified storage. Use a detached context, e.g. context.WithTimeoutCause(context.WithoutCancel(ctx), 10*time.Second, ...), and take a deep copy of obj before starting the goroutine so it does not race with the response path."
+        },
+        {
+          "id": "s_082644e5",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 166,
+          "relevantLinesEnd": 166,
+          "suggestionContent": "The legacy DeleteCollection goroutine calls recordStorageDuration, so legacy timing and errors are attributed to the storage metric. Use recordLegacyDuration here."
+        },
+        {
+          "id": "s_f5f42939",
+          "sourceIndex": 10,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 129,
+          "relevantLinesEnd": 129,
+          "suggestionContent": "When Storage.Update fails (and likewise Storage.Create at line 45), the code calls recordLegacyDuration(true, ...). This is a storage failure, so the error is attributed to the legacy metric. Use recordStorageDuration."
+        },
+        {
+          "id": "s_7f4a71cc",
+          "sourceIndex": 11,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 106,
+          "relevantLinesEnd": 106,
+          "suggestionContent": "recordStorageDuration is passed `name` (the object name) where the kind label is expected; every other call passes options.Kind. This creates a high-cardinality, wrongly labelled metric. Line 97 also sets the context logger from d.Log instead of the enriched `log`."
+        },
+        {
+          "id": "s_66a23edf",
+          "sourceIndex": 12,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 50,
+          "relevantLinesEnd": 57,
+          "suggestionContent": "The legacy write now runs in a goroutine, but its context is derived from the request ctx. Once the handler returns, the server cancels that ctx, so the legacy Create/Update/Delete/DeleteCollection calls can fail with context canceled. Legacy storage can then silently diverge from unified storage. The same pattern appears in the Update, Delete and DeleteCollection goroutines. Fix: build the background context with context.WithoutCancel(ctx) before applying the 10s timeout."
+        },
+        {
+          "id": "s_1b33ac3d",
+          "sourceIndex": 13,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+          "relevantLinesStart": 134,
+          "relevantLinesEnd": 141,
+          "suggestionContent": "The old Update fetched the old object and passed legacy an updateWrapper carrying the object storage had already updated. The new code passes the raw objInfo to Legacy.Update. Legacy now recomputes the update against its own stored copy, which may differ from storage. Also, the legacy error is only recorded in a metric and never logged or returned."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "unified-storage-performance-optimizations-grafana-codex": {
+      "sourceSha": "824d91e807fa7aae846ed826fab1bd67187e4a1e",
+      "suggestions": [
+        {
+          "id": "s_2ea8ac8d",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "pkg/storage/unified/search/bleve.go",
+          "relevantLinesStart": 88,
+          "relevantLinesEnd": 140,
+          "suggestionContent": "WHAT: BuildIndex no longer holds cacheMu during the build, and only the cache map write is locked. There is no per-key de-duplication. WHY: concurrent builds for the same NamespacedResource (for example startup init racing with getOrCreateIndex) both call bleve.New on the same directory. The second call fails with 'path already exists' for file-backed indices. For memory indices, one index overwrites the other in the cache and is leaked without being closed. HOW: serialize builds per key (a per-key mutex or singleflight), or re-check the cache under the lock before building and close any index that gets replaced."
+        },
+        {
+          "id": "s_b2bdd3e9",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "pkg/storage/unified/resource/server.go",
+          "relevantLinesStart": 258,
+          "relevantLinesEnd": 262,
+          "suggestionContent": "NewResourceServer now runs s.Init(ctx) synchronously. Previously construction was cheap and could not fail on init, and Init (lifecycle hooks, search index build, watcher start) ran separately. Construction now blocks on the full index build and returns an error if any init step fails. Callers such as apistore/restoptions.go, registry/apis/dashboard/legacy_storage.go, unified/client.go and the tests that call Init after construction (e.g. watcher_test.go:148) were not updated for this. A transient backend or lifecycle failure at startup now aborts server creation instead of surfacing lazily through initErr. Either keep Init separate and let callers invoke it, or update every constructor caller to handle the blocking, fallible behaviour."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "notification-rule-processing-engine-grafana-codex": {
+      "sourceSha": "35824e33ab1b841d180caa7cdd346701ed6f31e1",
+      "suggestions": [
+        {
+          "id": "s_898bc376",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+          "relevantLinesStart": 242,
+          "relevantLinesEnd": 245,
+          "suggestionContent": "WHAT: isFederated is now hardcoded to false. The old useAllAlertRuleAbilities computed it with isFederatedRuleGroup(rule.group), and the deprecated wrapper now delegates to useAllRulerRuleAbilities, which has no group information. WHY: federated Mimir rule groups are no longer treated as immutable, so Update, Delete and Pause are offered for them. HOW: pass the federated state through, for example by reading it from the rule group, or keep the federated check in the CombinedRule wrapper."
+        },
+        {
+          "id": "s_37747cd1",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+          "relevantLinesStart": 308,
+          "relevantLinesEnd": 309,
+          "suggestionContent": "The comment says 'always supported (no loading state for ruler availability)', but the next line is `loading ? NotSupported : AlwaysSupported`. That makes support depend on the folder loading state, which comes from useFolder. The stray `// duplicate` comment on the useIsGrafanaPromRuleEditable call (line 289) says nothing useful. The comment at line 301 ('All GrafanaPromRuleDTO rules are Grafana-managed by definition') sits above `isAlertingRule`, which also excludes recording rules. Reword these comments to match the code."
+        },
+        {
+          "id": "s_461ac7aa",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+          "relevantLinesStart": 296,
+          "relevantLinesEnd": 313,
+          "suggestionContent": "When the rule is undefined (the skipToken case), useAllGrafanaPromRuleAbilities still reports Duplicate as supported. useIsGrafanaPromRuleEditable returns loading=false, so MaybeSupported is AlwaysSupported, and the Grafana create permission makes it allowed. AlertRuleMenu ORs this with the ruler ability, so a cloud (Mimir) rule can show Duplicate even when the ruler ability denies it. Make every ability NotSupported when `rule` is undefined, for example `const MaybeSupported = !rule || loading ? NotSupported : AlwaysSupported;`."
+        },
+        {
+          "id": "s_cb496a37",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+          "relevantLinesStart": 227,
+          "relevantLinesEnd": 245,
+          "suggestionContent": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false. The old code computed isFederatedRuleGroup(rule.group). Federated Mimir rule groups are therefore no longer treated as immutable, and edit, delete and pause abilities are wrongly granted for them. Pass the federation state through, for example by computing it from rule.group in the deprecated wrapper and passing it as a parameter."
+        },
+        {
+          "id": "s_ce276048",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+          "relevantLinesStart": 242,
+          "relevantLinesEnd": 245,
+          "suggestionContent": "The federated-group check was dropped from the CombinedRule ability path. `useAllAlertRuleAbilities(rule: CombinedRule)` previously computed `isFederated = isFederatedRuleGroup(rule.group)`. It now delegates to `useAllRulerRuleAbilities`, which hard-codes `isFederated = false` (the TODO is in the diff). Callers that still pass a CombinedRule from a federated Mimir group no longer get the immutable-rule guard, so Update, Delete and similar actions can show as supported. Compute `isFederated` in the deprecated wrapper and pass it in, or keep the check in the shared hook using the group info."
+        },
+        {
+          "id": "s_989e1020",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+          "relevantLinesStart": 296,
+          "relevantLinesEnd": 318,
+          "suggestionContent": "When `useAllGrafanaPromRuleAbilities` is called with `undefined` (the skipToken path used for cloud/non-Grafana rules), `useIsGrafanaPromRuleEditable` returns `loading: false`, so `MaybeSupported` becomes `AlwaysSupported`. Duplicate is then computed from the global Grafana create permission alone, with no rule to check. `AlertRuleMenu` ORs the Grafana ability with the ruler ability, so a cloud rule can show Duplicate to a user who has Grafana rule-create permission. Fix: when `rule` is undefined, return NotSupported for every action, for example `const MaybeSupported = !rule || loading ? NotSupported : AlwaysSupported;`."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "implement-access-token-context-encoding-framework-keycloak": {
+      "sourceSha": "5ef1ad02a3071fef4b460aadfed5f4fcd8aeeb6e",
+      "suggestions": [
+        {
+          "id": "s_c4e9c10a",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 483,
+          "relevantLinesEnd": 483,
+          "oneSentenceSummary": "isAccessTokenId matcher has an inverted comparison and the wrong substring offset.",
+          "suggestionContent": "WHAT: The isAccessTokenId matcher has an inverted comparison and the wrong substring offset. It returns false when the shortcut equals the expected one, and it reads substring(3, 5) instead of the grant shortcut at substring(4, 6). WHY: Correct token IDs fail the match, and the check does not validate the grant shortcut as intended. The tests that use expectCodeToToken, expectRefresh and similar will fail. FIX: `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`"
+        },
+        {
+          "id": "s_3fcf3843",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+          "relevantLinesStart": 73,
+          "relevantLinesEnd": 73,
+          "oneSentenceSummary": "The null check for rawTokenId is applied to grantType instead.",
+          "suggestionContent": "WHAT: The null check for rawTokenId is applied to grantType (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`). WHY: A null rawTokenId is accepted, which produces token IDs ending in \"null\" and skips the intended validation. FIX: Call `Objects.requireNonNull(rawTokenId, ...)`."
+        },
+        {
+          "id": "s_dedf90ac",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 480,
+          "relevantLinesEnd": 484,
+          "oneSentenceSummary": "The isAccessTokenId matcher slices the grant shortcut at the wrong indices (3,5 instead of 4,6) and inverts the equality check, so it validates nothing.",
+          "suggestionContent": "The encoded prefix is 6 chars (session 0-2, token type 2-4, grant 4-6). Use `items[0].length() == 6 && items[0].substring(4, 6).equals(expectedGrantShortcut)` and return false when it is NOT equal: `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+        },
+        {
+          "id": "s_0f11c762",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 480,
+          "relevantLinesEnd": 484,
+          "suggestionContent": "The grant-shortcut comparison in isAccessTokenId is inverted and off by one. The encoded id is sessionType(2)+tokenType(2)+grant(2), so the grant shortcut is substring(4,6). Use `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`. The current code returns false on a match, so the expected-grant check is wrong."
+        },
+        {
+          "id": "s_f9a913f1",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+          "relevantLinesStart": 73,
+          "relevantLinesEnd": 73,
+          "suggestionContent": "The message says 'Null rawTokenId not allowed', but the check is on grantType, which is already checked on the line above. rawTokenId is never validated, so a null id passes and the message does not describe what is checked. Change it to Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+        },
+        {
+          "id": "s_9fe47bb1",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 482,
+          "relevantLinesEnd": 483,
+          "suggestionContent": "The comment says the grant shortcut is 2 chars starting at the 4th char. The ID format is sessionType(2) + tokenType(2) + grant(2), so the shortcut is at index 4..6, i.e. substring(4,6). The code uses substring(3,5), which spans the last char of the token type and the first char of the grant. The condition is also inverted: it returns false when the shortcut equals the expected one. Fix it to `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;` and correct the comment."
+        },
+        {
+          "id": "s_48023927",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 480,
+          "relevantLinesEnd": 484,
+          "suggestionContent": "isAccessTokenId never checks the grant shortcut. The token id format is `ssttgg:uuid`, so the grant shortcut is at indices 4..6, but the code uses substring(3,5). The comparison is also inverted: it returns false when the substring EQUALS the expected shortcut. As a result, the grant-type assertions in expectCodeToToken, expectRefresh and the others pass whatever grant is encoded. Fix: `if (items[0].length() != 6 || !items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`"
+        },
+        {
+          "id": "s_09ef53db",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+          "relevantLinesStart": 77,
+          "relevantLinesEnd": 85,
+          "suggestionContent": "testIncorrectGrantType catches any RuntimeException. The factory has no sessionFactory set, so the unknown-shortcut path throws an NPE inside getGrantTypeByShortcut. The test passes because of the NPE, not because the IllegalArgumentException for an unknown grant is raised. Catch IllegalArgumentException specifically, and set the factory's sessionFactory (for example a mock) so the intended branch is reached."
+        },
+        {
+          "id": "s_843e5d06",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 480,
+          "relevantLinesEnd": 484,
+          "suggestionContent": "The matcher reads the wrong substring and inverts the comparison. The grant shortcut is at indices 4..6, not 3..5. Also, `equals` returning false makes the matcher fail exactly when the shortcut matches, and pass for any other shortcut. This makes the assertions in expectCodeToToken, expectRefresh and similar methods fail on correct IDs. It can also throw StringIndexOutOfBounds on short IDs. Fix: `if (items[0].length() != 6 || !items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`"
+        },
+        {
+          "id": "s_edcf5e7e",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+          "relevantLinesStart": 72,
+          "relevantLinesEnd": 73,
+          "suggestionContent": "The null check for rawTokenId actually tests grantType (copy-paste error). A null rawTokenId is accepted despite the 'Null rawTokenId not allowed' message, and would produce an ID like 'xxxxxx:null'. Fix: `Objects.requireNonNull(rawTokenId, ...)`."
+        },
+        {
+          "id": "s_3fc72bd5",
+          "sourceIndex": 10,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+          "relevantLinesStart": 72,
+          "relevantLinesEnd": 73,
+          "suggestionContent": "Copy-paste bug: the rawTokenId null check actually re-checks grantType. A null rawTokenId passes validation and gets encoded as 'xxxxxx:null'. Fix: Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\");"
+        },
+        {
+          "id": "s_febeb791",
+          "sourceIndex": 11,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+          "relevantLinesStart": 54,
+          "relevantLinesEnd": 55,
+          "suggestionContent": "initToken now calls getShouldUseLightweightToken(session) on every token creation. That method dereferences session.getContext().getClient(), which can be null (or a different client than the one passed to initToken) in some flows. The result would be an NPE during token creation. Guard against a null client, or derive the setting from the client being processed."
+        },
+        {
+          "id": "s_16105147",
+          "sourceIndex": 12,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+          "relevantLinesStart": 480,
+          "relevantLinesEnd": 484,
+          "suggestionContent": "isAccessTokenId disagrees with the encoder in DefaultTokenContextEncoderProvider.encodeTokenId. The encoder produces a 6-char prefix (sessionType 2 + tokenType 2 + grant 2), so the grant shortcut is at substring(4,6). The matcher reads substring(3,5) and returns false when it EQUALS the expected shortcut. The effect is that it accepts any grant shortcut and never verifies the grant. Fix: `if (items[0].length() != 6 || !items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`"
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+      "sourceSha": "aac5011dac5b3ff70474ed0a96bb64cb6d9b6c1e",
+      "suggestions": [
+        {
+          "id": "s_2f48b633",
+          "sourceIndex": 0,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+          "relevantLinesStart": 136,
+          "relevantLinesEnd": 157,
+          "suggestionContent": "The race test never synchronises the reader thread with the deleter. The reader is not joined, so exceptions from a read in flight after deletedAll.set(true) are missed, because the assertion runs first. Nothing guarantees the reader performed any read overlapping the deletions, so a slow thread start makes the test pass even if the null-handling fix is reverted. Fix: use a CountDownLatch that the reader counts down after its first successful read, and await it before deleting. Keep the Thread reference and join() it after setting the flag, before asserting. Also make the thread a daemon."
+        },
+        {
+          "id": "s_2dd2e70d",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "potential_issue",
+          "relevantFile": "GroupAdapter.java",
+          "relevantLinesStart": 256,
+          "relevantLinesEnd": 268,
+          "oneSentenceSummary": "getSubGroupsStream still calls modelSupplier.get() without a null check, unlike the updated getSubGroupsCount.",
+          "suggestionContent": "Other methods in the same Infinispan GroupAdapter class, such as getSubGroupsStream at lines 256-268, still call modelSupplier.get() without a null check. If the group is deleted concurrently, they could hit the same null case that getSubGroupsCount now handles. The reviewer did not trace these and noted they are outside the lines changed by this PR."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "add-html-sanitizer-for-translated-message-resources-keycloak": {
+      "sourceSha": "cca62184a84a8ea6801f3d0e43dafd4320a549d3",
+      "suggestions": [
+        {
+          "id": "s_732d5528",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+          "relevantLinesStart": 71,
+          "relevantLinesEnd": 71,
+          "suggestionContent": "WHAT: The Lithuanian loginTotpStep1 was replaced with Italian text ('Installa una delle seguenti applicazioni sul tuo cellulare:'). WHY: Lithuanian users now see an Italian sentence on the TOTP setup screen. HOW: Use a Lithuanian translation, or remove the key so it falls back to English. The same Italian string was also put into themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties at line 101."
+        },
+        {
+          "id": "s_3a0628fc",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+          "relevantLinesStart": 112,
+          "relevantLinesEnd": 112,
+          "suggestionContent": "WHAT: The zh_CN totpStep1 was replaced with Traditional Chinese text ('在您的手機上安裝以下應用程式之一：'). WHY: Simplified Chinese users see Traditional characters, and the text is inconsistent with the rest of the file. HOW: Use the Simplified Chinese wording, for example '在您的手机上安装以下应用程序之一：'."
+        },
+        {
+          "id": "s_ee4e0e15",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+          "relevantLinesStart": 101,
+          "relevantLinesEnd": 101,
+          "suggestionContent": "The Lithuanian file's totpStep1 is now Italian text ('Installa una delle seguenti applicazioni sul tuo cellulare:'). Lithuanian users will see an Italian sentence. Replace it with a Lithuanian translation. The same wrong text was also put into loginTotpStep1 in login/messages/messages_lt.properties (line 71)."
+        },
+        {
+          "id": "s_0b9e8b6a",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+          "relevantLinesStart": 71,
+          "relevantLinesEnd": 71,
+          "suggestionContent": "loginTotpStep1 in the Lithuanian login bundle is Italian text ('Installa una delle seguenti applicazioni sul tuo cellulare:'). Replace it with a Lithuanian translation."
+        },
+        {
+          "id": "s_0015f314",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+          "relevantLinesStart": 112,
+          "relevantLinesEnd": 112,
+          "suggestionContent": "The zh_CN file's totpStep1 is written in Traditional Chinese (手機, 安裝, 應用程式), while the rest of the file is Simplified Chinese. Convert it to Simplified (e.g. 请在您的手机上安装以下应用程序之一：)."
+        },
+        {
+          "id": "s_f60fe56a",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+          "relevantLinesStart": 101,
+          "relevantLinesEnd": 101,
+          "suggestionContent": "The Lithuanian totpStep1 was replaced with Italian text ('Installa una delle seguenti applicazioni sul tuo cellulare:'). Users with the Lithuanian locale will see Italian. The same Italian string is also in the lt login file, key loginTotpStep1 (login/messages/messages_lt.properties line 71). Use a Lithuanian translation, or remove the key so it falls back to English."
+        },
+        {
+          "id": "s_72e92533",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+          "relevantLinesStart": 112,
+          "relevantLinesEnd": 112,
+          "suggestionContent": "The zh_CN totpStep1 now contains Traditional Chinese ('在您的手機上安裝以下應用程式之一：'). The rest of the file is Simplified Chinese. Use the Simplified form: '在您的手机上安装以下应用程序之一：'."
+        },
+        {
+          "id": "s_c92095be",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+          "relevantLinesStart": 102,
+          "relevantLinesEnd": 111,
+          "suggestionContent": "The prefix and suffix scans are independent, so they can overlap when the sanitizer removes characters next to repeated ones (value \"aa\", sanitized \"a\" gives start=1, end=1). `sanitized.substring(start, sanitized.length() - end)` then has begin > end and throws StringIndexOutOfBoundsException. That crashes the verifier instead of reporting the illegal HTML. Cap the suffix scan so it cannot run into the prefix: `while (end < sanitized.length() - start && end < value.length() - start && ...)`."
+        },
+        {
+          "id": "s_a5279db6",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+          "relevantLinesStart": 102,
+          "relevantLinesEnd": 111,
+          "suggestionContent": "The suffix scan is not capped by the prefix length. When the prefix and suffix overlap (e.g. value \"aa\" vs sanitized \"a\"), substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException instead of reporting the illegal HTML. Cap the suffix scan with `end < Math.min(value.length(), sanitized.length()) - start`."
+        },
+        {
+          "id": "s_a8060ba7",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "i18n",
+          "relevantFile": "messages_lt.properties",
+          "relevantLinesStart": 0,
+          "relevantLinesEnd": 0,
+          "oneSentenceSummary": "The Lithuanian totpStep1 text is in the wrong language.",
+          "suggestionContent": "The Lithuanian totpStep1 text is in the wrong language. This is a content/translation issue rather than a verifier problem."
+        },
+        {
+          "id": "s_6df080eb",
+          "sourceIndex": 10,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "i18n",
+          "relevantFile": "messages_zh.properties",
+          "relevantLinesStart": 0,
+          "relevantLinesEnd": 0,
+          "oneSentenceSummary": "The Chinese totpStep1 text is in the wrong language.",
+          "suggestionContent": "The Chinese totpStep1 text is in the wrong language. This is a content/translation issue rather than a verifier problem."
+        },
+        {
+          "id": "s_6de14c0c",
+          "sourceIndex": 11,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "verification",
+          "relevantFile": "messages_*.properties",
+          "relevantLinesStart": 0,
+          "relevantLinesEnd": 0,
+          "oneSentenceSummary": "The grep for remaining '<br/>' in messages_*.properties may not have worked because the working directory is not a git checkout, so the check is weak.",
+          "suggestionContent": "The verification that no '<br/>' remains in messages_*.properties is weak. The grep returned nothing, but the repo is not a git checkout in this working directory, so the grep may not have run against the right files. Re-run the check in the actual repository checkout to confirm no '<br/>' remains."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+      "sourceSha": "99b4f01415c83317e773e5f5e7580239883f7870",
+      "suggestions": [
+        {
+          "id": "s_583e834c",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+          "relevantLinesStart": 77,
+          "relevantLinesEnd": 95,
+          "suggestionContent": "WHAT: The ClientRemovedEvent handler calls management(...).clients().setPermissionsEnabled(client, false). With V2 active, clients() is ClientPermissionsV2, whose setPermissionsEnabled throws UnsupportedOperationException. WHY: removing a client while the V1 feature guard passes could throw from the event listener and fail or abort the client deletion. HOW: skip this cleanup when the V2 permissions are in use, or make V2's setPermissionsEnabled a no-op. The V2 role and group paths should be checked for the same problem."
+        },
+        {
+          "id": "s_c82368a3",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+          "relevantLinesStart": 214,
+          "relevantLinesEnd": 222,
+          "suggestionContent": "WHAT: When no per-client resource exists, the code passes the result of getResourceTypeResource(...) to getPolicyStore().findByResource without a null check. WHY: if that call returns null, the evaluation throws a NullPointerException instead of returning false. HOW: return false when the resource is null before calling findByResource."
+        },
+        {
+          "id": "s_568085fd",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+          "relevantLinesStart": 88,
+          "relevantLinesEnd": 103,
+          "suggestionContent": "The Javadoc on requireView() and requireViewClientScopes() says \"Returns true if canView()/canViewClientScopes() returns true\", but both methods are void. Reword them to \"Throws ForbiddenException if {@link #canView()} returns {@code false}\" and \"Throws ForbiddenException if {@link #canViewClientScopes()} returns {@code false}\", matching the other require* methods."
+        },
+        {
+          "id": "s_2edb1678",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+          "relevantLinesStart": 147,
+          "relevantLinesEnd": 153,
+          "suggestionContent": "The try block calls getDefaultClientScopes() and removeDefaultClientScope() together. getDefaultClientScopes() already throws ForbiddenException before the permission is granted, so removeDefaultClientScope is never reached. The denial of the remove call is never tested. Fetch the scope id with the privileged realm.admin() client outside the try, and put only removeDefaultClientScope in the try."
+        },
+        {
+          "id": "s_8758638b",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+          "relevantLinesStart": 187,
+          "relevantLinesEnd": 205,
+          "suggestionContent": "isPermissionsEnabled, setPermissionsEnabled, resource and getPermissions throw UnsupportedOperationException in V2. ClientResource (lines 710-742, the management permissions endpoint) calls them unconditionally, so with V2 enabled the request fails with an unhandled exception (HTTP 500) instead of a clean 4xx or a disabled response. Return false/no-op from isPermissionsEnabled and setPermissionsEnabled, or have ClientResource reject the call explicitly when V2 is active. The same throw would also hit the ClientRemovedEvent listener in AdminPermissions if both V1 and V2 features are enabled."
+        },
+        {
+          "id": "s_a2452e35",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+          "relevantLinesStart": 187,
+          "relevantLinesEnd": 195,
+          "oneSentenceSummary": "V2 client permissions now throw UnsupportedOperationException from methods that existing callers invoke unconditionally.",
+          "suggestionContent": "Return safe values in V2 (isPermissionsEnabled -> false, setPermissionsEnabled -> no-op, canExchangeTo -> false), or guard the callers (ClientResource management endpoints, token exchange) against V2 and return a proper 4xx/feature-disabled response."
+        },
+        {
+          "id": "s_1aab7b37",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+          "relevantLinesStart": 77,
+          "relevantLinesEnd": 95,
+          "suggestionContent": "The removal listener is gated only on ADMIN_FINE_GRAINED_AUTHZ (V1), but it calls management(...).clients().setPermissionsEnabled(client, false). ClientPermissionsV2.setPermissionsEnabled throws UnsupportedOperationException. When V2 is also enabled, management() returns the V2 implementation, so deleting a client throws. Gate the listener on V2 being disabled, for example `V1 enabled && !V2 enabled`. Alternatively, make ClientPermissionsV2.setPermissionsEnabled and isPermissionsEnabled a no-op or return false."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "fixing-re-authentication-with-passkeys-keycloak": {
+      "sourceSha": "5dda08868d9f02272e9bd664ecdb979dc8d6998a",
+      "suggestions": [],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+      "sourceSha": "eb7bcf82bccb223d102da0a840c0e524ff8c16dd",
+      "suggestions": [
+        {
+          "id": "s_db67742f",
+          "sourceIndex": 0,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+          "relevantLinesStart": 381,
+          "relevantLinesEnd": 381,
+          "suggestionContent": "The cleanup is registered with the string literal \"alias\", not the created alias (\"idp-alias-\" + i, and \"idp-alias-20\" at line 425). The created IDPs are never removed, so they leak into later tests. Use the variable: final String alias = \"idp-alias-\" + i; getCleanup().addCleanup(testRealm().identityProviders().get(alias)::remove);"
+        },
+        {
+          "id": "s_053e275d",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "code_style",
+          "relevantFile": "testCacheIDPForLogin",
+          "relevantLinesStart": 0,
+          "relevantLinesEnd": 0,
+          "oneSentenceSummary": "Test cleanup uses the hard-coded literal alias \"alias\" instead of a constant or the created alias value.",
+          "suggestionContent": "The cleanup in testCacheIDPForLogin uses the literal alias \"alias\". This is a hygiene problem rather than a correctness problem: it does not cause the test's assertions to fail or pass incorrectly. Consider using a constant or the alias value actually created in the test."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "replays-self-serve-bulk-delete-system-sentry": {
+      "sourceSha": "ee2b634df42f9e3a8e02713d549755c72694c072",
+      "suggestions": [
+        {
+          "id": "s_bd9befb8",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+          "relevantLinesStart": 107,
+          "relevantLinesEnd": 120,
+          "suggestionContent": "WHAT: fetch_error_details pairs error_ids with events.values() using zip. WHY: nodestore.get_multi returns a dict keyed by node_id, and I expect it to omit missing nodes and not preserve request order. Any missing or reordered node shifts the alignment, so errors get the wrong event ID and payload, and the ID pairing is wrong in the logs sent to Seer. HOW: iterate over error_ids and look up events.get(Event.generate_node_id(project_id, id)) for each one."
+        },
+        {
+          "id": "s_c2a5e9e7",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+          "relevantLinesStart": 47,
+          "relevantLinesEnd": 60,
+          "suggestionContent": "WHAT: the age/timestamp exclusivity checks live in validate_timestamp and validate_age, which DRF runs only when the field is present. WHY: a report with neither age nor timestamp passes validation, even though one of them is required under either spec. Also, the falsy check on initial_data.get('age') or get('timestamp') lets a value of 0 bypass the mutual-exclusion check. HOW: add a validate() method that requires exactly one of the two fields, using `is not None` checks."
+        },
+        {
+          "id": "s_5a268069",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+          "relevantLinesStart": 107,
+          "relevantLinesEnd": 120,
+          "suggestionContent": "zip(error_ids, events.values()) assumes the get_multi dict preserves the order of error_ids and contains an entry for every id. Neither is guaranteed, so error IDs can be paired with the wrong event data, or shifted when a node is missing. Key the lookup by node id instead: build a dict from error_id to Event.generate_node_id(project_id, error_id), then use events.get(node_id)."
+        },
+        {
+          "id": "s_fecd973c",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+          "relevantLinesStart": 50,
+          "relevantLinesEnd": 60,
+          "suggestionContent": "The cross-field checks use truthiness (initial_data.get('age') / get('timestamp')). A value of 0 is valid for both fields, so age=0 together with timestamp passes validation even though the two specs must not be mixed. Use `'age' in self.initial_data` / `'timestamp' in self.initial_data` instead."
+        },
+        {
+          "id": "s_c721b9d2",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+          "relevantLinesStart": 142,
+          "relevantLinesEnd": 168,
+          "suggestionContent": "The merge compares the error event timestamp (seconds) with the replay event timestamp. Replay events are usually in milliseconds, so errors would all sort before every event. Normalize both to the same unit before comparing."
+        },
+        {
+          "id": "s_37fe1b8f",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-data-exposure",
+          "label": "security",
+          "relevantFile": "src/sentry/workflow_engine/processors/delayed_workflow.py",
+          "relevantLinesStart": 583,
+          "relevantLinesEnd": 583,
+          "suggestionContent": "The log extra now passes the whole workflow_event_data object, which holds the full event (message, exception values, user data, tags). Before this change it logged only the Redis event_data (IDs). Logging the full event can leak PII and sensitive payload content into logs. Log only identifiers instead, such as event_id, group_id and project_id."
+        },
+        {
+          "id": "s_9352f0cd",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+          "relevantLinesStart": 107,
+          "relevantLinesEnd": 120,
+          "suggestionContent": "nodestore.get_multi returns a dict keyed by node_id and omits missing nodes. Zipping error_ids with events.values() misaligns IDs with data when any node is missing or ordering differs. Iterate over node_ids/error_ids and look each up by key: for event_id, node_id in zip(error_ids, node_ids): data = events.get(node_id)."
+        },
+        {
+          "id": "s_2bcad9d4",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "static/app/views/dashboards/widgetCard/chart.tsx",
+          "relevantLinesStart": 164,
+          "relevantLinesEnd": 174,
+          "suggestionContent": "The TableWidgetVisualization branch ignores the computed tableResults and passes columns=[] and empty data/meta, so the table renders empty when the feature flag is on. Pass result.data and result.meta as tableData, and the real columns."
+        },
+        {
+          "id": "s_33cb2e33",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx",
+          "relevantLinesStart": 114,
+          "relevantLinesEnd": 146,
+          "suggestionContent": "The number-type test mock matches on `query.query === 'search-query'`, but the hook sends the search term as `substringMatch`. The mock therefore never matches, and `expect(searchQueryMock).not.toHaveBeenCalled()` would still pass if the number-type short-circuit were removed. Match on `query.substringMatch` (as the string-type test does), or assert on the API client's request spy, so that the test fails when the short-circuit is broken."
+        },
+        {
+          "id": "s_bdf9a1e7",
+          "sourceIndex": 9,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+          "relevantLinesStart": 107,
+          "relevantLinesEnd": 120,
+          "suggestionContent": "fetch_error_details pairs `error_ids` with `events.values()` by position. `get_multi` returns a dict keyed by node_id and omits missing nodes, so one missing event shifts every later pairing and assigns wrong ids. Iterate over `zip(error_ids, node_ids)` and look up `events.get(node_id)` instead."
+        },
+        {
+          "id": "s_b6da4f38",
+          "sourceIndex": 10,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "static/app/views/explore/contexts/pageParamsContext/visualizes.tsx",
+          "relevantLinesStart": 37,
+          "relevantLinesEnd": 49,
+          "suggestionContent": "The Visualize class dropped `yAxes` and now exposes a single `yAxis`. Other consumers still read `.yAxes`: savedQueries/exploreParams.tsx:29 (`visualizes.flatMap(v => v.yAxes)`), explore/utils.tsx:127 and components/seerSearch.tsx:179. If any of these receive Visualize instances, `.yAxes` is undefined at runtime. That would produce undefined entries in the saved-query yAxes, or a crash on `.slice()`. Update each call site to use `yAxis`, or call `toJSON()` first where the BaseVisualize shape is intended."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+      "sourceSha": "3a4f255da16c42c3bfb8c8e629c513ca99351e4f",
+      "suggestions": [
+        {
+          "id": "s_bbaff0a0",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 336,
+          "relevantLinesEnd": 347,
+          "suggestionContent": "WHAT: join() does `break` once the deadline has passed, so the remaining processes are never terminated. The `process.terminate()` call sits inside the loop after that `break`. WHY: with several processes and a timeout, a slow first process leaves later flusher processes running without terminate(). HOW: do not break; instead skip the wait loop when time is up and always call terminate() for each multiprocessing.Process (or run the terminate step in a separate pass after the wait loop)."
+        },
+        {
+          "id": "s_d8cd6310",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 253,
+          "relevantLinesEnd": 259,
+          "suggestionContent": "WHAT: on restart, the old worker is only killed if it is a multiprocessing.Process. A hung threading.Thread (the produce_to_pipe case) cannot be stopped and keeps running while a replacement is started. WHY: two workers then flush the same shards and share the `stopped` and `current_drift` values. Also, `_create_process_for_shards` overwrites `self.buffers[process_index]` with a new SpansBuffer without closing the old one. HOW: signal the old worker to stop through a per-process flag, or only restart workers that are actually dead."
+        },
+        {
+          "id": "s_86b092f6",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/sentry/spans/consumers/process/test_consumer.py",
+          "relevantLinesStart": 60,
+          "relevantLinesEnd": 62,
+          "suggestionContent": "The `time.sleep(0.1)` added here is a no-op because `time.sleep` is monkeypatched to `lambda _: None` at the start of the test. It does not wait for the flusher thread, so the later `(msg,) = messages` assertion can run before the flusher has produced anything. Replace it with a condition-based wait: poll `messages` until it is non-empty with a deadline, using the real sleep captured before patching."
+        },
+        {
+          "id": "s_e019621a",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-value-boundary-and-position",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 51,
+          "relevantLinesEnd": 51,
+          "suggestionContent": "`max_processes or len(buffer.assigned_shards)` uses a truthiness test, so an explicit 0 (valid for the int CLI option) is treated as unset and spawns one process per shard. Use an explicit None check, and validate values below 1: `self.max_processes = len(buffer.assigned_shards) if max_processes is None else max_processes`."
+        },
+        {
+          "id": "s_cd0b3c17",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 31,
+          "relevantLinesEnd": 32,
+          "suggestionContent": "The docstring says 'Creates one process per shard', but the constructor now caps processes at min(max_processes, number of shards) and assigns shards round-robin. Several shards can share one process, and the CLI defaults to a single flusher process. Reword it, e.g. 'Creates up to max_processes processes; shards are distributed across them.'"
+        },
+        {
+          "id": "s_95a93597",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 199,
+          "relevantLinesEnd": 199,
+          "suggestionContent": "The wait_produce timer is tagged with the key \"shards\". The other new metrics (flusher.produce, segment_size_bytes, flusher_unhealthy) use the key \"shard\". The tag key is inconsistent, so dashboards that group by \"shard\" will miss this metric. Use \"shard\" for all of them."
+        },
+        {
+          "id": "s_c0b73dfc",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 253,
+          "relevantLinesEnd": 257,
+          "suggestionContent": "The restart path now kills the old process only if `isinstance(process, multiprocessing.Process)`. The processes are created from `mp_context.Process`, where `mp_context` is the spawn context, so they are `SpawnProcess` objects. `SpawnProcess` is a `BaseProcess` subclass, not a subclass of `multiprocessing.context.Process`, so this check is likely always False. The old code called `kill()` unconditionally. A hung process is therefore never killed before a replacement is spawned, which leaks processes that keep flushing the same shards. Use `multiprocessing.process.BaseProcess` in the check, or call `kill()` for anything that is not a `threading.Thread`. The same check in `join()` means `terminate()` is also skipped."
+        },
+        {
+          "id": "s_91f6b187",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 185,
+          "relevantLinesEnd": 199,
+          "suggestionContent": "The tag key is inconsistent across metrics. `spans.buffer.flusher.produce` and `segment_size_bytes` use `tags={\"shard\": ...}`. `spans.buffer.flusher.wait_produce` uses `tags={\"shards\": ...}`. Metrics that should be sliced together will not line up. Use one key name, and note the value is a comma-joined list of shards."
+        },
+        {
+          "id": "s_f3717cf6",
+          "sourceIndex": 8,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+          "relevantLinesStart": 253,
+          "relevantLinesEnd": 259,
+          "suggestionContent": "The hung-process kill is guarded by isinstance(process, multiprocessing.Process). The flusher processes are SpawnProcess objects, which are not instances of multiprocessing.Process, so the guard is False and kill() is never called. A hung flusher keeps running while _create_process_for_shards starts a second one on the same shards. Both read and flush the same Redis segments, which can cause duplicate production and leaked processes. Check for threading.Thread instead (for example `if not isinstance(process, threading.Thread): process.kill()`), or use multiprocessing.process.BaseProcess. The same isinstance check in join() (the terminate call) has the same problem."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+      "sourceSha": "2abffca55e396c65f365add482ff256c31f32225",
+      "suggestions": [
+        {
+          "id": "s_1de4d23b",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/services/assignment_source.py",
+          "relevantLinesStart": 18,
+          "relevantLinesEnd": 18,
+          "suggestionContent": "WHAT: `queued: datetime = timezone.now()` is evaluated once at class definition (import time), so every AssignmentSource shares the same stale timestamp. WHY: the `queued` value is wrong for every instance, and the test that only asserts it is not None would not catch that. HOW: use `field(default_factory=timezone.now)`."
+        },
+        {
+          "id": "s_d328cce0",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/services/assignment_source.py",
+          "relevantLinesStart": 18,
+          "relevantLinesEnd": 18,
+          "suggestionContent": "`queued` defaults to `timezone.now()`, which is evaluated once when the module is imported. Every AssignmentSource instance therefore gets the same stale timestamp, not the time it was queued. Use `field(default_factory=timezone.now)` (import `field` from dataclasses)."
+        },
+        {
+          "id": "s_428c1b8f",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/services/assignment_source.py",
+          "relevantLinesStart": 18,
+          "relevantLinesEnd": 18,
+          "suggestionContent": "`queued: datetime = timezone.now()` is evaluated once at module import, so every AssignmentSource shares the same stale timestamp (the process start time). Use `field(default_factory=timezone.now)` instead. A datetime in to_dict() would also break if the Celery serializer were ever switched from pickle to JSON."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "github-oauth-security-enhancement-sentry": {
+      "sourceSha": "2918a1283181b70b848e1f32a56a90682fce4eec",
+      "suggestions": [
+        {
+          "id": "s_cd22cc09",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/github/integration.py",
+          "relevantLinesStart": 481,
+          "relevantLinesEnd": 482,
+          "suggestionContent": "WHAT: when no Integration row exists for the installation_id, the code calls pipeline.next_step() without comparing the authenticated GitHub user against the installer. WHY: the user check only runs when an Integration already exists. If the installation webhook hasn't been processed yet, or the installation_id is one the attacker supplies, the pipeline continues with no sender validation, so the security fix is bypassed. HOW: validate the authenticated user against the installation's sender from the GitHub API (get_installation_info) in this branch, or fail closed."
+        },
+        {
+          "id": "s_86d45cb5",
+          "sourceIndex": 1,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/github/integration.py",
+          "relevantLinesStart": 501,
+          "relevantLinesEnd": 504,
+          "suggestionContent": "WHAT: `integration.metadata[\"sender\"][\"login\"]` is read without a guard. WHY: integrations created before this change, or without webhook sender metadata, raise KeyError and return a 500 instead of the error view. HOW: use .get chains and treat a missing value as a mismatch."
+        },
+        {
+          "id": "s_80121966",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-secret-and-identity",
+          "label": "security",
+          "relevantFile": "src/sentry/integrations/github/integration.py",
+          "relevantLinesStart": 412,
+          "relevantLinesEnd": 413,
+          "suggestionContent": "The OAuth state is compared to pipeline.signature using `!=`, which is not constant-time. Use `constant_time_compare` from django.utils.crypto, e.g. `if not constant_time_compare(request.GET.get('state') or '', pipeline.signature): return error(...)`."
+        },
+        {
+          "id": "s_70ec4ac6",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/github/integration.py",
+          "relevantLinesStart": 129,
+          "relevantLinesEnd": 146,
+          "suggestionContent": "error() calls _(error_short) on a variable. Translation extraction only sees string literals inside _(), so the short messages (\"Invalid installation request.\", \"GitHub installation pending deletion.\", \"Github installed on another Sentry organization.\") no longer reach translators. Before this PR each was a literal _(\"...\") at its call site. Fix: mark the strings at the call sites and the default with _() or gettext_noop, for example error_short=_(\"Invalid installation request.\"), and drop the _() wrapper inside the helper."
+        },
+        {
+          "id": "s_734730fd",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/github/integration.py",
+          "relevantLinesStart": 500,
+          "relevantLinesEnd": 505,
+          "suggestionContent": "integration.metadata[\"sender\"][\"login\"] is accessed unguarded. If the Integration row has no \"sender\" in its metadata (an older integration, or one created before the installation webhook populated it), this raises KeyError and the install flow returns a 500 instead of the error page. Use a safe lookup, e.g. integration.metadata.get(\"sender\", {}).get(\"login\"), and return error(...) when it is missing or does not match."
+        },
+        {
+          "id": "s_0f08123e",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/sentry/integrations/github/test_integration.py",
+          "relevantLinesStart": 388,
+          "relevantLinesEnd": 396,
+          "suggestionContent": "The test uses state 'ddd023d87a913d5226e2a882c4c4cc05', which likely differs from pipeline.signature. The request therefore fails at the OAuth state check in OAuthLoginView and never reaches the GitHubInstallation 'integration not found' branch. The assertion on the generic message 'Invalid installation request.' passes for any failure. Use the valid state so the flow reaches GitHubInstallation, and assert something specific to the not-found case, or give that case a distinct error message. Also assert that the authorize step ran or that no Integration was created."
+        },
+        {
+          "id": "s_0cfbf4fc",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "src/sentry/integrations/github/integration.py",
+          "relevantLinesStart": 500,
+          "relevantLinesEnd": 505,
+          "suggestionContent": "The new check reads integration.metadata[\"sender\"][\"login\"] directly. Integrations whose metadata has no \"sender\" key now raise KeyError and return a 500 when they are installed on a second organization. installation.py:44 shows that sender is optional, and integration.py:376 sets it only conditionally. Use metadata.get(\"sender\", {}).get(\"login\") and return the error view when it is missing or doesn't match."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+      "sourceSha": "25c793237eb51ac7eb94b6377750241a4bdfaec4",
+      "suggestions": [
+        {
+          "id": "s_8ab8d747",
+          "sourceIndex": 0,
+          "producedBy": "generalist-base",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 12,
+          "suggestionContent": "MetricAlertDetectorHandler is now an empty subclass of StatefulDetectorHandler. That class has abstract members it does not implement: counter_names, get_dedupe_value, get_group_key_values and the new build_occurrence_and_event_data. Python cannot instantiate it. Detector.detector_handler builds the handler from MetricAlertFire.detector_handler, so every detector of type metric_alert_fire raises TypeError in process_detectors. Before this PR the handler was concrete and returned an empty list. Fix: keep a concrete stub implementation that returns {} from evaluate, or implement all of the abstract members."
+        },
+        {
+          "id": "s_83a370b6",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/workflow_engine/processors/detector.py",
+          "relevantLinesStart": 226,
+          "relevantLinesEnd": 233,
+          "suggestionContent": "The docstring of StatefulDetectorHandler.evaluate still says it 'returns a list of `DetectorEvaluationResult`'. This PR changed the return type to dict[DetectorGroupKey, DetectorEvaluationResult]. Update the docstring to say it returns a dict keyed by group key."
+        },
+        {
+          "id": "s_22700eb7",
+          "sourceIndex": 2,
+          "producedBy": "micro-exp-p3-text-that-ships",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 10,
+          "relevantLinesEnd": 12,
+          "suggestionContent": "The comment '# TODO: This will be a stateful detector when we build that abstraction' is stale. MetricAlertDetectorHandler now extends StatefulDetectorHandler. Remove or reword the comment, for example to note that the abstract hooks are not implemented yet."
+        },
+        {
+          "id": "s_b5942d75",
+          "sourceIndex": 3,
+          "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 12,
+          "oneSentenceSummary": "MetricAlertDetectorHandler subclasses the abstract StatefulDetectorHandler without implementing its abstract methods, so instantiating it raises TypeError.",
+          "suggestionContent": "Implement get_dedupe_value, get_group_key_values, counter_names and build_occurrence_and_event_data in MetricAlertDetectorHandler. Alternatively, keep the previous stub DetectorHandler whose evaluate returns {} until the stateful implementation exists."
+        },
+        {
+          "id": "s_3225cc55",
+          "sourceIndex": 4,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "bug",
+          "relevantFile": "tests/sentry/workflow_engine/processors/test_detector.py",
+          "relevantLinesStart": 244,
+          "relevantLinesEnd": 275,
+          "suggestionContent": "build_mock_occurrence_and_event ignores its `value` argument, and the tests pass mismatched values (6 when the packet value is 100, 8 or 10). The new build_occurrence_and_event_data hook could receive a wrong value and every test would still pass. Embed `value` in the mock occurrence, for example in evidence_data, and pass the real packet value in the expected results. Alternatively, assert on the arguments the hook is called with."
+        },
+        {
+          "id": "s_870608df",
+          "sourceIndex": 5,
+          "producedBy": "micro-exp-p3-changed-files-disagree",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 10,
+          "relevantLinesEnd": 12,
+          "suggestionContent": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler with only `pass`. It does not implement the abstract methods that the base class in processors/detector.py requires: the newly added build_occurrence_and_event_data, plus get_dedupe_value, get_group_key_values and counter_names. Instantiating it, which Detector.detector_handler does for metric-alert detectors, raises TypeError. Before this change the handler was concrete and returned []. Implement the abstract methods, or keep a concrete DetectorHandler that returns {} until the stateful version is ready."
+        },
+        {
+          "id": "s_fe329d71",
+          "sourceIndex": 6,
+          "producedBy": "micro-exp-p3-contract-not-followed",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 12,
+          "suggestionContent": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with an empty body. StatefulDetectorHandler declares abstract methods (get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data), and the old concrete evaluate was removed. Detector.detector_handler calls group_type.detector_handler(self), which will raise TypeError for any detector of the metric alert type. Implement the abstract methods, or keep a concrete evaluate stub returning {}."
+        },
+        {
+          "id": "s_aef0f2d1",
+          "sourceIndex": 7,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "src/sentry/incidents/grouptype.py",
+          "relevantLinesStart": 11,
+          "relevantLinesEnd": 12,
+          "suggestionContent": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with only `pass`, so the abstract methods are left unimplemented (build_occurrence_and_event_data, and probably get_dedupe_value and get_group_key_values). Detector.detector_handler instantiates the handler, so this will raise TypeError for metric-alert detectors. The previous version returned an empty list from evaluate. Implement the abstract methods, or keep a concrete stub handler."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    },
+    "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+      "sourceSha": "86c083074110d8e8b02613296ff07cf5ee064abb",
+      "suggestions": [
+        {
+          "id": "s_75ad896c",
+          "sourceIndex": 0,
+          "producedBy": "micro-exp-p3-says-one-thing-does-another",
+          "label": "bug",
+          "relevantFile": "src/sentry/monitors/logic/incident_occurrence.py",
+          "relevantLinesStart": 160,
+          "relevantLinesEnd": 168,
+          "suggestionContent": "get_monitor_environment_context builds `config` (a copy with schedule_type replaced by its display value) but returns `monitor_environment.monitor.config`. The copy is dead code, and the event context carries the raw schedule_type instead of the human-readable one. Use `\"config\": config`."
+        },
+        {
+          "id": "s_9d4092f2",
+          "sourceIndex": 1,
+          "producedBy": "micro-exp-p3-test-does-not-verify",
+          "label": "testing",
+          "relevantFile": "unknown",
+          "relevantLinesStart": 0,
+          "relevantLinesEnd": 0,
+          "oneSentenceSummary": "The diff moves code across modules without any test changes, so behavioural regressions or stale patch paths in existing tests would go undetected.",
+          "suggestionContent": "The diff contains no changed or added test files. It only moves code (mark_failed_threshold to try_incident_threshold, the occurrence code to incident_occurrence.py) and moves SimpleCheckIn to types.py. No test in the diff would fail if the behaviour were broken. Existing tests outside the diff, such as tests that patch the old module paths, were not checked because the repo was unavailable. Add or update tests to cover the moved code and verify any patches reference the new module paths."
+        }
+      ],
+      "groups": [],
+      "uniqueConfidence": {}
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "b92db0d6f0f72f006373d5c78dded1a21bb9f1d2",
+  "attempt": 1,
+  "ms": 30547,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_01a0543d",
+          "s_7c49b05b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The non-atomic count-then-insert operation allows concurrent requests to exceed the device limit.",
+        "rationale": "Both describe concurrent new devices observing available capacity before either inserts. Both require atomic enforcement of the same limit check."
+      },
+      {
+        "members": [
+          "s_d63726ea",
+          "s_34a7ef4b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Caching a device before its database write succeeds lets a rejected device bypass the limit on retry.",
+        "rationale": "Both identify the same prematurely populated cache entry surviving ErrDeviceLimitReached. Moving cache insertion after a successful write resolves both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_c2c656d9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_30ef29c9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f91fbc78",
+        "confidence": "high"
+      },
+      {
+        "id": "s_54c1028f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_04b97fc7",
+        "confidence": "high"
+      },
+      {
+        "id": "s_82da83fd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3a7464c4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3fa4a2de",
+        "confidence": "high"
+      }
+    ],
+    "partialOverlap": [
+      {
+        "container": "s_3a7464c4",
+        "contained": "s_f91fbc78",
+        "rationale": "Both report authentication blocking on synchronous tagging using the request context. s_3a7464c4 additionally reports an authentication refusal contract change and missing caller handling for ErrDeviceLimitReached, which requires a separate remedy."
+      }
+    ]
+  }
+}

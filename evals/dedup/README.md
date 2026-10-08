@@ -52,3 +52,19 @@ Golden labels are cached in `.cache-goldenlabels/` (judging is dedup-independent
 
 - The replay/seed is a single finder pass; production dedups a richer aggregated pool. Enrich the dataset by unioning findings across model runs if you want heavier dedup load.
 - First-match wins when a finding could map to multiple goldens (findings normally address one bug).
+
+## Duplicate gold (`gold/`)
+
+A second ground truth that covers every finder suggestion, golden or not: per model, which suggestions of the same PR are duplicates of each other. One file per model in `gold/` (`deepseek-v4.1-flash`, `kimi-k3`, `muse-spark-1.2`, `gpt-6.1-sol`, `sonnet-5.5`, `opus-5.5`, `glm-5.3`), built from the finder output that feeds the dedup (G + M3, heavysv pools).
+
+- Criterion: `gold/judge-prompt.md`. Three kinds (`same_location`, `cross_location`, `systemic_pattern`), all duplicates. A suggestion that is part of another, or that shares a reported defect with it, is a duplicate too; `needsUnifiedComment` marks groups whose merged comment must carry every location or defect. Two pilot groups were split by the reviewer because one suggestion only mentioned the other defect as context or inside its fix (`gold/human-overrides.json`); the prompt does not state that limit yet.
+- Labeling: two blind judges (Opus 5.5 via Claude Code, GPT-6 Astra via Codex, both on subscription, no tools) in `gold/judge.js`; agreement stays, disagreements go by component to an Opus arbiter in `gold/reconcile.js`. Human corrections live in `gold/human-overrides.json` and survive a re-reconcile.
+- Human review: `gold/review-data.js` builds the review page data, `gold/review/second-check.js` re-checks every unique suggestion, `gold/apply-decisions.js` writes the reviewer's decisions (`gold/review/decisions-pilot.json`) into the gold.
+- Status: pilot labeled and fully human-reviewed (5 PRs, one per repo, for `muse-spark-1.2` and `gpt-6.1-sol`). The other PRs and models are still unlabeled.
+
+```bash
+node evals/dedup/gold/build-gold.js
+node evals/dedup/gold/judge.js --judge=opus --models=<model> --prs=<caseId,...>
+node evals/dedup/gold/judge.js --judge=astra --models=<model> --prs=<caseId,...>
+node evals/dedup/gold/reconcile.js --models=<model> --arbitrate --write
+```
