@@ -168,6 +168,7 @@ const buildStages = () => {
         commentManager as any,
         pullRequests as any,
         suggestionService as any,
+        { getChangedFilesMetadata: jest.fn() },
     );
 
     return {

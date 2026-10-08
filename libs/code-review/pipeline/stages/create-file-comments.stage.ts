@@ -31,6 +31,10 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import {
+    IPullRequestManagerService,
+    PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+} from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { Inject, Injectable } from '@nestjs/common';
@@ -53,6 +57,9 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
 
         @Inject(SUGGESTION_SERVICE_TOKEN)
         private readonly suggestionService: ISuggestionService,
+
+        @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
+        private readonly pullRequestManagerService: IPullRequestManagerService,
     ) {
         super();
     }
@@ -273,7 +280,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             medium: 2,
             low: 1,
         };
-        const sortedPrioritizedSuggestions = [
+        let sortedPrioritizedSuggestions = [
             ...validSuggestionsToAnalyze,
         ].sort((a, b) => {
             const fileA = a.relevantFile || '';
@@ -285,6 +292,84 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             return rankB - rankA;
         });
         const allDiscardedSuggestions = [...discardedSuggestionsBySafeGuard];
+
+        // #2037: a rebase/force-push can orphan the previously-analyzed commit,
+        // forcing a full re-run (forceFullRerun) that re-reads the whole PR.
+        // Re-reviewing unchanged code is what reposts stale or identical
+        // suggestions. Restrict such a re-run to the files that actually
+        // changed since the previous head: a file byte-identical between the
+        // two heads was already reviewed and must not get a fresh comment. New
+        // or changed files are still fully reviewed (the #976 guarantee: never
+        // comment on code the author did not write). Fail open on any error.
+        const orphanedPreviousSha =
+            context.pipelineMetadata?.forceFullRerun === true
+                ? context.orphanedBaseCommit?.previousSha
+                : undefined;
+
+        let filesChangedSinceLastReview: Set<string> | undefined;
+        if (
+            typeof orphanedPreviousSha === 'string' &&
+            sortedPrioritizedSuggestions.length > 0
+        ) {
+            try {
+                const changed =
+                    await this.pullRequestManagerService.getChangedFilesMetadata(
+                        organizationAndTeamData,
+                        repository,
+                        pullRequest,
+                        orphanedPreviousSha,
+                    );
+                filesChangedSinceLastReview = new Set(
+                    changed.map((file) => file.filename),
+                );
+            } catch (error) {
+                // Fail open: without a diff we cannot prove a file is unchanged,
+                // so we suppress nothing - behavior identical to today.
+                filesChangedSinceLastReview = undefined;
+                this.logger.warn({
+                    message: `Could not diff against the orphaned head (${orphanedPreviousSha}) - skipping unchanged-code suppression for PR#${pullRequest.number}`,
+                    context: this.stageName,
+                    error,
+                });
+            }
+        }
+
+        if (filesChangedSinceLastReview) {
+            const suppressedByUnchangedCode =
+                sortedPrioritizedSuggestions.filter(
+                    (suggestion) =>
+                        suggestion.relevantFile != null &&
+                        !filesChangedSinceLastReview.has(
+                            suggestion.relevantFile,
+                        ),
+                );
+            if (suppressedByUnchangedCode.length > 0) {
+                for (const suppressed of suppressedByUnchangedCode) {
+                    allDiscardedSuggestions.push({
+                        ...suppressed,
+                        priorityStatus:
+                            PriorityStatus.DISCARDED_BY_UNCHANGED_CODE,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                    });
+                }
+                this.logger.log({
+                    message: `[CREATE-COMMENTS] ${suppressedByUnchangedCode.length} suggestion(s) on files unchanged since the last review suppressed during the full re-run (#2037)`,
+                    context: this.stageName,
+                    metadata: {
+                        prNumber: pullRequest.number,
+                        previousSha: orphanedPreviousSha,
+                        files: suppressedByUnchangedCode.map(
+                            (suggestion) => suggestion.relevantFile,
+                        ),
+                    },
+                });
+                const suppressedByPath = new Set(suppressedByUnchangedCode);
+                sortedPrioritizedSuggestions =
+                    sortedPrioritizedSuggestions.filter(
+                        (suggestion) => !suppressedByPath.has(suggestion),
+                    );
+            }
+        }
 
         const fallbackSuggestionsBySeverity =
             this.groupDiscardedByQuantitySuggestions(allDiscardedSuggestions);
