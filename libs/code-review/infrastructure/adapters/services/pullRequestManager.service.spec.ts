@@ -228,7 +228,7 @@ describe('PullRequestHandlerService.getNewCommitsSinceLastExecution', () => {
 });
 
 describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
-    it('uses getChangedFilesSinceLastCommit when lastCommit is provided', async () => {
+    it('normalizes a bare-string lastCommit to { sha } for getChangedFilesSinceLastCommit', async () => {
         const { service, codeManagementService } = makeService();
         const files = [{ filename: 'a.ts', status: 'modified' }];
         codeManagementService.getChangedFilesSinceLastCommit.mockResolvedValue(
@@ -243,17 +243,45 @@ describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
         );
 
         expect(result).toEqual([{ filename: 'a.ts', status: 'modified' }]);
+        // The adapters read lastCommit.sha, so a bare string must be
+        // normalized to the object shape (otherwise baseSha is undefined and
+        // the diff silently comes back empty).
         expect(
             codeManagementService.getChangedFilesSinceLastCommit,
         ).toHaveBeenCalledWith({
             organizationAndTeamData: orgData,
             repository,
             prNumber: 42,
-            lastCommit: 'last-sha',
+            lastCommit: { sha: 'last-sha' },
         });
         expect(
             codeManagementService.getFilesByPullRequestId,
         ).not.toHaveBeenCalled();
+    });
+
+    it('passes { sha } through unchanged when lastCommit is already the object shape', async () => {
+        const { service, codeManagementService } = makeService();
+        const files = [{ filename: 'a.ts', status: 'modified' }];
+        codeManagementService.getChangedFilesSinceLastCommit.mockResolvedValue(
+            files,
+        );
+
+        const result = await (service as any).getChangedFilesMetadata(
+            orgData,
+            repository,
+            pullRequest,
+            { sha: 'obj-sha' },
+        );
+
+        expect(result).toEqual([{ filename: 'a.ts', status: 'modified' }]);
+        expect(
+            codeManagementService.getChangedFilesSinceLastCommit,
+        ).toHaveBeenCalledWith({
+            organizationAndTeamData: orgData,
+            repository,
+            prNumber: 42,
+            lastCommit: { sha: 'obj-sha' },
+        });
     });
 
     it('uses getFilesByPullRequestId (with headSha) when lastCommit is absent', async () => {
@@ -281,20 +309,23 @@ describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
         ).not.toHaveBeenCalled();
     });
 
-    it('returns [] when the fetch resolves null (lastCommit path)', async () => {
+    it('rejects when the fetch resolves null on the lastCommit path (diff unavailable)', async () => {
         const { service, codeManagementService } = makeService();
         codeManagementService.getChangedFilesSinceLastCommit.mockResolvedValue(
             null,
         );
 
-        const result = await (service as any).getChangedFilesMetadata(
-            orgData,
-            repository,
-            pullRequest,
-            'last-sha',
-        );
-
-        expect(result).toEqual([]);
+        // A null result means the adapter could not compute the diff; it must
+        // be surfaced (not collapsed to []) so callers can fail open instead
+        // of reading it as "every file is unchanged".
+        await expect(
+            (service as any).getChangedFilesMetadata(
+                orgData,
+                repository,
+                pullRequest,
+                'last-sha',
+            ),
+        ).rejects.toThrow(/diff unavailable/);
     });
 
     it('returns [] when the fetch resolves undefined (no-lastCommit path)', async () => {

@@ -269,11 +269,12 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
         ]);
     });
 
-    it('fails open when the orphaned-base diff is empty, suppressing nothing (#2037)', async () => {
+    it('suppresses every suggestion when the orphaned-base diff is empty (#2037)', async () => {
         mockCommentManagerService.createLineComments = jest
             .fn()
             .mockResolvedValue({ commentResults: [], lastAnalyzedCommit: 'new-head' });
-        // The adapter returns no files changed at all.
+        // An empty comparison is a valid answer: the two heads are byte-
+        // identical, so no file changed and every re-read suggestion is stale.
         mockPullRequestManagerService.getChangedFilesMetadata = jest
             .fn()
             .mockResolvedValue([]);
@@ -303,9 +304,6 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
 
         await stage.execute(ctx);
 
-        // An empty diff is indistinguishable from a failed diff, so it must
-        // never read as "nothing changed" (which would suppress every
-        // suggestion): the suggestion is still posted.
         expect(
             mockPullRequestManagerService.getChangedFilesMetadata,
         ).toHaveBeenCalledWith(
@@ -314,6 +312,57 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             expect.anything(),
             { sha: 'old-head' },
         );
+        // Nothing is posted: the only suggestion sits on a file that did not
+        // change between the two heads.
+        const posted =
+            mockCommentManagerService.createLineComments.mock.calls[0][3];
+        expect((posted as Array<{ path: string }>).map((c) => c.path)).toEqual(
+            [],
+        );
+    });
+
+    it('skips suppression when the adapter returns the whole PR file set via merge base (#2037)', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({ commentResults: [], lastAnalyzedCommit: 'new-head' });
+        // Merge-base diff against an orphaned head returns the whole PR set:
+        // that is not a true two-point diff, so detection must skip
+        // suppression explicitly instead of silently no-op'ing.
+        mockPullRequestManagerService.getChangedFilesMetadata = jest
+            .fn()
+            .mockResolvedValue([
+                { filename: 'src/changed.ts', additions: 2, deletions: 1, changes: 3 },
+                { filename: 'src/unchanged.ts', additions: 2, deletions: 1, changes: 3 },
+            ]);
+
+        const ctx = baseContext({
+            platformType: 'GITHUB' as never,
+            changedFiles: [
+                { filename: 'src/changed.ts', additions: 2, deletions: 1, changes: 3 } as never,
+                { filename: 'src/unchanged.ts', additions: 2, deletions: 1, changes: 3 } as never,
+            ],
+            validSuggestions: [
+                {
+                    relevantFile: 'src/unchanged.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Fix unchanged.',
+                    severity: 'high',
+                    label: 'bug',
+                },
+            ] as never,
+            pipelineMetadata: { forceFullRerun: true },
+            orphanedBaseCommit: {
+                previousSha: 'old-head',
+                currentHeadSha: 'new-head',
+                totalCommits: 2,
+            },
+        });
+
+        await stage.execute(ctx);
+
+        // The whole PR set came back, so suppression is skipped and the
+        // suggestion is still posted.
         const posted =
             mockCommentManagerService.createLineComments.mock.calls[0][3];
         expect((posted as Array<{ path: string }>).map((c) => c.path)).toEqual([

@@ -325,22 +325,44 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                         // so pass the object shape, never a bare SHA string.
                         { sha: orphanedPreviousSha },
                     );
-                if (changed.length === 0) {
-                    // An empty diff is indistinguishable from a failed or
-                    // uncomputable diff where an adapter returned [] without
-                    // throwing. Never read it as "nothing changed": that would
-                    // suppress every suggestion wholesale. Fail open instead.
+
+                // #2037: the adapters compute `previousSha...head` via MERGE
+                // BASE (github/gitlab: `basehead: ${baseSha}...${headSha}`).
+                // With an ORPHANED previous head the merge base is the old
+                // base-branch commit, so the result is the whole PR file set
+                // and every file any suggestion can cite appears "changed" -
+                // nothing can be suppressed, so the duplicate reposts happen
+                // silently. A true two-point diff (blob/tree SHA at
+                // previousSha vs currentHeadSha) is the real fix and is tracked
+                // separately; here we at least detect the whole-set result and
+                // skip suppression EXPLICITLY instead of no-op'ing silently.
+                const prFileCount = context.changedFiles?.length ?? 0;
+                const returnedWholePrSet =
+                    changed.length > 0 &&
+                    prFileCount > 0 &&
+                    changed.length >= prFileCount;
+
+                if (returnedWholePrSet) {
                     filesChangedSinceLastReview = undefined;
                     this.logger.warn({
-                        message: `Empty diff against the orphaned head (${orphanedPreviousSha}) - skipping unchanged-code suppression for PR#${pullRequest.number}`,
+                        message: `Diff against the orphaned head (${orphanedPreviousSha}) returned the whole PR file set (${changed.length}/${prFileCount} files) - the adapter diffs via merge base, not a true two-point diff, so unchanged-code suppression is skipped for PR#${pullRequest.number}`,
                         context: this.stageName,
                         metadata: {
                             organizationAndTeamData,
                             prNumber: pullRequest.number,
                             previousSha: orphanedPreviousSha,
+                            returnedFiles: changed.length,
+                            prFiles: prFileCount,
                         },
                     });
                 } else {
+                    // An empty comparison is a valid answer: the previous head
+                    // and the current head are byte-identical (a rebase/amend/
+                    // squash that only rewrote history), so every file is
+                    // unchanged and every re-read suggestion must be
+                    // suppressed. A diff the adapter could not compute is
+                    // thrown by getChangedFilesMetadata and caught below - it
+                    // never reaches this branch.
                     filesChangedSinceLastReview = new Set(
                         changed.map((file) => file.filename),
                     );
