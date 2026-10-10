@@ -3,6 +3,7 @@ import { CreateFileCommentsStage } from '@/code-review/pipeline/stages/create-fi
 import { COMMENT_MANAGER_SERVICE_TOKEN } from '@/code-review/domain/contracts/CommentManagerService.contract';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { SUGGESTION_SERVICE_TOKEN } from '@/code-review/domain/contracts/SuggestionService.contract';
+import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@/code-review/domain/contracts/PullRequestManagerService.contract';
 import { CodeManagementService } from '@/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '@/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@/core/domain/enums';
@@ -104,6 +105,10 @@ describe('CreateFileCommentsStage', () => {
                 {
                     provide: SUGGESTION_SERVICE_TOKEN,
                     useValue: mockSuggestionService,
+                },
+                {
+                    provide: PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+                    useValue: { getChangedFilesMetadata: jest.fn() },
                 },
                 {
                     provide: CodeManagementService,

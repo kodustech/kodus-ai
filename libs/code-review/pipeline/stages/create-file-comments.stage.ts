@@ -31,6 +31,10 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import {
+    IPullRequestManagerService,
+    PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+} from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { Inject, Injectable } from '@nestjs/common';
@@ -53,6 +57,9 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
 
         @Inject(SUGGESTION_SERVICE_TOKEN)
         private readonly suggestionService: ISuggestionService,
+
+        @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
+        private readonly pullRequestManagerService: IPullRequestManagerService,
     ) {
         super();
     }
@@ -273,7 +280,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             medium: 2,
             low: 1,
         };
-        const sortedPrioritizedSuggestions = [
+        let sortedPrioritizedSuggestions = [
             ...validSuggestionsToAnalyze,
         ].sort((a, b) => {
             const fileA = a.relevantFile || '';
@@ -286,10 +293,143 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         });
         const allDiscardedSuggestions = [...discardedSuggestionsBySafeGuard];
 
+        // #2037: a rebase/force-push can orphan the previously-analyzed commit,
+        // forcing a full re-run (forceFullRerun) that re-reads the whole PR.
+        // Re-reviewing unchanged code is what reposts stale or identical
+        // suggestions. Restrict such a re-run to the files that actually
+        // changed since the previous head: a file byte-identical between the
+        // two heads was already reviewed and must not get a fresh comment. New
+        // or changed files are still fully reviewed (the #976 guarantee: never
+        // comment on code the author did not write). Fail open on any error.
+        const orphanedPreviousSha =
+            context.pipelineMetadata?.forceFullRerun === true
+                ? context.orphanedBaseCommit?.previousSha
+                : undefined;
+
+        let filesChangedSinceLastReview: Set<string> | undefined;
+        // Collected so executeStage can record the degradation as `partial`
+        // instead of letting the run finish as a clean success.
+        const unchangedCodeSuppressionErrors: Error[] = [];
+        if (
+            typeof orphanedPreviousSha === 'string' &&
+            sortedPrioritizedSuggestions.length > 0
+        ) {
+            try {
+                const changed =
+                    await this.pullRequestManagerService.getChangedFilesMetadata(
+                        organizationAndTeamData,
+                        repository,
+                        pullRequest,
+                        // The adapters resolve the base SHA from lastCommit.sha
+                        // (github/gitlab/azure/bitbucket all read lastCommit?.sha),
+                        // so pass the object shape, never a bare SHA string.
+                        { sha: orphanedPreviousSha },
+                    );
+
+                // #2037: the adapters compute `previousSha...head` via MERGE
+                // BASE (github/gitlab: `basehead: ${baseSha}...${headSha}`).
+                // With an ORPHANED previous head the merge base is the old
+                // base-branch commit, so the result is the whole PR file set
+                // and every file any suggestion can cite appears "changed" -
+                // nothing can be suppressed, so the duplicate reposts happen
+                // silently. A true two-point diff (blob/tree SHA at
+                // previousSha vs currentHeadSha) is the real fix and is tracked
+                // separately; here we at least detect the whole-set result and
+                // skip suppression EXPLICITLY instead of no-op'ing silently.
+                const prFileCount = context.changedFiles?.length ?? 0;
+                const returnedWholePrSet =
+                    changed.length > 0 &&
+                    prFileCount > 0 &&
+                    changed.length >= prFileCount;
+
+                if (returnedWholePrSet) {
+                    filesChangedSinceLastReview = undefined;
+                    this.logger.warn({
+                        message: `Diff against the orphaned head (${orphanedPreviousSha}) returned the whole PR file set (${changed.length}/${prFileCount} files) - the adapter diffs via merge base, not a true two-point diff, so unchanged-code suppression is skipped for PR#${pullRequest.number}`,
+                        context: this.stageName,
+                        metadata: {
+                            organizationAndTeamData,
+                            prNumber: pullRequest.number,
+                            previousSha: orphanedPreviousSha,
+                            returnedFiles: changed.length,
+                            prFiles: prFileCount,
+                        },
+                    });
+                } else {
+                    // An empty comparison is a valid answer: the previous head
+                    // and the current head are byte-identical (a rebase/amend/
+                    // squash that only rewrote history), so every file is
+                    // unchanged and every re-read suggestion must be
+                    // suppressed. A diff the adapter could not compute is
+                    // thrown by getChangedFilesMetadata and caught below - it
+                    // never reaches this branch.
+                    filesChangedSinceLastReview = new Set(
+                        changed.map((file) => file.filename),
+                    );
+                }
+            } catch (error) {
+                // Fail open: without a diff we cannot prove a file is unchanged,
+                // so we suppress nothing - behavior identical to today. Record
+                // the degradation so the run finishes `partial`, not `success`.
+                filesChangedSinceLastReview = undefined;
+                unchangedCodeSuppressionErrors.push(error as Error);
+                this.logger.warn({
+                    message: `Could not diff against the orphaned head (${orphanedPreviousSha}) - skipping unchanged-code suppression for PR#${pullRequest.number}`,
+                    context: this.stageName,
+                    error,
+                    metadata: {
+                        organizationAndTeamData,
+                        prNumber: pullRequest.number,
+                        previousSha: orphanedPreviousSha,
+                    },
+                });
+            }
+        }
+
+        if (filesChangedSinceLastReview) {
+            const suppressedByUnchangedCode =
+                sortedPrioritizedSuggestions.filter(
+                    (suggestion) =>
+                        suggestion.relevantFile != null &&
+                        !filesChangedSinceLastReview.has(
+                            suggestion.relevantFile,
+                        ),
+                );
+            if (suppressedByUnchangedCode.length > 0) {
+                for (const suppressed of suppressedByUnchangedCode) {
+                    allDiscardedSuggestions.push({
+                        ...suppressed,
+                        priorityStatus:
+                            PriorityStatus.DISCARDED_BY_UNCHANGED_CODE,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                    });
+                }
+                this.logger.log({
+                    message: `[CREATE-COMMENTS] ${suppressedByUnchangedCode.length} suggestion(s) on files unchanged since the last review suppressed during the full re-run (#2037)`,
+                    context: this.stageName,
+                    metadata: {
+                        prNumber: pullRequest.number,
+                        previousSha: orphanedPreviousSha,
+                        files: suppressedByUnchangedCode.map(
+                            (suggestion) => suggestion.relevantFile,
+                        ),
+                    },
+                });
+                const suppressedByPath = new Set(suppressedByUnchangedCode);
+                sortedPrioritizedSuggestions =
+                    sortedPrioritizedSuggestions.filter(
+                        (suggestion) => !suppressedByPath.has(suggestion),
+                    );
+            }
+        }
+
         const fallbackSuggestionsBySeverity =
             this.groupDiscardedByQuantitySuggestions(allDiscardedSuggestions);
 
         const promptReplyErrors: Error[] = [];
+        // A swallowed error in a review stage must set the execution to
+        // `partial` rather than finishing as a clean success.
+        promptReplyErrors.push(...unchangedCodeSuppressionErrors);
 
         // Create line comments
         const { commentResults, lastAnalyzedCommit } =

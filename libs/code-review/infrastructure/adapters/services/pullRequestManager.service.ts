@@ -296,21 +296,47 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { name: string; id: any },
         pullRequest: any,
-        lastCommit?: string,
+        lastCommit?: string | { sha?: string },
     ): Promise<FileChange[]> {
         try {
             let changedFiles: FileChange[];
 
             if (lastCommit) {
-                changedFiles =
+                // Every platform adapter resolves the base SHA from
+                // `lastCommit.sha` (github/gitlab/azure/bitbucket all read
+                // `lastCommit?.sha`), but the contract still accepts the legacy
+                // bare-string shape that callers forward (resolve-config /
+                // fetch-changed-files pass lastExecution.lastAnalyzedCommit,
+                // a string at runtime). Normalize here so both shapes work — a
+                // bare string would otherwise resolve to `undefined` and
+                // silently yield an empty file list.
+                const baseSha =
+                    typeof lastCommit === 'string'
+                        ? lastCommit
+                        : lastCommit?.sha;
+
+                const diff =
                     await this.codeManagementService.getChangedFilesSinceLastCommit(
                         {
                             organizationAndTeamData,
                             repository,
                             prNumber: pullRequest?.number,
-                            lastCommit,
+                            lastCommit: { sha: baseSha },
                         },
                     );
+
+                // Distinguish a diff the adapter could not compute
+                // (null/undefined — e.g. an error) from a genuinely empty diff
+                // (`[]`, two byte-identical heads). Only the latter means "no
+                // file changed"; surface the former so callers can fail open
+                // instead of reading it as "everything is unchanged".
+                if (diff == null) {
+                    throw new Error(
+                        'getChangedFilesSinceLastCommit returned no result (diff unavailable)',
+                    );
+                }
+
+                changedFiles = diff;
             } else {
                 changedFiles =
                     await this.codeManagementService.getFilesByPullRequestId({

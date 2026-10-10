@@ -4,6 +4,7 @@ import { CreateFileCommentsStage } from './create-file-comments.stage';
 import { COMMENT_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 import { SUGGESTION_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/SuggestionService.contract';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 /**
@@ -20,6 +21,7 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
     let mockCommentManagerService: any;
     let mockPullRequestService: any;
     let mockSuggestionService: any;
+    let mockPullRequestManagerService: any;
 
     // Frozen by DEFAULT: that is the shape production hands every stage after
     // the first produce(). See test/fixtures/frozen-pipeline-context.ts.
@@ -62,6 +64,9 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
                 filteredDiscardedSuggestions: [],
             }),
         };
+        mockPullRequestManagerService = {
+            getChangedFilesMetadata: jest.fn().mockResolvedValue([]),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -77,6 +82,10 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
                 {
                     provide: SUGGESTION_SERVICE_TOKEN,
                     useValue: mockSuggestionService,
+                },
+                {
+                    provide: PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+                    useValue: mockPullRequestManagerService,
                 },
             ],
         }).compile();
@@ -190,5 +199,260 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             }),
         ]);
         expect(out.lastAnalyzedCommit).toBe('abc');
+    });
+
+    it('suppresses comments on files unchanged since an orphaned-base full re-run (#2037)', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({ commentResults: [], lastAnalyzedCommit: 'new-head' });
+        mockPullRequestManagerService.getChangedFilesMetadata = jest
+            .fn()
+            .mockResolvedValue([
+                { filename: 'src/changed.ts', additions: 2, deletions: 1, changes: 3 },
+            ]);
+
+        const ctx = baseContext({
+            platformType: 'GITHUB',
+            changedFiles: [
+                { filename: 'src/changed.ts', additions: 2, deletions: 1, changes: 3 },
+                { filename: 'src/unchanged.ts', additions: 2, deletions: 1, changes: 3 },
+            ],
+            validSuggestions: [
+                {
+                    relevantFile: 'src/changed.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Fix changed.',
+                    severity: 'high',
+                    label: 'bug',
+                },
+                {
+                    relevantFile: 'src/unchanged.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Fix unchanged.',
+                    severity: 'medium',
+                    label: 'bug',
+                },
+            ] as never,
+            pipelineMetadata: { forceFullRerun: true },
+            orphanedBaseCommit: {
+                previousSha: 'old-head',
+                currentHeadSha: 'new-head',
+                totalCommits: 2,
+            },
+        });
+
+        await stage.execute(ctx);
+
+        // The seeded diff shows only src/changed.ts changed since the previous
+        // head, so only that suggestion is handed to the comment manager; the
+        // unchanged-file one is suppressed before posting.
+        expect(
+            mockPullRequestManagerService.getChangedFilesMetadata,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            mockPullRequestManagerService.getChangedFilesMetadata,
+        ).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.anything(),
+            expect.anything(),
+            // The adapters resolve the base SHA from lastCommit.sha, so the
+            // stage must pass the object shape, never a bare SHA string.
+            { sha: 'old-head' },
+        );
+
+        const posted =
+            mockCommentManagerService.createLineComments.mock.calls[0][3];
+        expect((posted as Array<{ path: string }>).map((c) => c.path)).toEqual([
+            'src/changed.ts',
+        ]);
+    });
+
+    it('suppresses every suggestion when the orphaned-base diff is empty (#2037)', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({ commentResults: [], lastAnalyzedCommit: 'new-head' });
+        // An empty comparison is a valid answer: the two heads are byte-
+        // identical, so no file changed and every re-read suggestion is stale.
+        mockPullRequestManagerService.getChangedFilesMetadata = jest
+            .fn()
+            .mockResolvedValue([]);
+
+        const ctx = baseContext({
+            platformType: 'GITHUB' as never,
+            changedFiles: [
+                { filename: 'src/unchanged.ts', additions: 2, deletions: 1, changes: 3 } as never,
+            ],
+            validSuggestions: [
+                {
+                    relevantFile: 'src/unchanged.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Fix unchanged.',
+                    severity: 'high',
+                    label: 'bug',
+                },
+            ] as never,
+            pipelineMetadata: { forceFullRerun: true },
+            orphanedBaseCommit: {
+                previousSha: 'old-head',
+                currentHeadSha: 'new-head',
+                totalCommits: 2,
+            },
+        });
+
+        await stage.execute(ctx);
+
+        expect(
+            mockPullRequestManagerService.getChangedFilesMetadata,
+        ).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.anything(),
+            expect.anything(),
+            { sha: 'old-head' },
+        );
+        // Nothing is posted: the only suggestion sits on a file that did not
+        // change between the two heads.
+        const posted =
+            mockCommentManagerService.createLineComments.mock.calls[0][3];
+        expect((posted as Array<{ path: string }>).map((c) => c.path)).toEqual(
+            [],
+        );
+    });
+
+    it('skips suppression when the adapter returns the whole PR file set via merge base (#2037)', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({ commentResults: [], lastAnalyzedCommit: 'new-head' });
+        // Merge-base diff against an orphaned head returns the whole PR set:
+        // that is not a true two-point diff, so detection must skip
+        // suppression explicitly instead of silently no-op'ing.
+        mockPullRequestManagerService.getChangedFilesMetadata = jest
+            .fn()
+            .mockResolvedValue([
+                { filename: 'src/changed.ts', additions: 2, deletions: 1, changes: 3 },
+                { filename: 'src/unchanged.ts', additions: 2, deletions: 1, changes: 3 },
+            ]);
+
+        const ctx = baseContext({
+            platformType: 'GITHUB' as never,
+            changedFiles: [
+                { filename: 'src/changed.ts', additions: 2, deletions: 1, changes: 3 } as never,
+                { filename: 'src/unchanged.ts', additions: 2, deletions: 1, changes: 3 } as never,
+            ],
+            validSuggestions: [
+                {
+                    relevantFile: 'src/unchanged.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Fix unchanged.',
+                    severity: 'high',
+                    label: 'bug',
+                },
+            ] as never,
+            pipelineMetadata: { forceFullRerun: true },
+            orphanedBaseCommit: {
+                previousSha: 'old-head',
+                currentHeadSha: 'new-head',
+                totalCommits: 2,
+            },
+        });
+
+        await stage.execute(ctx);
+
+        // The whole PR set came back, so suppression is skipped and the
+        // suggestion is still posted.
+        const posted =
+            mockCommentManagerService.createLineComments.mock.calls[0][3];
+        expect((posted as Array<{ path: string }>).map((c) => c.path)).toEqual([
+            'src/unchanged.ts',
+        ]);
+    });
+
+    it('records a swallowed orphaned-base diff error as partial, failing open (#2037)', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({ commentResults: [], lastAnalyzedCommit: 'new-head' });
+        mockPullRequestManagerService.getChangedFilesMetadata = jest
+            .fn()
+            .mockRejectedValue(new Error('adapter down'));
+
+        const ctx = baseContext({
+            platformType: 'GITHUB' as never,
+            changedFiles: [
+                { filename: 'src/unchanged.ts', additions: 1, deletions: 0, changes: 1 } as never,
+            ],
+            validSuggestions: [
+                {
+                    relevantFile: 'src/unchanged.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Fix.',
+                    severity: 'high',
+                    label: 'bug',
+                },
+            ] as never,
+            pipelineMetadata: { forceFullRerun: true },
+            orphanedBaseCommit: {
+                previousSha: 'old-head',
+                currentHeadSha: 'new-head',
+                totalCommits: 2,
+            },
+        });
+
+        const out = await stage.execute(ctx);
+
+        // Fail open: nothing suppressed, the suggestion is still posted.
+        const posted =
+            mockCommentManagerService.createLineComments.mock.calls[0][3];
+        expect((posted as Array<{ path: string }>).map((c) => c.path)).toEqual([
+            'src/unchanged.ts',
+        ]);
+        // And the swallowed error marks the run partial, not a clean success.
+        expect((out as { errors: unknown[] }).errors).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    severity: 'partial',
+                    error: expect.objectContaining({ message: 'adapter down' }),
+                }),
+            ]),
+        );
+    });
+
+    it('does not suppress without an orphaned base (normal incremental run)', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({ commentResults: [], lastAnalyzedCommit: 'new-head' });
+        mockPullRequestManagerService.getChangedFilesMetadata = jest.fn();
+
+        const ctx = baseContext({
+            platformType: 'GITHUB',
+            changedFiles: [
+                { filename: 'src/unchanged.ts', additions: 1, deletions: 0, changes: 1 },
+            ],
+            validSuggestions: [
+                {
+                    relevantFile: 'src/unchanged.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Fix.',
+                    severity: 'high',
+                    label: 'bug',
+                },
+            ] as never,
+            // No forceFullRerun, no orphanedBaseCommit: the guard must not run.
+        });
+
+        await stage.execute(ctx);
+
+        expect(
+            mockPullRequestManagerService.getChangedFilesMetadata,
+        ).not.toHaveBeenCalled();
+        const posted =
+            mockCommentManagerService.createLineComments.mock.calls[0][3];
+        expect((posted as Array<{ path: string }>).map((c) => c.path)).toEqual([
+            'src/unchanged.ts',
+        ]);
     });
 });

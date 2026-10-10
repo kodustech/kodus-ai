@@ -15,6 +15,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { contextToGenerateIssues } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
+import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 
 describe('KodyIssuesManagementService', () => {
     let service: KodyIssuesManagementService;
@@ -315,6 +316,36 @@ describe('KodyIssuesManagementService', () => {
             expect(
                 pullRequestsServiceMock.updateSyncedWithIssuesFlag,
             ).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('filterValidSuggestionsFromPrByStatus', () => {
+        it('excludes suggestions discarded by unchanged code (#2037) so a withheld comment is not re-created as a Kody issue', async () => {
+            const prFiles = [
+                {
+                    path: 'src/unchanged.ts',
+                    suggestions: [
+                        {
+                            ...mockSuggestion,
+                            priorityStatus:
+                                PriorityStatus.DISCARDED_BY_UNCHANGED_CODE,
+                        },
+                        {
+                            ...mockSuggestion,
+                            priorityStatus: PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                        },
+                        { ...mockSuggestion, priorityStatus: undefined },
+                    ],
+                },
+            ];
+
+            const valid = await (
+                service as any
+            ).filterValidSuggestionsFromPrByStatus(prFiles);
+
+            // Only the non-discarded suggestion survives.
+            expect(valid).toHaveLength(1);
+            expect(valid[0].priorityStatus).toBeUndefined();
         });
     });
 });
