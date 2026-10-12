@@ -31,6 +31,10 @@ const {
     dedupEmbeddingText,
     DEDUP_TIEBREAK_SCHEMA,
     buildTiebreakPrompt,
+    DEDUP_FOLLOWUP_SCHEMA,
+    buildDedupFollowupPrompt,
+    applyDedupFollowup,
+    unclassifiedDedupIndices,
 } = require('@libs/code-review/infrastructure/agents/engine/dedup-prompt');
 const { SECONDARY_BASELINE } = require('../shared/secondary-models');
 const { TIER0, applyModelEnv } = require('../shared/tier0-models');
@@ -94,7 +98,29 @@ async function runDedup(suggestions, modelKey = SECONDARY_BASELINE, opts = {}) {
         const dupsRaw = g?.duplicates ?? g?.discarded ?? [];
         return { keep, duplicates: (Array.isArray(dupsRaw) ? dupsRaw : []).map(toIdx) };
     });
-    const unique = rawUnique.map(toIdx);
+    let unique = rawUnique.map(toIdx);
+
+    // Same follow-up as agent-review.stage: the left-out indices go back in one
+    // short call. opts.followup=false measures the first answer alone.
+    let followup = null;
+    const leftOut = groups.length || unique.length ? unclassifiedDedupIndices(n, groups, unique) : [];
+    if (leftOut.length && opts.followup !== false) {
+        try {
+            const out = await LLM.run({
+                schema: jsonSchema(DEDUP_FOLLOWUP_SCHEMA),
+                user: buildDedupFollowupPrompt(suggestions, groups, unique, leftOut),
+                runName: 'code-review-dedup-followup',
+                spanName: 'code-review::dedup',
+                ...(opts.prebuiltModel ? { prebuiltModel: opts.prebuiltModel } : {}),
+            });
+            const merged = applyDedupFollowup(n, groups, unique, leftOut, Array.isArray(out?.assignments) ? out.assignments : []);
+            groups.splice(0, groups.length, ...merged.groups);
+            unique = merged.unique;
+            followup = { leftOut, stillLeftOut: unclassifiedDedupIndices(n, groups, unique) };
+        } catch (e) {
+            followup = { leftOut, erro: String(e?.message || e).slice(0, 200) };
+        }
+    }
 
     const kept = new Set();
     for (const i of unique) if (valid(i)) kept.add(i);
@@ -225,7 +251,7 @@ async function runDedup(suggestions, modelKey = SECONDARY_BASELINE, opts = {}) {
         unmentioned.length = 0;
     }
 
-    return { groups, unique, kept: [...kept].sort((a, b) => a - b), dropped, unmentioned, schemaExact, noOp, raw: object };
+    return { groups, unique, kept: [...kept].sort((a, b) => a - b), dropped, unmentioned, schemaExact, noOp, followup, raw: object };
 }
 
 module.exports = { runDedup, DEDUP_MODELS };

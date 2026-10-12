@@ -12,8 +12,12 @@ import {
     DEDUP_EMBEDDING_LOW,
     DEDUP_EMBEDDING_HIGH,
     DEDUP_TIEBREAK_SCHEMA,
+    DEDUP_FOLLOWUP_SCHEMA,
+    applyDedupFollowup,
+    buildDedupFollowupPrompt,
     buildDedupPrompt,
     buildTiebreakPrompt,
+    unclassifiedDedupIndices,
     contentSimilarity,
     cosineSimilarity,
     dedupEmbeddingText,
@@ -2197,11 +2201,62 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 },
             ) as any;
 
-            const groups: Array<{
+            let groups: Array<{
                 keep: number;
                 duplicates: number[];
             }> = normalizedDedup?.groups || [];
-            const unique: number[] = normalizedDedup?.unique || [];
+            let unique: number[] = normalizedDedup?.unique || [];
+
+            // A model can stop partway through the list. The left-out
+            // suggestions go back in one short call that sees what was already
+            // decided; any still left out falls to the safety net below.
+            const leftOut =
+                groups.length || unique.length
+                    ? unclassifiedDedupIndices(suggestions.length, groups, unique)
+                    : [];
+            if (leftOut.length > 0) {
+                try {
+                    const followup = (await LLM.run({
+                        byokConfig: resolvedSlot,
+                        schema: jsonSchema(DEDUP_FOLLOWUP_SCHEMA as any),
+                        user: buildDedupFollowupPrompt(
+                            suggestions,
+                            groups,
+                            unique,
+                            leftOut,
+                        ),
+                        runName: 'code-review-dedup-followup',
+                        spanName: 'code-review::dedup',
+                        organizationId: telemetryMeta?.organizationId,
+                        telemetryMetadata: telemetryMeta,
+                        attrs: {
+                            type: dedupSlot ? 'byok' : 'system',
+                            prNumber,
+                            ...(telemetryMeta?.teamId
+                                ? { teamId: telemetryMeta.teamId }
+                                : {}),
+                        },
+                    })) as any;
+                    ({ groups, unique } = applyDedupFollowup(
+                        suggestions.length,
+                        groups,
+                        unique,
+                        leftOut,
+                        Array.isArray(followup?.assignments)
+                            ? followup.assignments
+                            : [],
+                    ));
+                    this.logger.log({
+                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: ${leftOut.length} left out, ${unclassifiedDedupIndices(suggestions.length, groups, unique).length} still left out after the follow-up`,
+                        context: this.stageName,
+                    });
+                } catch (error) {
+                    this.logger.warn({
+                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: follow-up for ${leftOut.length} left-out suggestions failed, safety net keeps them: ${error instanceof Error ? error.message : String(error)}`,
+                        context: this.stageName,
+                    });
+                }
+            }
 
             // Semantic tier of the content guard (PR #1527): when lexical overlap
             // is inconclusive we compare description embeddings, and only escalate
