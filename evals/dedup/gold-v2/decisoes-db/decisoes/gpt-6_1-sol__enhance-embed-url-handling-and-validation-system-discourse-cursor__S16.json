@@ -1,0 +1,11 @@
+{
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "em": "2026-10-10T14:53:54.538Z",
+  "escolha": "outra",
+  "ids": [
+    "S16"
+  ],
+  "model": "gpt-6.1-sol",
+  "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S16.",
+  "por": "claude"
+}

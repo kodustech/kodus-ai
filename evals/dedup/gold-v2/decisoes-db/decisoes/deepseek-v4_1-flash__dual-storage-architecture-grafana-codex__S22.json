@@ -1,0 +1,11 @@
+{
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "em": "2026-10-10T14:53:54.525Z",
+  "escolha": "outra",
+  "ids": [
+    "S22"
+  ],
+  "model": "deepseek-v4.1-flash",
+  "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S22.",
+  "por": "claude"
+}

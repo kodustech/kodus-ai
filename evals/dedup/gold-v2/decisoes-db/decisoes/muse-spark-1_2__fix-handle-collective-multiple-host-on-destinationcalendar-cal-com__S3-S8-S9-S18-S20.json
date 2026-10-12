@@ -1,0 +1,15 @@
+{
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "em": "2026-10-10T16:52:12.329Z",
+  "escolha": "opus",
+  "ids": [
+    "S3",
+    "S8",
+    "S9",
+    "S18",
+    "S20"
+  ],
+  "model": "muse-spark-1.2",
+  "nota": "",
+  "por": "u_o6NTrRRlghP3hRryRQ8i2Q"
+}

@@ -1,0 +1,22 @@
+{
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "em": "2026-10-10T14:53:54.521Z",
+  "escolha": "outra",
+  "ids": [
+    "S1",
+    "S2",
+    "S3",
+    "S5",
+    "S6",
+    "S7",
+    "S11",
+    "S12",
+    "S13",
+    "S18",
+    "S19",
+    "S20"
+  ],
+  "model": "deepseek-v4.1-flash",
+  "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado). Grupo: S1, S2, S3, S5, S6, S7, S11, S12, S13, S18, S19, S20.",
+  "por": "claude"
+}

@@ -1,0 +1,11 @@
+{
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "em": "2026-10-10T14:53:54.552Z",
+  "escolha": "outra",
+  "ids": [
+    "S6"
+  ],
+  "model": "muse-spark-1.2",
+  "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S6.",
+  "por": "claude"
+}

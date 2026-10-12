@@ -1,0 +1,17 @@
+{
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "em": "2026-10-12T00:00:00.000Z",
+  "escolha": "outra",
+  "ids": [
+    "S1",
+    "S3",
+    "S6",
+    "S7",
+    "S8",
+    "S10",
+    "S12"
+  ],
+  "model": "sonnet-5.5",
+  "nota": "Grupo: S1, S3, S6, S7, S8, S10, S12 (tudo num grupo só, decisão do Junior no chat).",
+  "por": "junior"
+}

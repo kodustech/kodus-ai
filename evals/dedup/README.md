@@ -68,3 +68,32 @@ node evals/dedup/gold/judge.js --judge=opus --models=<model> --prs=<caseId,...>
 node evals/dedup/gold/judge.js --judge=astra --models=<model> --prs=<caseId,...>
 node evals/dedup/gold/reconcile.js --models=<model> --arbitrate --write
 ```
+
+## Duplicate gold v2 (`gold-v2/`)
+
+The definitive finder of 09/10/26 (G + M3, lean output, one-problem rule, no verify, no dedup, no synthesis-rescue), 30 PRs per model: `deepseek-v4.1-flash`, `gpt-6.1-sol`, `muse-spark-1.2`, `sonnet-5.5`. Ids `S1..Sn` per PR in finder order (`gold-v2/build.js`).
+
+- Criterion: `gold-v2/judge-prompt.md`. A group is one problem. A suggestion that reports several problems goes to `multiProblem`, with the groups it also covers and the problems no group has.
+- Labeling: Opus 5.5 and GPT-6 Astra, blind (`gold-v2/judge.js`, raw answers in `gold-v2/runs/`). Opus refused one Muse PR (safety filter); Astra's reading stands there. `gold-v2/reconcile.js` accepts what both agree on and sends the rest to human review (`gold-v2/review/`).
+- Coverage rule (`gold-v2/aplicar-regra.js`): suggestions sharing a problem are one component; the component is one group when one suggestion covers all its problems (A + AB, A + B + AB). Otherwise the reviewer decides. Reviewer decisions are in `gold-v2/decisoes-db/` (the review page's database).
+- Exceptions to the rule, decided by the reviewer because the Martian goldens count the problems separately: Muse `add-guest-management` (blacklist case bypass: S2, S8, S9; duplicates within the request: S13, S14, S15) and Muse `oauth-credential-sync` (fetch `Response` shape: S5, S14, S24, S25, S27, S29; `credentialId` passed as `userId`: S6, S15, S21).
+- Output: `gold-v2/09.10.26_<model>.final.json`, every suggestion with its final group and where the decision came from (`consenso`, `junior`, `claude`).
+
+Martian recall / precision if the dedup grouped exactly like the gold, keeping one member per group (`gold-v2/placar-dedup.py`, no LLM call):
+
+| Model | Suggestions → kept | Recall before → after | Precision before → after |
+|---|---|---|---|
+| DeepSeek V4.1 Flash | 319 → 185 | 64.0% → 63.1% | 22.0% → 37.2% |
+| GPT 6.1 Sol | 265 → 144 | 49.5% → 49.5% | 20.7% → 37.4% |
+| Muse Spark 1.2 | 438 → 280 | 69.4% → 69.4% | 17.5% → 27.0% |
+| Sonnet 5.5 | 227 → 122 | 53.2% → 53.2% | 25.4% → 46.1% |
+
+The one DeepSeek golden lost is a Martian judge mismatch (`fix-handle-collective`, S14 matched to a different golden than the S1 it duplicates), not a wrong group.
+
+```bash
+node evals/dedup/gold-v2/build.js
+node evals/dedup/gold-v2/judge.js --judge=opus|astra --models=<model>
+node evals/dedup/gold-v2/reconcile.js
+node evals/dedup/gold-v2/aplicar-regra.js
+python3 evals/dedup/gold-v2/placar-dedup.py
+```

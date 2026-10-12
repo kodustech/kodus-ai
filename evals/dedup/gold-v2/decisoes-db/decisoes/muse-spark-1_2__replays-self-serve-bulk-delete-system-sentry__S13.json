@@ -1,0 +1,11 @@
+{
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "em": "2026-10-10T14:53:54.563Z",
+  "escolha": "outra",
+  "ids": [
+    "S13"
+  ],
+  "model": "muse-spark-1.2",
+  "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S13.",
+  "por": "claude"
+}

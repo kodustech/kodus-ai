@@ -1,0 +1,13 @@
+{
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "em": "2026-10-10T14:53:54.536Z",
+  "escolha": "outra",
+  "ids": [
+    "S3",
+    "S6",
+    "S11"
+  ],
+  "model": "gpt-6.1-sol",
+  "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado). Grupo: S3, S6, S11.",
+  "por": "claude"
+}

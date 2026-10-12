@@ -1,0 +1,291 @@
+[
+ {
+  "doc_id": "deepseek-v4_1-flash__dual-storage-architecture-grafana-codex__S1-S2-S3-S5-S6-S7-S11-S12-S13-S18-S19-S20",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:24.980Z",
+   "model": "deepseek-v4.1-flash",
+   "caseId": "dual-storage-architecture-grafana-codex",
+   "ids": [
+    "S1",
+    "S2",
+    "S3",
+    "S5",
+    "S6",
+    "S7",
+    "S11",
+    "S12",
+    "S13",
+    "S18",
+    "S19",
+    "S20"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado). Grupo: S1, S2, S3, S5, S6, S7, S11, S12, S13, S18, S19, S20."
+  }
+ },
+ {
+  "doc_id": "deepseek-v4_1-flash__dual-storage-architecture-grafana-codex__S15",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:24.980Z",
+   "model": "deepseek-v4.1-flash",
+   "caseId": "dual-storage-architecture-grafana-codex",
+   "ids": [
+    "S15"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S15."
+  }
+ },
+ {
+  "doc_id": "deepseek-v4_1-flash__dual-storage-architecture-grafana-codex__S22",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:24.980Z",
+   "model": "deepseek-v4.1-flash",
+   "caseId": "dual-storage-architecture-grafana-codex",
+   "ids": [
+    "S22"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S22."
+  }
+ },
+ {
+  "doc_id": "deepseek-v4_1-flash__add-html-sanitizer-for-translated-message-resources-keycloak__S7",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:24.982Z",
+   "model": "deepseek-v4.1-flash",
+   "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+   "ids": [
+    "S7"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S7."
+  }
+ },
+ {
+  "doc_id": "gpt-6_1-sol__add-guest-management-functionality-to-existing-bookings-cal-com__S2-S8-S10",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:24.989Z",
+   "model": "gpt-6.1-sol",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+   "ids": [
+    "S2",
+    "S8",
+    "S10"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado). Grupo: S2, S8, S10."
+  }
+ },
+ {
+  "doc_id": "gpt-6_1-sol__add-guest-management-functionality-to-existing-bookings-cal-com__S3-S6-S11",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:24.989Z",
+   "model": "gpt-6.1-sol",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+   "ids": [
+    "S3",
+    "S6",
+    "S11"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado). Grupo: S3, S6, S11."
+  }
+ },
+ {
+  "doc_id": "gpt-6_1-sol__sms-workflow-reminder-retry-count-tracking-cal-com__S5",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:24.989Z",
+   "model": "gpt-6.1-sol",
+   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+   "ids": [
+    "S5"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S5."
+  }
+ },
+ {
+  "doc_id": "gpt-6_1-sol__enhance-embed-url-handling-and-validation-system-discourse-cursor__S16",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:24.990Z",
+   "model": "gpt-6.1-sol",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "ids": [
+    "S16"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S16."
+  }
+ },
+ {
+  "doc_id": "gpt-6_1-sol__feature-can-edit-category-host-relationships-for-embedding-discourse-cursor__S1-S7-S8-S13",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:24.991Z",
+   "model": "gpt-6.1-sol",
+   "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+   "ids": [
+    "S1",
+    "S7",
+    "S8",
+    "S13"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado). Grupo: S1, S7, S8, S13."
+  }
+ },
+ {
+  "doc_id": "muse-spark-1_2__add-guest-management-functionality-to-existing-bookings-cal-com__S5",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:25.001Z",
+   "model": "muse-spark-1.2",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+   "ids": [
+    "S5"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S5."
+  }
+ },
+ {
+  "doc_id": "muse-spark-1_2__add-guest-management-functionality-to-existing-bookings-cal-com__S6",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:25.001Z",
+   "model": "muse-spark-1.2",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+   "ids": [
+    "S6"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S6."
+  }
+ },
+ {
+  "doc_id": "muse-spark-1_2__enhance-embed-url-handling-and-validation-system-discourse-cursor__S6",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:25.002Z",
+   "model": "muse-spark-1.2",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "ids": [
+    "S6"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S6."
+  }
+ },
+ {
+  "doc_id": "muse-spark-1_2__enhance-embed-url-handling-and-validation-system-discourse-cursor__S8-S20-S23-S24",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:25.002Z",
+   "model": "muse-spark-1.2",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "ids": [
+    "S8",
+    "S20",
+    "S23",
+    "S24"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado). Grupo: S8, S20, S23, S24."
+  }
+ },
+ {
+  "doc_id": "muse-spark-1_2__enhance-embed-url-handling-and-validation-system-discourse-cursor__S12",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:25.002Z",
+   "model": "muse-spark-1.2",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "ids": [
+    "S12"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S12."
+  }
+ },
+ {
+  "doc_id": "muse-spark-1_2__enhance-embed-url-handling-and-validation-system-discourse-cursor__S21",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:25.002Z",
+   "model": "muse-spark-1.2",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "ids": [
+    "S21"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S21."
+  }
+ },
+ {
+  "doc_id": "muse-spark-1_2__feature-automatically-downsize-large-images-discourse-cursor__S3",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:25.003Z",
+   "model": "muse-spark-1.2",
+   "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+   "ids": [
+    "S3"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S3."
+  }
+ },
+ {
+  "doc_id": "muse-spark-1_2__anonymous-add-configurable-device-limit-grafana-codex__S10-S11-S12",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:25.005Z",
+   "model": "muse-spark-1.2",
+   "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+   "ids": [
+    "S10",
+    "S11",
+    "S12"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado). Grupo: S10, S11, S12."
+  }
+ },
+ {
+  "doc_id": "muse-spark-1_2__replays-self-serve-bulk-delete-system-sentry__S3",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:25.008Z",
+   "model": "muse-spark-1.2",
+   "caseId": "replays-self-serve-bulk-delete-system-sentry",
+   "ids": [
+    "S3"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S3."
+  }
+ },
+ {
+  "doc_id": "muse-spark-1_2__replays-self-serve-bulk-delete-system-sentry__S13",
+  "data": {
+   "escolha": "outra",
+   "por": "claude",
+   "em": "2026-10-12T12:03:25.008Z",
+   "model": "muse-spark-1.2",
+   "caseId": "replays-self-serve-bulk-delete-system-sentry",
+   "ids": [
+    "S13"
+   ],
+   "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S13."
+  }
+ }
+]

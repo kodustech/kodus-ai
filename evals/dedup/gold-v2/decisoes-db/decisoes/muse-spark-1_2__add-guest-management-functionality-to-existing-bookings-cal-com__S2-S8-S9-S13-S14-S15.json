@@ -1,0 +1,16 @@
+{
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "em": "2026-10-12T00:00:00.000Z",
+  "escolha": "outra",
+  "ids": [
+    "S2",
+    "S8",
+    "S9",
+    "S13",
+    "S14",
+    "S15"
+  ],
+  "model": "muse-spark-1.2",
+  "nota": "Grupo: S2, S8, S9. Grupo: S13, S14, S15. (decisão do Junior no chat: blacklist/caixa separado de duplicados na requisição; goldens diferentes na Martian)",
+  "por": "junior"
+}

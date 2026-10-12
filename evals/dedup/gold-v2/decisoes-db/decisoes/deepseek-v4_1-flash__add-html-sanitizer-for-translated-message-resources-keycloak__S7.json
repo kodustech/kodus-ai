@@ -1,0 +1,11 @@
+{
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "em": "2026-10-10T14:53:54.528Z",
+  "escolha": "outra",
+  "ids": [
+    "S7"
+  ],
+  "model": "deepseek-v4.1-flash",
+  "nota": "Decidido pelo Claude com a regra de cobertura (as duas leituras dao o mesmo resultado).  Unicas: S7.",
+  "por": "claude"
+}
