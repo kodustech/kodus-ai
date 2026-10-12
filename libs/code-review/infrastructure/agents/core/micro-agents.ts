@@ -24,6 +24,7 @@
  * Item text is read out of V2_DEFAULT_CATEGORY_DESCRIPTIONS_TEXT rather than
  * copied, so the two never drift apart.
  */
+import { CLAUDE_ONE_PROBLEM_REINFORCEMENT, ONE_PROBLEM_RULE } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 import { z } from 'zod';
 import { LLM } from '@libs/llm/llm';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -505,9 +506,6 @@ export function focusBlockFor(group: MicroAgentGroup): string {
  * mode they address is documented — the model writing 17k characters of
  * analysis about the exact symbol a golden names, then reporting nothing.
  */
-const REASON_EVIDENCIA = (semCensura: boolean): string =>
-    `"REQUIRED — evidence for THIS finding: the input or state that triggers it and the file:line locations involved. ${semCensura ? 'If the evidence is partial, say what is still unconfirmed and lower the confidence — do not drop the finding.' : 'A finding without file:line evidence should not be submitted.'}"`;
-
 export function buildMicroAgentPrompt(
     group: MicroAgentGroup,
     diffText: string,
@@ -515,14 +513,8 @@ export function buildMicroAgentPrompt(
     teto = 2,
     semCensura = false,
     reguaEvidencia = false,
-    /** Claude: `reason` pedido como evidencia, nao como percurso — o texto do
-     *  percurso faz o Sonnet 5.5 recusar a chamada (#1821). */
+    /** Claude: recebe tambem o reforco de "um problema por sugestao" (#1821). */
     claudeSafeWording = false,
-    /** EXPERIMENTO (#1821, so o eval liga): saida enxuta, igual a do generalista
-     *  (prompt-builder.ts, leanOutput) — cada achado pede so label, arquivo,
-     *  linhas e descricao; trecho, correcao, severidade, confianca e percurso
-     *  ficam para uma etapa posterior. */
-    enxuto = false,
 ): string {
     // <Diffs> FIRST, and the assignment after it. The twelve agents run under
     // one Promise.all against the same pull request, so the diff is the only
@@ -589,35 +581,20 @@ ${focusBlockFor(group)}
   "reasoning": "REQUIRED, never empty — what you traced and why you reported or dismissed. Example: '${group.reasoningExample}'",
   "suggestions": [
     {
-${enxuto ? `      "label": "${group.label}",
+      "label": "${group.label}",
       "relevantFile": "path/to/file.ext",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
-      "suggestionContent": "what is wrong and why it matters"` : `      "label": "${group.label}",
-      "relevantFile": "path/to/file.ext",
-      "language": "the file language",
-      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
-      "existingCode": "problematic code snippet from the diff",
-      "improvedCode": "fixed code snippet (only if fix is clear from context)",
-      "oneSentenceSummary": "Brief summary",
-      "reason": ${claudeSafeWording ? REASON_EVIDENCIA(semCensura) : `"REQUIRED when the schema asks for it — the walk that produced THIS finding, not a restatement of it: the concrete input or state you started from, the lines it passes through in order with file:line, and what the caller ends up with. A reason with no file:line is not one. ${semCensura ? 'If you cannot write the whole walk, write the part you traced, say what is still unconfirmed, and lower the confidence — do not drop the finding.' : 'If you cannot write the walk, you have not established the finding and should not submit it.'}"`},
-      "relevantLinesStart": 10,
-      "relevantLinesEnd": 15,
-      "severity": "critical|high|medium|low",
-      "confidence": 8`}
+      "suggestionContent": "the ONE problem: what is wrong and why it matters"
     }
   ]
 }
 \`\`\`
 
   Anchor relevantLinesStart/End to the lines this PR changed — that is the fix site.
-${enxuto ? '' : `
-  Assign confidence honestly:
-    9-10: you read BOTH the call site AND the definition, and confirmed the mismatch
-    7-8:  you read the relevant code and traced the failure path, but not both sides
-    5-6:  the pattern looks wrong from the diff, but you only read one side
-    1-4:  speculative, or based on experience rather than on evidence in this repo
-`}
+
+  ${claudeSafeWording ? `${ONE_PROBLEM_RULE} ${CLAUDE_ONE_PROBLEM_REINFORCEMENT}` : ONE_PROBLEM_RULE}
+
   "reasoning" is REQUIRED and is never empty, including when you report nothing:
   name what you read, what you checked it against, and why you concluded the
   change is safe for your class. A submission with an empty reasoning is not a
@@ -669,8 +646,8 @@ const SILENCIO_TEXTO = `  Most pull requests contain no defect of any single cla
 const SEM_CENSURA_TEXTO = `  Every finding you submit is checked afterwards: a verifier re-reads the code
   for each one, and a ranker decides what reaches the developer. Your job here
   is recall. Report every defect of your class that the changed code makes you
-  suspect, with an honest confidence — a finding at confidence 3 that the
-  verifier can check is worth more than a suspicion left out of the list.
+  suspect — a doubtful finding that the verifier can check is worth more than
+  a suspicion left out of the list.
   Submit an empty array only when you looked and found nothing to suspect.`;
 
 function tetoSemCensura(teto: number): string {

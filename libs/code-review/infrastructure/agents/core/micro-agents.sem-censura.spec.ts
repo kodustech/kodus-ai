@@ -1,4 +1,5 @@
 import { MICRO_AGENTS, buildMicroAgentPrompt } from './micro-agents';
+import { CLAUDE_ONE_PROBLEM_REINFORCEMENT, ONE_PROBLEM_RULE } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 
 /**
  * Experimento #1821 (exp-p<N>[g]nc): a lente sem os tres pedidos de silencio.
@@ -7,13 +8,13 @@ import { MICRO_AGENTS, buildMicroAgentPrompt } from './micro-agents';
  */
 describe('prompt dos microagentes sem autocensura', () => {
     const grupo = MICRO_AGENTS[0];
+    // O pedido de silencio do `reason` saiu junto com o campo (saida enxuta).
     const SILENCIO = [
-        'If you cannot write the walk, you have not established the finding and should not submit it.',
         'a forced finding costs more than a silent pass.',
         'quota: zero is the ordinary answer and one is common.',
     ];
 
-    it('o padrao continua com os tres pedidos de silencio (teto 4)', () => {
+    it('o padrao continua com os pedidos de silencio (teto 4)', () => {
         const p = buildMicroAgentPrompt(grupo, 'DIFF', undefined, 4);
         for (const frase of SILENCIO) expect(p).toContain(frase);
     });
@@ -21,14 +22,14 @@ describe('prompt dos microagentes sem autocensura', () => {
     it('o padrao com teto 2 continua com o texto de producao', () => {
         const p = buildMicroAgentPrompt(grupo, 'DIFF');
         expect(p).toContain('AT MOST TWO. Submit no more than two suggestions');
-        expect(p).toContain(SILENCIO[1]);
+        expect(p).toContain(SILENCIO[0]);
     });
 
-    it('sem autocensura tira os tres e cobra recall', () => {
+    it('sem autocensura tira os pedidos de silencio e cobra recall', () => {
         const p = buildMicroAgentPrompt(grupo, 'DIFF', undefined, 4, true);
         for (const frase of SILENCIO) expect(p).not.toContain(frase);
         expect(p).toContain('Your job here\n  is recall.');
-        expect(p).toContain('lower the confidence — do not drop the finding.');
+        expect(p).toContain('a doubtful finding that the verifier can check');
         expect(p).toContain('AT MOST 4. Submit no more than 4 suggestions.');
     });
 
@@ -48,14 +49,12 @@ describe('prompt dos microagentes sem autocensura', () => {
         expect(b.replace(bloco, '')).toBe(a);
     });
 
-    it('texto para Claude: pede evidencia, sem percurso; o resto fica igual', () => {
+    it('texto para Claude: so acrescenta o reforco de um problema por sugestao', () => {
         const a = buildMicroAgentPrompt(grupo, 'DIFF', 'GRAFO', 4);
         const c = buildMicroAgentPrompt(grupo, 'DIFF', 'GRAFO', 4, false, false, true);
+        expect(c.replace(` ${CLAUDE_ONE_PROBLEM_REINFORCEMENT}`, '')).toBe(a);
+        expect(a).toContain(ONE_PROBLEM_RULE);
+        expect(a).not.toContain(CLAUDE_ONE_PROBLEM_REINFORCEMENT);
         expect(c).not.toMatch(/walk/i);
-        expect(c).toContain('evidence for THIS finding');
-        const linha = (p: string) => p.split('\n').find((l) => l.includes('"reason":'));
-        expect(c.replace(linha(c)!, '').replace(SILENCIO[0], '')).toBe(
-            a.replace(linha(a)!, '').replace(SILENCIO[0], ''),
-        );
     });
 });

@@ -302,9 +302,6 @@ export interface ReviewAgentInput
      *  read "auditor — list every defect" instead of "reviewer". See
      *  AUDITOR_ROLE_SWAPS in prompt-builder.ts. */
     auditorRole?: boolean;
-    /** #1821 experiment (default off): lean output format in the generalist
-     *  prompt and in the submitResult schema. Forwarded to AgentLoopInput. */
-    leanOutput?: boolean;
     /**
      * Commits that make up this PR (SHA + subject line + author date),
      * oldest→newest. Threaded so commit-hygiene rules ("don't mix mechanical
@@ -527,8 +524,6 @@ export interface AgentLoopInput {
      *  instrucao que o scout era mandado ignorar. Tem precedencia sobre
      *  scoutDedicatedPrompt e scoutCalibratedPrompt. */
     scoutBasePromptOverride?: string;
-    /** EXPERIMENTO (#1821): saida enxuta nas lentes (igual a do generalista). */
-    microAgentLeanOutput?: boolean;
     /** EXPERIMENTO (#1821): microagentes em paralelo com o generalista. */
     parallelMicroAgents?: boolean;
     /** EXPERIMENTO (#1821): custo do verificador por achado. So o eval liga. */
@@ -722,9 +717,6 @@ export interface AgentLoopInput {
      *  conclusao sem o caminho. Opt-in para poder reverter: um campo
      *  obrigatorio a mais pode custar recall. */
     requireFindingReason?: boolean;
-    /** #1821 experiment (default off): the finder's output asks only for file,
-     *  lines, label and description; the other fields become optional. */
-    leanOutput?: boolean;
     /** Findings a previous pass already posted on this PR, handed to the
      *  simulation pass so it does not spend its walks on covered ground. */
     priorFindings?: Array<{ file?: string; line?: number; summary?: string }>;

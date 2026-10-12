@@ -7,6 +7,7 @@
  * (identity, category prompt/label, allowed labels) arrive via PromptAgentMeta,
  * so the builders carry no `this` and are unit-testable.
  */
+import { ONE_PROBLEM_RULE } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
@@ -317,7 +318,7 @@ ${rendered}
 
 /** Experiment knob `auditorRole` (#1821): reframes the generalist from
  *  "reviewer" (decides what deserves a comment) to "auditor" (lists every
- *  defect; severity carries importance, a later stage decides). Only these two
+ *  defect; a later stage decides what is posted). Only these two
  *  sentences change — the texts measured in the isolated recognition test. */
 export const AUDITOR_ROLE_SWAPS: ReadonlyArray<readonly [string, string]> = [
     [
@@ -326,7 +327,7 @@ export const AUDITOR_ROLE_SWAPS: ReadonlyArray<readonly [string, string]> = [
     ],
     [
         'Find real, verifiable issues in the changed code in a single pass. You may report bug, security, or performance findings, but only when the evidence is concrete.',
-        'List every real defect you find in the changed code in a single pass, however small. Importance is recorded in severity; another stage decides what gets posted.',
+        'List every real defect you find in the changed code in a single pass, however small. Another stage decides what gets posted.',
     ],
 ];
 
@@ -547,10 +548,9 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
     - Do not suppress a concrete performance issue just because it is not a correctness bug. If the primary failure mode is scale, query count, cache blowup, unbounded loading, async fanout, or blocking I/O, label it as performance.
     - Do not suppress a concrete security issue just because the code also has a bug. If the primary failure mode is exploitability, authorization bypass, trust-boundary failure, or unsafe input reaching a sink, label it as security.`
             : '';
-        const outputLabelLine = mixedLabelMode
-            ? `"label": "${allowedSuggestionLabels.join('|')}",
-      `
-            : '';
+        // label is required by the submitResult schema, so it is always shown.
+        const outputLabelLine = `"label": "${allowedSuggestionLabels.join('|')}",
+      `;
 
         const taskDescriptions: Record<string, string> = {
             bug: 'real bugs introduced, exposed, or made worse by these changes',
@@ -576,26 +576,15 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
             ? `
     - Deliver file by file: every changed file gets a verdict in "reasoning", and every issue named in a verdict MUST also be an entry in "suggestions" — an issue that is only in the reasoning is lost.`
             : '';
-        // leanOutput (#1821): each finding asks only for what finding the bug
-        // needs; fix, snippets, severity and confidence come from a later stage.
-        const suggestionFields = input.leanOutput
-            ? `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
+        // Each finding carries only what finding the bug needs; fix, snippets,
+        // severity and confidence are added by a later enrichment stage.
+        const suggestionFields = `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
-      "suggestionContent": "what is wrong and why it matters"`
-            : `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
-      "language": "the file language",
-      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
-      "existingCode": "problematic code snippet from the diff",
-      "improvedCode": "fixed code snippet (only if fix is clear from context)",
-      "oneSentenceSummary": "Brief summary",
-      "relevantLinesStart": 10,
-      "relevantLinesEnd": 15,
-      "severity": "critical|high|medium|low",
-      "confidence": 8`;
+      "suggestionContent": "the ONE problem: what is wrong and why it matters"`;
         const importanceRule = input.noImportanceFilter
             ? `
-    - Do not decide on your own that a real defect is too minor to report. If you concluded something is a real defect, it goes in "suggestions" and "severity" says how much it matters (low for minor ones); a later stage decides what is posted. Style and naming issues stay out.`
+    - Do not decide on your own that a real defect is too minor to report. If you concluded something is a real defect, it goes in "suggestions"; a later stage decides what is posted. Style and naming issues stay out.`
             : '';
 
         return (
@@ -642,11 +631,7 @@ ${coverageTargets ? `${coverageTargets}\n` : ''}
     - For security flows, challenge any value that became static, shared, or reused across requests/users when it should be per-request, per-session, or per-principal.
     ${mixedLabelRules}
     ${mixedLabelLensRules}
-    - Assign a confidence score (1-10) to each finding. Be honest — overconfidence wastes verification budget:
-      9-10: You read BOTH the callsite AND the callee definition, confirmed the types/signatures mismatch or the wrong return value, and can name the exact failing input. Reserve 10 for bugs where you verified the fix would work.
-      7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
-      5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
-      1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.
+    - ${ONE_PROBLEM_RULE}
     - Return only the JSON object inside markdown fences, no extra text.${perFileRule}${importanceRule}
   </Rules>
 
@@ -723,7 +708,7 @@ ${coverageTargets ?? ''}</CoverageContract>
     - Reporting threshold (high-recall): report any defect the changed code makes you suspect — anchor it to a changed line and name the failure kind (wrong output, crash, broken contract/branch, lost side effect, broken caller/callee assumption). You need not prove the exact triggering input; the verifier filters. Only pure speculation with no anchor is out.
     - Resource-exhaustion, injection, bypass, perf (O(N)/N+1), and missing-defensive (CSRF/rate-limit/validation) concerns: report when the changed code makes you suspect them — anchor + let the verifier judge; do not pre-suppress by class.
     - "Looks correct" is not a dismissal — explain why it cannot fail.
-    - Assign confidence 1–10. Be honest: ≥9 only when both caller and callee read; ≤4 = speculative, do not report below 5.
+    - ${ONE_PROBLEM_RULE}
     - Submit via the submitResult tool; do not print free-form JSON.
   </Rules>
 </ReviewTask>`;
@@ -780,7 +765,6 @@ export function buildSelfContainedSystemPrompt(input: ReviewAgentInput, meta: Pr
 
     PHASE 3 — RESPOND
       Return a JSON object with your findings. Every finding must cite exact line numbers from the diff.
-      Assign confidence honestly: 7+ only when the defect is obvious from the shown lines, 3-5 when you suspect it but cannot fully prove it, below 3 for speculation (do NOT report below 5).
 
     FORBIDDEN:
       - Claiming a caller passes wrong data (you cannot see callers).
@@ -829,12 +813,10 @@ export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: Prom
         );
 
         const categoryLabel = meta.categoryLabel;
-        const mixedLabelMode = meta.supportsMixed;
         const allowedSuggestionLabels = meta.allowedLabels;
-        const outputLabelLine = mixedLabelMode
-            ? `"label": "${allowedSuggestionLabels.join('|')}",
-      `
-            : '';
+        // label is required by the submitResult schema, so it is always shown.
+        const outputLabelLine = `"label": "${allowedSuggestionLabels.join('|')}",
+      `;
 
         const taskDescriptions: Record<string, string> = {
             bug: 'real bugs introduced, exposed, or made worse by these changes',
@@ -876,7 +858,7 @@ ${fileContentsSection}
     - DO NOT report: generic performance theories, missing CSRF/rate-limiting, speculative race conditions without a visible shared-state violation, suggestions that require knowing how the code is used elsewhere.
     - Every finding must pass this test: "Can I point to the exact lines in the diff and explain the failure path using only what is visible here?"
     - If in doubt, do NOT report it.
-    - Assign a confidence score (1-10). In self-contained mode, confidence above 7 is rare — reserve it for defects that are obvious from the shown lines alone.
+    - ${ONE_PROBLEM_RULE}
     - Return only the JSON object inside markdown fences, no extra text.
   </Rules>
 
@@ -889,15 +871,9 @@ ${fileContentsSection}
   "suggestions": [
     {
       ${outputLabelLine}"relevantFile": "path/to/file.ext",
-      "language": "the file language",
-      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact visible from the diff. HOW: concrete fix if clear.",
-      "existingCode": "problematic code snippet from the diff",
-      "improvedCode": "fixed code snippet",
-      "oneSentenceSummary": "Brief summary",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
-      "severity": "critical|high|medium|low",
-      "confidence": 6
+      "suggestionContent": "the ONE problem: what is wrong and why it matters"
     }
   ]
 }
@@ -1026,9 +1002,8 @@ function formatOverrides(input: ReviewAgentInput, meta: PromptAgentMeta): string
             }
         }
 
-        // Severity classification is handled by a separate post-processing step (classify-severity.ts)
-        // to avoid biasing the agent's investigation. The agent assigns a rough severity but
-        // the final classification uses dedicated criteria (default or client-custom).
+        // The finder does not assign severity; a later stage does, with dedicated
+        // criteria (default or client-custom).
 
         const generationMain = resolvePromptOverrideText(
             input.generationMain ?? input.v2PromptOverrides?.generation?.main,

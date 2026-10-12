@@ -860,10 +860,6 @@ function buildCurrentPrompts(caseData) {
         // RECALL_GEN_AUDITOR=1: papel de auditor no generalista (ganhou no teste
         // isolado do Sonnet: +6 bugs reconhecidos, 0 perdidos) (#1821).
         ...(process.env.RECALL_GEN_AUDITOR === '1' ? { auditorRole: true } : {}),
-        // RECALL_GEN_LEAN=1: saida enxuta no prompt do generalista (so arquivo,
-        // linhas, rotulo, descricao) — no agente nativo o formato pesado custou
-        // ~14 goldens ao Sonnet (#1821). O schema vai pelo input do loop, abaixo.
-        ...(process.env.RECALL_GEN_LEAN === '1' ? { leanOutput: true } : {}),
     };
 
     // Priority tiering, mirroring what the provider's execute() does in
@@ -1305,9 +1301,6 @@ class InvestigationAgentProvider {
                         : {}),
                     // O eval sempre registra o custo do verificador por achado.
                     recordVerifyCost: true,
-                    // RECALL_LENTES_LEAN=1: saida enxuta nas lentes, igual a do generalista
-                    // (RECALL_GEN_LEAN). Tira do schema o que so a etapa de enriquecimento usa.
-                    ...(process.env.RECALL_LENTES_LEAN === '1' ? { microAgentLeanOutput: true } : {}),
                     // RECALL_PARALELO=1: microagentes comecam junto com o generalista.
                     ...(process.env.RECALL_PARALELO === '1' ? { parallelMicroAgents: true } : {}),
                     // RECALL_SCOUT_AGENTE=1: o scout roda pelo loop de agente (teto 1).
@@ -1503,11 +1496,6 @@ class InvestigationAgentProvider {
                     // vale para generalista, microagentes e simulacao.
                     ...(process.env.RECALL_FINDING_REASON === '1'
                         ? { requireFindingReason: true }
-                        : {}),
-                    // RECALL_GEN_LEAN=1: o schema do submitResult exige so
-                    // arquivo e descricao (par do leanOutput do prompt).
-                    ...(process.env.RECALL_GEN_LEAN === '1'
-                        ? { leanOutput: true }
                         : {}),
                     // 'sim' = so a simulacao; '1+sim' = os quinze E a
                     // simulacao, que e o conjunto que se quer medir.

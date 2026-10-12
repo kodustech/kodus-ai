@@ -1,9 +1,13 @@
 /**
- * #1821 experiment knob `leanOutput`: the generalist prompt asks each finding
- * only for file, lines, label and description, and submitResult requires only
- * file + content. Off must stay the production prompt and schema.
+ * #1821: the finder's output is lean. Every generalist prompt variant asks each
+ * finding only for label, file, lines and description, and submitResult
+ * requires exactly those fields; snippet, fix, severity and confidence are
+ * added by a later enrichment stage.
  */
 import {
+    buildCompactUserPrompt,
+    buildSelfContainedSystemPrompt,
+    buildSelfContainedUserPrompt,
     buildUserPrompt,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
@@ -24,30 +28,43 @@ const input = (over: any = {}): any => ({
     ...over,
 });
 const outputBlock = (p: string) => p.slice(p.indexOf('<OutputFormat>'), p.indexOf('</OutputFormat>'));
+const LEGACY = ['"existingCode"', '"improvedCode"', '"oneSentenceSummary"', '"language"', '"severity"', '"confidence"', 'WHAT:'];
 const required = (t: ReturnType<typeof buildSubmitResultTool>) =>
     (t.inputSchema as any).properties.suggestions.items.required as string[];
 
-describe('leanOutput', () => {
-    it('off keeps the production output format and schema', () => {
-        const out = outputBlock(buildUserPrompt(input(), meta));
-        for (const f of ['"existingCode"', '"improvedCode"', '"severity"', '"confidence"', 'WHAT:']) expect(out).toContain(f);
-        expect(required(buildSubmitResultTool())).toEqual(['relevantFile', 'suggestionContent', 'existingCode', 'improvedCode']);
+describe('lean finder output', () => {
+    it('the full and self-contained prompts ask only for label, file, lines and description', () => {
+        for (const p of [buildUserPrompt(input(), meta), buildSelfContainedUserPrompt(input(), meta)]) {
+            const out = outputBlock(p);
+            for (const f of LEGACY) expect(out).not.toContain(f);
+            for (const f of ['"reasoning"', '"label"', '"relevantFile"', '"relevantLinesStart"', '"relevantLinesEnd"', '"suggestionContent"']) {
+                expect(out).toContain(f);
+            }
+        }
+    });
+
+    it('no variant asks for confidence or severity', () => {
+        for (const p of [
+            buildUserPrompt(input(), meta),
+            buildUserPrompt(input({ noImportanceFilter: true }), meta),
+            buildCompactUserPrompt(input(), meta),
+            buildSelfContainedSystemPrompt(input(), meta),
+            buildSelfContainedUserPrompt(input(), meta),
+        ]) {
+            expect(p).not.toMatch(/confidence score|Assign confidence|"severity"|severity" says/i);
+        }
+    });
+
+    it('shows the label even for a single-category agent', () => {
+        const single = { ...meta, categoryLabel: 'bug', allowedLabels: ['bug'], supportsMixed: false } as PromptAgentMeta;
+        expect(outputBlock(buildUserPrompt(input(), single))).toContain('"label": "bug"');
+    });
+
+    it('submitResult requires exactly the lean fields, nothing optional', () => {
+        const tool = buildSubmitResultTool();
+        const fields = ['label', 'relevantFile', 'relevantLinesStart', 'relevantLinesEnd', 'suggestionContent'];
+        expect(required(tool)).toEqual(fields);
+        expect(Object.keys((tool.inputSchema as any).properties.suggestions.items.properties).sort()).toEqual([...fields].sort());
         expect(required(buildSubmitResultTool(true))).toContain('reason');
-    });
-
-    it('on asks only for file, lines, label and description', () => {
-        const out = outputBlock(buildUserPrompt(input({ leanOutput: true }), meta));
-        for (const f of ['"existingCode"', '"improvedCode"', '"severity"', '"confidence"', 'WHAT:', '"language"', '"oneSentenceSummary"']) expect(out).not.toContain(f);
-        for (const f of ['"reasoning"', '"relevantFile"', '"relevantLinesStart"', '"suggestionContent"', '"label"']) expect(out).toContain(f);
-        const lean = buildSubmitResultTool(false, false, false, true);
-        expect(required(lean)).toEqual(['label', 'relevantFile', 'relevantLinesStart', 'relevantLinesEnd', 'suggestionContent']);
-        // Nothing optional: the schema carries exactly the required fields.
-        expect(Object.keys((lean.inputSchema as any).properties.suggestions.items.properties).sort()).toEqual(['label', 'relevantFile', 'relevantLinesEnd', 'relevantLinesStart', 'suggestionContent']);
-    });
-
-    it('on changes nothing outside the OutputFormat block', () => {
-        const off = buildUserPrompt(input(), meta);
-        const on = buildUserPrompt(input({ leanOutput: true }), meta);
-        expect(on.replace(outputBlock(on), '')).toBe(off.replace(outputBlock(off), ''));
     });
 });

@@ -21,6 +21,7 @@
  *  - discardedBySeverity is [] by design: the new path has no severity
  *    pre-filter — verify alone decides keep/drop.
  */
+import { withClaudeOneProblem, withClaudeWritingPolicy } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 import type { LanguageModel } from 'ai';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import type { AgentRunner } from '@libs/agent-harness/domain/contracts/agent.contract';
@@ -506,6 +507,10 @@ export async function runAgentLoopViaCore(
             fallbackModelId,
             (secrets.prebuiltModel as { modelId?: string } | undefined)?.modelId,
         ].some((id) => typeof id === 'string' && /claude/i.test(id));
+    // Ponto unico para um reforco por modelo da regra "um problema por
+    // sugestao" (#1821). Hoje nenhum: o do Muse (withMuseOneProblem) esta em
+    // avaliacao e fica fora ate decidir.
+    const reforcoDoModelo = (prompt: string): string => prompt;
     const buildSpecWithLedger = (
         ledger: DiffCoverageLedger,
         maxStepsOverride?: number,
@@ -513,17 +518,16 @@ export async function runAgentLoopViaCore(
         /** So as passadas dev-level ligam: o campo precisa estar no schema da
          *  ferramenta, senao `additionalProperties:false` o descarta. */
         requireDevLevel?: boolean,
-        /** Saida enxuta (#1821): tambem desliga o `reason` obrigatorio. */
-        leanOutput?: boolean,
     ) =>
         buildFinderAgentSpec({
-            systemPrompt: systemPromptOverride ?? input.systemPrompt,
-            requireFindingReason: leanOutput ? false : input.requireFindingReason,
+            // Claude: a politica de escrita WHAT/WHY/HOW com "um problema so" (#1821).
+            systemPrompt:
+                systemPromptOverride ??
+                (claudeSafeWording ? withClaudeWritingPolicy(input.systemPrompt) : input.systemPrompt),
+            // A saida enxuta e o formato do finder: sem `reason` por achado.
+            requireFindingReason: false,
             claudeSafeWording,
             ...(requireDevLevel ? { requireDevLevel: true } : {}),
-            // Global (RECALL_GEN_LEAN, o generalista e tudo que usa o spec dele)
-            // ou por passada (as variantes enxutas do eval).
-            leanOutput: leanOutput || input.leanOutput,
             modelId: specModelId,
             fallbackModelId,
             usageRunName: input.usageRunName,
@@ -577,7 +581,9 @@ export async function runAgentLoopViaCore(
     // reviewer framing this knob exists to replace.
     let finderPrompt = input.adversarial
         ? buildAdversarialPrompt(rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget), true)
-        : input.userPrompt;
+        : claudeSafeWording
+          ? withClaudeOneProblem(input.userPrompt)
+          : reforcoDoModelo(input.userPrompt);
     if (input.scoutVerdict) {
         try {
             const flags = await runScout(
@@ -672,8 +678,6 @@ export async function runAgentLoopViaCore(
                               }),
                               1,
                               SCOUT_AGENT_SYSTEM_PROMPT,
-                              false,
-                              true,
                           ),
                   }
                 : {}),
@@ -825,7 +829,6 @@ export async function runAgentLoopViaCore(
                                   undefined,
                                   undefined,
                                   claudeSafeWording,
-                                  !!input.microAgentLeanOutput,
                               ),
                               // Teto de passos proprio dos agentes de classe (medido
                               // em 26/09: 8 empata ou ganha de 12 e corta ~1/3 dos
@@ -834,8 +837,6 @@ export async function runAgentLoopViaCore(
                                   ledger(),
                                   input.microAgentMaxSteps ?? input.maxSteps ?? 12,
                                   MICRO_AGENT_SYSTEM_PROMPT,
-                                  false,
-                                  !!input.microAgentLeanOutput,
                               ),
                           }))
                         : []),
@@ -926,7 +927,7 @@ export async function runAgentLoopViaCore(
                                 label: experimentalExtraLabel(`proc-${proc[1]}-p${proc[2]}${proc[3] ?? ''}`),
                                 phase: 0,
                                 prompt: enxuto ? comSaidaEnxuta(base, 'bug', false) : base,
-                                spec: buildSpecWithLedger(ledger(), Number(proc[2]), PROCEDURE_SYSTEM_PROMPT, false, enxuto),
+                                spec: buildSpecWithLedger(ledger(), Number(proc[2]), PROCEDURE_SYSTEM_PROMPT),
                             }];
                         }
                         // exp-chain-<categoria>-p<N>: pleno -> senior -> expert em
@@ -995,7 +996,6 @@ export async function runAgentLoopViaCore(
                                     n,
                                     variante === 'qa' ? DEV_LEVEL_QA_SYSTEM_PROMPT : DEV_LEVEL_SYSTEM_PROMPT,
                                     true,
-                                    enxuto,
                                 ),
                             }];
                         }
@@ -1028,8 +1028,8 @@ export async function runAgentLoopViaCore(
                             return microGroups.map((group) => ({
                                 label: experimentalExtraLabel(`p${n}${comGrafo ? 'g' : ''}${teto[3] ?? ''}-${group.id}`),
                                 phase: 0,
-                                prompt: buildMicroAgentPrompt(group, diff, comGrafo ? input.xfileCallGraph : grafoParaOsAgentes, input.microAgentTeto ?? 2, semCensura, reguaEvidencia, claudeSafeWording, !!input.microAgentLeanOutput),
-                                spec: buildSpecWithLedger(ledger(), n, MICRO_AGENT_SYSTEM_PROMPT, false, !!input.microAgentLeanOutput),
+                                prompt: buildMicroAgentPrompt(group, diff, comGrafo ? input.xfileCallGraph : grafoParaOsAgentes, input.microAgentTeto ?? 2, semCensura, reguaEvidencia, claudeSafeWording),
+                                spec: buildSpecWithLedger(ledger(), n, MICRO_AGENT_SYSTEM_PROMPT),
                             }));
                         }
                         // exp-grp-<classe>+<classe>...: um agente com varias classes.
@@ -1110,7 +1110,9 @@ export async function runAgentLoopViaCore(
                           ]
                         : []),
                 ];
-                return passes.length ? passes : undefined;
+                return passes.length
+                    ? passes.map((p) => (typeof p.prompt === 'string' ? { ...p, prompt: reforcoDoModelo(p.prompt) } : p))
+                    : undefined;
             })(),
             shardCap: input.shardCap,
             shardPerWorker: input.shardPerWorker,

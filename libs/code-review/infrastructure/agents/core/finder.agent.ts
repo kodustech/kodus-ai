@@ -141,97 +141,22 @@ const REASON_DESCRIPTION_EVIDENCE =
 const DEV_LEVEL_DESCRIPTION =
     'The LEAST experienced reviewer who would have caught this: junior if it is visible in the changed lines themselves, pleno if you had to follow the value somewhere else, senior if it only appears when you compare the change against what the code guaranteed before, expert if it only appears on a run that is not the simple one (a second execution, a concurrent one, a retry, a cold cache, or an API contract that disagrees with how the call reads), qa if it only showed up when a quality analyst exercised a concrete test case. This is not severity.';
 
+/** The finder's output: exactly the fields the prompt asks for, all required.
+ *  Snippet, fix, severity and confidence are not part of it at all; a later
+ *  enrichment stage adds them. */
 function buildSubmitResultSchema(
     requireFindingReason = false,
     claudeSafeWording = false,
     /** EXPERIMENTO (#1821, so o eval liga): exige `developerLevel` por achado.
      *  Precisa estar AQUI, e nao so no zod: o schema da ferramenta declara
      *  `additionalProperties: false`, entao um campo ausente daqui e descartado
-     *  pelo provider antes de qualquer parsing — medido no smoke de 29/09, 1 de
-     *  9 achados chegou com o campo. E a mesma armadilha que engoliu o `reason`. */
+     *  pelo provider antes de qualquer parsing. */
     requireDevLevel = false,
-    leanOutput = false,
 ): JSONSchema {
-    if (leanOutput) {
-        return buildLeanSubmitResultSchema(
-            requireFindingReason,
-            claudeSafeWording,
-            requireDevLevel,
-        );
-    }
     return {
         type: 'object',
         // additionalProperties:false on every object is required by provider strict
-        // tool use / structured output modes. Harmless in best-effort mode; optional
-        // properties are still allowed.
-        additionalProperties: false,
-        properties: {
-            reasoning: { type: 'string' },
-            suggestions: {
-                type: 'array',
-                items: {
-                    type: 'object',
-                    additionalProperties: false,
-                    properties: {
-                        relevantFile: { type: 'string' },
-                        language: { type: 'string' },
-                        label: {
-                            type: 'string',
-                            enum: ['bug', 'security', 'performance'],
-                        },
-                        suggestionContent: { type: 'string' },
-                        existingCode: { type: 'string' },
-                        improvedCode: { type: 'string' },
-                        oneSentenceSummary: { type: 'string' },
-                        relevantLinesStart: { type: 'number' },
-                        relevantLinesEnd: { type: 'number' },
-                        severity: {
-                            type: 'string',
-                            enum: ['critical', 'high', 'medium', 'low'],
-                        },
-                        confidence: { type: 'number' },
-                        ruleUuid: { type: 'string' },
-                        reason: {
-                            type: 'string',
-                            description: claudeSafeWording
-                                ? REASON_DESCRIPTION_EVIDENCE
-                                : REASON_DESCRIPTION_WALK,
-                        },
-                        ...(requireDevLevel
-                            ? {
-                                  developerLevel: {
-                                      type: 'string',
-                                      enum: ['junior', 'pleno', 'senior', 'expert', 'qa'],
-                                      description: DEV_LEVEL_DESCRIPTION,
-                                  },
-                              }
-                            : {}),
-                    },
-                    required: [
-                        'relevantFile',
-                        'suggestionContent',
-                        'existingCode',
-                        'improvedCode',
-                        ...(requireFindingReason ? ['reason'] : []),
-                        ...(requireDevLevel ? ['developerLevel'] : []),
-                    ],
-                },
-            },
-        },
-        required: ['reasoning', 'suggestions'],
-    };
-}
-
-/** Lean output (#1821): exactly the fields the lean prompt asks for, all
- *  required. Snippet, fix, severity and confidence are not optional here —
- *  they are not part of the finder's output at all; a later stage adds them. */
-function buildLeanSubmitResultSchema(
-    requireFindingReason: boolean,
-    claudeSafeWording: boolean,
-    requireDevLevel: boolean,
-): JSONSchema {
-    return {
-        type: 'object',
+        // tool use / structured output modes.
         additionalProperties: false,
         properties: {
             reasoning: { type: 'string' },
@@ -307,7 +232,6 @@ export function buildSubmitResultTool(
     requireFindingReason = false,
     claudeSafeWording = false,
     requireDevLevel = false,
-    leanOutput = false,
 ): AgentTool {
     return {
         ...submitResultTool,
@@ -315,7 +239,6 @@ export function buildSubmitResultTool(
             requireFindingReason,
             claudeSafeWording,
             requireDevLevel,
-            leanOutput,
         ),
         description: requireFindingReason && !claudeSafeWording
             ? 'Submit your final findings and end the review. Every finding must carry a `reason`: the walk that produced it, with file:line. A finding you cannot walk is one you should not submit.'
@@ -340,8 +263,6 @@ export interface BuildFinderSpecParams {
     /** Claude: texto de evidencia no lugar do percurso (ver
      *  REASON_DESCRIPTION_EVIDENCE). */
     claudeSafeWording?: boolean;
-    /** #1821 experiment: submitResult requires only file + content. */
-    leanOutput?: boolean;
     /** Investigation tools (grep/readFile/...) from buildFinderToolRegistry. */
     tools: ToolRegistry;
     coverageLedger: ProgressLedger;
@@ -373,7 +294,6 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
                 params.requireFindingReason,
                 params.claudeSafeWording,
                 params.requireDevLevel,
-                params.leanOutput,
             ),
             strict: supportsStrictToolsForRun(
                 params.modelId,
@@ -547,21 +467,13 @@ const RECOVERY_SCHEMA = z.object({
         z.object({
             relevantFile: z.string(),
             suggestionContent: z.string(),
-            // Nullable, como no schema principal (findings-schema.ts): prosa que
-            // descreve um defeito sem citar o trecho nao traz codigo, e o modelo
-            // devolve null. Exigir string derrubava a recuperacao INTEIRA com
-            // "response did not match schema" — medido no GPT-6.1 (30/09) e a
-            // causa das falhas atribuidas ao `managed-default`, que e so o
-            // rotulo da telemetria quando o eval passa o modelo pronto.
-            existingCode: z.string().nullable(),
-            improvedCode: z.string().nullable(),
-            language: z.string().nullable(),
+            // Same lean fields as submitResult. Nullable: prose that describes a
+            // defect may not name its label or lines, and requiring them made
+            // the WHOLE recovery fail with "response did not match schema"
+            // (measured on GPT-6.1, 30/09).
             label: z.string().nullable(),
-            oneSentenceSummary: z.string().nullable(),
             relevantLinesStart: z.number().nullable(),
             relevantLinesEnd: z.number().nullable(),
-            severity: z.string().nullable(),
-            confidence: z.number().nullable(),
         }),
     ),
 });

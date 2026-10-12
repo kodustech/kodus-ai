@@ -336,11 +336,7 @@ describe('rendered prompt snapshots', () => {
                 - For every enabled category (bug, security, performance), either report a concrete finding or explain in the reasoning why no concrete issue exists.
                 - Do not suppress a concrete performance issue just because it is not a correctness bug. If the primary failure mode is scale, query count, cache blowup, unbounded loading, async fanout, or blocking I/O, label it as performance.
                 - Do not suppress a concrete security issue just because the code also has a bug. If the primary failure mode is exploitability, authorization bypass, trust-boundary failure, or unsafe input reaching a sink, label it as security.
-                - Assign a confidence score (1-10) to each finding. Be honest — overconfidence wastes verification budget:
-                  9-10: You read BOTH the callsite AND the callee definition, confirmed the types/signatures mismatch or the wrong return value, and can name the exact failing input. Reserve 10 for bugs where you verified the fix would work.
-                  7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
-                  5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
-                  1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.
+                - One problem per suggestion. Each entry in "suggestions" describes exactly ONE defect: one root cause and the failure it causes. If the same code has two problems (for example a missing validation and a wrong argument), report them as two separate suggestions, each anchored to its own lines. Never combine several problems in one suggestion.
                 - Return only the JSON object inside markdown fences, no extra text.
               </Rules>
 
@@ -352,15 +348,9 @@ describe('rendered prompt snapshots', () => {
                 {
                   "label": "bug|security|performance",
                   "relevantFile": "path/to/file.ext",
-                  "language": "the file language",
-                  "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
-                  "existingCode": "problematic code snippet from the diff",
-                  "improvedCode": "fixed code snippet (only if fix is clear from context)",
-                  "oneSentenceSummary": "Brief summary",
                   "relevantLinesStart": 10,
                   "relevantLinesEnd": 15,
-                  "severity": "critical|high|medium|low",
-                  "confidence": 8
+                  "suggestionContent": "the ONE problem: what is wrong and why it matters"
                 }
               ]
             }
@@ -436,11 +426,7 @@ describe('rendered prompt snapshots', () => {
                 - For every enabled category (bug, security, performance), either report a concrete finding or explain in the reasoning why no concrete issue exists.
                 - Do not suppress a concrete performance issue just because it is not a correctness bug. If the primary failure mode is scale, query count, cache blowup, unbounded loading, async fanout, or blocking I/O, label it as performance.
                 - Do not suppress a concrete security issue just because the code also has a bug. If the primary failure mode is exploitability, authorization bypass, trust-boundary failure, or unsafe input reaching a sink, label it as security.
-                - Assign a confidence score (1-10) to each finding. Be honest — overconfidence wastes verification budget:
-                  9-10: You read BOTH the callsite AND the callee definition, confirmed the types/signatures mismatch or the wrong return value, and can name the exact failing input. Reserve 10 for bugs where you verified the fix would work.
-                  7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
-                  5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
-                  1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.
+                - One problem per suggestion. Each entry in "suggestions" describes exactly ONE defect: one root cause and the failure it causes. If the same code has two problems (for example a missing validation and a wrong argument), report them as two separate suggestions, each anchored to its own lines. Never combine several problems in one suggestion.
                 - Return only the JSON object inside markdown fences, no extra text.
               </Rules>
 
@@ -452,15 +438,9 @@ describe('rendered prompt snapshots', () => {
                 {
                   "label": "bug|security|performance",
                   "relevantFile": "path/to/file.ext",
-                  "language": "the file language",
-                  "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
-                  "existingCode": "problematic code snippet from the diff",
-                  "improvedCode": "fixed code snippet (only if fix is clear from context)",
-                  "oneSentenceSummary": "Brief summary",
                   "relevantLinesStart": 10,
                   "relevantLinesEnd": 15,
-                  "severity": "critical|high|medium|low",
-                  "confidence": 8
+                  "suggestionContent": "the ONE problem: what is wrong and why it matters"
                 }
               ]
             }
@@ -517,7 +497,7 @@ describe('rendered prompt snapshots', () => {
                 - Reporting threshold (high-recall): report any defect the changed code makes you suspect — anchor it to a changed line and name the failure kind (wrong output, crash, broken contract/branch, lost side effect, broken caller/callee assumption). You need not prove the exact triggering input; the verifier filters. Only pure speculation with no anchor is out.
                 - Resource-exhaustion, injection, bypass, perf (O(N)/N+1), and missing-defensive (CSRF/rate-limit/validation) concerns: report when the changed code makes you suspect them — anchor + let the verifier judge; do not pre-suppress by class.
                 - "Looks correct" is not a dismissal — explain why it cannot fail.
-                - Assign confidence 1–10. Be honest: ≥9 only when both caller and callee read; ≤4 = speculative, do not report below 5.
+                - One problem per suggestion. Each entry in "suggestions" describes exactly ONE defect: one root cause and the failure it causes. If the same code has two problems (for example a missing validation and a wrong argument), report them as two separate suggestions, each anchored to its own lines. Never combine several problems in one suggestion.
                 - Submit via the submitResult tool; do not print free-form JSON.
               </Rules>
             </ReviewTask>"
@@ -564,7 +544,6 @@ describe('rendered prompt snapshots', () => {
 
                 PHASE 3 — RESPOND
                   Return a JSON object with your findings. Every finding must cite exact line numbers from the diff.
-                  Assign confidence honestly: 7+ only when the defect is obvious from the shown lines, 3-5 when you suspect it but cannot fully prove it, below 3 for speculation (do NOT report below 5).
 
                 FORBIDDEN:
                   - Claiming a caller passes wrong data (you cannot see callers).
@@ -623,7 +602,7 @@ describe('rendered prompt snapshots', () => {
                 - DO NOT report: generic performance theories, missing CSRF/rate-limiting, speculative race conditions without a visible shared-state violation, suggestions that require knowing how the code is used elsewhere.
                 - Every finding must pass this test: "Can I point to the exact lines in the diff and explain the failure path using only what is visible here?"
                 - If in doubt, do NOT report it.
-                - Assign a confidence score (1-10). In self-contained mode, confidence above 7 is rare — reserve it for defects that are obvious from the shown lines alone.
+                - One problem per suggestion. Each entry in "suggestions" describes exactly ONE defect: one root cause and the failure it causes. If the same code has two problems (for example a missing validation and a wrong argument), report them as two separate suggestions, each anchored to its own lines. Never combine several problems in one suggestion.
                 - Return only the JSON object inside markdown fences, no extra text.
               </Rules>
 
@@ -635,15 +614,9 @@ describe('rendered prompt snapshots', () => {
                 {
                   "label": "bug|security|performance",
                   "relevantFile": "path/to/file.ext",
-                  "language": "the file language",
-                  "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact visible from the diff. HOW: concrete fix if clear.",
-                  "existingCode": "problematic code snippet from the diff",
-                  "improvedCode": "fixed code snippet",
-                  "oneSentenceSummary": "Brief summary",
                   "relevantLinesStart": 10,
                   "relevantLinesEnd": 15,
-                  "severity": "critical|high|medium|low",
-                  "confidence": 6
+                  "suggestionContent": "the ONE problem: what is wrong and why it matters"
                 }
               ]
             }
