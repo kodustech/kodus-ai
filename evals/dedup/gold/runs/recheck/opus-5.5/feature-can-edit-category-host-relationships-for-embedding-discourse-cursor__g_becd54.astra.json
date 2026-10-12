@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e1409577",
+     "s_6580f8e0"
+    ],
+    "defect": "As ações update e destroy não tratam a ausência do EmbeddableHost consultado, causando NoMethodError e resposta 500 em vez de 404."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S17 relatam o mesmo defeito nas mesmas ações: acessar um registro inexistente sem verificar nil. Ambas propõem a mesma correção, usando find ou tratando explicitamente a ausência, portanto o grupo deve ser mantido."
+ }
+}

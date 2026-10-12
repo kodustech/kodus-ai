@@ -1,0 +1,51 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "c8cecf8db7c344a97b81d6fc1b5d54ab4dd86c20",
+  "attempt": 1,
+  "ms": 40276,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_edcf5e7e",
+          "s_3fcf3843",
+          "s_f9a913f1",
+          "s_3fc72bd5"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "AccessTokenContext checks grantType twice instead of validating rawTokenId, allowing null token IDs.",
+        "rationale": "All four suggestions identify the same incorrect requireNonNull argument in the constructor; replacing it with rawTokenId resolves all four."
+      },
+      {
+        "members": [
+          "s_843e5d06",
+          "s_16105147",
+          "s_dedf90ac",
+          "s_9fe47bb1",
+          "s_0f11c762",
+          "s_48023927",
+          "s_c4e9c10a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "isAccessTokenId extracts the grant shortcut at the wrong offset, reverses the equality check, and lacks a prefix-length guard against short IDs; its offset comment is also misleading.",
+        "rationale": "Every suggestion reports the same substring-offset and comparison defects in the matcher. The merged comment must also preserve the short-ID exception reported by s_843e5d06 and the misleading comment identified by s_9fe47bb1."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_febeb791",
+        "confidence": "high"
+      },
+      {
+        "id": "s_09ef53db",
+        "confidence": "high"
+      }
+    ]
+  }
+}

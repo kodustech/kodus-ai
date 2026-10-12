@@ -1,0 +1,47 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "updateEvent (lines ~254-256): fallback find compares against falsy externalCalendarId, never matches, destination calendar fallback lost"
+   },
+   {
+    "id": "F2",
+    "description": "deleteEvent (lines ~315-317): same dead fallback find, calendarId becomes undefined instead of destination calendar"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_03a86b3c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e60cb4a6",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_40565196",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_77f00126",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

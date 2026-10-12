@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_87d9d8ee",
+     "s_c3704159"
+    ],
+    "defect": "TotalDocs itera b.cache sem adquirir cacheMu e pode concorrer com a escrita de BuildIndex durante a inicialização, causando uma falha fatal no processo."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 descrevem o mesmo acesso concorrente ao mapa b.cache, destacando respectivamente a chamada de TotalDocs e a escrita em BuildIndex. Sincronizar a leitura em TotalDocs resolve ambas; a diferença entre os locks propostos não caracteriza outro defeito."
+ }
+}

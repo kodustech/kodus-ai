@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "getShortcut() javadoc in OAuth2GrantTypeFactory says 'usually like 3-letters', but DefaultTokenContextEncoderProvider.getTokenContextFromTokenId requires exactly 2 characters (6-char prefix), so a 3-letter shortcut produces token IDs that cannot be decoded"
+   },
+   {
+    "id": "F2",
+    "description": "Nothing checks that the shortcut is non-null and exactly 2 characters; a null shortcut throws an NPE on the ConcurrentHashMap put in DefaultTokenContextEncoderProviderFactory.postInit and server startup fails"
+   },
+   {
+    "id": "F3",
+    "description": "getShortcut() is a new abstract SPI method with no default implementation, so existing custom OAuth2GrantTypeFactory implementations stop compiling or hit AbstractMethodError"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_9c9743f6",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7cc8bcbd",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,40 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_f5f884a5",
+     "s_1afe381d",
+     "s_1a067d7d",
+     "s_f1c91035",
+     "s_ffcfc8fc"
+    ],
+    "defect": "O matcher extrai o grant shortcut com substring(3, 5), embora ele ocupe os índices 4 e 5 e exija substring(4, 6)."
+   },
+   {
+    "members": [
+     "s_2017887b",
+     "s_4d9f7dee",
+     "s_dd50b51b",
+     "s_f60d4003"
+    ],
+    "defect": "A condição de igualdade do matcher está invertida, retornando false quando o trecho corresponde ao grant shortcut esperado."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_f5f884a5",
+   "s_1afe381d",
+   "s_2017887b",
+   "s_4d9f7dee",
+   "s_dd50b51b",
+   "s_1a067d7d",
+   "s_f1c91035",
+   "s_f60d4003",
+   "s_ffcfc8fc"
+  ],
+  "reasoningPt": "Os limites do substring e a condição invertida são defeitos distintos, com correções independentes. Considerando o primeiro defeito apresentado, inclusive no resumo, S2, S6, S15, S16 e S21 priorizam o deslocamento; S8, S12, S13 e S20 priorizam a igualdade invertida. Todas relatam ambos os defeitos e, portanto, entram em bundles."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9201a4d6",
+     "s_85b8c9a1"
+    ],
+    "defect": "O listener de remoção de clientes chama setPermissionsEnabled da implementação V2, que lança UnsupportedOperationException e interrompe a exclusão."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_9201a4d6"
+  ],
+  "reasoningPt": "S1 e S9 têm o mesmo defeito principal: a exclusão chama setPermissionsEnabled em V2 e recebe UnsupportedOperationException. S1 também relata um defeito independente: a limpeza ignorada em modo somente V2, sendo classificada como bundle. Em S9, a ausência de limpeza é apresentada como consequência da exceção."
+ }
+}

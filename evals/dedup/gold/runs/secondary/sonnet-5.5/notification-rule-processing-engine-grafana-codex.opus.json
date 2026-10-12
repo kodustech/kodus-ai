@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_37747cd1",
+    "mainDefect": "The comment says 'always supported (no loading state for ruler availability)', but the code makes support depend on the folder loading state (`loading ? NotSupported : AlwaysSupported`).",
+    "secondary": [
+     {
+      "defect": "The stray `// duplicate` comment on the useIsGrafanaPromRuleEditable call says nothing useful.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The comment 'All GrafanaPromRuleDTO rules are Grafana-managed by definition' sits above `isAlertingRule`, which also excludes recording rules, so the comment does not match the code.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_df9ce485",
+     "s_08cbca4d",
+     "s_389b8963"
+    ],
+    "defect": "A lista de fallback chama SiteSetting.default_locale.to_sym sem proteção contra um valor nulo, podendo interromper a tradução."
+   }
+  ],
+  "unique": [
+   "s_831e218a"
+  ],
+  "bundles": [
+   "s_08cbca4d"
+  ],
+  "reasoningPt": "S1, S3 e S7 têm como defeito principal a conversão de um default_locale nulo sem proteção. S5 trata da mistura de String e Symbol, que exige normalização e constitui outro defeito. S3 também relata esse segundo problema, por isso é um bundle, mas permanece no grupo do primeiro defeito."
+ }
+}

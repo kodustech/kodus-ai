@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0f08123e",
+    "mainDefect": "The test likely uses an invalid OAuth state, causing it to fail before reaching the intended integration-not-found branch.",
+    "secondary": [
+     {
+      "defect": "The assertion checks a generic error message that can pass for unrelated failures, so it does not verify the intended not-found behavior.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

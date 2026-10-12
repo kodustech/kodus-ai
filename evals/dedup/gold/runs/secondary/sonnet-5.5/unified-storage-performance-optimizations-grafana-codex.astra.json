@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_2ea8ac8d",
+    "mainDefect": "Concurrent builds for the same resource can both call bleve.New on the same directory, causing file-backed index creation to fail with 'path already exists'.",
+    "secondary": [
+     {
+      "defect": "Concurrent memory-index builds can overwrite an index in the cache without closing it, leaking the displaced index.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b2bdd3e9",
+    "mainDefect": "NewResourceServer now blocks on synchronous initialization, including the full search index build.",
+    "secondary": [
+     {
+      "defect": "Initialization failures now abort server construction instead of surfacing lazily through initErr.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Existing callers that invoke Init after construction were not updated for initialization now happening inside the constructor.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

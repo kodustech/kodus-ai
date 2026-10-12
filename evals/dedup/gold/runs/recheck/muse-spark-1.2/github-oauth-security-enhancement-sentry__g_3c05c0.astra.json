@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_dba5cf11",
+     "s_e8005d12"
+    ],
+    "defect": "O limite MAX_ALLOWED_REQUESTS está configurado como 150 quando deveria ser 100."
+   }
+  ],
+  "unique": [
+   "s_c04307da",
+   "s_ed2f4754",
+   "s_be8c18fb",
+   "s_fec7e43b",
+   "s_e345fbc9"
+  ],
+  "bundles": [
+   "s_dba5cf11",
+   "s_e8005d12",
+   "s_c04307da",
+   "s_ed2f4754",
+   "s_be8c18fb",
+   "s_fec7e43b",
+   "s_e345fbc9"
+  ],
+  "reasoningPt": "S8 e S9 apresentam o limite de requisições como primeiro defeito concreto. S10, S11, S12, S13 e S14 começam pelos respectivos defeitos de nomenclatura, busca, temporização, método HTTP e vinculação de campos, que exigem correções distintas. Todas são bundles: o corpo idêntico reúne vários defeitos, mas não substitui o defeito principal apresentado primeiro no resumo."
+ }
+}

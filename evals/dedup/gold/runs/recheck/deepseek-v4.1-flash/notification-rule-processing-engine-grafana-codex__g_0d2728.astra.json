@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_61ba8ef0",
+     "s_9d5d3468"
+    ],
+    "defect": "RuleActionsButtons passa rule possivelmente undefined para useRulerRuleAbility, cuja assinatura ainda exige RulerRuleDTO."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_9d5d3468"
+  ],
+  "reasoningPt": "S9 e S10 relatam primeiro a mesma incompatibilidade entre a prop rule opcional e a assinatura de useRulerRuleAbility, portanto permanecem juntas. S10 também aponta o desaparecimento das ações quando getEditableIdentifier retorna undefined, um defeito adicional que a caracteriza como bundle."
+ }
+}

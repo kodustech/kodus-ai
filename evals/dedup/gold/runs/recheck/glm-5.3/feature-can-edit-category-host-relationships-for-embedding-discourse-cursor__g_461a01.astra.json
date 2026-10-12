@@ -1,0 +1,24 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_14dcd034",
+     "s_7128b0ce",
+     "s_afaedccf",
+     "s_17201292",
+     "s_f33a3118"
+    ],
+    "defect": "A migração acessa a primeira linha do resultado sem verificar sua existência, abortando quando a consulta não retorna linhas e impedindo o fallback."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_afaedccf",
+   "s_17201292"
+  ],
+  "reasoningPt": "S1, S6, S14, S16 e S21 têm o mesmo defeito principal: acesso desprotegido ao resultado vazio da consulta. As referências à consulta de fallback repetem esse mesmo erro. S14 e S16 também apontam a comparação entre um ID armazenado e o nome da categoria, um defeito adicional que os torna bundles sem alterar o agrupamento."
+ }
+}

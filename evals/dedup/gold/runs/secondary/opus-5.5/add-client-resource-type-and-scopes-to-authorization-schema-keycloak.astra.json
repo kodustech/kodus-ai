@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_e8a630ee",
+    "mainDefect": "Searching by the Clients resource type misses untyped per-client resources, so individual-client permissions are never found.",
+    "secondary": [
+     {
+      "defect": "When a type-level permission grants the scope, the method returns the literal resource name \"Clients\" as a client ID, causing a NullPointerException in its caller.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

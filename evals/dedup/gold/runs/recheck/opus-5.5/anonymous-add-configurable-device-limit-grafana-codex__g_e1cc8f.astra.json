@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_15ab1a80",
+     "s_911ba0d0"
+    ],
+    "defect": "O cache local mantém a chave do dispositivo após a falha por limite atingido, permitindo que requisições seguintes contornem o limite por cerca de 29 minutos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S10 descrevem o mesmo defeito: a chave entra no cache antes da gravação e permanece após ErrDeviceLimitReached, liberando as requisições seguintes. Ambas propõem corrigir esse mesmo fluxo, e nenhuma relata um segundo defeito."
+ }
+}

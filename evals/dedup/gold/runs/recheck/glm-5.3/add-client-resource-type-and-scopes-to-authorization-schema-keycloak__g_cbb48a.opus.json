@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8c884e4a",
+     "s_8797ead7"
+    ],
+    "defect": "The Javadoc on the void methods requireView() and requireViewClientScopes() was copied from the boolean can* methods: it says they 'Return true if ...' when it should say they throw ForbiddenException when the matching can* check fails."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S6 apontam o mesmo erro de copiar e colar no Javadoc, em dois métodos void require* vizinhos (requireView e requireViewClientScopes). Os dois dizem 'Returns true' quando deveriam dizer 'Throws ForbiddenException'. É o mesmo erro repetido em dois lugares e se corrige com a mesma mudança, então o grupo fica como está."
+ }
+}

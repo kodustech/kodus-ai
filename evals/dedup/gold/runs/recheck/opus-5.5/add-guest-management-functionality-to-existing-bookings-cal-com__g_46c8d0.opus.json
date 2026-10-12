@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bc207073",
+     "s_6b5ea536",
+     "s_3e2f564b",
+     "s_67d69ac5"
+    ],
+    "defect": "isTeamAdminOrOwner joins isTeamAdmin and isTeamOwner with && instead of ||, so team admins who are not owners are wrongly refused."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_bc207073"
+  ],
+  "reasoningPt": "S1, S14, S16 e S19 apontam o mesmo defeito: o uso de && em vez de || no cálculo de isTeamAdminOrOwner, com a mesma correção. S1 acrescenta no fim um segundo ponto (\"Also...\"), que é evitar as consultas quando teamId é nulo em vez de usar 0. Por isso S1 entra em bundles, mas pela regra do defeito principal continua neste grupo."
+ }
+}

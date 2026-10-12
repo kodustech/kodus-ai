@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7882dbd4",
+     "s_e721f2fc"
+    ],
+    "defect": "Os conteúdos de category_fabricator.rb e embeddable_host_fabricator.rb estão trocados."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S8 relatam a mesma troca de conteúdo entre os dois arquivos, apenas apontando locais diferentes. Recolocar cada fabricator no arquivo correspondente resolve ambas as sugestões, portanto o grupo deve ser mantido."
+ }
+}

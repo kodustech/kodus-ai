@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c8231ce6",
+     "s_29c9524c"
+    ],
+    "defect": "A mesma frase em italiano foi inserida nas instruções de configuração de OTP dos bundles lituanos de account e login."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S3 relatam o mesmo erro repetido em dois arquivos: uma instrução em italiano nos bundles lituanos. Substituir essa frase pela tradução lituana nas duas ocorrências resolve ambos os relatos, mantendo o grupo."
+ }
+}

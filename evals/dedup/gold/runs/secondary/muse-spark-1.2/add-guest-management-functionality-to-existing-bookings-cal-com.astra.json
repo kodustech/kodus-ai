@@ -1,0 +1,82 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6b3b1759",
+    "mainDefect": "Guest emails are not lowercased before blacklist comparison, allowing case variations to bypass the blacklist.",
+    "secondary": [
+     {
+      "defect": "The existing-attendee check is case-sensitive, allowing duplicate attendees with differently cased emails.",
+      "coveredBy": [
+       "s_358a3c52",
+       "s_382d8521"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_9d50fd99",
+    "mainDefect": "The handler passes unfiltered guests to the email manager, causing incorrect new-attendee classification.",
+    "secondary": [
+     {
+      "defect": "The server accepts duplicate emails within a request, allowing duplicate attendee creation.",
+      "coveredBy": [
+       "s_d5ce31d3",
+       "s_663c3e53"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c99a8cda",
+    "mainDefect": "Guest emails are not normalized before blacklist comparison, allowing case variations to bypass the blacklist.",
+    "secondary": [
+     {
+      "defect": "The existing-attendee check is case-sensitive, allowing duplicate attendees with differently cased emails.",
+      "coveredBy": [
+       "s_358a3c52",
+       "s_382d8521"
+      ]
+     },
+     {
+      "defect": "Input guests are not deduplicated case-insensitively within a request.",
+      "coveredBy": [
+       "s_663c3e53"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_358a3c52",
+    "mainDefect": "Guest emails are not normalized to lowercase, allowing case variations to defeat attendee uniqueness checks.",
+    "secondary": [
+     {
+      "defect": "Guest emails are not deduplicated within a request before insertion.",
+      "coveredBy": [
+       "s_d5ce31d3",
+       "s_663c3e53"
+      ]
+     },
+     {
+      "defect": "The read-then-write operation lacks concurrency protection, allowing simultaneous requests to insert duplicate attendees.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_382d8521",
+    "mainDefect": "The attendee-existence check does not normalize guest email casing, allowing duplicate attendees.",
+    "secondary": [
+     {
+      "defect": "The blacklist check does not normalize guest email casing, allowing case variations to bypass the blacklist.",
+      "coveredBy": [
+       "s_6b3b1759",
+       "s_c99a8cda"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

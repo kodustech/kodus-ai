@@ -1,0 +1,79 @@
+{
+  "judge": "opus",
+  "model": "kimi-k3",
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "promptSha": "943da489d862126ae9053fb50dacdad874121a5e",
+  "attempt": 1,
+  "ms": 12284,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 8207,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 574,
+    "output_tokens_details": {
+      "thinking_tokens": 113
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 8207,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 574,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 8207,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 8207
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.0789176,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_d110f3c0",
+          "s_ce320063",
+          "s_a04f7645",
+          "s_aac44397",
+          "s_5d6e93db"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The concurrency test asserts caughtExceptions is empty without joining the reader thread, so an exception from an in-flight request can land in the list after the assertion has already passed.",
+        "rationale": "All five point at the same missing join() between deletedAll.set(true) and the assertion in GroupTest, and all propose the same fix."
+      },
+      {
+        "members": [
+          "s_7793d543",
+          "s_6014debd",
+          "s_03406bfd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "getSubGroupsCount() now returns null after a concurrent delete, which breaks the non-null contract and lets callers that unbox or use the value hit an NPE or emit a null subGroupCount.",
+        "rationale": "All three report the same nullable-return contract change in GroupAdapter.getSubGroupsCount() and suggest returning 0L or another non-null fallback."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_a544519f",
+        "confidence": "high"
+      }
+    ]
+  }
+}

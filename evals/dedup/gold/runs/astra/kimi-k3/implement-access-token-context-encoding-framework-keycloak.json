@@ -1,0 +1,74 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "7721b36dc7ad881396bcfcf14446bf289047bb62",
+  "attempt": 1,
+  "ms": 49427,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_b0aa7885",
+          "s_76bcb0fc",
+          "s_aca65677",
+          "s_e6f8c322",
+          "s_38c9a377",
+          "s_2684011e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "AccessTokenContext's constructor checks grantType twice instead of validating rawTokenId, allowing null token IDs.",
+        "rationale": "Every member identifies the same incorrect argument in the fourth requireNonNull call. Correcting that argument resolves all reported manifestations."
+      },
+      {
+        "members": [
+          "s_ffcfc8fc",
+          "s_4d9f7dee",
+          "s_f60d4003",
+          "s_f1c91035",
+          "s_f5f884a5",
+          "s_1afe381d",
+          "s_1a067d7d",
+          "s_2017887b",
+          "s_dd50b51b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "isAccessTokenId extracts the grant shortcut at the wrong offset and reverses the equality condition; its adjacent comment also states the wrong starting character.",
+        "rationale": "All members report the same incorrect substring in the same matcher, and most also report the inverted condition. s_1afe381d additionally flags the misleading comment, which the merged comment must preserve."
+      },
+      {
+        "members": [
+          "s_071b2150",
+          "s_efbf1629"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The grant-shortcut documentation recommends three characters despite the decoder requiring two, and registration and encoding do not enforce that required length.",
+        "rationale": "Both explicitly report the documentation's conflict with the fixed-width decoder. s_efbf1629 additionally reports missing length validation, so the combined comment must retain both concerns."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_aed13dee",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8d25cd0b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3a81160b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b5837604",
+        "confidence": "high"
+      }
+    ]
+  }
+}

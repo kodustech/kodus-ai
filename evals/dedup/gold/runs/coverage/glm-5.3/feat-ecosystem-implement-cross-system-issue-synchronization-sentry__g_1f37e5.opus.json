@@ -1,0 +1,69 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "assignment_source.py line 18: `queued` defaults to timezone.now(), which runs once at import time, so every instance gets the same stale timestamp"
+   },
+   {
+    "id": "F2",
+    "description": "to_dict() puts a raw datetime into the Celery apply_async kwargs (sync.py:141). It either fails JSON serialization or comes back as an ISO string that from_dict doesn't convert back to a datetime"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7123f91d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_221233e4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ad4d76d9",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_87e5e747",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_81d5305c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7dcbf2c4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_30f59a75",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

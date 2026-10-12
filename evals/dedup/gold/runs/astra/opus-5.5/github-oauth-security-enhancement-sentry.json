@@ -1,0 +1,48 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "59c251e175d86d47e0eb164711713ecb846b5e6e",
+  "attempt": 1,
+  "ms": 29312,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_7e38bae0",
+          "s_cf238e42",
+          "s_f6ecc7cd",
+          "s_b2a83cd2",
+          "s_f4232fe5"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Directly indexing optional sender metadata during installer verification raises an unhandled KeyError instead of rendering a controlled error.",
+        "rationale": "All five suggestions identify the same unguarded metadata lookup at lines 500-505 and the same missing-sender failure. One guarded lookup with controlled failure handling addresses every report."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_cb63bfdb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b8cedde1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_229ae289",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1fa2d487",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c5a23624",
+        "confidence": "high"
+      }
+    ]
+  }
+}

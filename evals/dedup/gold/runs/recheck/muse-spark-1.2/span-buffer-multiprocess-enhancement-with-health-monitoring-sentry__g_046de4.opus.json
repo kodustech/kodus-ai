@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ca82d915",
+     "s_f884b54a",
+     "s_975b3a2a"
+    ],
+    "defect": "`max_processes or len(buffer.assigned_shards)` treats 0 as missing and can produce zero flusher processes; fix it with an explicit None check and a lower bound of at least one process."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S7 e S11 apontam o mesmo defeito na linha 51: o uso de `or` em `max_processes` trata 0 como ausente e pode resultar em zero processos de flusher. Todas propõem a mesma correção (checagem explícita de None e garantir pelo menos um processo). As diferenças são só de ênfase, já que S7 detalha os efeitos em submit(), então o grupo continua como está."
+ }
+}

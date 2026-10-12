@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e4020fa2",
+     "s_d2aeb4fc",
+     "s_c9ce7bf7"
+    ],
+    "defect": "A atualização de retryCount sem proteção dentro do catch pode lançar uma exceção e interromper todo o lote de lembretes."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_d2aeb4fc"
+  ],
+  "reasoningPt": "S1, S3 e S4 relatam o mesmo defeito principal: uma falha na atualização dentro do catch escapa e aborta o lote. S3 também aponta o escopo excessivo do deleteMany, sendo um bundle, mas esse defeito secundário não altera seu agrupamento."
+ }
+}

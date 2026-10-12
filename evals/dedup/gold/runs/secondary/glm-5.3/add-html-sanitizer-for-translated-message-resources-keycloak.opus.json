@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c4bb13a0",
+    "mainDefect": "In the admin-ui keycloak.v2 English bundle, error-invalid-multivalued-size was rewritten in Java MessageFormat syntax ({0}, {2,choice,...}), but the React admin console's i18next only fills in {{n}} placeholders, so users see the raw text.",
+    "secondary": [
+     {
+      "defect": "The same MessageFormat rewrite of error-invalid-multivalued-size was made in the account-ui keycloak.v3 English bundle, which also uses i18next, so the account console breaks the same way.",
+      "coveredBy": [
+       "s_0e7da5d3",
+       "s_ecc11bba",
+       "s_4b64c7d5"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

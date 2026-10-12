@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8cace1ff",
+     "s_53c0e8ba",
+     "s_e3323d09"
+    ],
+    "defect": "The new TotalDocs() call in search init ranges over b.cache without holding cacheMu while the watch goroutine can write to the cache at the same time, which causes a fatal concurrent map access."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S7 e S8 descrevem o mesmo defeito: TotalDocs() percorre b.cache sem lock enquanto a goroutine de watch pode escrever no cache. S8 olha a partir do lock reduzido em BuildIndex, mas a correção é a mesma (RLock em TotalDocs ou mudar a chamada de lugar). Nenhuma delas reporta um segundo defeito."
+ }
+}

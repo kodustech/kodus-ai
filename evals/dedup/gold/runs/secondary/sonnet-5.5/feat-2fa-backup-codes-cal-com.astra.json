@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d02f32dc",
+    "mainDefect": "Dismissing the dialog through the overlay or Esc after enabling 2FA does not call onEnable(), leaving the settings UI stale.",
+    "secondary": [
+     {
+      "defect": "Dismissing the dialog does not reset its step, so reopening displays old backup codes without repeating the password flow.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_50511f10",
+    "mainDefect": "Non-atomic backup code consumption allows concurrent logins to succeed using the same single-use code.",
+    "secondary": [
+     {
+      "defect": "Concurrent backup code writes can overwrite each other's updates, losing a consumption update.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

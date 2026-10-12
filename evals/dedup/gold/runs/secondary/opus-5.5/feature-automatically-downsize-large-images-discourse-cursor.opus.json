@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_16e7d729",
+    "mainDefect": "The client-side size limit is hard-coded to 10MB for every upload type, so attachments are no longer checked against max_attachment_size_kb.",
+    "secondary": [
+     {
+      "defect": "The file-too-large error messages, both here and in the 413 handler, show 10MB instead of the limit the server actually enforces.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4e7770ed",
+    "mainDefect": "Because maxSizeKB is hard-coded to 10MB for every type, attachments up to 10MB pass the client check even though the server still enforces max_attachment_size_kb.",
+    "secondary": [
+     {
+      "defect": "The translated file_too_large message shows max_size_kb 10240 instead of the limit the server actually enforces.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

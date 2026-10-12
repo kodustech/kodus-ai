@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_86f24f93",
+     "s_258d0746",
+     "s_976a034f",
+     "s_ead68308"
+    ],
+    "defect": "totalPages uses Math.floor(user_count / limit) + 1, which counts one page too many when user_count is an exact multiple of limit, so 'next' stays enabled and opens an empty page; Math.ceil should be used."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4, S5 e S6 apontam o mesmo defeito: totalPages calculado com Math.floor(...) + 1, que conta uma página a mais quando user_count é múltiplo exato de limit. Todas propõem a mesma correção com Math.ceil. Nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

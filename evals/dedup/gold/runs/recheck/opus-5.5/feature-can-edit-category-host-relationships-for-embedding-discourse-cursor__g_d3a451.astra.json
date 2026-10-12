@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_abc77493",
+     "s_1f259cc1"
+    ],
+    "defect": "O callback before_validation chama sub! em host sem verificar nil, causando NoMethodError em vez de um erro de validação."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S15 apontam o mesmo defeito no mesmo callback: chamar sub! quando host é nil. Os exemplos de entrada e as correções propostas variam, mas uma única proteção contra nil resolve ambos os relatos."
+ }
+}

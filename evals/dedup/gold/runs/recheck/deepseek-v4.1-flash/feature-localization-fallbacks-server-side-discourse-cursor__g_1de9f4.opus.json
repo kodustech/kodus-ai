@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_df9ce485",
+     "s_08cbca4d",
+     "s_389b8963"
+    ],
+    "defect": "FallbackLocaleList#[] calls SiteSetting.default_locale.to_sym before .compact, so a nil or unavailable default locale raises NoMethodError on every translation and request."
+   }
+  ],
+  "unique": [
+   "s_831e218a"
+  ],
+  "bundles": [
+   "s_08cbca4d"
+  ],
+  "reasoningPt": "S1, S3 e S7 apontam o mesmo defeito principal: `.to_sym` é chamado em `SiteSetting.default_locale` antes do `.compact`, então um valor nil gera erro em toda tradução. O S3 também cita, como segundo ponto (\"Also...\"), a mistura de String e Symbol que impede o `uniq` de remover duplicatas, por isso entra em bundles. O S5 trata só desse segundo defeito, que tem outra correção, e fica sozinho."
+ }
+}

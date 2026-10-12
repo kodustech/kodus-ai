@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b5a7f414",
+     "s_2f45f628"
+    ],
+    "defect": "A ausência ou falha de leitura do arquivo inglês derivado lança RuntimeException não tratada, interrompendo a verificação em vez de usar os mecanismos de erro existentes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S9 relatam o mesmo defeito nas linhas 73–80: a RuntimeException ao carregar o arquivo inglês escapa de verify() e interrompe a execução. S9 acrescenta um exemplo com o fixture renomeado, mas uma única correção no tratamento desse erro resolve ambas."
+ }
+}

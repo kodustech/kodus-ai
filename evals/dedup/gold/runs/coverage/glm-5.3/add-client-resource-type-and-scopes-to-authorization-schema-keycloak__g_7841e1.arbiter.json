@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "getClientsWithPermission (ClientPermissionsV2 lines 138-142) adds the name of the type-level \"Clients\" resource to the result set instead of real client IDs when an all-clients permission grants the scope"
+   },
+   {
+    "id": "F2",
+    "description": "Per-client resources created by AdminPermissionsSchema.getOrCreateResource have no type attribute, so findByType misses them and per-client grants are never returned"
+   },
+   {
+    "id": "F3",
+    "description": "The caller AvailableRoleMappingResource.getRoleIdsWithPermissions passes each returned ID to realm.getClientById(cid) and dereferences the result, so the bogus \"Clients\" entry causes a NullPointerException / 500 error"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_924e2d8b",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_accc352b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": true,
+  "reasoning": "I used the three parts named in the group problem: the \\\"Clients\\\" name added as if it were a client ID, per-client resources missed because they have no type, and the resulting NPE in the caller.\n\ns_924e2d8b states all three parts outright, so it is complete.\n\ns_accc352b only reports the \\\"Clients\\\" name getting into the set. It says no real client IDs come back for all-clients grants, but that is the same defect, not a separate one. It never says per-client resources lack a type attribute. For impact, it only mentions callers getting an empty or wrong list from set.contains, never the NPE. So it covers F1 only and is not complete.\n\nLabeler 1's extra facets don't hold up. The deleted-client point is only a side remark in s_924e2d8b and is not part of the group problem. The all-clients point is part of F1, not a separate facet."
+ }
+}

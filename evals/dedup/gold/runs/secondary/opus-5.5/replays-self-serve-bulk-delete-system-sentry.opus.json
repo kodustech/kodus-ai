@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0f836d52",
+    "mainDefect": "The mutual-exclusion checks use truthiness, so a report with age 0 plus a timestamp, or timestamp 0 plus an age, passes validation.",
+    "secondary": [
+     {
+      "defect": "A report with neither age nor timestamp passes validation because both fields are optional and nothing requires exactly one of them.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_619962f4",
+    "mainDefect": "exploreParams.tsx still reads the removed `visualize.yAxes` field, so flatMap returns undefined and the saved query's y-axes are lost.",
+    "secondary": [
+     {
+      "defect": "utils.tsx:127 (`visualize?.yAxes ?? []`) and seerSearch.tsx:179 (`v.yAxes`) also still read the removed `yAxes` field, so they silently get empty or undefined y-axes.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

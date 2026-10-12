@@ -1,0 +1,69 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "d57c379eaef3836d769c5553f75fedf41a4c65b2",
+  "attempt": 1,
+  "ms": 40075,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_5ebba24e",
+          "s_b803431c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "fetch_error_details pairs error IDs with nodestore mapping values positionally, potentially associating IDs with the wrong event data.",
+        "rationale": "Both identify the same zip(error_ids, events.values()) defect. Missing, reordered, or deduplicated results are different triggers for the same alignment failure, resolved by matching by node ID."
+      },
+      {
+        "members": [
+          "s_5617da88",
+          "s_b934e7bb",
+          "s_73ccec8d",
+          "s_06a69ac5"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The age/timestamp validators use truthiness instead of presence checks for mutual exclusion and fail to require either field.",
+        "rationale": "All four report the same falsy-value exclusion defect in the same validators. s_06a69ac5 additionally reports acceptance of reports containing neither field, which must survive in the merged comment."
+      },
+      {
+        "members": [
+          "s_c91d29d0",
+          "s_0f7f00ca"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The feature-flagged dashboard table branch passes hardcoded empty columns and data instead of the fetched query results.",
+        "rationale": "Both report the same placeholder props causing empty tables for flagged organizations. Wiring the query results into this branch addresses both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_05939d85",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b6f586de",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c8f5a1e5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_07b5f6bf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1199d6cb",
+        "confidence": "high"
+      }
+    ]
+  }
+}

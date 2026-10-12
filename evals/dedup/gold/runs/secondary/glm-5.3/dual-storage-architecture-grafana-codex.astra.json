@@ -1,0 +1,141 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_01f5b937",
+    "mainDefect": "Background legacy writes inherit request cancellation and can abort when the HTTP request completes.",
+    "secondary": [
+     {
+      "defect": "Legacy-write errors are recorded only in metrics and are not logged, leaving failures invisible in logs.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f5076626",
+    "mainDefect": "Create records unified-storage failures in the legacy-duration metric.",
+    "secondary": [
+     {
+      "defect": "Update records unified-storage failures in the legacy-duration metric.",
+      "coveredBy": [
+       "s_abda811f"
+      ]
+     },
+     {
+      "defect": "DeleteCollection records legacy-write durations and errors in the storage-duration metric.",
+      "coveredBy": [
+       "s_8649b5e3"
+      ]
+     },
+     {
+      "defect": "Successful Delete operations use the object name instead of the resource kind as a metric label.",
+      "coveredBy": [
+       "s_a19a1898"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_48464c58",
+    "mainDefect": "Update passes raw objInfo to legacy storage, recomputing the update instead of mirroring the unified-storage result.",
+    "secondary": [
+     {
+      "defect": "Updating an object absent from legacy storage returns NotFound and never creates the missing legacy copy.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Concurrent background legacy writes can execute out of order and leave legacy storage with stale state.",
+      "coveredBy": [
+       "s_3930204d"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_85cdb7f9",
+    "mainDefect": "Background legacy writes inherit request cancellation and can abort after the handler returns.",
+    "secondary": [
+     {
+      "defect": "Mode-3 unit tests use a never-canceled background context and therefore do not exercise request-cancellation failures.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Mode-3 unit tests do not await and verify the asynchronous legacy writes.",
+      "coveredBy": [
+       "s_952eaebd",
+       "s_3e0dbc3c"
+      ]
+     },
+     {
+      "defect": "The playlist integration tests do not reliably verify that the asynchronous legacy writes complete.",
+      "coveredBy": [
+       "s_c52e7744"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_3e0dbc3c",
+    "mainDefect": "Mode-3 unit tests never await or assert the legacy writes, so removing those writes would leave the tests passing.",
+    "secondary": [
+     {
+      "defect": "Legacy and unified-storage test backends share one mock, preventing independent verification of backend calls.",
+      "coveredBy": [
+       "s_f1e42d68"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_bb72d331",
+    "mainDefect": "Background legacy writes inherit request cancellation and can fail as soon as the HTTP handler returns.",
+    "secondary": [
+     {
+      "defect": "Unit tests use a never-canceled background context and therefore miss request-cancellation failures.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_1f0c2877",
+    "mainDefect": "Create records unified-storage failures in the legacy-duration metric.",
+    "secondary": [
+     {
+      "defect": "Update records unified-storage failures in the legacy-duration metric.",
+      "coveredBy": [
+       "s_abda811f"
+      ]
+     },
+     {
+      "defect": "DeleteCollection records legacy-write durations and errors in the storage-duration metric.",
+      "coveredBy": [
+       "s_8649b5e3"
+      ]
+     },
+     {
+      "defect": "Successful Delete operations use the object name instead of the resource kind as a metric label.",
+      "coveredBy": [
+       "s_a19a1898"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_27f7b4ca",
+    "mainDefect": "Update passes raw objInfo to legacy storage instead of wrapping the object committed by unified storage, allowing divergent results.",
+    "secondary": [
+     {
+      "defect": "The asynchronous legacy update inherits the request context and can be aborted by request cancellation.",
+      "coveredBy": [
+       "s_01f5b937",
+       "s_85cdb7f9",
+       "s_bb72d331",
+       "s_093e0431"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

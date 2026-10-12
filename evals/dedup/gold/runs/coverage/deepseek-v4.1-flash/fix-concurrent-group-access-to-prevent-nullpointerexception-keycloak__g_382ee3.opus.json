@@ -1,0 +1,52 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GroupTest concurrency test: the reader thread is never joined before assertThat, so exceptions thrown late (or by an in-flight read) get added after the assertion runs, and the test can pass when it should fail"
+   },
+   {
+    "id": "F2",
+    "description": "GroupTest concurrency test can pass without testing anything: the reader loop may never run while deletes are happening, so caughtExceptions is empty by default"
+   },
+   {
+    "id": "F3",
+    "description": "GroupTest concurrency test: deletedAll.set(true) is not in a finally block, so if a delete throws, the non-daemon reader thread loops forever and the test hangs"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_cfee9f21",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4687a409",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6f563687",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_907d17d3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

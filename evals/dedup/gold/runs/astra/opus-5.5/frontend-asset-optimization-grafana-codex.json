@@ -1,0 +1,24 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "promptSha": "67dee080bc6a56fbfb4ce3db5f3292cbaa975d1c",
+  "attempt": 1,
+  "ms": 48499,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_6cf3f09f",
+          "s_c1f76361"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The cache is not rechecked after acquiring the write lock, so concurrent cache misses redundantly reload and rebuild assets after another goroutine has populated the cache.",
+        "rationale": "Both suggestions identify the same missing cache check at the same lines and propose the same fix. The first suggestion's discussion of loading failures and development mode provides context; its additional nil-handling recommendation does not report a separate defect."
+      }
+    ],
+    "unique": []
+  }
+}

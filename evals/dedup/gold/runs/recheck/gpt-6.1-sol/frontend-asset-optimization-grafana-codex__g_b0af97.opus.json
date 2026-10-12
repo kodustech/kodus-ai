@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "After acquiring the write lock, GetWebAssets does not re-check entryPointAssetsCache, so concurrent callers that saw a nil cache each rebuild the assets again.",
+    "members": [
+     "s_d788d88a",
+     "s_b93643f2"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 apontam o mesmo defeito: falta a segunda verificação do cache depois de adquirir o write lock. Por isso, chamadas concorrentes recarregam os assets de forma redundante. A correção proposta é a mesma e nenhuma das duas traz um segundo defeito."
+ }
+}

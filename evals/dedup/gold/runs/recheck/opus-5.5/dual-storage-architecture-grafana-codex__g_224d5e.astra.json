@@ -1,0 +1,25 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_03fc7aa9",
+     "s_68ce1673",
+     "s_ffe2609d"
+    ],
+    "defect": "As escritas assíncronas no legado herdam o cancelamento do contexto da requisição e podem ser interrompidas quando o handler retorna."
+   }
+  ],
+  "unique": [
+   "s_f50f8610"
+  ],
+  "bundles": [
+   "s_03fc7aa9",
+   "s_f50f8610",
+   "s_ffe2609d"
+  ],
+  "reasoningPt": "S1, S13 e S20 têm como defeito principal o cancelamento das escritas pelo contexto da requisição. S12 abre com a incompatibilidade entre escritas assíncronas e testes que exigem consistência imediata; desvincular o contexto não resolve essa corrida. S12 também aborda cancelamento, enquanto S1 e S20 acrescentam a ausência de logs, por isso os três são bundles."
+ }
+}

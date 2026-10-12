@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3de994d1",
+     "s_b9468b8e"
+    ],
+    "defect": "The PR replaces the configurable SiteSetting size limits with a hardcoded 10MB value, so client validation and the server download cap ignore the admin-configured max size."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_b9468b8e"
+  ],
+  "reasoningPt": "O defeito principal do S3 é o limite fixo de 10.megabytes que ignora o SiteSetting. É o mesmo erro que o S2 aponta no utilities.js: trocar a configuração por 10MB fixo, e a mesma troca de volta para o SiteSetting resolve os dois lugares. As queixas extras do S3 (retorno do downsize não verificado e content_type nil) são defeitos secundários, então o S3 entra em bundles mas continua no grupo."
+ }
+}

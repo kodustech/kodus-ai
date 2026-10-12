@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_fb963067",
+     "s_28120ad1"
+    ],
+    "defect": "O preenchimento de dados WebAuthn específicos do usuário antes da autenticação expõe a existência de passkeys e metadados das credenciais a visitantes que apenas informam um nome de usuário."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 descrevem a mesma exposição de dados de passkeys antes da autenticação, apontando locais complementares do fluxo. Restringir o preenchimento desses dados a sessões já autenticadas resolve ambas; a enumeração e a exposição de metadados são consequências do mesmo defeito."
+ }
+}

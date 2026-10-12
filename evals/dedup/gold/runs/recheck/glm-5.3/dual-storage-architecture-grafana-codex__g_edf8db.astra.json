@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_48464c58",
+     "s_27f7b4ca",
+     "s_d80b979f"
+    ],
+    "defect": "A remoção do updateWrapper faz Legacy.Update recalcular a atualização sobre seu próprio estado, podendo persistir um objeto diferente do gravado no armazenamento unificado."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_48464c58",
+   "s_27f7b4ca"
+  ],
+  "reasoningPt": "S3, S18 e S20 têm como primeiro defeito a remoção do updateWrapper e propõem restaurar o espelhamento do objeto gravado no armazenamento unificado. S3 também relata atualizações concorrentes fora de ordem, e S18 acrescenta o cancelamento pelo contexto da requisição; esses defeitos adicionais tornam ambas bundles, sem alterar seu agrupamento."
+ }
+}

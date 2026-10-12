@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a1b0441f",
+     "s_38444aa4"
+    ],
+    "defect": "As goroutines de searchSupport.init escrevem na mesma variável err capturada, causando uma corrida de dados."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_a1b0441f",
+   "s_38444aa4"
+  ],
+  "reasoningPt": "S2 e S6 apresentam primeiro a corrida na variável err compartilhada, portanto pertencem ao mesmo grupo. Ambas também relatam a corrida em totalBatchesIndexed, que exige uma correção independente, e por isso são bundles."
+ }
+}

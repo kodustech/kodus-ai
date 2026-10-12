@@ -1,0 +1,71 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Google updateEvent, lines 254–256: fallback compares against the already-falsy externalCalendarId, yielding undefined instead of the destination calendar's externalId."
+   },
+   {
+    "id": "F2",
+    "description": "Google deleteEvent, lines 315–317: the same impossible fallback loses the destination calendar's externalId, preventing deletion from the intended calendar."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f5b59d63",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_6293a6a3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a907ae4b",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_02b6e8cb",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3ab53f11",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0a0cb899",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_ac235e40",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ca951180",
+     "s_752a0659",
+     "s_736fc3f5"
+    ],
+    "defect": "O listener de remoção não exclui V2 e chama ClientPermissionsV2.setPermissionsEnabled, que lança UnsupportedOperationException e interrompe a exclusão do cliente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S5 relatam o mesmo defeito: o listener executa uma operação de limpeza incompatível com o avaliador V2. S4 destaca a mudança em clients(), enquanto S1 e S5 destacam o listener; uma única correção nesse fluxo resolve os três relatos."
+ }
+}

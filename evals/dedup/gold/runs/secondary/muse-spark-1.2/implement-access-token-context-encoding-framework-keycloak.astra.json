@@ -1,0 +1,122 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_2a4d8fa0",
+    "mainDefect": "The matcher rejects matching grant shortcuts because its equality condition is inverted.",
+    "secondary": [
+     {
+      "defect": "The matcher extracts the grant shortcut at indices (3,5) instead of (4,6).",
+      "coveredBy": [
+       "s_9862ac83",
+       "s_f28d822f",
+       "s_c4f3874e",
+       "s_cb4db53f"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f886b821",
+    "mainDefect": "The constructor dereferences formParams without checking for null.",
+    "secondary": [
+     {
+      "defect": "setFormParams() leaves the cached grantType stale, causing incorrect grant shortcuts in token IDs.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_9862ac83",
+    "mainDefect": "The matcher extracts the grant shortcut at indices (3,5) instead of (4,6).",
+    "secondary": [
+     {
+      "defect": "The matcher's inverted equality condition rejects matching grant shortcuts.",
+      "coveredBy": [
+       "s_2a4d8fa0"
+      ]
+     },
+     {
+      "defect": "The matcher does not validate that the encoded context is exactly six characters long.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The matcher splits token IDs without a limit of two, splitting additional colons within the raw token ID.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f28d822f",
+    "mainDefect": "The matcher reads the grant shortcut from the wrong position in the encoded prefix.",
+    "secondary": [
+     {
+      "defect": "The matcher's inverted equality condition rejects matching grant shortcuts.",
+      "coveredBy": [
+       "s_2a4d8fa0"
+      ]
+     },
+     {
+      "defect": "The matcher lacks a length guard and can throw StringIndexOutOfBoundsException on short prefixes.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c4f3874e",
+    "mainDefect": "The matcher extracts the grant shortcut at indices (3,5) instead of (4,6).",
+    "secondary": [
+     {
+      "defect": "The matcher's inverted equality condition rejects matching grant shortcuts.",
+      "coveredBy": [
+       "s_2a4d8fa0"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f12ae264",
+    "mainDefect": "Token creation does not guard against a null encoder provider.",
+    "secondary": [
+     {
+      "defect": "Unhandled IllegalStateException or IllegalArgumentException from encoding crashes token creation instead of falling back to the raw UUID.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_2e17a8b1",
+    "mainDefect": "The decoder does not validate null token IDs up front.",
+    "secondary": [
+     {
+      "defect": "IllegalArgumentExceptions for malformed lengths or unknown shortcuts escape as server errors instead of handled invalid-token responses.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ce1639a8",
+    "mainDefect": "The copy constructor is missing and needs restoration with grantType copied.",
+    "secondary": [
+     {
+      "defect": "setFormParams() leaves the cached grantType stale, causing incorrect grant shortcuts in token IDs.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_cb4db53f",
+    "mainDefect": "The matcher reads the grant shortcut at indices (3,5) instead of the producer's indices (4,6).",
+    "secondary": [
+     {
+      "defect": "The matcher's inverted equality condition rejects matching grant shortcuts.",
+      "coveredBy": [
+       "s_2a4d8fa0"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,26 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "promptSha": "c3ee98b4792c052b1b1bf773744f43b8c54f11a9",
+  "attempt": 1,
+  "ms": 24475,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0dfb07e9",
+          "s_bdeb7dae",
+          "s_3d7a717e",
+          "s_8fb311b9"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The test neither waits for the reader thread to finish before checking exceptions nor verifies that any read occurred during deletion, allowing late failures or an unexercised concurrency path to pass.",
+        "rationale": "s_0dfb07e9 and s_8fb311b9 report the missing join, while s_3d7a717e reports the missing reader-execution check. s_bdeb7dae explicitly reports both defects, connecting all four into one overlapping group."
+      }
+    ],
+    "unique": []
+  }
+}

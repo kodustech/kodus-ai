@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7d604253",
+     "s_a57d87d0",
+     "s_87977711",
+     "s_2fdd418d"
+    ],
+    "defect": "The handler passes the raw `guests` input to sendAddGuestsEmails instead of the filtered `uniqueGuests`, so existing attendees who are submitted again get the wrong (new-guest) email."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6, S11, S24 e S25 apontam o mesmo defeito: a chamada sendAddGuestsEmails(evt, guests) usa a lista bruta em vez de uniqueGuests. Por isso, attendees que já existiam recebem o email errado. Todas propõem a mesma correção, que é passar uniqueGuests, e nenhuma traz um segundo defeito."
+ }
+}

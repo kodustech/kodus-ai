@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_63bda620",
+     "s_cc993937",
+     "s_4d3c3dc5"
+    ],
+    "defect": "Update passes the raw objInfo to the async Legacy.Update instead of an updateWrapper pinned to the storage result, so legacy recomputes the object (calling UpdatedObject a second time) and can diverge from unified storage."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_4d3c3dc5"
+  ],
+  "reasoningPt": "S2, S19 e S24 têm o mesmo defeito principal: a remoção do updateWrapper no Update faz o legacy recalcular o objeto (chamando UpdatedObject de novo) e divergir do unified storage. A correção é a mesma para os três. S24 acrescenta com \"In addition\" um segundo defeito, a ordenação de updates concorrentes no legacy assíncrono, por isso entra em bundles, mas continua no grupo do seu defeito principal."
+ }
+}

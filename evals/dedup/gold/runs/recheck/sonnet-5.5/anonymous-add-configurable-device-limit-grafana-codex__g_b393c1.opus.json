@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f3ed8c70",
+     "s_52be6958",
+     "s_df37064d"
+    ],
+    "defect": "tagDeviceUI writes the device key to localCache before CreateOrUpdateDevice and leaves it there when the write fails with ErrDeviceLimitReached, so for the 29-minute TTL the device limit is bypassed."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S6 apontam o mesmo defeito: a chave do dispositivo é gravada no localCache antes da escrita no banco e continua lá quando ocorre ErrDeviceLimitReached, o que permite burlar o limite durante o TTL do cache. As três propõem a mesma correção: gravar no cache só após sucesso ou remover a chave em caso de erro. Só o intervalo de linhas muda, por isso o grupo fica como está."
+ }
+}

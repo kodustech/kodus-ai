@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_86d45cb5",
+     "s_734730fd",
+     "s_0cfbf4fc"
+    ],
+    "defect": "Unguarded access to integration.metadata[\"sender\"][\"login\"] raises KeyError (500) for integrations without sender metadata instead of returning the error view."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S5 e S7 apontam o mesmo defeito: o acesso sem proteção a integration.metadata[\"sender\"][\"login\"], que gera KeyError e um erro 500 em integrações sem o campo sender. As três propõem a mesma correção, usar .get e retornar a view de erro, e nenhuma traz um segundo defeito. Por isso o grupo fica como está."
+ }
+}

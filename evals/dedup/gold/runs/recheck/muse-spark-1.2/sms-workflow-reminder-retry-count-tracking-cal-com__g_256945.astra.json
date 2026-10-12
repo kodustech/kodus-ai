@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_847266f2",
+     "s_6f6fcf09",
+     "s_a43d5a76"
+    ],
+    "defect": "O segundo ramo do OR em deleteMany não filtra method por SMS, permitindo excluir lembretes de outros métodos com retryCount > 1."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S6 relatam a mesma ausência do filtro de método no segundo ramo do OR, resolvida pela mesma correção. A observação condicional de S1 sobre scheduled: false não caracteriza o relato de um segundo defeito."
+ }
+}

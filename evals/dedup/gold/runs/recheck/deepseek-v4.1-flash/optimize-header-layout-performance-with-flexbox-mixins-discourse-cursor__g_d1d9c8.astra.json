@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1dbf5554",
+     "s_b1e0be12"
+    ],
+    "defect": "O mixin align-items emite a propriedade inexistente -ms-align-items, gerando uma declaração sem efeito que deve ser removida."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 apontam o mesmo defeito na mesma declaração: a emissão de -ms-align-items, que nenhum navegador reconhece. Ambas propõem remover essa linha e manter -ms-flex-align; a diferença no intervalo de linhas não altera o agrupamento."
+ }
+}

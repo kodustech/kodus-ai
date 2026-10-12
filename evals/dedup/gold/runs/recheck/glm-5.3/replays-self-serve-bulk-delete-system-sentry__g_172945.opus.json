@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9ea9f5fd",
+     "s_890c4551"
+    ],
+    "defect": "The flag-gated TableWidgetVisualization branch in chart.tsx receives hardcoded empty columns and tableData, so dashboard table widgets show up blank and the query results are thrown away."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 descrevem o mesmo defeito: o ramo com a flag use-table-widget-visualization passa columns e tableData vazios fixos e descarta result.data/result.meta. A correção é a mesma nas duas, passar os dados reais ao componente. Nenhuma delas traz um segundo defeito."
+ }
+}

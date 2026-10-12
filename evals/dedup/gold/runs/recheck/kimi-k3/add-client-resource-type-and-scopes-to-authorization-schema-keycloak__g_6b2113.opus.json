@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_04234c39",
+     "s_802136a9",
+     "s_b9487ef1"
+    ],
+    "defect": "With V2 active, the ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled, which always throws UnsupportedOperationException, so deleting a client fails."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S8 e S12 descrevem o mesmo defeito: o listener de ClientRemovedEvent chama ClientPermissionsV2.setPermissionsEnabled, que sempre lança UnsupportedOperationException. Por isso, remover um client falha quando o V2 está ativo. S1 e S8 apontam onde o defeito nasce (o override que lança a exceção) e S12 aponta onde ele aparece (o listener). Uma única correção resolve os três, então o grupo se mantém."
+ }
+}

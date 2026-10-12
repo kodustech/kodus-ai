@@ -1,0 +1,74 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "assignment_source.py:18 evaluates timezone.now() at import time, giving instances a shared stale queued timestamp."
+   },
+   {
+    "id": "F2",
+    "description": "assignment_source.py:27-28 leaves queued as a raw datetime in to_dict(), potentially failing JSON serialization of Celery kwargs."
+   },
+   {
+    "id": "F3",
+    "description": "assignment_source.py:31-33 does not parse queued ISO strings after transport, reconstructing a str instead of the declared datetime."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7123f91d",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_221233e4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ad4d76d9",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_87e5e747",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_81d5305c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7dcbf2c4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_30f59a75",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

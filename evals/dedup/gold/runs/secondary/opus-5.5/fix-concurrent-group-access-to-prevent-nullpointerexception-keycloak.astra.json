@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_bdeb7dae",
+    "mainDefect": "The test does not join the reader thread before checking exceptions, so failures from an in-flight read can go undetected.",
+    "secondary": [
+     {
+      "defect": "The test does not verify that the reader made any request during deletions, so it can pass without exercising concurrent reads and deletes.",
+      "coveredBy": [
+       "s_3d7a717e"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

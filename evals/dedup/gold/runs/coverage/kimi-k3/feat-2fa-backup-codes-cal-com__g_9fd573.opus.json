@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Login path (packages/features/auth/lib/next-auth-options.ts, ~line 144): backup code checked with non-constant-time backupCodes.indexOf"
+   },
+   {
+    "id": "F2",
+    "description": "Disable-2FA endpoint (apps/web/pages/api/auth/two-factor/totp/disable.ts, ~line 61): backup code checked with non-constant-time backupCodes.indexOf"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_801d97bf",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_548ddd10",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

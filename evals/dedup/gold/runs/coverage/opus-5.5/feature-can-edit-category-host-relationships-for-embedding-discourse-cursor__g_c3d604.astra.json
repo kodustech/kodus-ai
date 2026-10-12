@@ -1,0 +1,58 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "store.js.es6:197–201 unconditionally replaces and deletes raw *_ids arrays even when lookups fail, losing ids and producing undefined entries."
+   },
+   {
+    "id": "F2",
+    "description": "store.js.es6:200 can overwrite an existing field with the pluralized relationship property."
+   },
+   {
+    "id": "F3",
+    "description": "store.js.es6:197 calls .map on potentially null *_ids values, crashing hydration."
+   },
+   {
+    "id": "F4",
+    "description": "store.js.es6:200 has an ineffective || [] fallback because map always returns an array."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_d5eddfe5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_083999f0",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_777115f9",
+    "covers": [
+     "F1",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_36199324",
+    "covers": [
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "self.downsize is defined twice in OptimizedImage, so the new (from, to, dimensions, opts) version replaces the old width/height version and breaks existing callers such as resize_emoji.rb.",
+    "members": [
+     "s_5a7ce5b2",
+     "s_ca5a3ea5",
+     "s_dc2edf67",
+     "s_46bbb3d3",
+     "s_9cc99ae8",
+     "s_8d9e86d7",
+     "s_843a4529",
+     "s_f069ee71",
+     "s_a649b4be"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S6, S7, S8, S10, S12, S14, S16, S21) apontam o mesmo defeito: o método self.downsize foi definido duas vezes, e a segunda definição substitui a primeira, quebrando chamadores antigos como o resize_emoji.rb. As diferenças estão só no erro citado (TypeError ou ArgumentError) e no nível de detalhe. A correção é a mesma: remover ou unificar a definição duplicada e atualizar os chamadores."
+ }
+}

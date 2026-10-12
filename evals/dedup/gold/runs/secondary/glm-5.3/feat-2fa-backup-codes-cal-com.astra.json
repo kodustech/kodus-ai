@@ -1,0 +1,57 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_93d23259",
+    "mainDefect": "Supplying a non-empty totpCode bypasses password verification when authenticating with a valid backup code.",
+    "secondary": [
+     {
+      "defect": "The backup code is consumed before authorization finishes, so a later failure can burn it without granting a session.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e721eff4",
+    "mainDefect": "The disable-2FA endpoint compares secret backup codes using a non-constant-time comparison.",
+    "secondary": [
+     {
+      "defect": "A non-string backupCode causes replaceAll to throw a TypeError, turning invalid input into a server error.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a9a22761",
+    "mainDefect": "The checked-state assertion tests the truthiness of a Promise and therefore always passes.",
+    "secondary": [
+     {
+      "defect": "The first test fails to close the new backup-code dialog before expecting the 2FA switch to be checked.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ac3a5ed0",
+    "mainDefect": "The copy-button test asserts only a toast and cannot detect missing or incorrect clipboard contents.",
+    "secondary": [
+     {
+      "defect": "The copy handler displays success without awaiting clipboard.writeText, so it reports success even when copying fails.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_816910f9",
+    "mainDefect": "The login form schema omits backupCode, causing validation to strip the submitted value.",
+    "secondary": [
+     {
+      "defect": "The login submit handler does not forward backupCode in the nextAuth.signIn credentials payload.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

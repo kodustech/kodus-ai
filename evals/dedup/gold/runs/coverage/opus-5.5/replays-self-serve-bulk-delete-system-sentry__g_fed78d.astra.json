@@ -1,0 +1,38 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "validate_timestamp (line 52) treats age: 0 as absent in its mutual-exclusion check."
+   },
+   {
+    "id": "F2",
+    "description": "validate_age (line 58) treats timestamp: 0 as absent in its mutual-exclusion check."
+   },
+   {
+    "id": "F3",
+    "description": "BrowserReportSerializer accepts reports with neither age nor timestamp because both fields are optional."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_4580ba49",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0f836d52",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

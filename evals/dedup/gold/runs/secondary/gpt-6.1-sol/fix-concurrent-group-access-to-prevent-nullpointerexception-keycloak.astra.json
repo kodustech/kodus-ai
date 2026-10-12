@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_dc7f347e",
+    "mainDefect": "The test asserts caughtExceptions before the reader thread stops, allowing late exceptions to go unnoticed.",
+    "secondary": [
+     {
+      "defect": "The reader thread can remain running beyond the end of the test.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

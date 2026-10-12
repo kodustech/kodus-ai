@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Line 51: `max_processes or ...` treats an explicit 0 as missing because 0 is falsy, so it needs an explicit None check."
+   },
+   {
+    "id": "F2",
+    "description": "Lines 51-66: when assigned_shards is empty, num_processes = min(0, 0) = 0, so no flusher processes or buffers are created and the flush, backpressure and memory checks become no-ops."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_975b3a2a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ca82d915",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_f884b54a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

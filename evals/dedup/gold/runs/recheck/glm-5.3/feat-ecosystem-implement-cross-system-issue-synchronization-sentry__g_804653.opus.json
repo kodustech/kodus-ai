@@ -1,0 +1,13 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_1aa94032",
+   "s_b202afb8"
+  ],
+  "bundles": [],
+  "reasoningPt": "S2 aponta que o override ExampleIntegration.sync_status_outbound não aceita o novo parâmetro assignment_source. Isso quebra o contrato da subclasse, e a correção é ajustar a assinatura do ExampleIntegration. S7 aponta que o parâmetro foi declarado no método abstrato errado: quem de fato recebe assignment_source é sync_assignee_outbound, cuja assinatura abstrata não foi atualizada. São defeitos diferentes, com correções diferentes, então o grupo deve ser separado."
+ }
+}

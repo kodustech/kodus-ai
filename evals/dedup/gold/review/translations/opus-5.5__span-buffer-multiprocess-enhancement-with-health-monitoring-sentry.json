@@ -1,0 +1,22 @@
+{
+ "s_4ee392ad": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `isinstance(process, multiprocessing.Process)` é sempre False para processos criados via `multiprocessing.get_context(\"spawn\").Process`, então um processo travado nunca é encerrado com kill. Esses objetos são `SpawnProcess`, que herda de `BaseProcess`, e não de `multiprocessing.Process`. POR QUÊ: em um restart por 'hang', o flusher antigo continua rodando, e `_create_process_for_shards` inicia um segundo processo para os mesmos shards, que compartilha os mesmos Values healthy_since/backpressure. Dois flushers então produzem os mesmos segments duas vezes e entram em race em `done_flush_segments`, e processos travados se acumulam a cada restart. O código antigo chamava `kill()` incondicionalmente. COMO: chame `process.kill()` quando `isinstance(process, multiprocessing.process.BaseProcess)`, ou use `hasattr(process, 'kill')`, mantendo o guard de ValueError."
+ },
+ "s_7a1b8c6d": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: em join(), quando o deadline expira, o loop faz `break` antes de chegar aos processos restantes, então eles nunca são terminados. A checagem `isinstance(process, multiprocessing.Process)` também é False para SpawnProcess, então terminate() nunca é executado para nenhum processo. POR QUÊ: em um shutdown ou rebalance com timeout, os processos flusher de outros shards continuam rodando e fazendo flush depois que o consumer acha que eles foram parados. COMO: sempre termine todos os processos. Por exemplo, percorra todos os processos, pule apenas a etapa de espera quando o deadline tiver passado, e use `isinstance(process, multiprocessing.process.BaseProcess)`."
+ },
+ "s_555f4a4d": {
+  "summaryPt": "Um processo flusher travado nunca é encerrado com kill antes de seu substituto iniciar, então dois processos fazem flush dos mesmos shards ao mesmo tempo.",
+  "contentPt": "O guard `isinstance(process, multiprocessing.Process)` nunca é True para os processos flusher criados com spawn. Eles são objetos `multiprocessing.context.SpawnProcess`, que herdam de `BaseProcess` e não de `multiprocessing.Process`. Como resultado, quando um processo é reiniciado por causa de um hang, ele nunca recebe kill. Ele continua chamando `flush_segments` nos seus shards enquanto o novo processo faz o mesmo, então segments podem ser enviados com flush e produzidos duas vezes. Ambos os processos também escrevem nos mesmos Values compartilhados `healthy_since`/`backpressure_since`, o que pode esconder se o substituto está de fato saudável. O código antigo chamava `kill()` incondicionalmente. A correção é checar o caso de thread no lugar."
+ },
+ "s_b2cc6608": {
+  "summaryPt": "`isinstance(process, multiprocessing.Process)` nunca é verdadeiro para SpawnProcess, então um processo flusher travado nunca recebe kill antes de ser reiniciado.",
+  "contentPt": "Os processos vêm de `self.mp_context.Process`, onde `mp_context` é o contexto spawn, então cada um é um `multiprocessing.context.SpawnProcess`. Essa classe é baseada em `BaseProcess` e não é subclasse de `multiprocessing.Process`, então essa checagem é sempre False. Antes deste PR, `kill()` era chamado incondicionalmente. Agora, no caso de 'hang', o processo antigo continua rodando enquanto um novo inicia para os mesmos shards. Ambos então fazem flush dos mesmos segments, e o restart não faz o que deveria. Correção: cheque `isinstance(process, multiprocessing.process.BaseProcess)`, ou pule apenas threads (`not isinstance(process, threading.Thread)`). O mesmo problema afeta a checagem de `terminate()` em `join()`."
+ },
+ "s_7f309577": {
+  "summaryPt": "Quando o deadline expira, `join()` sai do loop com break e nunca chama `terminate()` nos processos restantes.",
+  "contentPt": "Quando `remaining_time <= 0`, o `break` sai do loop, então `terminate()` nunca é chamado para os processos restantes. No código antigo com um único processo, `terminate()` sempre rodava após a espera. Agora, um shutdown que estoura o timeout pode deixar processos flusher rodando. Correção: pule apenas a espera quando o deadline tiver passado, e ainda assim termine todos os processos."
+ }
+}

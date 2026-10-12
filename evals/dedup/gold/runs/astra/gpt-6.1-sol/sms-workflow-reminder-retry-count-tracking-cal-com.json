@@ -1,0 +1,45 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "promptSha": "8164dc7338e0786fecdb3add8c3807d45e505519",
+  "attempt": 1,
+  "ms": 38643,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_869f5ab5",
+          "s_a55aac5f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Both failure paths calculate retryCount from a stale snapshot, causing concurrent failed attempts to overwrite each other's increments.",
+        "rationale": "Both suggestions identify the same assignments, concurrency scenario, and atomic-increment fix. Each already covers both failure paths."
+      },
+      {
+        "members": [
+          "s_1c7da030",
+          "s_c123b6c9",
+          "s_de9f9f9c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The unprotected retry-count update inside catch can reject, aborting the handler and skipping remaining reminders.",
+        "rationale": "All three report the same failure of per-reminder error isolation at the same update. Concurrent deletion and persistent database failures are different triggers for that same defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_b96ddd5a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a04e9a65",
+        "confidence": "high"
+      }
+    ]
+  }
+}

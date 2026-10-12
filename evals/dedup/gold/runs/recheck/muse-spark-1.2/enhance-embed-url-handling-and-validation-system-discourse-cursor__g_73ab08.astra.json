@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f8bb1b1d",
+     "s_020c1288"
+    ],
+    "defect": "O teste do EmbedController ainda espera uma chamada síncrona a TopicRetriever, embora o controller agora enfileire Jobs.enqueue(:retrieve_topic)."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S17 e S19 apontam a mesma incompatibilidade entre o comportamento assíncrono do controller e a expectativa síncrona do teste. Atualizar essa expectativa resolve o defeito descrito por ambas; as orientações adicionais não caracterizam outro defeito independente."
+ }
+}

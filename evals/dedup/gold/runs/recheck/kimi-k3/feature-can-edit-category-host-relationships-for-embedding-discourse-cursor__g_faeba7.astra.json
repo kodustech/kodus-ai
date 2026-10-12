@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_d78df7ae",
+     "s_4b5af67b"
+    ],
+    "defect": "A comparação normaliza apenas a coluna do banco para minúsculas, rejeitando hosts com maiúsculas na URL consultada."
+   }
+  ],
+  "unique": [
+   "s_721295fb"
+  ],
+  "bundles": [
+   "s_4b5af67b"
+  ],
+  "reasoningPt": "S4 e S13 têm como defeito principal a normalização incompleta de maiúsculas e minúsculas na comparação de hosts. S13 também relata a incompatibilidade de portas, mas esse defeito secundário não a une a S22, que trata desse problema e exige uma correção distinta."
+ }
+}

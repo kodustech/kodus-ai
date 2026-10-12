@@ -1,0 +1,42 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "42dbc97355ef169465b35962ff83863e20429a5f",
+  "attempt": 1,
+  "ms": 27625,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_734730fd",
+          "s_86d45cb5",
+          "s_0cfbf4fc"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The unguarded integration.metadata[\"sender\"][\"login\"] lookup raises KeyError when sender metadata is missing, returning a 500 instead of the error view.",
+        "rationale": "All three report the same unguarded metadata lookup at overlapping lines. A single guarded lookup that treats missing sender information as a mismatch addresses all three."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_cd22cc09",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0f08123e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_80121966",
+        "confidence": "high"
+      },
+      {
+        "id": "s_70ec4ac6",
+        "confidence": "high"
+      }
+    ]
+  }
+}

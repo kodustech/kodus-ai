@@ -1,0 +1,57 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "promptSha": "0cb9f95af9e87e8080b0d45d3ad250243fcd369d",
+  "attempt": 1,
+  "ms": 37511,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_f8dcf583",
+          "s_7340d73f",
+          "s_0f309c2e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Prom-only list rows enable Silence while its drawer requires a ruler rule; s_f8dcf583 additionally reports that Duplicate handling may retain the same dependency.",
+        "rationale": "All three report the same nonfunctional Silence action in RuleActionsButtons.V2 when rule is undefined. The broader suggestion also reports a possible Duplicate handling failure, which the merged comment must preserve."
+      },
+      {
+        "members": [
+          "s_0909b944",
+          "s_b297e3a1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Delegating CombinedRule abilities to useAllRulerRuleAbilities loses the federated-group immutability guard and enables previously blocked actions.",
+        "rationale": "Both identify the same removed group check and hardcoded isFederated=false, affecting the same existing CombinedRule consumers."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_77a1eebb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8dd313c2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d98dbc8e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3dae7361",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bb931ff4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

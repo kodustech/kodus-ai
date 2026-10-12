@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cc6b5fef",
+     "s_88211022",
+     "s_b87c3cd2",
+     "s_bd0c0912"
+    ],
+    "defect": "isTeamAdminOrOwner joins isTeamAdmin and isTeamOwner with && instead of ||, so team admins who are not owners are wrongly denied."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_cc6b5fef",
+   "s_bd0c0912"
+  ],
+  "reasoningPt": "S1, S6, S11 e S13 têm como defeito principal o uso de && em vez de || em isTeamAdminOrOwner, então o grupo se mantém. S1 acrescenta uma observação separada sobre a permissão ampla demais para attendees, e S13 acrescenta a chave de tradução 'you_do_not_have_permission' ausente. Por isso os dois aparecem em bundles, mas continuam no grupo do defeito principal."
+ }
+}

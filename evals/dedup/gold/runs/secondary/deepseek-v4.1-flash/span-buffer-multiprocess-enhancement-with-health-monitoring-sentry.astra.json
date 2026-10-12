@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_a6ca4743",
+    "mainDefect": "The health-check guard incorrectly tests SpawnProcess instances against multiprocessing.Process, preventing unhealthy flusher processes from being killed before replacement.",
+    "secondary": [
+     {
+      "defect": "The same incorrect isinstance guard in join prevents SpawnProcess flusher processes from being terminated.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

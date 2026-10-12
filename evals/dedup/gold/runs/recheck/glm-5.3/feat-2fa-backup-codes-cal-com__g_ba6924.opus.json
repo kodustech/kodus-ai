@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ac3a5ed0",
+     "s_be1b7939"
+    ],
+    "defect": "The new backup-codes e2e block never checks the actual code content (downloaded file, clipboard text or grid), so the test passes even when the codes are empty or wrong."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_ac3a5ed0"
+  ],
+  "reasoningPt": "S10 e S11 apontam a mesma falha no teste e2e: o bloco de backup codes não confere o conteúdo real dos códigos. S10 trata do clipboard, e S11 cobre download, grid e também clipboard, então é o mesmo erro em mais lugares. S10 entra em bundles porque também sugere aguardar o writeText no handler, que é um defeito secundário."
+ }
+}

@@ -1,0 +1,152 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d598c74b",
+    "mainDefect": "The matcher extracts the grant shortcut using incorrect substring offsets.",
+    "secondary": [
+     {
+      "defect": "The matcher rejects matching grant shortcuts instead of mismatching ones.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_9c9743f6",
+    "mainDefect": "Adding getShortcut() as an abstract SPI method without a default breaks existing custom implementations.",
+    "secondary": [
+     {
+      "defect": "The shortcut documentation suggests three characters although the decoder requires exactly two.",
+      "coveredBy": [
+       "s_7cc8bcbd"
+      ]
+     },
+     {
+      "defect": "Shortcut length is not validated, allowing custom providers to produce token IDs the decoder rejects.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Null shortcuts are not validated and cause server startup to fail when inserted into ConcurrentHashMap.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a57e3ef3",
+    "mainDefect": "The matcher extracts the grant shortcut using incorrect substring offsets.",
+    "secondary": [
+     {
+      "defect": "The matcher rejects matching grant shortcuts instead of mismatching ones.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_1f2d92bd",
+    "mainDefect": "The matcher extracts the grant shortcut using incorrect substring offsets.",
+    "secondary": [
+     {
+      "defect": "The matcher rejects matching grant shortcuts instead of mismatching ones.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_166630be",
+    "mainDefect": "The test fixture leaves sessionFactory null, causing a NullPointerException before the intended unknown-grant validation.",
+    "secondary": [
+     {
+      "defect": "The test catches any RuntimeException, allowing an unrelated exception to satisfy the assertion.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_15c59a87",
+    "mainDefect": "The matcher and its comment place the grant shortcut at the wrong substring offsets.",
+    "secondary": [
+     {
+      "defect": "The matcher rejects matching grant shortcuts instead of mismatching ones.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_8188e9fe",
+    "mainDefect": "The matcher extracts the grant shortcut using incorrect substring offsets.",
+    "secondary": [
+     {
+      "defect": "The matcher rejects matching grant shortcuts instead of mismatching ones.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c309ae7b",
+    "mainDefect": "The matcher extracts the grant shortcut using incorrect substring offsets.",
+    "secondary": [
+     {
+      "defect": "The matcher rejects matching grant shortcuts instead of mismatching ones.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_859a4a3a",
+    "mainDefect": "The matcher extracts the grant shortcut using incorrect substring offsets.",
+    "secondary": [
+     {
+      "defect": "The matcher rejects matching grant shortcuts instead of mismatching ones.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_cf0c2a48",
+    "mainDefect": "The matcher extracts the grant shortcut using incorrect substring offsets.",
+    "secondary": [
+     {
+      "defect": "The matcher rejects matching grant shortcuts instead of mismatching ones.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a2208ca1",
+    "mainDefect": "The matcher rejects matching grant shortcuts instead of mismatching ones.",
+    "secondary": [
+     {
+      "defect": "The matcher extracts the grant shortcut using incorrect substring offsets.",
+      "coveredBy": [
+       "s_d598c74b",
+       "s_a57e3ef3",
+       "s_1f2d92bd",
+       "s_15c59a87",
+       "s_8188e9fe",
+       "s_c309ae7b",
+       "s_859a4a3a",
+       "s_cf0c2a48"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3eda2f5b",
+     "s_a6079adb",
+     "s_95d38bcb"
+    ],
+    "defect": "As gravações assíncronas no Legacy herdam o contexto da requisição e podem ser abortadas quando ele é cancelado ao término do handler."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_a6079adb"
+  ],
+  "reasoningPt": "S5, S21 e S23 apontam como primeiro defeito o uso do contexto cancelável da requisição nas gravações assíncronas, portanto permanecem juntas. S21 também relata uma possível corrida de dados pelo compartilhamento do objeto, sendo marcada como bundle sem alterar seu agrupamento pelo defeito principal."
+ }
+}

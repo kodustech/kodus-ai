@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7b9850c3",
+     "s_3dc681cc",
+     "s_bb5adb31"
+    ],
+    "defect": "A mesma frase em italiano foi inserida indevidamente nas mensagens lituanas do primeiro passo de configuração de OTP, tanto no login quanto na conta."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S6 relatam o mesmo erro repetido em dois arquivos, corrigível pela substituição da frase italiana pela tradução lituana. S10 aponta essas mesmas duas ocorrências, portanto todos permanecem juntos e nenhum reúne defeitos distintos."
+ }
+}

@@ -1,0 +1,58 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "addGuests.handler.ts lines 74-78: blacklist check is case-sensitive because the guest email is not lowercased while blacklist entries are, so mixed-case addresses bypass it"
+   },
+   {
+    "id": "F2",
+    "description": "addGuests.handler.ts line 76: existing-attendee dedupe compares raw strings (case-sensitive), so a mixed-case email can duplicate an existing attendee"
+   },
+   {
+    "id": "F3",
+    "description": "addGuests.handler.ts: duplicate emails within the submitted guests list are not removed server-side (only the client checks), so createMany inserts duplicate attendees"
+   },
+   {
+    "id": "F4",
+    "description": "addGuests.handler.ts line 52: isAttendee permission comparison (attendee.email === user.email) is case-sensitive"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_dc76b747",
+    "covers": [
+     "F1",
+     "F2",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bdaa90a8",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_66ed9605",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7a5dc6fd",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_47e65bca",
+    "mainDefect": "Non-Google createEvent implementations retain signatures that the suggestion claims do not satisfy the updated Calendar interface.",
+    "secondary": [
+     {
+      "defect": "Non-Google providers leave per-credential destination calendar selection unimplemented.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_dc30b21a",
+    "mainDefect": "Office365, Lark and BaseCalendarService createEvent signatures lack the credentialId parameter required by the updated Calendar interface.",
+    "secondary": [
+     {
+      "defect": "These providers select the first destination calendar instead of matching the destination calendar by credentialId.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_08905d22",
+    "mainDefect": "Lark createEvent lacks the credentialId parameter specified by the updated Calendar interface.",
+    "secondary": [
+     {
+      "defect": "Lark selects the first destination calendar without first matching by credentialId.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

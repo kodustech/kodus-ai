@@ -1,0 +1,89 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "fae1644a81274b6f85acf41424102650bc73b31c",
+  "attempt": 1,
+  "ms": 106490,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_3e0dbc3c",
+          "s_952eaebd",
+          "s_c52e7744"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Mode-3 unit and playlist integration tests never wait for and assert the legacy writes, allowing missing legacy writes to go undetected.",
+        "rationale": "All report missing verification of the legacy half of dual writes. The unit and integration tests require separate edits, so the merged comment must preserve both locations."
+      },
+      {
+        "members": [
+          "s_27f7b4ca",
+          "s_48464c58",
+          "s_d80b979f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "mid",
+        "defect": "Legacy Update receives raw objInfo instead of the unified store's committed object through updateWrapper, allowing recomputation to diverge or fail.",
+        "rationale": "All identify the removed wrapper at the same Legacy.Update call. References to request cancellation and asynchronous ordering describe compounding conditions rather than separate findings within these comments."
+      },
+      {
+        "members": [
+          "s_f5076626",
+          "s_abda811f",
+          "s_ce012dec",
+          "s_1f0c2877",
+          "s_a19a1898",
+          "s_8649b5e3"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Create and Update storage failures use the legacy recorder, legacy DeleteCollection uses the storage recorder, and successful Delete uses the object name as the kind label.",
+        "rationale": "The two comprehensive suggestions explicitly cover all four faulty metric calls, linking the narrower suggestions. Each affected call requires correction."
+      },
+      {
+        "members": [
+          "s_912f86cd",
+          "s_33a63d8e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Delete returns on unified-storage NotFound before attempting legacy cleanup, leaving legacy-only objects undeleted.",
+        "rationale": "Both report the same removed NotFound exception in Delete's early-return branch."
+      },
+      {
+        "members": [
+          "s_093e0431",
+          "s_01f5b937",
+          "s_bb72d331",
+          "s_85cdb7f9"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "All four asynchronous legacy write paths inherit request cancellation, allowing handler completion to abort the background writes.",
+        "rationale": "Each identifies the same request-context lifetime mistake repeated across Create, Delete, Update, and DeleteCollection. The test references explain why cancellation is missed; they do not independently report the missing legacy assertions covered by the test group."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_232614e3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f1e42d68",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3930204d",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

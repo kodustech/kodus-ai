@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_79880069",
+     "s_f5c72b60",
+     "s_d1fe5072",
+     "s_1af271fe"
+    ],
+    "defect": "O construtor verifica grantType duas vezes e deixa rawTokenId sem validação de nulidade."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4, S8 e S11 apontam o mesmo erro no quarto guard do construtor, corrigido ao trocar grantType por rawTokenId. A observação de S4 sobre a mensagem descreve o mesmo defeito, sem acrescentar um problema independente."
+ }
+}

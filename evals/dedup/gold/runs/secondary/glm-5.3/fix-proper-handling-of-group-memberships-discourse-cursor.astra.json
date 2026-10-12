@@ -1,0 +1,53 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_e22fa0b2",
+    "mainDefect": "Adding an existing member attempts a duplicate membership insert and raises an unhandled database uniqueness error.",
+    "secondary": [
+     {
+      "defect": "The username selector is never cleared after adding members, making repeat submissions easy.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The client-side addMembers action lacks an error handler, so failed requests are silent.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_927f6da6",
+    "mainDefect": "Removing membership without destroying the join record can bypass counter-cache bookkeeping and leave group.user_count stale.",
+    "secondary": [
+     {
+      "defect": "Removing a member does not clear primary_group_id when it points to the removed group.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_9ede52cf",
+    "mainDefect": "The membership controller specs pass group_id instead of the route's id parameter, masking the parameter mismatch.",
+    "secondary": [
+     {
+      "defect": "The membership controller actions require group_id even though member routes provide id, causing real requests to fail with HTTP 400.",
+      "coveredBy": [
+       "s_191ff583"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_191ff583",
+    "mainDefect": "The membership controller actions require group_id even though member routes provide id, causing real requests to fail with HTTP 400.",
+    "secondary": [
+     {
+      "defect": "The frontend does not handle membership AJAX promise rejections, so request failures are silent.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

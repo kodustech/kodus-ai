@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "GetWebAssets doesn't check the cache again after taking entryPointAssetsCacheMu.Lock(), so goroutines that were waiting reload the assets and overwrite the cache.",
+    "members": [
+     "s_505b8655",
+     "s_0d3625df"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_505b8655"
+  ],
+  "reasoningPt": "S1 e S2 apontam como defeito principal a falta de uma segunda verificação do cache depois de pegar o Lock, o que leva a recarregar os assets e sobrescrever o cache. A correção é a mesma: double-checked locking. S1 também critica o lock mantido durante o I/O, um segundo defeito, por isso entra em bundles, mas continua no grupo do seu defeito principal."
+ }
+}

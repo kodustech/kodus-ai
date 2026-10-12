@@ -1,0 +1,40 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "promptSha": "92caa9872459c7a284e9f5bcce7534a1bd3f413c",
+  "attempt": 1,
+  "ms": 35218,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_4875e870",
+          "s_af3017dc",
+          "s_77082367",
+          "s_624823a3",
+          "s_609a1176"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The test does not wait for the reader to finish before asserting, allowing late exceptions and reader activity during teardown, and does not ensure any read occurs during deletion, allowing a vacuous pass.",
+        "rationale": "The first four suggestions share the missing-join assertion race. s_4875e870 also explicitly reports the zero-read execution defect described by s_609a1176, connecting both defects into one overlapping group."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_e9cf117f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0aaf3a1d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f6e6c392",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_12e66445",
+     "s_647627fa",
+     "s_ef00ffaa",
+     "s_e7d73ab7"
+    ],
+    "defect": "A comparação sem normalizar os emails dos convidados permite contornar a blacklist usando diferenças de maiúsculas e minúsculas."
+   }
+  ],
+  "unique": [
+   "s_aed18a73"
+  ],
+  "bundles": [
+   "s_12e66445",
+   "s_647627fa",
+   "s_ef00ffaa",
+   "s_aed18a73"
+  ],
+  "reasoningPt": "S4, S9, S17 e S21 têm como primeiro defeito o bypass da blacklist por diferenças de caixa; S4, S9 e S17 também mencionam duplicação de participantes. S18 começa pela duplicação de convidados e agrega problemas de concorrência e uso da lista bruta no envio de emails, exigindo correções distintas. Pela regra do defeito principal, S18 fica separado."
+ }
+}

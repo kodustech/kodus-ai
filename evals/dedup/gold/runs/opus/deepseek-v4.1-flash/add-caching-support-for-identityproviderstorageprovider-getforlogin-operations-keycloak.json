@@ -1,0 +1,87 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "promptSha": "b8a6d45bf2e7bbedf570b081e6f0268d29bb879f",
+  "attempt": 1,
+  "ms": 12069,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 15229,
+    "cache_read_input_tokens": 6564,
+    "output_tokens": 700,
+    "output_tokens_details": {
+      "thinking_tokens": 214
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 15229,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 700,
+        "cache_read_input_tokens": 6564,
+        "cache_creation_input_tokens": 15229,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 15229
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1371528,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_1a15af6b",
+          "s_25a59b36"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The cached branch of getForLogin returns raw getById models without applying createOrganizationAwareIdentityProviderModel, while the uncached branches do apply it, so results depend on cache state.",
+        "rationale": "Both point at lines 244-254 and describe the same missing org-aware mapping on the cache-hit path, with the same fix."
+      },
+      {
+        "members": [
+          "s_ce3f677e",
+          "s_fa609e7a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Test cleanup removes the literal alias \"alias\" instead of the created \"idp-alias-N\" alias (lines 381 and 425), so the created IDPs are never cleaned up.",
+        "rationale": "Same wrong cleanup alias at the same lines; both suggestions also mention the repeat at line 425."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_522435da",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_bca8f065",
+        "confidence": "high"
+      },
+      {
+        "id": "s_95237b2c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a3df6e2b",
+        "confidence": "high"
+      }
+    ]
+  }
+}

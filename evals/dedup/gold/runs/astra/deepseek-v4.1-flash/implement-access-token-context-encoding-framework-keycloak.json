@@ -1,0 +1,48 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "3f4656acf2857712237145f4f0a747ea8fcf436f",
+  "attempt": 1,
+  "ms": 43742,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_f5c72b60",
+          "s_1af271fe",
+          "s_d1fe5072",
+          "s_79880069"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The AccessTokenContext constructor checks grantType twice instead of validating rawTokenId, allowing a null raw token ID.",
+        "rationale": "All four identify the same incorrect argument in the fourth null check. Replacing that argument with rawTokenId resolves every report."
+      },
+      {
+        "members": [
+          "s_a148cd25",
+          "s_dccfaa16",
+          "s_511ab22a",
+          "s_756b95c2",
+          "s_88dcd5ff",
+          "s_5ae95ca9",
+          "s_f2171902",
+          "s_be2a870e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The access-token-ID matcher extracts the grant shortcut at the wrong offset, reverses the equality check, and can throw on malformed prefixes because it does not check their length before taking a substring.",
+        "rationale": "Every member reports the same incorrect substring range; all except s_be2a870e also report the inverted comparison. The merged comment must preserve both defects and the malformed-prefix handling raised by s_511ab22a."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_bf39cccb",
+        "confidence": "high"
+      }
+    ]
+  }
+}

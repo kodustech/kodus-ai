@@ -1,0 +1,10 @@
+{
+ "s_3a4fa9ea": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O diff moveu o TagDevice de uma goroutine fire-and-forget (background context, timeout de 2 minutos, panic recovery) para uma chamada síncrona no contexto da requisição dentro de Anonymous.Authenticate. POR QUÊ: Agora todo cache-miss de autenticação anônima bloqueia o caminho de autenticação com uma escrita síncrona no banco, adicionando latência à requisição; o panic recovery anterior para a etapa de tagging também foi removido, então um panic aqui se propaga para o fluxo de autenticação. CORREÇÃO: Mantenha o tagging fora do caminho crítico (assíncrono, com seu próprio contexto limitado) e ainda exponha o ErrDeviceLimitReached, ou, no mínimo, mantenha o panic guard em volta da chamada de tagging."
+ },
+ "s_def15064": {
+  "summaryPt": "A chamada síncrona de TagDevice removeu o recover de panic e o timeout de 2 minutos anteriores, então falhas/panics de tagging agora afetam a requisição de autenticação anônima.",
+  "contentPt": "Authenticate agora chama TagDevice de forma síncrona no caminho da requisição, substituindo a goroutine fire-and-forget anterior que tinha (1) um panic guard `defer recover()` e (2) um timeout de 2 minutos com `context.Background()`. Usar o `ctx` da requisição aqui significa que o tagging não tem mais seu próprio deadline (apenas o que o chamador definiu), e a remoção do `recover()` significa que um panic dentro do device tagging agora escapa para a requisição de autenticação anônima em vez de ser logado e isolado. Mantenha a propagação de erro para `ErrDeviceLimitReached`, mas restaure um contexto limitado / panic guard em volta da chamada síncrona de tagging para que um store lento ou com panic não derrube a requisição de autenticação."
+ }
+}

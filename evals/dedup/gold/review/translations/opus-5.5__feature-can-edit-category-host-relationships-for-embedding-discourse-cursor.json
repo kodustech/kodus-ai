@@ -1,0 +1,82 @@
+{
+ "s_7900c369": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `execute(...)[0]['id']` (e o mesmo para `uncategorized_category_id` na linha 15) assume que a query retorna uma linha. Se `embed_category` nunca foi definido, ou se seu valor não corresponde a um nome de categoria, o resultado é vazio. POR QUÊ: acessar o índice de um PG::Result vazio lança erro (IndexError, ou NoMethodError em nil['id']), então a migration aborta e o deploy falha em todo site que nunca configurou embed_category. O fallback `category_id == 0` nunca é alcançado. CORREÇÃO: verifique `result.ntuples > 0` (ou use `select_value`) e use uncategorized como fallback quando não houver linha."
+ },
+ "s_dbcf98a4": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: os hosts da configuração antiga são separados por \"\\n\" e inseridos como estão via interpolação de string. Eles pulam a normalização do model (remoção de http(s):// e paths), mantêm `\\r` e espaços em branco no final, e não são escapados com aspas. POR QUÊ: `EmbeddableHost.record_for_host` compara `lower(host)` com `URI#host`, então um valor migrado como `http://example.com` ou `example.com\\r` nunca corresponde e o embedding quebra silenciosamente após o upgrade. Um valor contendo aspas quebra o INSERT e aborta a migration. CORREÇÃO: aplique strip e normalize cada valor (`h.strip.sub(%r{^https?://}, '').sub(%r{/.*$}, '')`), ignore valores em branco e escape com `quote(h)`."
+ },
+ "s_93eb20ca": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `where(\"lower(host) = ?\", host)` converte para minúsculas apenas a coluna, não `uri.host`. Também compara apenas o host puro, enquanto o validator permite hosts armazenados com sufixo `:port`. POR QUÊ: um referer ou URL de embed com letras maiúsculas, ou qualquer host salvo com porta (ex.: `localhost.dev:3000`), nunca corresponde, então `host_allowed?` retorna false e embedding/TopicRetriever são rejeitados. CORREÇÃO: use `host.downcase` e compare com `uri.host` mais `\"#{uri.host}:#{uri.port}\"` (ou armazene a porta separadamente)."
+ },
+ "s_abc77493": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: o callback `before_validation` chama `self.host.sub!` sem nil guard. `save_host` atribui `params[:embeddable_host][:host]` diretamente, que pode ser nil. POR QUÊ: uma requisição de create/update sem host lança NoMethodError, gerando um 500 em vez de um erro de validação. CORREÇÃO: `return if host.blank?`, ou use `self.host = host.to_s.sub(...)`."
+ },
+ "s_e1409577": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `update` e `destroy` usam `EmbeddableHost.where(id: params[:id]).first` e acessam o resultado imediatamente. POR QUÊ: um id desconhecido ou já excluído (ex.: exclusão dupla a partir de duas abas de admin) lança NoMethodError em nil e retorna 500 em vez de 404. CORREÇÃO: use `EmbeddableHost.find(params[:id])`, ou lance `Discourse::NotFound` quando for nil."
+ },
+ "s_777115f9": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: toda chave que corresponde a `*_ids` agora é mapeada via `_lookupSubType` e a chave original é sempre removida. Ids que não podem ser resolvidos viram entradas `undefined`, e um valor `*_ids` nulo lança erro em `.map`. POR QUÊ: models REST existentes com campos `*_ids` perdem esses dados (substituídos por arrays de undefined) ou quebram durante a hidratação quando não existe coleção sideloaded correspondente. `hydrated || []` é código morto porque `map` sempre retorna um array. CORREÇÃO: proteja com `Array.isArray(obj[k])`, só substitua/remova quando a coleção sideloaded existir, e filtre os ids não resolvidos."
+ },
+ "s_13c616c7": {
+  "summaryPt": "",
+  "contentPt": "`execute(...)[0]['id']` assume que o INNER JOIN retorna uma linha. Quando nenhuma configuração `embed_category` está armazenada (o caso padrão), ou seu valor não corresponde a um nome de categoria, o resultado é vazio. Acessar o índice 0 de um PG::Result vazio lança erro, então a migration quebra antes de alcançar o fallback `category_id == 0`. A busca de `uncategorized_category_id` na linha 15 tem o mesmo problema. Verifique `ntuples`/`cmd_tuples` antes de acessar o índice, como o código já faz para a query de `embeddable_hosts`."
+ },
+ "s_36199324": {
+  "summaryPt": "",
+  "contentPt": "O novo branch de `_ids` chama `obj[k].map(...)` sem verificar se o valor é um array. Um payload com `something_ids: null` lança TypeError e quebra a hidratação da resposta inteira. O guard `|| []` é aplicado ao resultado de `map`, que sempre é um array, então nunca tem efeito. Proteja a entrada (`(obj[k] || []).map(...)`) e considere descartar ids que `_lookupSubType` não consegue resolver, para que não permaneçam no array como `undefined`."
+ },
+ "s_29d8f6c2": {
+  "summaryPt": "A query converte para minúsculas o host armazenado, mas não o host da URI recebida, então referers com hostnames em caixa mista são rejeitados.",
+  "contentPt": "`where(\"lower(host) = ?\", host)` converte para minúsculas apenas a coluna armazenada. O `uri.host` recebido mantém a caixa com que chegou, porque o URI do Ruby não converte hosts para minúsculas. Um referer ou embed_url como `http://EvilTrout.com/page` portanto falha em host_allowed?, o que bloqueia embedding e recuperação de tópicos, e TopicEmbed.import recorre a nenhuma categoria. Converta ambos os lados da comparação para minúsculas."
+ },
+ "s_f1af608e": {
+  "summaryPt": "O teste 'is false if embeddable_host is blank' passa apenas porque has_topic_embed? é false em um tópico não salvo; ele não testa a ausência de embeddable hosts.",
+  "contentPt": "`expandable_first_post?` não verifica mais embeddable hosts. Agora é apenas `SiteSetting.embed_truncate? && has_topic_embed?`. Este teste está fora do contexto `with an emeddable host`, então `has_topic_embed?` não tem stub. Em um `Fabricate.build(:topic)` não salvo, ele retorna false. O teste passaria independentemente de como os hosts são tratados, então seu nome diz cobrir um comportamento que ele não cobre. Defina `embed_truncate = true`, faça stub de `has_topic_embed?` para true e verifique o resultado que você realmente pretende, ou renomeie/remova o teste, já que a verificação de host foi removida intencionalmente."
+ },
+ "s_59aa04a7": {
+  "summaryPt": "A busca de host converte para minúsculas apenas o host armazenado, não o host do referer recebido, então um referer com letras maiúsculas nunca corresponde ao seu host permitido.",
+  "contentPt": "Apenas o lado armazenado da comparação é normalizado: `lower(host)` é comparado com `uri.host` na caixa original. Domínios não diferenciam maiúsculas de minúsculas, então um host permitido é rejeitado quando o Referer ou a URL de embed tem letras maiúsculas, e TopicEmbed então não escolhe nenhuma categoria. Converta ambos os lados para minúsculas e, idealmente, também converta o host para minúsculas ao salvá-lo."
+ },
+ "s_d5eddfe5": {
+  "summaryPt": "`_hydrateEmbedded` agora remove toda chave `*_ids` e a substitui por lookups possivelmente undefined, o que quebra consumidores existentes que leem os ids brutos.",
+  "contentPt": "Antes desta mudança, o regex `/(.+)\\_id$/` não correspondia a chaves terminadas em `_ids`, então os models mantinham campos como `group_ids` / `category_ids` exatamente como o servidor os enviava. Agora qualquer chave terminada em `_ids` recebe `delete obj[k]` incondicionalmente. Seu valor vai para `obj[pluralize(subType)]` como o resultado de `_lookupSubType` para cada id, que é `undefined` quando a resposta não faz sideload desse tipo. Qualquer model ou template do REST store existente que leia um array bruto `*_ids` o perde. A propriedade pluralizada também pode sobrescrever um campo real com o mesmo nome. Para corrigir: só substitua e remova a chave quando todos os ids forem resolvidos (o branch singular já faz isso com sua verificação `if (hydrated)`), e caso contrário deixe `obj[k]` como estava."
+ },
+ "s_0621eb9a": {
+  "summaryPt": "A migration copia os valores da configuração antiga sem alteração, incluindo scheme e path, mas EmbeddableHost.record_for_host compara os valores armazenados com um uri.host puro, então entradas migradas em formato de URL nunca correspondem.",
+  "contentPt": "A configuração antiga `embeddable_hosts` aceitava URLs completas como `http://discourse.org` ou `https://example.com/1234`; os specs antigos usavam exatamente esses valores. Esta migration insere cada linha como está, com SQL puro, então a normalização do `before_validation` do model nunca é executada. `EmbeddableHost.record_for_host` (app/models/embeddable_host.rb:10-17) busca linhas com `lower(host) = uri.host`, o que assume que os valores armazenados são hostnames puros e normalizados. Linhas migradas que ainda têm scheme ou path nunca vão corresponder. O EmbedController rejeitará esses referers e o TopicRetriever os tratará como inválidos, então o embedding quebra em sites atualizados. Normalize cada valor antes de inserir: faça strip de espaços, `sub(/^https?:\\/\\//,'')`, `sub(/\\/.*$/,'')`, e ignore linhas em branco. Escape o valor também (por exemplo com `ActiveRecord::Base.connection.quote`)."
+ },
+ "s_c76cedb8": {
+  "summaryPt": "",
+  "contentPt": "A migration quebra quando a linha `embed_category` está ausente em site_settings, o que ocorre sempre que a configuração foi deixada no padrão. `execute(...)[0]` é nil, então `['id']` lança NoMethodError. A busca de uncategorized_category_id tem o mesmo problema. Os hosts também são inseridos como strings brutas. Valores com prefixo http(s):// ou um path, que a configuração antiga permitia, são armazenados como estão e nunca vão corresponder a `uri.host` em `record_for_host`, então o embedding quebra após o upgrade. Uma aspa simples em um valor também quebra o INSERT. Correção: verifique a contagem de linhas antes de acessar o índice, remova scheme e path de cada host, e escape os valores com `ActiveRecord::Base.connection.quote`."
+ },
+ "s_1f259cc1": {
+  "summaryPt": "",
+  "contentPt": "O callback before_validation chama `self.host.sub!` sem verificar nil. Salvar pelo controller de admin sem o param host, ou validar `EmbeddableHost.new`, lança NoMethodError em vez de retornar um erro de validação. Proteja com `if self.host.present?` (ou use safe navigation) e adicione `validates :host, presence: true`."
+ },
+ "s_083999f0": {
+  "summaryPt": "",
+  "contentPt": "O branch plural roda em toda chave terminada em `_ids`. Ele chama `obj[k].map` sem null check, então um valor null lança erro. Também sempre remove o array de ids original, mesmo quando `_lookupSubType` não encontra coleção correspondente no root e retorna undefined para cada id. Qualquer payload serializado pelo rest com um array simples de ids (ex.: `user_ids`) portanto perde seus ids e recebe um array de undefined. Só substitua e remova a chave quando `obj[k]` for um array e a coleção plural existir no root."
+ },
+ "s_6580f8e0": {
+  "summaryPt": "",
+  "contentPt": "`update` e `destroy` chamam métodos em `EmbeddableHost.where(id:).first` sem verificar nil. Um id desconhecido ou já excluído lança NoMethodError e retorna 500 em vez de 404. Use `find` (lança RecordNotFound, que é tratado) ou adicione uma verificação explícita de nil."
+ },
+ "s_6d5def1b": {
+  "summaryPt": "",
+  "contentPt": "O conteúdo dos arquivos de fabricator está trocado. embeddable_host_fabricator.rb agora contém os fabricators :category, :diff_category, :happy_category e :private_category, e category_fabricator.rb (linhas 1-4) contém apenas :embeddable_host. Cada nome de arquivo agora descreve o conteúdo do outro arquivo, então quem procurar os fabricators de categoria em category_fabricator.rb não os encontrará. Correção: restaure os fabricators de categoria em category_fabricator.rb e coloque o fabricator :embeddable_host em embeddable_host_fabricator.rb."
+ },
+ "s_974e8b50": {
+  "summaryPt": "",
+  "contentPt": "O nome do teste 'is false if embeddable_host is blank' não está mais correto. Este PR removeu a verificação de host de Topic#expandable_first_post?, que agora verifica apenas embed_truncate? e has_topic_embed?. O teste passa apenas porque has_topic_embed? é false em um tópico não salvo. Correção: renomeie-o para descrever o que realmente torna o resultado false (por exemplo 'is false without a topic embed'), ou remova-o."
+ },
+ "s_3e791796": {
+  "summaryPt": "",
+  "contentPt": "O bloco describe 'allows_embeddable_host' usa o nome removido SiteSetting.allows_embeddable_host?, mas seus testes exercitam EmbeddableHost.host_allowed?. Correção: renomeie o bloco para 'host_allowed?' para que corresponda ao método testado."
+ }
+}

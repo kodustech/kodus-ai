@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_778e09a3",
+    "mainDefect": "The imported_from link interpolates an unescaped URL into HTML, allowing broken markup or HTML injection.",
+    "secondary": [
+     {
+      "defect": "Appending with << mutates the caller's contents string instead of building a new string.",
+      "coveredBy": [
+       "s_22702472"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

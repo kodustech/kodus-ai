@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_461ac7aa",
+     "s_989e1020"
+    ],
+    "defect": "O hook permite Duplicate sem uma regra Grafana no caminho skipToken, fazendo o menu oferecer a ação para regras cloud mesmo quando a habilidade do ruler a nega."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 descrevem o mesmo defeito: uma regra undefined gera suporte a Duplicate baseado na permissão global de criação do Grafana. Ambas apontam a mesma origem e o mesmo efeito no AlertRuleMenu, resolvidos pela mesma correção."
+ }
+}

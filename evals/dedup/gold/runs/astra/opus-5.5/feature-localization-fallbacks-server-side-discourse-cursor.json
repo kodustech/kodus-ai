@@ -1,0 +1,28 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "promptSha": "74a44591cf5c1227c761cdd754389920d645d10f",
+  "attempt": 1,
+  "ms": 24039,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_c94570f5",
+          "s_d02ab584",
+          "s_35d3c9d2",
+          "s_e15dc8b6",
+          "s_6a01472a",
+          "s_a0b43d2d"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Fallback locales are loaded only through the controller, causing missing translations and cached failures elsewhere; the translation cache also omits the site default locale, retaining stale fallback text after that setting changes.",
+        "rationale": "Five suggestions report the same incomplete fallback loading across the initializer and translate accelerator. s_6a01472a additionally reports the stale-cache defect described by s_e15dc8b6, connecting all six through explicit overlap; the merged comment must preserve both defects."
+      }
+    ],
+    "unique": []
+  }
+}

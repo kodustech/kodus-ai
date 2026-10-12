@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_a3224d7a",
+    "mainDefect": "The Javadoc for requireView() says 'Returns true if ...', but the method is void and throws ForbiddenException.",
+    "secondary": [
+     {
+      "defect": "The Javadoc for requireViewClientScopes() says 'Returns true if ...', but the method is void and throws ForbiddenException.",
+      "coveredBy": [
+       "s_c29b13de"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

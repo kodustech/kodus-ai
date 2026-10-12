@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_7529b678",
+    "mainDefect": "The newly added `_create_process_for_shard` method is dead code that is never called.",
+    "secondary": [
+     {
+      "defect": "If `_create_process_for_shard` were called, it would restart the owning process without killing the current one, leaving an orphaned process that flushes the same shards twice.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_d926f869",
+    "mainDefect": "The docstring says the flusher creates one process per shard, but it actually creates up to max_processes processes and assigns shards to them round-robin.",
+    "secondary": [
+     {
+      "defect": "The docstring calls it a multiprocessing manager, but the produce_to_pipe path creates threads instead of processes.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

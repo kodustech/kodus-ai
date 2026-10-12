@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c29b13de",
+     "s_a3224d7a",
+     "s_cff36f10"
+    ],
+    "defect": "Os Javadocs de requireView() e requireViewClientScopes() descrevem retorno booleano, embora os métodos sejam void e devam documentar o lançamento de ForbiddenException."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S9 apontam o mesmo erro de documentação repetido em dois métodos, corrigível pela mesma substituição de texto. S5 reúne essas duas ocorrências, portanto os três permanecem juntos e nenhum constitui um bundle de defeitos distintos."
+ }
+}

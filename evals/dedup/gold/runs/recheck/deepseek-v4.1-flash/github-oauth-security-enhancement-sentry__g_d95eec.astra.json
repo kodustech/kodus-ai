@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b6bcca54",
+     "s_412f55af",
+     "s_2c66d685",
+     "s_4c48d4f6",
+     "s_faf6b973"
+    ],
+    "defect": "O acesso incondicional a integration.metadata[\"sender\"][\"login\"] pode gerar uma exceção quando os metadados opcionais estão ausentes, causando um erro 500 em vez da página de falha."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_faf6b973"
+  ],
+  "reasoningPt": "S1, S2, S3, S4 e S5 têm como defeito principal o acesso sem proteção aos metadados opcionais de sender, portanto continuam no mesmo grupo. S5 também relata a comparação sensível a maiúsculas e minúsculas como defeito secundário, entrando em bundles sem alterar seu agrupamento."
+ }
+}

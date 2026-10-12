@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0e56e8cb",
+     "s_4df40c73",
+     "s_88b657e8"
+    ],
+    "defect": "Legacy.Update recebe objInfo original em vez de updateWrapper com res, recalculando a atualização sobre o estado legado e podendo causar conflitos ou divergência entre os stores."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_0e56e8cb"
+  ],
+  "reasoningPt": "S2, S14 e S19 apontam o mesmo defeito principal e propõem a mesma correção: passar o resultado de Storage.Update em updateWrapper para Legacy.Update. S2 também menciona a ausência de log, um defeito secundário que o torna um bundle sem alterar seu grupo."
+ }
+}

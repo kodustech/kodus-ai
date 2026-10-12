@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e70c33f4",
+     "s_f2332220",
+     "s_4b2add7b"
+    ],
+    "defect": "O time.sleep(0.1) adicionado ao teste é neutralizado pelo monkeypatch de time.sleep no próprio teste e não aguarda o flusher."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S7 e S10 apontam o mesmo defeito no mesmo trecho: a espera adicionada é anulada pelo monkeypatch. As diferenças sobre o efeito na sincronização e a correção proposta não alteram o defeito principal; nenhuma sugestão relata um segundo defeito independente."
+ }
+}

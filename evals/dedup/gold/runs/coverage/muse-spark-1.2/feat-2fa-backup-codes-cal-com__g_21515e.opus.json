@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "disable.ts (lines 58-64): backup code checked with indexOf/===, not constant-time, in the disable-2FA endpoint"
+   },
+   {
+    "id": "F2",
+    "description": "next-auth-options.ts authorize (lines 139-146): backup code checked with indexOf/===, not constant-time, in the login path"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_76e752b3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_522c099e",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

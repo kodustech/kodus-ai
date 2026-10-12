@@ -1,0 +1,33 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "01e0ce607c46d2e3e208d21bd80cc40398f00c4b",
+  "attempt": 1,
+  "ms": 28557,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_a0c4295e",
+          "s_82bc776a",
+          "s_bd97a81c",
+          "s_ac42de81",
+          "s_c23a39bb",
+          "s_ba5fb2e8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The second downsize definition overrides the first, breaking compatibility with callers that pass width and height separately.",
+        "rationale": "All six report the same method-signature replacement at the same lines. Most identify resize_emoji.rb as an affected caller; s_c23a39bb describes the same compatibility defect without verifying a caller."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_054a4ca7",
+        "confidence": "high"
+      }
+    ]
+  }
+}

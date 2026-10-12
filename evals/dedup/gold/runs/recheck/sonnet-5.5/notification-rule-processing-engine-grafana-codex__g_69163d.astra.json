@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_898bc376",
+     "s_cb496a37",
+     "s_ce276048"
+    ],
+    "defect": "A delegação de useAllAlertRuleAbilities para useAllRulerRuleAbilities perde a verificação de grupos federados, removendo a proteção de imutabilidade para regras de grupos Mimir federados."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S5 descrevem o mesmo defeito: a perda da verificação de federação ao delegar para o hook que fixa isFederated como false. Preservar e repassar esse estado resolve as três sugestões; nenhuma relata um defeito independente."
+ }
+}

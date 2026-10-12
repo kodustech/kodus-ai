@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f8fef021",
+     "s_e31ebbd9"
+    ],
+    "defect": "A validação de origem do postMessage usa uma busca por substring em discourseUrl, aceitando origens diferentes da origem autorizada."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S10 apontam o mesmo defeito na mesma verificação de origem. Ambas propõem comparar exatamente e.origin com a origem extraída de discourseUrl; uma única correção resolve os dois relatos."
+ }
+}

@@ -1,0 +1,65 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Office365 createEvent (office365calendar/lib/CalendarService.ts lines 73-76) always uses the first destination calendar instead of the one matching the current credentialId, so secondary collective hosts target the organizer's calendar"
+   },
+   {
+    "id": "F2",
+    "description": "Lark CalendarService has the same first-element destinationCalendar selection problem"
+   },
+   {
+    "id": "F3",
+    "description": "Base CalendarService (packages/lib/CalendarService.ts) has the same first-element destinationCalendar selection problem"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_41c96050",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_23010781",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8dd680d0",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_60571361",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d2d1c6a5",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_6a0ae591",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

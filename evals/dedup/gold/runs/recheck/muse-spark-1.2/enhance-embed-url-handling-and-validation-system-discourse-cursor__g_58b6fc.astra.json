@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8c2349e8",
+     "s_3adf9f4b"
+    ],
+    "defect": "PollFeed chama scrub em i.content sem tratar nil, causando NoMethodError e interrompendo a importação do feed."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_8c2349e8"
+  ],
+  "reasoningPt": "S1 e S16 relatam o mesmo defeito na linha 35: conteúdo nil interrompe a importação ao receber a chamada scrub. As alternativas de correção não mudam essa equivalência. S1 também pede tratamento para título nil, sendo um bundle, mas seu defeito principal continua igual ao de S16."
+ }
+}

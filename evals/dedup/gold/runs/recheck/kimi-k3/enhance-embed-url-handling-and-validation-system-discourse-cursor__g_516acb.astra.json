@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_21875822",
+     "s_0382c995"
+    ],
+    "defect": "A chamada i.content.scrub sem tratar conteúdo ausente provoca NoMethodError e interrompe a importação dos itens restantes do feed."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S17 relatam o mesmo defeito na mesma chamada: i.content pode ser nil, interrompendo o processamento do feed. A proteção por item sugerida em S17 é uma mitigação adicional para essa falha, sem caracterizar outro defeito."
+ }
+}

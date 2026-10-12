@@ -1,0 +1,48 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "promptSha": "e4f16e98e23201deb7ef6434f8f34efbf7fffeb1",
+  "attempt": 1,
+  "ms": 42082,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0ed4a288",
+          "s_fa724245"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "getBaseConditions contains unreachable fallback branches because authorization conditions always return a truthy Prisma.Sql object.",
+        "rationale": "Both identify the same dead control flow caused by testing always-truthy authorization conditions. s_fa724245 covers the final fallback reported by s_0ed4a288 and the adjacent unreachable branch."
+      },
+      {
+        "members": [
+          "s_1bd86873",
+          "s_1ed631f1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The public options type permits team scope without teamId, allowing invalid calls to typecheck and silently return empty results after runtime validation fails.",
+        "rationale": "Both report the identical mismatch between the new public options type and the existing discriminated-union validator, with the same trigger and consequence."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_bea9e94d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_42ff8ad6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ab28c1c1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_fb963067",
+    "mainDefect": "In the identity-first flow, PasswordForm.render now calls webauthnAuth.fillContextForm for a user who has only typed a username, so the unauthenticated response contains per-user WebAuthn data. This lets anyone enumerate accounts that have passkeys and can expose their credential IDs.",
+    "secondary": [
+     {
+      "defect": "The relaxed isConditionalPasskeysEnabled(context.getUser()) guard in UsernamePasswordForm.challenge no longer checks whether a user is already selected, so the typed user's passkey data is put into the form before any credential is verified.",
+      "coveredBy": [
+       "s_28120ad1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_259020b6",
+    "mainDefect": "The wrong-password re-auth tests check only for 'Invalid password.', which does not depend on the relocated setupReauthenticationInUsernamePasswordFormError. They never assert USERNAME_HIDDEN or REGISTRATION_DISABLED, so they would still pass if that method broke.",
+    "secondary": [
+     {
+      "defect": "No test covers the new setupReauthenticationInUsernamePasswordFormError call site in WebAuthnConditionalUIAuthenticator.errorChallenge, which runs when a passkey fails during prompt=login re-authentication.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

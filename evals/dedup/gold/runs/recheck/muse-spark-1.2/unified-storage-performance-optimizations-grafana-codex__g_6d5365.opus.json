@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "defect": "Narrowing cacheMu in BuildIndex lets concurrent builds of the same key race on bleve.New(dir), duplicate work and leak indexes; fix with per-key singleflight or by restoring the full lock.",
+    "members": [
+     "s_53aa8e91",
+     "s_6f655174"
+    ]
+   }
+  ],
+  "unique": [
+   "s_4cfadd1d"
+  ],
+  "bundles": [
+   "s_4cfadd1d"
+  ],
+  "reasoningPt": "S5 e S8 relatam o mesmo defeito: builds concorrentes da mesma chave disputam o diretório e duplicam trabalho, corrigido com singleflight por chave. O defeito principal de S1 é a data race em TotalDocs, que percorre b.cache sem RLock e pede outra correção. Os builds duplicados da mesma chave aparecem só como segundo defeito em S1, por isso ele fica separado e marcado como bundle."
+ }
+}

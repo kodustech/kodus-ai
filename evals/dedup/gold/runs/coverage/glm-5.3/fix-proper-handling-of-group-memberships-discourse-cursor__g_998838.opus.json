@@ -1,0 +1,41 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Admin::GroupsController#add_members (line 66) calls params.require(:group_id), but the member route sends the group id as params[:id], so real requests fail with 400"
+   },
+   {
+    "id": "F2",
+    "description": "Admin::GroupsController#remove_member (line 85) calls params.require(:group_id), but the member route sends the group id as params[:id], so real requests fail with 400"
+   },
+   {
+    "id": "F3",
+    "description": "The .add_members specs (spec lines 94, 103) pass group_id: directly, which hides the mismatch; they need to pass id: instead"
+   },
+   {
+    "id": "F4",
+    "description": "The .remove_member specs (spec lines 115, 125) pass group_id: directly, which hides the mismatch; they need to pass id: instead"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_191ff583",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9ede52cf",
+    "covers": [
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

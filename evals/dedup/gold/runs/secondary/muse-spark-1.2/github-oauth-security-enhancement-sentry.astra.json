@@ -1,0 +1,199 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_a5422206",
+    "mainDefect": "Translating the error_short variable prevents error-message literals from being extracted for translation.",
+    "secondary": [
+     {
+      "defect": "The spelling \"Github\" should be normalized to \"GitHub\".",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_dba5cf11",
+    "mainDefect": "MAX_ALLOWED_REQUESTS is set to 150 instead of 100.",
+    "secondary": [
+     {
+      "defect": "performSearch() is unnecessarily wrapped in requestAnimationFrame.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The sanitization function is named sanitizeInput instead of sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Analytics timing uses Date.now() instead of performance.now().",
+      "coveredBy": []
+     },
+     {
+      "defect": "The /api/data request uses GET instead of POST.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may incorrectly map body.name to fields other than input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e8005d12",
+    "mainDefect": "MAX_ALLOWED_REQUESTS is set to 150 instead of 100.",
+    "secondary": [
+     {
+      "defect": "performSearch() is unnecessarily wrapped in requestAnimationFrame.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The sanitization function is named sanitizeInput instead of sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Analytics timing uses Date.now() instead of performance.now().",
+      "coveredBy": []
+     },
+     {
+      "defect": "The /api/data request uses GET instead of POST.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may incorrectly map body.name to fields other than input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c04307da",
+    "mainDefect": "MAX_ALLOWED_REQUESTS is set to 150 instead of 100.",
+    "secondary": [
+     {
+      "defect": "performSearch() is unnecessarily wrapped in requestAnimationFrame.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The sanitization function is named sanitizeInput instead of sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Analytics timing uses Date.now() instead of performance.now().",
+      "coveredBy": []
+     },
+     {
+      "defect": "The /api/data request uses GET instead of POST.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may incorrectly map body.name to fields other than input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ed2f4754",
+    "mainDefect": "MAX_ALLOWED_REQUESTS is set to 150 instead of 100.",
+    "secondary": [
+     {
+      "defect": "performSearch() is unnecessarily wrapped in requestAnimationFrame.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The sanitization function is named sanitizeInput instead of sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Analytics timing uses Date.now() instead of performance.now().",
+      "coveredBy": []
+     },
+     {
+      "defect": "The /api/data request uses GET instead of POST.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may incorrectly map body.name to fields other than input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_be8c18fb",
+    "mainDefect": "MAX_ALLOWED_REQUESTS is set to 150 instead of 100.",
+    "secondary": [
+     {
+      "defect": "performSearch() is unnecessarily wrapped in requestAnimationFrame.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The sanitization function is named sanitizeInput instead of sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Analytics timing uses Date.now() instead of performance.now().",
+      "coveredBy": []
+     },
+     {
+      "defect": "The /api/data request uses GET instead of POST.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may incorrectly map body.name to fields other than input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_fec7e43b",
+    "mainDefect": "MAX_ALLOWED_REQUESTS is set to 150 instead of 100.",
+    "secondary": [
+     {
+      "defect": "performSearch() is unnecessarily wrapped in requestAnimationFrame.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The sanitization function is named sanitizeInput instead of sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Analytics timing uses Date.now() instead of performance.now().",
+      "coveredBy": []
+     },
+     {
+      "defect": "The /api/data request uses GET instead of POST.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may incorrectly map body.name to fields other than input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e345fbc9",
+    "mainDefect": "MAX_ALLOWED_REQUESTS is set to 150 instead of 100.",
+    "secondary": [
+     {
+      "defect": "performSearch() is unnecessarily wrapped in requestAnimationFrame.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The sanitization function is named sanitizeInput instead of sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Analytics timing uses Date.now() instead of performance.now().",
+      "coveredBy": []
+     },
+     {
+      "defect": "The /api/data request uses GET instead of POST.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may incorrectly map body.name to fields other than input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

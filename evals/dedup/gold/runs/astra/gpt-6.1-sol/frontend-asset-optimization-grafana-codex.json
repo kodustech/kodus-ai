@@ -1,0 +1,24 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "promptSha": "d2176834b2ec0247beef72960ad6c48c864ab90d",
+  "attempt": 1,
+  "ms": 18213,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_b93643f2",
+          "s_d788d88a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The write-lock path does not recheck the cache, so concurrent non-Dev callers that initially observe nil each rebuild assets after acquiring the lock.",
+        "rationale": "Both suggestions identify the same missing cache check immediately after acquiring the write lock. Adding that check resolves both reports."
+      }
+    ],
+    "unique": []
+  }
+}

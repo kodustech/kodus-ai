@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_ad72bd96",
+   "s_4d254d59"
+  ],
+  "bundles": [
+   "s_4d254d59"
+  ],
+  "reasoningPt": "S1 aponta a exclusão prematura de lembretes por bloqueios temporários ou falhas transitórias. S2 tem como defeito principal contar falhas de persistência após o sucesso no Twilio, deixando mensagens sem controle e permitindo duplicações; isso exige uma correção distinta. S2 também reúne outro defeito: a falta de filtros na exclusão, por isso consta em bundles."
+ }
+}

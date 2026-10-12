@@ -1,0 +1,69 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "EmbeddableHostsController#update passes a nil lookup result to save_host, causing a 500 instead of a 404 for an unknown id."
+   },
+   {
+    "id": "F2",
+    "description": "EmbeddableHostsController#destroy calls destroy on a nil lookup result, causing a 500 instead of a 404 for an unknown id."
+   },
+   {
+    "id": "F3",
+    "description": "EmbeddableHost before_validation calls sub! on a possibly nil host, raising instead of returning a validation error."
+   },
+   {
+    "id": "F4",
+    "description": "EmbeddableHost.record_for_host compares lower(host) with an input host that is not downcased, rejecting mixed-case referers."
+   },
+   {
+    "id": "F5",
+    "description": "EmbeddableHostsController#save_host raises when params[:embeddable_host] is nil."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_5fd8900b",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_2a55c64a",
+    "covers": [
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8d184fdd",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5d6ec13d",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7958039f",
+    "covers": [
+     "F1",
+     "F2",
+     "F5"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

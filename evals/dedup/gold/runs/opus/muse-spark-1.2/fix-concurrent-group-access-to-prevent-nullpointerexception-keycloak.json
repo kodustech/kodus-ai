@@ -1,0 +1,86 @@
+{
+  "judge": "opus",
+  "model": "muse-spark-1.2",
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "promptSha": "467a00f3ee80f3731e1eaa451d1945cb06626429",
+  "attempt": 1,
+  "ms": 9095,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 7112,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 611,
+    "output_tokens_details": {
+      "thinking_tokens": 218
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 7112,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 611,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 7112,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 7112
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.0708976,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_ba7c99d1",
+          "s_f9a7eab4",
+          "s_7a7a84f5",
+          "s_e124c85a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The background reader thread in createMultiDeleteMultiReadMulti is never joined before the assertion, so exceptions can be missed (false pass or flaky result) and the thread can leak past the test.",
+        "rationale": "All four point at the same test lines and report the same missing join before assertThat. Joining the thread fixes every variant, including the thread-leak point."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_19dff499",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4118fce3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_11f47b82",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7b464a31",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7a9f177c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5a343300",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cf238e42",
+     "s_f6ecc7cd",
+     "s_f4232fe5",
+     "s_b2a83cd2",
+     "s_7e38bae0"
+    ],
+    "defect": "O acesso direto a integration.metadata[\"sender\"][\"login\"] causa KeyError e HTTP 500 quando falta o metadado sender, em vez de apresentar o erro controlado de verificação."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S6, S7 e S9 descrevem o mesmo acesso sem proteção ao metadado opcional sender, no mesmo trecho. Uma única correção com consulta segura e tratamento da ausência resolve todas as sugestões; nenhuma relata um segundo defeito."
+ }
+}

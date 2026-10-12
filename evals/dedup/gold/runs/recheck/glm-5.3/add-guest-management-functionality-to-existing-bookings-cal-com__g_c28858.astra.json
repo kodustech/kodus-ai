@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_14cc2bfd",
+     "s_4d5582bd",
+     "s_3fe2d5bd"
+    ],
+    "defect": "O handler passa guests em vez de uniqueGuests para sendAddGuestsEmails, fazendo participantes existentes serem classificados como novos e receberem uma confirmação de agendamento indevida."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S12, S16 e S17 descrevem o mesmo defeito na mesma chamada, corrigido passando uniqueGuests. A observação de S17 sobre a validação do diálogo apenas explica como o caso ocorre, sem relatar um defeito independente."
+ }
+}

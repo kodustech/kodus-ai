@@ -1,0 +1,21 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "promptSha": "be523012daa96aa370dd9d8cbdc891dfb632d371",
+  "attempt": 1,
+  "ms": 23517,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_b2bdd3e9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2ea8ac8d",
+        "confidence": "high"
+      }
+    ]
+  }
+}

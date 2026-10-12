@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_04234c39",
+     "s_802136a9",
+     "s_b9487ef1"
+    ],
+    "defect": "O listener de ClientRemovedEvent chama ClientPermissionsV2.setPermissionsEnabled, que lança UnsupportedOperationException e faz a exclusão de clientes falhar com V2 ativo."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S8 e S12 descrevem o mesmo defeito: a chamada de limpeza na exclusão de clientes chega ao método V2 que lança a exceção. S1 e S8 apontam o método, enquanto S12 aponta o chamador; uma única correção resolve os três relatos, e nenhum deles reúne defeitos adicionais."
+ }
+}

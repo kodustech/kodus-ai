@@ -1,0 +1,25 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5d7d2e7e",
+     "s_ed544c46",
+     "s_0640a963",
+     "s_f0d5db8a",
+     "s_a2efe6f7",
+     "s_12928c44",
+     "s_acdcfcf1"
+    ],
+    "defect": "A segunda definição de downsize sobrescreve a assinatura com largura e altura, quebrando a compatibilidade com os chamadores existentes."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_f0d5db8a"
+  ],
+  "reasoningPt": "S1, S4, S5, S6, S7, S8 e S11 relatam a mesma sobrescrita de downsize; diferenças entre erro de aridade e argumentos incorretos são consequências desse defeito. S6 acrescenta a preocupação com a mudança de contrato dos chamadores diretos de optimize, mas permanece no grupo pelo defeito principal."
+ }
+}

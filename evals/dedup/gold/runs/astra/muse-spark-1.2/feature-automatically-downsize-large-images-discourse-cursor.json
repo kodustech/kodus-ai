@@ -1,0 +1,57 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "baaf995a2eac91bb0c096cd74696d022d2a7e460",
+  "attempt": 1,
+  "ms": 58601,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_f0d5db8a",
+          "s_ed544c46",
+          "s_12928c44",
+          "s_a2efe6f7",
+          "s_5d7d2e7e",
+          "s_0640a963",
+          "s_acdcfcf1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The second downsize definition overwrites the width/height definition, breaking existing callers.",
+        "rationale": "All seven report the same Ruby method-shadowing defect. Malformed geometry, incorrect argument binding, and ArgumentError are consequences of that same overwritten signature."
+      },
+      {
+        "members": [
+          "s_b9468b8e",
+          "s_3de994d1"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "Hardcoded 10 MB limits replace configured limits in client validation, error messages, and remote downloads; the controller additionally ignores downsizing failures and leaves URL-upload content_type unset.",
+        "rationale": "Both report the repeated replacement of configured upload limits with the same fixed cap, requiring edits at distinct locations. The controller suggestion also reports conversion-failure handling and missing content-type defects that must survive consolidation."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_967223b8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2fff3d9b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d973678d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e2277099",
+        "confidence": "high"
+      }
+    ]
+  }
+}

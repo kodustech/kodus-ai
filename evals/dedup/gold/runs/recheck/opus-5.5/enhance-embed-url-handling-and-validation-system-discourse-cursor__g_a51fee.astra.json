@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_8ac429ca",
+     "s_bfc86ebc"
+    ],
+    "defect": "A URL é interpolada sem escape no link de origem, permitindo injeção de atributos ou marcação HTML."
+   }
+  ],
+  "unique": [
+   "s_8882a392"
+  ],
+  "bundles": [
+   "s_8ac429ca"
+  ],
+  "reasoningPt": "S2 e S8 têm como defeito principal a interpolação da URL sem escape no link de origem. S3 trata da ausência de sanitização em Post.cook para qualquer conteúdo raw_html, inclusive revisões posteriores, exigindo uma correção distinta. S2 também relata essa ausência de sanitização e, por isso, é um bundle, mas seu defeito principal mantém seu agrupamento com S8."
+ }
+}

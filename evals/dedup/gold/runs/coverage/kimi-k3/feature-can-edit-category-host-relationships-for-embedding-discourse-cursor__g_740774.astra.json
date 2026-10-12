@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "store.js.es6:197: Calling .map on a null *_ids value crashes hydration."
+   },
+   {
+    "id": "F2",
+    "description": "store.js.es6:197-200: Missing sideloaded records leave undefined array entries that crash consumers."
+   },
+   {
+    "id": "F3",
+    "description": "store.js.es6:200-201: Unconditionally deleting and replacing *_ids attributes changes model shape even when hydration fails."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3869a81c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9bf99a8b",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "addGuests.handler.ts:168 passes raw guests instead of uniqueGuests to sendAddGuestsEmails, causing filtered-out attendees to receive the scheduled email instead of the guests-added notice."
+   },
+   {
+    "id": "F2",
+    "description": "addGuests.handler.ts:92–165 persists attendees before an unhandled calendar update; failure leaves guests saved, returns an error, and prevents retrying with the same guests."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_d430022b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_72a13bc3",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c03cd3b4",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

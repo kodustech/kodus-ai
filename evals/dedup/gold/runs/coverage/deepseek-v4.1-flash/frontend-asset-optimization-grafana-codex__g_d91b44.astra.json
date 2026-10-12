@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GetWebAssets does not re-check entryPointAssetsCache after acquiring the write lock at lines 48-49."
+   },
+   {
+    "id": "F2",
+    "description": "GetWebAssets holds the write lock across manifest file/CDN I/O, serializing concurrent callers."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_6b35380b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_12bc3466",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_efe46b6a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

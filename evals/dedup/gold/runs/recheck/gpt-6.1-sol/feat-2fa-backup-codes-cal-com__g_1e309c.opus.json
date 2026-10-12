@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ed0e31d7",
+     "s_9602943b"
+    ],
+    "defect": "Backup codes are checked with a non-constant-time indexOf comparison, which leaks timing information in both the login and the 2FA-disable paths."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S4 apontam o mesmo erro, a comparação do código de backup com indexOf, que não leva tempo constante e por isso vaza informação de tempo. O erro aparece em dois lugares: no login (next-auth-options.ts) e na desativação do 2FA (disable.ts). A correção é a mesma nos dois, usar crypto.timingSafeEqual em todos os códigos, então trata-se de um erro repetido e o grupo fica como está."
+ }
+}

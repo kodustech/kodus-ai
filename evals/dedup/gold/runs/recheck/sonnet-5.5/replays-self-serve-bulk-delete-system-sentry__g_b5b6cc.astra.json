@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_c2a5e9e7",
+   "s_fecd973c"
+  ],
+  "bundles": [
+   "s_c2a5e9e7"
+  ],
+  "reasoningPt": "O defeito principal de S2 é aceitar um relatório sem age nem timestamp; o de S4 é permitir a coexistência dos campos quando o valor zero burla a checagem. S2 também relata esse segundo defeito e por isso é um bundle, mas essa sobreposição não une as sugestões pela regra do defeito principal."
+ }
+}

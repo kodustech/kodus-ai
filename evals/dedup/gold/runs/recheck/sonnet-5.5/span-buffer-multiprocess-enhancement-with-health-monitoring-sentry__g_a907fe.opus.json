@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c0b73dfc",
+     "s_f3717cf6"
+    ],
+    "defect": "The isinstance(process, multiprocessing.Process) guard is always False for SpawnProcess objects, so hung flusher processes are never killed on restart (and never terminated in join()), which leaks duplicate processes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S9 apontam o mesmo defeito: o isinstance com multiprocessing.Process nunca é verdadeiro para SpawnProcess, então kill() não é chamado e processos travados vazam. As duas sugerem a mesma correção. A menção ao terminate() em join() é o mesmo erro repetido em outro lugar, e não um defeito diferente, por isso nenhuma delas é bundle."
+ }
+}

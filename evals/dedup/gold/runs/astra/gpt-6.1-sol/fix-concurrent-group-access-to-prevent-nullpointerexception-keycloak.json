@@ -1,0 +1,24 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "promptSha": "5c7cd36261358a4e121c08935f5ffcce1f30f6cc",
+  "attempt": 1,
+  "ms": 26292,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_dc7f347e",
+          "s_3e52a596"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The test asserts caughtExceptions without joining the reader thread, so an in-flight read can report an exception after the assertion and escape detection.",
+        "rationale": "Both suggestions identify the same assertion race in the same test and require the same fix: stop and join the reader before checking collected exceptions."
+      }
+    ],
+    "unique": []
+  }
+}

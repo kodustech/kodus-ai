@@ -1,0 +1,25 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_c4bfaaf2",
+     "s_29d4df72"
+    ],
+    "defect": "MetricsMiddleware QueryData/CallResource dereference req (Queries, Body, PluginContext) without a nil guard, so nil requests panic."
+   },
+   {
+    "members": [
+     "s_87ece20e",
+     "s_ca7aeab6"
+    ],
+    "defect": "ContextualLoggerMiddleware unary methods dereference req.PluginContext without a nil guard, so nil requests panic."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 apontam a falta de verificação de nil no MetricsMiddleware (metrics_middleware.go), enquanto S6 e S7 apontam o mesmo tipo de falha no ContextualLoggerMiddleware (contextual_logger_middleware.go). São middlewares diferentes, e cada um precisa da sua própria correção. Por isso, publicar um par não torna o outro redundante."
+ }
+}

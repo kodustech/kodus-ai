@@ -1,0 +1,53 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "TestMode3_Create (lines 17-78) never waits for or asserts the async Legacy.Create goroutine"
+   },
+   {
+    "id": "F2",
+    "description": "TestMode3_Delete (lines 189-241) never waits for or asserts the async Legacy.Delete goroutine"
+   },
+   {
+    "id": "F3",
+    "description": "TestMode3_DeleteCollection (lines 243-295) never waits for or asserts the async Legacy.DeleteCollection goroutine"
+   },
+   {
+    "id": "F4",
+    "description": "TestMode3_Update (lines 297-356) never waits for or asserts the async Legacy.Update goroutine"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_9cd9483f",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_028635c3",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b32e2b9e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_49bc7a3a",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

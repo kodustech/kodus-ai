@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Update (line 139) passes raw objInfo to async Legacy.Update instead of updateWrapper around the storage result, so legacy recomputes an object that can diverge from the unified copy"
+   },
+   {
+    "id": "F2",
+    "description": "UpdatedObject is invoked a second time on the caller's objInfo (once by storage, again by legacy)"
+   },
+   {
+    "id": "F3",
+    "description": "Async, unordered legacy writes let concurrent updates reach legacy out of order, leaving it stale"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_63bda620",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cc993937",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4d3c3dc5",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

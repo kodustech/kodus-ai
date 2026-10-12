@@ -1,0 +1,10 @@
+{
+ "s_2e15df29": {
+  "summaryPt": "Exceções não tratadas de get_user_info (raise_for_status/rede/JSON) transformam falhas transitórias do GitHub em erros 500 em vez da página de erro.",
+  "contentPt": "`get_user_info(payload[\"access_token\"])` é chamado fora de qualquer try/except, mas sua implementação (src/sentry/identity/github/provider.py:7-17) chama `resp.raise_for_status()` e `resp.json()`. Assim, qualquer erro da API do GitHub (5xx, rate limit), falha de rede (ConnectionError/Timeout) ou corpo que não seja JSON lança uma exceção não tratada e retorna um 500, em vez da página graciosa de github-integration-failed que esta view usa em todos os outros pontos (o parsing da troca de token logo acima envolve as falhas em try/except exatamente por esse motivo). Correção: envolva a chamada, por exemplo `try: authenticated_user_info = get_user_info(payload[\"access_token\"]) except Exception: return error(request, self.active_organization)`."
+ },
+ "s_25ae84d7": {
+  "summaryPt": "Falhas de rede/API na troca de token OAuth e na consulta de user-info estão fora do try/except e aparecem como erros 500 não tratados em vez da página de erro pretendida.",
+  "contentPt": "O tratamento de falhas em OAuthLoginView.dispatch está incompleto: `req = safe_urlopen(url=ghip.get_oauth_access_token_url(), data=data)` (linha 423) é executado ANTES do try/except, então um erro de conexão/timeout com o GitHub lança uma exceção não tratada e retorna um 500 em vez da página graciosa de github-integration-failed que este PR adiciona. Da mesma forma, `get_user_info(payload[\"access_token\"])` (linha 434) pode lançar ApiError se o token for rejeitado pelo endpoint /user, e isso também escapa. O PR claramente pretende degradar de forma graciosa (ele retorna error() quando access_token está ausente do payload), então envolva as chamadas de safe_urlopen e get_user_info em try/except e siga para `return error(request, self.active_organization)` em caso de falha."
+ }
+}

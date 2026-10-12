@@ -1,0 +1,70 @@
+{
+ "s_37416a55": {
+  "summaryPt": "A migration desreferencia execute()[0] sem um nil guard, causando crash quando não existe linha de categoria correspondente.",
+  "contentPt": "O QUÊ: `execute(\"...\")[0]['id']` assume que o join entre category/embed_category sempre retorna uma linha; quando não retorna nenhuma, `[0]` é nil e `nil['id']` lança NoMethodError. POR QUÊ: Em qualquer site onde `embed_category` não está definido ou nenhuma categoria corresponde ao seu valor (ou seja, sites que nunca usaram embedding, incluindo instalações novas), a migration é abortada com um NoMethodError e o fallback `if category_id == 0` nunca é executado. CORREÇÃO: Espelhe o padrão com guarda usado em db/migrate/20140715190552_remove_uncategorized_parents.rb, por exemplo `row = execute(...)[0]; category_id = row && row['id'] ? row['id'].to_i : 0`, e aplique a mesma guarda à busca de uncategorized_category_id na linha 15."
+ },
+ "s_dfb530f5": {
+  "summaryPt": "before_validation chama self.host.sub! sem proteger contra host nil, causando crash com entrada em branco.",
+  "contentPt": "O QUÊ: `self.host.sub!(...)` é chamado incondicionalmente em `before_validation`; se `host` for nil (create/update com o parâmetro `host` ausente ou em branco), `nil.sub!` lança NoMethodError. POR QUÊ: A validação (validates_format_of) que rejeitaria um host em branco roda DEPOIS deste callback, então uma requisição malformada gera um 500 em vez de um erro de validação limpo; a guarda `cantSave` no client-side não protege chamadas diretas à API. CORREÇÃO: Proteja o callback, por exemplo `return if host.blank?` no topo do bloco before_validation (Stub/Fabricate `EmbeddableHost.new` com host definido não é afetado)."
+ },
+ "s_bcd54d22": {
+  "summaryPt": "update/destroy desreferenciam uma busca de EmbeddableHost possivelmente nil.",
+  "contentPt": "O QUÊ: `EmbeddableHost.where(id: params[:id]).first` pode retornar nil, e tanto `save_host(host)` (que faz `host.host = ...`) quanto `host.destroy` passam a operar sobre nil. POR QUÊ: Qualquer requisição com um id desconhecido/já excluído lança NoMethodError e retorna um 500 em vez de um erro no estilo 404. CORREÇÃO: Interrompa quando a busca retornar nil, por exemplo `host = EmbeddableHost.where(id: params[:id]).first; raise Discourse::NotFound unless host` tanto em update quanto em destroy."
+ },
+ "s_7d922aa5": {
+  "summaryPt": "host_allowed? aplica lowercase apenas na coluna, então um referer/host com diferença de caixa não corresponde.",
+  "contentPt": "O QUÊ: `where(\"lower(host) = ?\", host)` normaliza a coluna armazenada, mas não o valor vinculado (`uri.host`), que o URI do Ruby mantém na caixa original do parse. POR QUÊ: Um referer ou URL de embed contendo letras maiúsculas (por exemplo `EvilTrout.com`) então não corresponde a um host armazenado, e um embed legítimo é rejeitado com 'invalid referer host'. CORREÇÃO: Normalize também o parâmetro, por exemplo `where(\"lower(host) = ?\", host.downcase)`."
+ },
+ "s_5c00ae33": {
+  "summaryPt": "",
+  "contentPt": "`execute(...)[0]['id']` assume que a busca de embed_category retorna pelo menos uma linha. Quando a site setting `embed_category` está ausente ou seu valor não corresponde a nenhum nome de categoria, o SELECT retorna zero linhas, `[0]` é nil e `nil['id']` lança NoMethodError dentro da migration em vez de cair no fallback uncategorized de `if category_id == 0` na linha 14. Proteja o resultado, por exemplo `row = execute(...).first; category_id = row ? row['id'].to_i : 0` (e da mesma forma para a busca de uncategorized na linha 15), para que o fallback realmente execute quando não houver correspondência."
+ },
+ "s_0b85e8b9": {
+  "summaryPt": "",
+  "contentPt": "`before_validation` chama `self.host.sub!(...)` em um valor que pode ser nil. `save_host` atribui `host.host = params[:embeddable_host][:host]` diretamente, então um parâmetro ausente/em branco faz `nil.sub!` lançar NoMethodError (500) antes que a checagem `validates_format_of` possa produzir o erro de validação pretendido. Use uma forma nil-safe como `self.host = self.host.to_s.sub(...)` (ou proteja com `self.host.present?`) para que entrada em branco falhe na validação de forma limpa em vez de causar crash."
+ },
+ "s_9c6d1a3d": {
+  "summaryPt": "A allowlist de hosts aplica lowercase na coluna do banco, mas não no host de entrada, então referers com caixa mista nunca correspondem.",
+  "contentPt": "Normalização de caixa inconsistente em uma comparação case-insensitive. A query normaliza o lado armazenado (`lower(host)`), mas não o valor vinculado: `host = uri.host` é passado como está, e `before_validation` remove scheme/path, mas nunca aplica downcase. Um referer com qualquer host em maiúsculas (por exemplo `http://EvilTrout.com/...`) não corresponderá ao `eviltrout.com` da allowlist, então um embed legítimo é rejeitado. Normalize os dois lados, por exemplo `where(\"lower(host) = ?\", host.to_s.downcase)`. Observação: isso falha de forma fechada em vez de conceder acesso, então é um bug de correção, não um bypass de autenticação."
+ },
+ "s_135e8b0e": {
+  "summaryPt": "O teste 'embeddable_host is blank' não exercita mais o embeddable_host, então passa sem tocar em nenhuma condição que a implementação possui.",
+  "contentPt": "Este PR removeu a guarda de `embeddable_hosts` de `Topic#expandable_first_post?` (app/models/topic.rb:869) e também removeu o bloco `before` que definia `SiteSetting.embed_truncate = true` e fazia stub de `topic.has_topic_embed? => true`. Sem esse setup, o `expect(topic.expandable_first_post?).to eq(false)` da linha 1403 passa apenas porque um `Fabricate.build(:topic)` padrão não tem topic embed (`has_topic_embed?` é false) — a condição 'embeddable_host is blank' que ele nomeia não é mais configurada nem lida pelo código, então o teste não consegue detectar uma regressão nesse comportamento. Exclua o caso (a condição não existe mais) ou, se uma guarda de host em branco ainda for pretendida, restaure o setup e faça a asserção contra o caminho de código real para que o teste falhe quando o comportamento quebrar."
+ },
+ "s_888da293": {
+  "summaryPt": "A migration lança NoMethodError em nil quando a linha de site_setting embed_category está ausente.",
+  "contentPt": "A busca da categoria indexa `[0]` em um resultado possivelmente vazio: se nenhuma linha de site_settings chamada `embed_category` faz join com uma categoria (o caso comum, já que site_settings só guarda valores sobrescritos), `[0]` é nil e `nil['id']` lança NoMethodError, abortando a migration antes que o fallback `if category_id == 0` possa executar. Capture o resultado, verifique se está vazio e só então leia o id (usando como fallback `uncategorized_category_id`, com sua própria checagem de presença)."
+ },
+ "s_b3a7894c": {
+  "summaryPt": "before_validation chama sub! em um host nil, lançando NoMethodError antes de o validador de formato rodar.",
+  "contentPt": "`before_validation` modifica host com `sub!` sem um nil guard, então um host nil lança NoMethodError antes que `validates_format_of` possa reportar um erro de validação. Alcançável a partir de app/controllers/admin/embeddable_hosts_controller.rb:23 quando o parâmetro `embeddable_host[host]` está ausente, transformando um caso do tipo 400 em um 500. Retorne cedo para um host em branco ou opere em `host.to_s` e reatribua."
+ },
+ "s_37e50b4d": {
+  "summaryPt": "update/destroy lançam NoMethodError em um registro nil para ids desconhecidos em vez de retornar um erro.",
+  "contentPt": "`update` e `destroy` desreferenciam o resultado de `.first` sem checar nil, então um id desconhecido ou já excluído faz `save_host(nil)` lançar erro em `nil.host = ...` e `nil.destroy` lançar erro. Use `find_by` mais uma resposta explícita de not-found para que um id obsoleto retorne um erro em vez de um 500."
+ },
+ "s_193a4147": {
+  "summaryPt": "A correspondência de host case-insensitive aplica lowercase apenas na coluna do banco, não no valor de busca.",
+  "contentPt": "`record_for_host` normaliza apenas um lado da comparação: a coluna armazenada tem lowercase (`lower(host)`), mas o valor de busca `host` (`uri.host`, com a caixa preservada da URL da requisição) é usado como está, e `before_validation` também nunca aplica downcase ao host armazenado. Um host salvo como `Example.com` (permitido pelo validador case-insensitive) não será encontrado por `record_for_host`, então `host_allowed?` retorna false para um host legitimamente permitido. Aplique lowercase nos dois lados, por exemplo `where(\"lower(host) = ?\", host.downcase).first`."
+ },
+ "s_ad453db1": {
+  "summaryPt": "A migration faz join do valor da setting embed_category (um id de categoria) com o nome da categoria, perdendo a categoria migrada.",
+  "contentPt": "A migration lê a antiga site setting `embed_category` comparando `site_settings.value` com `categories.name`, mas `embed_category` armazenava o *id* da categoria. O join, portanto, não corresponde a nada, `category_id` permanece 0, e todo embeddable host migrado recebe silenciosamente `uncategorized_category_id` em vez da categoria de embed configurada. Compare com o id (por exemplo `s.value = c.id::text`, ou resolva a setting através da API SiteSetting)."
+ },
+ "s_c9027ce1": {
+  "summaryPt": "Os arquivos de fabricator de category e embeddable_host têm seus conteúdos trocados.",
+  "contentPt": "O arquivo `spec/fabricators/embeddable_host_fabricator.rb` foi criado contendo os fabricators de CATEGORY (`Fabricator(:category)`, `:diff_category`, `:happy_category`, `:private_category`), enquanto `spec/fabricators/category_fabricator.rb` foi sobrescrito para definir `Fabricator(:embeddable_host)`. Os conteúdos dos dois arquivos estão invertidos em relação aos seus nomes: o fabricator de embeddable_host está em category_fabricator.rb e os fabricators de category estão em embeddable_host_fabricator.rb. Mova as definições da família `Fabricator(:category)` de volta para spec/fabricators/category_fabricator.rb e coloque `Fabricator(:embeddable_host) { host 'eviltrout.com'; category }` em spec/fabricators/embeddable_host_fabricator.rb. Isso só continua funcionando porque o Fabrication carrega todos os arquivos em spec/fabricators por glob, mas qualquer ferramenta/spec que carregue fabricators por nome de arquivo ou uma futura reordenação vai quebrar, e o local errado é um risco de manutenção."
+ },
+ "s_8a6b086d": {
+  "summaryPt": "O fallback de categoria do PostCreator (SiteSetting.embed_category) foi substituído por eh.try(:category_id), que é nil quando o registro do host não pode ser resolvido, então tópicos embedded agora podem ser criados sem categoria.",
+  "contentPt": "Antes desta mudança, o novo tópico/post era sempre criado com uma categoria resolvida (`category: SiteSetting.embed_category`). O novo código a deriva do host correspondente: `eh = EmbeddableHost.record_for_host(url)` e então `category: eh.try(:category_id)`. Mas `record_for_host` (app/models/embeddable_host.rb:10-18) retorna `false` para uma URL não parseável/em branco e `nil` quando nenhuma linha de `EmbeddableHost` corresponde (`where(...).first`), então `eh.try(:category_id)` é nil e o post é criado sem categoria em vez de usar como fallback a categoria configurada/uncategorized. Restaure um fallback explícito (por exemplo `(eh.try(:category_id) || SiteSetting.uncategorized_category_id)`) ou garanta que a busca do host não possa falhar antes de chamar o PostCreator."
+ },
+ "s_30fe56e0": {
+  "summaryPt": "Os arquivos de fabricator de category e embeddable-host têm seus conteúdos trocados, então o nome de cada arquivo descreve o fabricator errado.",
+  "contentPt": "Os conteúdos dos dois arquivos de fabricator estão trocados: category_fabricator.rb agora define `Fabricator(:embeddable_host)`, enquanto o recém-adicionado embeddable_host_fabricator.rb define os fabricators de category. Os nomes dos arquivos agora contradizem seus conteúdos. Mova os fabricators de category de volta para category_fabricator.rb e o fabricator de embeddable-host para embeddable_host_fabricator.rb."
+ },
+ "s_da7b8917": {
+  "summaryPt": "A descrição do teste menciona uma condição de embeddable_host que expandable_first_post? não verifica mais.",
+  "contentPt": "Este exemplo se chama \"is false if embeddable_host is blank\", mas o bloco `before` que definia `SiteSetting.embeddable_hosts` foi removido e `Topic#expandable_first_post?` (app/models/topic.rb:868-869) não referencia mais embeddable hosts — ele verifica apenas `embed_truncate?` e `has_topic_embed?`. A descrição agora descreve uma condição que o código não tem mais; renomeie o exemplo (por exemplo, para refletir que é false quando não há topic embed) ou reestruture-o para voltar a exercitar uma condição de embeddable-host."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_24ce89e8",
+     "s_b9ad27f9"
+    ],
+    "defect": "get_monitor_environment_context retorna a configuração original em vez da cópia transformada, descartando a substituição de schedule_type pelo valor legível."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 descrevem o mesmo defeito no retorno de get_monitor_environment_context, com pequenas diferenças de ênfase e intervalo de linhas. Retornar o config transformado resolve ambas; nenhuma sugestão inclui outro defeito."
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_c2f1d70e",
+     "s_b183150d",
+     "s_9eae5caf",
+     "s_0ee85020"
+    ],
+    "defect": "O valor padrão de queued é calculado na importação e reutilizado pelas instâncias, em vez de ser calculado a cada criação."
+   }
+  ],
+  "unique": [
+   "s_03c0a1d9"
+  ],
+  "bundles": [
+   "s_c2f1d70e",
+   "s_03c0a1d9"
+  ],
+  "reasoningPt": "S1, S4, S5 e S6 têm como defeito principal o timestamp calculado na importação. S7 começa pela asserção insuficiente do teste, que exige uma alteração distinta, e por isso fica separado. S1 e S7 mencionam ambos os defeitos, mas essa sobreposição secundária não une os grupos."
+ }
+}

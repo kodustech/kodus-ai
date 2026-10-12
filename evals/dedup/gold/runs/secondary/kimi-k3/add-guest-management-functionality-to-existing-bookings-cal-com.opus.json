@@ -1,0 +1,73 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c8acf696",
+    "mainDefect": "The server-side guests schema and handler do not dedupe emails within one request, so duplicate emails in a single request create duplicate Attendee rows.",
+    "secondary": [
+     {
+      "defect": "There is a check-then-insert race (TOCTOU): concurrent requests both pass the existing-attendee check and insert duplicate attendees.",
+      "coveredBy": [
+       "s_6180295c"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_b8b58cda",
+    "mainDefect": "The blacklist check compares un-lowercased guest emails against a lowercased blacklist, so a different casing bypasses the blacklist.",
+    "secondary": [
+     {
+      "defect": "The existing-attendee duplicate check (guest === attendee.email) is case-sensitive, so the same email with different casing creates a duplicate attendee.",
+      "coveredBy": [
+       "s_0005a575"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_bfda6ce2",
+    "mainDefect": "findFirstOrThrow with booking.userId || 0 throws an unhandled 500 when the booking's userId is null.",
+    "secondary": [
+     {
+      "defect": "The extra organizer query is redundant because booking.user is already loaded by the first booking query.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_0005a575",
+    "mainDefect": "The server-side existing-attendee dedupe check is case-sensitive, so the same mailbox with different casing is added as a duplicate attendee.",
+    "secondary": [
+     {
+      "defect": "The client-side Set-based uniqueness check in AddGuestsDialog.tsx is also case-sensitive.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_76132555",
+    "mainDefect": "The blacklist check compares the raw guest email against a lowercased blacklist, so a different casing bypasses the blacklist.",
+    "secondary": [
+     {
+      "defect": "The attendee duplicate comparison on line 76 is also not case-normalized.",
+      "coveredBy": [
+       "s_0005a575"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_87249f18",
+    "mainDefect": "The error message comes from a template literal and is always truthy, so the unable_to_add_guests fallback can never be reached.",
+    "secondary": [
+     {
+      "defect": "The user-facing error toast is always prefixed with an internal TRPC error code (or 'undefined').",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

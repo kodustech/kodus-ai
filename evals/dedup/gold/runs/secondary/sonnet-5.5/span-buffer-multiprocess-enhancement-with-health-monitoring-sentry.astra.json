@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d8cd6310",
+    "mainDefect": "Restarting a hung thread leaves the old worker running alongside its replacement on the same shards.",
+    "secondary": [
+     {
+      "defect": "Creating the replacement overwrites the existing SpansBuffer without closing it.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c0b73dfc",
+    "mainDefect": "The restart path's multiprocessing.Process type check excludes SpawnProcess objects, so hung processes are not killed before replacements start.",
+    "secondary": [
+     {
+      "defect": "The same incorrect type check in join() prevents SpawnProcess workers from being terminated.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f3717cf6",
+    "mainDefect": "The restart path's multiprocessing.Process type check excludes SpawnProcess objects, so hung processes are not killed before replacements start.",
+    "secondary": [
+     {
+      "defect": "The same incorrect type check in join() prevents SpawnProcess workers from being terminated.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,26 @@
+{
+ "key": "1fff1be3fe",
+ "checks": {
+  "s_409de42d": [],
+  "s_7365ba08": [],
+  "s_f3eeca23": [],
+  "s_a3b03cbf": [],
+  "s_734b969b": [],
+  "s_48922cf0": [],
+  "s_34baf824": [],
+  "s_1f77ab04": [
+   {
+    "id": "s_8955a30a",
+    "likelihood": "borderline",
+    "reasonPt": "Ambas denunciam condições de renderização que continuam exigindo uma regra Ruler mesmo quando as permissões já aceitam promRule. É razoável agrupá-las como padrão sistêmico da migração, embora Silence exija corrigir a montagem do drawer e Pause/Delete exijam corrigir os itens do menu e seus handlers."
+   }
+  ],
+  "s_8955a30a": [
+   {
+    "id": "s_1f77ab04",
+    "likelihood": "borderline",
+    "reasonPt": "Ambas denunciam condições de renderização que continuam exigindo uma regra Ruler mesmo quando as permissões já aceitam promRule. É razoável agrupá-las como padrão sistêmico da migração, embora Pause/Delete exijam corrigir os itens do menu e seus handlers e Silence exija corrigir a montagem do drawer."
+   }
+  ]
+ }
+}

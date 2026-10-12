@@ -1,0 +1,46 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Update, line 139: raw objInfo lets legacy recompute against its own state and diverge from the unified storage result."
+   },
+   {
+    "id": "F2",
+    "description": "Update, lines 126 and 139: UpdatedObject is invoked twice, potentially breaking non-idempotent implementations."
+   },
+   {
+    "id": "F3",
+    "description": "Update, lines 134–141: asynchronous legacy updates can execute out of order, leaving legacy stale."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_63bda620",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cc993937",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4d3c3dc5",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

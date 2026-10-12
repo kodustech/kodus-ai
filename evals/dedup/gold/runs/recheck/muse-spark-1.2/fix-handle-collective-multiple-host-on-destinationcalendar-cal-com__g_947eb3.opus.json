@@ -1,0 +1,25 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "Calendar.createEvent now requires a credentialId parameter, but the Office365, Lark and Base implementations still declare createEvent(event) and ignore credentialId.",
+    "members": [
+     "s_47e65bca",
+     "s_99ffaedb",
+     "s_33ed9a24",
+     "s_dc30b21a",
+     "s_08905d22",
+     "s_7335ccdf",
+     "s_af4c6322"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_dc30b21a"
+  ],
+  "reasoningPt": "Todas as sugestões apontam o mesmo defeito: a interface Calendar.createEvent passou a exigir credentialId e as implementações não-Google (Office365, Lark, Base) não foram atualizadas. S4 cobre todos os provedores de uma vez, enquanto S12, S13, S17, S19, S21 e S22 reportam o mesmo erro repetido em cada arquivo, e uma única mudança resolve tudo. S17 também propõe trocar o uso fixo de [0] por uma seleção do calendário pelo credentialId, por isso entra em bundles, mas seu defeito principal é o mesmo do grupo."
+ }
+}

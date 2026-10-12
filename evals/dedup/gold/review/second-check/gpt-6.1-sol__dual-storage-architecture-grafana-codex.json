@@ -1,0 +1,21 @@
+{
+ "key": "4683f97cb3",
+ "checks": {
+  "s_68108285": [],
+  "s_3af77dc3": [
+   {
+    "id": "s_751ded27",
+    "likelihood": "borderline",
+    "reasonPt": "Ambas apontam nomes de testes desatualizados em relação ao comportamento do modo 3, o que pode ser agrupado como um padrão repetido. Porém, documentam contratos diferentes em Create e List e exigem renomeações independentes."
+   }
+  ],
+  "s_751ded27": [
+   {
+    "id": "s_3af77dc3",
+    "likelihood": "borderline",
+    "reasonPt": "Ambas apontam nomes de testes desatualizados em relação ao comportamento do modo 3, o que pode ser agrupado como um padrão repetido. Porém, documentam contratos diferentes em List e Create e exigem renomeações independentes."
+   }
+  ],
+  "s_5a02bd8a": []
+ }
+}

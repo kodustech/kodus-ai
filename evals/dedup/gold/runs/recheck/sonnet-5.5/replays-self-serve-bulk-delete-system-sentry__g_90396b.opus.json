@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bd9befb8",
+     "s_5a268069",
+     "s_9352f0cd",
+     "s_bdf9a1e7"
+    ],
+    "defect": "fetch_error_details uses zip to pair error_ids with events.values() from nodestore.get_multi, which can leave out missing nodes or return them in a different order, so IDs get matched to the wrong event data."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3, S7 e S10 apontam o mesmo defeito: em fetch_error_details, o zip de error_ids com events.values() desalinha IDs e dados quando o get_multi omite nós ou muda a ordem. Todas propõem a mesma correção, que é buscar cada evento pelo node_id. Nenhuma traz um segundo defeito."
+ }
+}

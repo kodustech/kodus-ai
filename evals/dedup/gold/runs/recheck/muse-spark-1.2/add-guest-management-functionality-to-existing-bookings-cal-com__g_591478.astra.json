@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6b3b1759",
+     "s_c99a8cda",
+     "s_382d8521"
+    ],
+    "defect": "A comparação da blacklist com convidados sem normalização permite contornar o bloqueio variando maiúsculas e minúsculas."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_6b3b1759",
+   "s_c99a8cda",
+   "s_382d8521"
+  ],
+  "reasoningPt": "S2, S6 e S13 apresentam primeiro o mesmo defeito: o bypass da blacklist por diferenças de capitalização. As três também abordam a comparação com participantes existentes, e S6 acrescenta a deduplicação da entrada; esses defeitos adicionais tornam as sugestões bundles, sem alterar seu agrupamento pelo defeito principal."
+ }
+}

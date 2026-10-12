@@ -1,0 +1,10 @@
+{
+ "s_ac3a5ed0": {
+  "summaryPt": "O teste do botão de copiar verifica apenas um toast que o handler exibe incondicionalmente (o writeText do clipboard nunca recebe await), então ele passa mesmo quando a cópia falha ou copia um texto vazio/errado.",
+  "contentPt": "A única asserção do novo teste do botão de copiar é que o toast aparece, mas o handler que ele cobre (botão de copiar em EnableTwoFactorModal.tsx) chama `navigator.clipboard.writeText(...)` sem await e depois exibe incondicionalmente o toast de sucesso. Portanto, o teste passa mesmo se o writeText for removido, for rejeitado (como pode acontecer em browsers headless sem permissões de clipboard) ou copiar uma string vazia/incorreta. Conceda as permissões de clipboard e verifique que o conteúdo do clipboard é igual aos backup codes formatados (e considere usar await no writeText dentro do handler para que o toast reflita o sucesso real)."
+ },
+ "s_be1b7939": {
+  "summaryPt": "O novo bloco de backup codes nunca verifica nenhum valor real de código — nem o conteúdo da grid, nem o conteúdo do arquivo baixado, nem o texto do clipboard — então uma regressão que gere zero códigos ou códigos malformados ainda passaria.",
+  "contentPt": "A premissa do novo bloco é \"os backup codes agora estão sendo exibidos\", mas nada verifica um único valor de código em lugar algum: a checagem do download verifica apenas suggestedFilename (que vem do atributo `download` e é idêntico para um arquivo vazio), e a grid de códigos é renderizada, mas nunca verificada. Se o setup.ts gerasse um array vazio ou códigos inválidos, a URL do blob ainda seria criada, o evento de download ainda dispararia com o nome de arquivo correto e o teste continuaria verde. Verifique que o arquivo baixado contém 10 linhas no formato hexadecimal XXXXX-XXXXX esperado (ou verifique que a grid renderiza 10 entradas correspondentes)."
+ }
+}

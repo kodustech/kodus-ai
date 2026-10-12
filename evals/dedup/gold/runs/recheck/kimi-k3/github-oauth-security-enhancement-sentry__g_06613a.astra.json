@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_2e15df29",
+   "s_25ae84d7"
+  ],
+  "bundles": [
+   "s_25ae84d7"
+  ],
+  "reasoningPt": "S2 aponta exceções não tratadas em get_user_info; o defeito principal de S6 é a chamada safe_urlopen fora do try/except na troca do token. Essas falhas exigem correções independentes, embora produzam o mesmo sintoma. S6 também menciona get_user_info, portanto é um bundle, mas essa menção secundária não a agrupa com S2."
+ }
+}

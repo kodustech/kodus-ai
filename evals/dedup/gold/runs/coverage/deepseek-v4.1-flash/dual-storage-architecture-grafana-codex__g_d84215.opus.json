@@ -1,0 +1,61 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create (line 51): async legacy write goroutine derives its timeout from the request-scoped ctx, so it can be cancelled when the handler returns"
+   },
+   {
+    "id": "F2",
+    "description": "Delete (line 110): same request-scoped ctx used for the async legacy delete"
+   },
+   {
+    "id": "F3",
+    "description": "Update (line 135): same request-scoped ctx used for the async legacy update"
+   },
+   {
+    "id": "F4",
+    "description": "DeleteCollection (line 163): same request-scoped ctx used for the async legacy deletecollection"
+   },
+   {
+    "id": "F5",
+    "description": "Legacy write error is no longer logged; it is only recorded in a metric"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0fa90f2c",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7e8b6adf",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b0ebef03",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

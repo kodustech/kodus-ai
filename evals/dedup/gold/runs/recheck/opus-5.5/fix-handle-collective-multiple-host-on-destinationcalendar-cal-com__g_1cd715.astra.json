@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e5148fc6",
+     "s_f9e00249"
+    ],
+    "defect": "A condição de atribuição do slug da organização foi invertida, definindo-o quando o billing está habilitado e omitindo-o quando está desabilitado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S20 apontam a mesma inversão de condição na linha 151 e propõem restaurar a mesma negação. Os efeitos nos ambientes com e sem billing são consequências desse único defeito, portanto o grupo deve ser mantido."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ee0c2eb0",
+     "s_ad0aab9e"
+    ],
+    "defect": "update and destroy in EmbeddableHostsController use a lookup that can return nil and then call methods on it, so a missing or deleted host id raises NoMethodError instead of a not-found response."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 apontam o mesmo defeito: em update e destroy, `where(...).first` pode retornar nil, e o código chama save_host(nil) e nil.destroy sem checar. A correção proposta é a mesma (retornar 404/erro), e a pequena diferença no intervalo de linhas não muda nada. Nenhuma das duas traz um segundo defeito."
+ }
+}

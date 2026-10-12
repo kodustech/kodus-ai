@@ -1,0 +1,69 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Google updateEvent fallback (line 256): find() compares against a falsy externalCalendarId, so it never matches and calendar.events.update gets calendarId undefined"
+   },
+   {
+    "id": "F2",
+    "description": "Google deleteEvent fallback (lines 315-317): the same find() never matches, so it falls back to 'primary' or undefined and misses the event on the real destination calendar"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7aa0f717",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7f78185c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_f50a5d4f",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e57c1a14",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dd554f89",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_08035170",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_29b344c5",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

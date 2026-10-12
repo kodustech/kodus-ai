@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "utilities.js line 182: the client-side size check hardcodes 10*1024 instead of reading the per-type Discourse.SiteSettings max_<type>_size_kb limit, so admin-configured limits are ignored"
+   },
+   {
+    "id": "F2",
+    "description": "utilities.js line 246: the 413 handler hardcodes 10MB, so the file_too_large alert shows the wrong max_size_kb"
+   },
+   {
+    "id": "F3",
+    "description": "Non-image uploads: max_attachment_size_kb is no longer enforced on either side, because the server only downsizes images"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_550877fa",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_ac29b93c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_78b42b19",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

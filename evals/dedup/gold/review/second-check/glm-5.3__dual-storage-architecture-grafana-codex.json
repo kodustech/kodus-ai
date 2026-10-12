@@ -1,0 +1,14 @@
+{
+ "key": "97355e6e71",
+ "checks": {
+  "s_232614e3": [],
+  "s_f1e42d68": [],
+  "s_3930204d": [
+   {
+    "id": "s_48464c58",
+    "likelihood": "borderline",
+    "reasonPt": "A s_48464c58 também aponta que as goroutines podem aplicar atualizações concorrentes fora de ordem e causar divergência permanente. Há possível sobreposição com o defeito de ordenação, embora essa observação apareça como agravante da ausência de updateWrapper, que é seu foco principal."
+   }
+  ]
+ }
+}

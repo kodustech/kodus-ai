@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c0312a1d",
+    "mainDefect": "The login IdP cache (cacheKeyForLogin) is not invalidated when OrganizationProvider.addIdentityProvider/removeIdentityProvider links or unlinks an IdP, so login pages show stale brokers.",
+    "secondary": [
+     {
+      "defect": "The login IdP cache is not invalidated when an organization's enabled state (OrganizationModel.isEnabled) is toggled.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8101d6f5",
+    "mainDefect": "Lookups in MetricsEndpoint that only match exact values like 'public' use string-pattern (regex) matching instead of a direct equals or set lookup.",
+    "secondary": [
+     {
+      "defect": "Regex patterns in MetricsEndpoint may not be anchored (e.g. ^fetch.*$), or may be applied to the wrong field, so matching or escaping errors can go unnoticed.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

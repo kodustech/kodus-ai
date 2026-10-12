@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0fcfd2d6",
+     "s_a23b880b",
+     "s_a98dfe02"
+    ],
+    "defect": "Office365, Lark and BaseCalendarService createEvent always use destinationCalendar[0].externalId instead of the destination that matches the passed credentialId, so in COLLECTIVE events with several hosts the other hosts' events go to the wrong calendar or fail."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6, S17 e S28 apontam o mesmo defeito: Office365, Lark e BaseCalendarService usam fixo o destinationCalendar[0] em vez de escolher pelo credentialId, como o Google já faz. A mesma correção resolve as três. A divergência do externalId salvo na referência, citada em S17, é consequência desse mesmo erro e some com a mesma correção, então não conta como defeito à parte."
+ }
+}

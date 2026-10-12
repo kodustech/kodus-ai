@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "align-items mixin (mixins.scss line 121) emits invalid -ms-align-items property; IE10/11 uses -ms-flex-align"
+   },
+   {
+    "id": "F2",
+    "description": "align-items mixin is missing -moz-box-align for legacy Firefox"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_1480fde3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_0303e051",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

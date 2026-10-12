@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0f08123e",
+    "mainDefect": "The test uses an OAuth state that probably doesn't match pipeline.signature, so it fails at the state check and never reaches the 'integration not found' branch, and its generic error assertion would pass for any failure.",
+    "secondary": [
+     {
+      "defect": "The test doesn't check that the authorize step ran or that no Integration was created.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

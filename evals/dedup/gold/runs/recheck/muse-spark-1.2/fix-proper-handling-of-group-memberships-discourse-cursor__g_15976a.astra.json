@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_14f65a41",
+     "s_ec5c3c72",
+     "s_44c02cb3"
+    ],
+    "defect": "As três sugestões apontam a mesma incompatibilidade entre o parâmetro :id atribuído às rotas e o :group_id exigido por add_members e remove_member."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9, S11 e S14 descrevem o mesmo defeito nos mesmos endpoints, resolvido pelo alinhamento do parâmetro entre rota e controller. A divergência sobre o status HTTP e as diferenças nas correções propostas não caracterizam defeitos distintos."
+ }
+}

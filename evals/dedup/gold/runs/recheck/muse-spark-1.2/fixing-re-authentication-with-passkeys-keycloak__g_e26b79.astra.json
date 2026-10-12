@@ -1,0 +1,13 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_a24812df",
+   "s_7f72f09d"
+  ],
+  "bundles": [],
+  "reasoningPt": "S1 relata a perda dos atributos de reautenticação ao renderizar respostas de erro; S2 relata a perda dos dados de passkeys ao renderizar a tela de senha. Embora ambos apontem instâncias descartadas de LoginFormsProvider, envolvem preparações e caminhos distintos, e corrigir um não resolve necessariamente o outro."
+ }
+}

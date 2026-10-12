@@ -1,0 +1,72 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "828f26f7ade6d928b1d78d7d1d2e1627a24650c1",
+  "attempt": 1,
+  "ms": 41450,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_8944a234",
+          "s_6ee5a633",
+          "s_61b47067",
+          "s_5e595406",
+          "s_24bc143e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "EventManager dereferences mainHostDestinationCalendar.integration when the destination calendar array is empty or nullish, causing Google Meet location processing to throw.",
+        "rationale": "All five report the same missing optional chain at the same access. Their references to producer sites explain how the undefined value arises; one guard resolves every report."
+      },
+      {
+        "members": [
+          "s_40565196",
+          "s_e60cb4a6",
+          "s_03a86b3c",
+          "s_77f00126"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Google Calendar updateEvent and deleteEvent search destination calendars using an already-falsy externalCalendarId, losing the configured destination calendar fallback.",
+        "rationale": "The identical faulty fallback appears in both methods and requires an edit in each. Two suggestions explicitly report both occurrences, linking the update-only and delete-only reports."
+      },
+      {
+        "members": [
+          "s_3eac123e",
+          "s_920837b4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "EventManager drops result.credentialId from non-calendar booking references, preventing consumers from identifying the video credential.",
+        "rationale": "Both identify the same conditional assignment that replaces the video credential ID with undefined. The cancellation failure is a downstream consequence of that same defect."
+      },
+      {
+        "members": [
+          "s_fd5d22ad",
+          "s_6e5785bb",
+          "s_ad515981"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Collective team destination calendars are discarded because the optional push does nothing when the organizer and event type have no destination calendar.",
+        "rationale": "All three report the same null initialization followed by an optional push. Initializing or assigning the merged array resolves all three."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_71e1a7f5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_195f096d",
+        "confidence": "high"
+      }
+    ]
+  }
+}

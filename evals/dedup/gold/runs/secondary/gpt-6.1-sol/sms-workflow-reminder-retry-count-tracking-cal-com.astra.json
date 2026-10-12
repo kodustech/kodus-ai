@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_b96ddd5a",
+    "mainDefect": "Retry-exhaustion cleanup can delete successfully scheduled reminders because it does not require isScheduled: false and success does not reset retryCount.",
+    "secondary": [
+     {
+      "defect": "The retry-exhaustion cleanup also deletes non-SMS reminders because its predicate is not restricted to method: SMS.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

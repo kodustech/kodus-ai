@@ -1,0 +1,38 @@
+{
+ "s_51ce1fbc": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O novo branch `retryCount > 1` do OR no deleteMany não tem filtro `method: WorkflowMethods.SMS` nem filtro `scheduled: false`. O cron de SMS vai deletar qualquer WorkflowReminder com retryCount > 1, incluindo lembretes de EMAIL e WHATSAPP. POR QUÊ: retryCount é uma coluna da tabela compartilhada WorkflowReminder. Assim que outro cron ou fluxo começar a incrementá-la, esta limpeza voltada apenas a SMS vai apagar silenciosamente lembretes de outros métodos. CORREÇÃO: Restrinja o branch: `{ method: WorkflowMethods.SMS, scheduled: false, retryCount: { gt: 1 } }`."
+ },
+ "s_1ee234e7": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: Todo retorno falsy ou exceção de twilio.scheduleSMS incrementa retryCount. Isso inclui o `return;` intencional quando o usuário ou time está bloqueado para SMS (twilioProvider.ts:92-95), além de throws de checkSMSRateLimit e erros transitórios do Twilio ou de rede. POR QUÊ: Após 2 execuções do cron, esses lembretes são deletados permanentemente pelo novo branch do deleteMany. Antes desta mudança, eles seriam retentados até a data agendada. Lembretes de contas temporariamente bloqueadas ou com rate limit, ou atingidos por uma breve indisponibilidade, agora são perdidos silenciosamente. CORREÇÃO: Conte apenas falhas permanentes (por exemplo, códigos de erro do Twilio para número inválido). Não incremente quando o envio estiver bloqueado ou com rate limit."
+ },
+ "s_910f4601": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O novo `prisma.workflowReminder.update` dentro do bloco catch não está envolvido em seu próprio try/catch. Se ele lançar uma exceção (por exemplo, P2025 porque o lembrete foi deletado concorrentemente quando o agendamento foi cancelado, ou um erro de conectividade com o banco, que também pode ter sido o que disparou o catch original), a exceção escapa do loop for. POR QUÊ: Isso aborta o processamento de todos os lembretes não agendados restantes nesta execução e faz o cron retornar 500. Antes desta mudança, um lembrete problemático não conseguia interromper o lote. CORREÇÃO: Envolva a atualização do retry count em seu próprio try/catch, ou use `updateMany({ where: { id }, data: { retryCount: { increment: 1 } } })` e registre em log qualquer falha."
+ },
+ "s_6fbe394f": {
+  "summaryPt": "",
+  "contentPt": "Esta limpeza costumava deletar apenas lembretes de SMS. O novo branch `OR` `{ retryCount: { gt: 1 } }` não tem filtro de `method`, então o cron de SMS agora deleta linhas de WorkflowReminder de todos os métodos (EMAIL, WHATSAPP) quando o retryCount passa de 1, inclusive linhas que já estão agendadas. Os crons de email e WhatsApp podiam contar antes com esse job deixando suas linhas em paz. Isso deixa de valer assim que qualquer outro fluxo incrementar `retryCount`. Restrinja o branch a SMS: `{ method: WorkflowMethods.SMS, retryCount: { gt: 1 } }`."
+ },
+ "s_4a1383d7": {
+  "summaryPt": "Um update do prisma sem proteção dentro do bloco catch pode lançar exceção, interrompendo o loop e fazendo toda a execução do cron falhar.",
+  "contentPt": "O bloco catch agora executa `prisma.workflowReminder.update` sem nenhum tratamento de erro. Esse catch também cobre falhas do update do caminho de sucesso nas linhas 169-177. Se a linha do lembrete foi deletada ao mesmo tempo (agendamento cancelado ou remarcado, ou o deleteMany de uma execução de cron sobreposta), o update lança P2025. Também pode lançar se o banco estiver com problemas. Essa exceção escapa do for-loop, todos os lembretes restantes neste lote são ignorados e o handler retorna 500. Antes desta mudança, o catch apenas registrava log e o loop continuava. Envolva o incremento em seu próprio try/catch, ou use `updateMany({ where: { id }, data: { retryCount: { increment: 1 } } })`, que não lança exceção quando a linha não existe."
+ },
+ "s_b943f255": {
+  "summaryPt": "retryCount é incrementado a partir de um valor desatualizado, então execuções sobrepostas do cron perdem incrementos.",
+  "contentPt": "`retryCount: reminder.retryCount + 1` grava um valor derivado do snapshot do findMany. Se duas invocações do cron se sobrepõem e ambas processam o mesmo lembrete não agendado, as duas gravam N+1, então uma tentativa com falha não é contada e o limite de retries não é aplicado como pretendido. Use o `{ increment: 1 }` atômico do Prisma aqui e no bloco catch."
+ },
+ "s_4680bb7e": {
+  "summaryPt": "O branch retryCount do OR no deleteMany de limpeza não tem filtro de método SMS, então o cron de SMS deleta lembretes de qualquer método.",
+  "contentPt": "Na query de limpeza, `method: WorkflowMethods.SMS` se aplica apenas ao primeiro branch do OR. O branch `retryCount > 1` casa com todo WorkflowReminder, incluindo os de EMAIL e WHATSAPP. A contagem de retries neste PR é somente para SMS, e este endpoint deve limpar apenas lembretes de SMS. Mova o filtro de method para fora do OR para que os dois lados fiquem consistentes."
+ },
+ "s_26a8bc77": {
+  "summaryPt": "Quando a mensagem está vazia ou sendTo está ausente, o lembrete não é agendado nem contado como retry, então é retentado para sempre.",
+  "contentPt": "O novo limite de retries deixa passar um caminho de falha. Se `message` estiver vazia ou `sendTo` for null, nada é atualizado, e o lembrete é pego novamente a cada execução do cron. Incremente `retryCount` também nesse caso, para que a limpeza acabe removendo-o."
+ },
+ "s_8701b717": {
+  "summaryPt": "O comentário acima do deleteMany não corresponde mais à query, que agora também deleta lembretes com retryCount > 1 de qualquer método.",
+  "contentPt": "O comentário diz que a query deleta apenas lembretes de SMS cuja data agendada já passou. Após esta mudança, o OR também deleta todo WorkflowReminder com retryCount > 1, independentemente da data ou do método. Quem ler o comentário vai esperar que apenas lembretes de SMS passados sejam removidos, não os futuros que falharam repetidamente nem os de email/WhatsApp. Atualize o comentário para descrever o branch de retry. Se deletar lembretes que não são de SMS não é intencional, adicione `method: WorkflowMethods.SMS` a esse branch para que o código corresponda ao comentário."
+ }
+}

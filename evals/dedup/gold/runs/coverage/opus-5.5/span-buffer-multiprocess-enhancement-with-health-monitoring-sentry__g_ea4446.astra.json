@@ -1,0 +1,58 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "flusher.py:254: The SpawnProcess type check prevents killing hung flushers before replacement, leaving duplicate flushers for the same shards."
+   },
+   {
+    "id": "F2",
+    "description": "flusher.py:346: The SpawnProcess type check prevents terminate() from running in join()."
+   },
+   {
+    "id": "F3",
+    "description": "flusher.py:340-341: join() breaks when the deadline expires, skipping termination of remaining processes."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_555f4a4d",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4ee392ad",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b2cc6608",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7f309577",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7a1b8c6d",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

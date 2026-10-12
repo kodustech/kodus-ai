@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_732d5528",
+     "s_ee4e0e15",
+     "s_0b9e8b6a",
+     "s_f60fe56a",
+     "s_a8060ba7"
+    ],
+    "defect": "A instrução inicial de configuração de TOTP nos arquivos lituanos de login e conta foi substituída por texto em italiano."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3, S4, S6 e S10 relatam o mesmo erro de tradução, repetido nos arquivos lituanos de login e conta. As referências aos dois locais em S1, S3 e S6 não constituem defeitos adicionais, pois a mesma substituição do texto italiano por lituano resolve ambas as ocorrências."
+ }
+}

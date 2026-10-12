@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_1f6fc379",
+    "mainDefect": "getClientsWithPermission includes the all-clients resource name 'Clients' as a bogus client ID instead of excluding that resource.",
+    "secondary": [
+     {
+      "defect": "getClientsWithPermission enumerates resources using a type key that may not match per-client resources, omitting granted client IDs.",
+      "coveredBy": [
+       "s_2383a0c6"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8c884e4a",
+     "s_8797ead7"
+    ],
+    "defect": "Javadocs de métodos void requireView* descrevem retorno booleano em vez de documentar ForbiddenException quando a permissão é negada."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S6 apontam o mesmo erro de documentação repetido em dois métodos, corrigível pela mesma substituição de texto preservando os links correspondentes. Pela regra de erro repetido em vários locais, pertencem ao mesmo grupo e não constituem bundles."
+ }
+}

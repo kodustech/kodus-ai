@@ -1,0 +1,80 @@
+{
+  "judge": "opus",
+  "model": "gpt-6.1-sol",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "f98251ee7e743124c764f89f36c2f74dd9c3aea4",
+  "attempt": 1,
+  "ms": 13148,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 37097,
+    "cache_read_input_tokens": 6564,
+    "output_tokens": 698,
+    "output_tokens_details": {
+      "thinking_tokens": 310
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 37097,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 698,
+        "cache_read_input_tokens": 6564,
+        "cache_creation_input_tokens": 37097,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 37097
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.31205679999999997,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_52703d76",
+          "s_bd0cbb6b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "canView(ClientModel) short-circuits on the global all-clients VIEW permission (via canView()) before evaluating client-specific permissions, so explicit negative per-client view permissions are ineffective.",
+        "rationale": "Both point at the same shortcut in ClientPermissionsV2.canView(ClientModel). Both propose the same fix: keep only the admin-role shortcut and evaluate the client resource, falling back to the Clients resource."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_5401b348",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7b271f70",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_d9eefa97",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_b4e86fdf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_06f85daf",
+        "confidence": "high"
+      }
+    ]
+  }
+}

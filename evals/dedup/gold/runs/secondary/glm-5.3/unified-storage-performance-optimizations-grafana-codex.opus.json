@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_a9a769d7",
+    "mainDefect": "The new t.Skip for postgres disables the only integration test that checks the storage-server target and the /metrics endpoint, which likely hides a postgres regression caused by the new eager Init.",
+    "secondary": [
+     {
+      "defect": "The postgres branch of addStorageServerToConfig is now unreachable dead test code.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

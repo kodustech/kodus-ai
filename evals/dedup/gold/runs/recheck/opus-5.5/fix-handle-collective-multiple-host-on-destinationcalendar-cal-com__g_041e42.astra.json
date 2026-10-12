@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e88e59a8",
+     "s_9e022e40",
+     "s_0c7af5ab",
+     "s_d12e4569"
+    ],
+    "defect": "Quando o tipo de evento e o organizador não têm calendário de destino, destinationCalendar fica null e o push opcional descarta os calendários dos demais anfitriões do evento coletivo."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S14, S17 e S23 descrevem o mesmo defeito no mesmo trecho: destinationCalendar nulo impede a inclusão dos calendários dos demais anfitriões. A mesma correção resolve todas as sugestões, e nenhuma relata um segundo defeito."
+ }
+}

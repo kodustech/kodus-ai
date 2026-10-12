@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_dc093c16",
+     "s_4e2a8deb"
+    ],
+    "defect": "O incremento não atômico de retryCount usa um valor desatualizado e pode perder incrementos em execuções concorrentes."
+   }
+  ],
+  "unique": [
+   "s_973148f4"
+  ],
+  "bundles": [
+   "s_dc093c16"
+  ],
+  "reasoningPt": "S3 e S7 pertencem ao mesmo grupo porque o primeiro defeito relatado em S3 é o incremento não atômico de retryCount. S8 trata da atualização sem proteção dentro do catch, que exige uma correção independente. S3 também relata esse segundo defeito e, por isso, aparece em bundles, sem unir os grupos."
+ }
+}

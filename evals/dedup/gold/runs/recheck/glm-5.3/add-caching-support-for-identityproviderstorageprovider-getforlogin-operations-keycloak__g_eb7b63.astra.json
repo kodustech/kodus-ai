@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7b9105ff",
+     "s_53838d83"
+    ],
+    "defect": "O cleanup usa o alias literal \"alias\" nos dois pontos de registro, em vez dos aliases dos provedores criados, deixando de removê-los."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 relatam o mesmo erro de alias no cleanup, nos mesmos dois pontos, e propõem a mesma correção. As diferenças sobre o comportamento dos DELETEs e os efeitos nos testes são consequências do mesmo defeito, não defeitos independentes."
+ }
+}

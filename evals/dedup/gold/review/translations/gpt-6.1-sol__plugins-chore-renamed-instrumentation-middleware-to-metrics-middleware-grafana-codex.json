@@ -1,0 +1,18 @@
+{
+ "s_c4bfaaf2": {
+  "summaryPt": "A nova instrumentação de métricas desreferencia requests de plugin que podem ser nulos e introduz panics de nil-pointer.",
+  "contentPt": "Proteja contra requests nil antes de acessar req.Queries, req.Body ou req.PluginContext, e encaminhe-os ao próximo client (como o LoggerMiddleware faz). Com o novo middleware instalado antes do logger, QueryData(nil) e CallResource(nil) atualmente entram em panic durante a coleta de métricas, em vez de preservar o comportamento existente para requests nil."
+ },
+ "s_29d4df72": {
+  "summaryPt": "O middleware de métricas desreferencia ponteiros de request nil na fronteira do client e pode entrar em panic antes de encaminhá-los.",
+  "contentPt": "Proteja contra requests nil antes de ler os campos do request (e encaminhe-os ao próximo client sem instrumentação, ou trate-os de forma consistente). QueryData e CallResource atualmente desreferenciam req, enquanto o LoggerMiddleware existente suporta explicitamente requests nil; assim, um request nil causa panic após a instalação deste middleware."
+ },
+ "s_87ece20e": {
+  "summaryPt": "O middleware de logger contextual desreferencia ponteiros de request unários nil ao construir o contexto.",
+  "contentPt": "Adicione guards de request nil antes de acessar req.PluginContext, encaminhando requests nil diretamente ao próximo client. O middleware atualmente assume que todo ponteiro de request unário é não nulo, então instalá-lo faz requests nil entrarem em panic, mesmo que o LoggerMiddleware voltado ao downstream suporte explicitamente requests nil."
+ },
+ "s_ca7aeab6": {
+  "summaryPt": "Requests de plugin nil agora causam panic no novo middleware contextual.",
+  "contentPt": "Esses métodos desreferenciam req.PluginContext sem verificar se req é nil. O LoggerMiddleware existente suporta explicitamente requests nil encaminhando-os sem alteração, mas este middleware roda antes na cadeia e entrará em panic antes que o client downstream possa tratar um request nil. Adicione guards de nil (ou evite a instrumentação) para requests nil."
+ }
+}

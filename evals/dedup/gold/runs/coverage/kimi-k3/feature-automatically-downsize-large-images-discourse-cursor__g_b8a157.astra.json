@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "uploads_controller.rb hardcodes the 10MB limit instead of using a named constant or setting."
+   },
+   {
+    "id": "F2",
+    "description": "utilities.js hardcodes the 10MB limit instead of using a named constant or setting."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_d6e025e2",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_82fe504b",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

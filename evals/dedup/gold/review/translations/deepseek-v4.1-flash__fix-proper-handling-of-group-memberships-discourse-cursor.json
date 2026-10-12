@@ -1,0 +1,46 @@
+{
+ "s_70fe4c12": {
+  "summaryPt": "totalPages com erro off-by-one quando user_count é múltiplo exato de limit",
+  "contentPt": "totalPages usa Math.floor(user_count / limit) + 1 em vez de Math.ceil. O QUÊ: quando user_count é múltiplo exato de limit (ex.: 100 membros, limit 50), retorna 3 páginas em vez de 2. POR QUÊ: showingLast (currentPage === totalPages) nunca é true na última página real, então a seta de próximo continua habilitada e `next` avança o offset para user_count, carregando uma página vazia (ex.: 3/3 com zero linhas). CORREÇÃO: calcule como Math.ceil(this.get('user_count') / this.get('limit'))."
+ },
+ "s_bff179c0": {
+  "summaryPt": "membros de grupos não automáticos agora são truncados em 50 sem UI de paginação",
+  "contentPt": "O QUÊ: o GroupsController#members público agora aplica `.limit(limit).offset(offset)` com limit padrão de 50 a todos os grupos, enquanto antes desta mudança apenas grupos automáticos eram paginados e grupos não automáticos retornavam a lista completa de membros. POR QUÊ: a página de membros do grupo para não administradores (app/assets/javascripts/discourse/routes/group-members.js.es6 chama findMembers com o limit padrão=50 do modelo Group) não tem controles de paginação, então qualquer grupo não automático com mais de 50 membros agora exibe silenciosamente apenas os 50 primeiros — uma regressão em relação à listagem completa anterior. CORREÇÃO: mantenha o comportamento anterior para grupos não automáticos, ou adicione controles de paginação no template de membros para não administradores para que os demais membros sejam acessíveis."
+ },
+ "s_5e51e255": {
+  "summaryPt": "totalPages usa floor+1, reportando páginas a mais quando user_count é múltiplo de limit.",
+  "contentPt": "totalPages usa Math.floor(user_count/limit)+1, contando páginas a mais quando user_count é múltiplo exato de limit (user_count=50, limit=50 → 2 páginas, embora os membros caibam na página 1; user_count=100 → 3 em vez de 2). Isso faz showingLast ser false na verdadeira última página, então 'next' continua habilitado e navega para uma página vazia (offset limitado a user_count). Use divisão com arredondamento para cima: Math.ceil(user_count / limit)."
+ },
+ "s_5c133571": {
+  "summaryPt": "As rotas de members são rotas simples que produzem /admin/groups/members sem id de grupo, enquanto o cliente chama /admin/groups/:id/members.json e o controller exige params[:group_id].",
+  "contentPt": "O cliente (discourse/models/group.js addMembers/removeMember) chama `/admin/groups/<id>/members.json`, mas essas rotas estão escritas como rotas simples dentro de `resources :groups`, então geram `/admin/groups/members` sem segmento `:id`/`:group_id`. A URL do cliente nunca vai corresponder, e as novas actions do controller leem o id via `params.require(:group_id)` (groups_controller.rb:66,85), que essa rota não consegue fornecer. Envolva-as em `member do ... end` (e leia `params[:id]`), ou defina um caminho explícito `/admin/groups/:group_id/members` para que a URL, a rota e o parâmetro exigido concordem. Os specs não detectam isso porque invocam as actions diretamente com um group_id literal."
+ },
+ "s_06df0f6c": {
+  "summaryPt": "totalPages usa floor(n/limit)+1, o que conta uma página extra sempre que user_count é múltiplo exato de limit.",
+  "contentPt": "`Math.floor(user_count / limit) + 1` resulta em 2 para 50 membros com limit 50 e 3 para 100 (deveria ser 1 e 2). O template renderiza `{{currentPage}}/{{totalPages}}` e `showingLast` compara currentPage com totalPages, então o paginador mostra/avança para uma página sem membros. Use `Math.ceil(user_count / limit)`."
+ },
+ "s_ce7d145c": {
+  "summaryPt": "totalPages conta uma página a mais para múltiplos exatos, então o texto \"currentPage/totalPages\" exibido mostra uma página que não existe e deixa o Next habilitado na última página.",
+  "contentPt": "`totalPages` usa `Math.floor(user_count / limit) + 1`, o que conta uma página a mais sempre que user_count é múltiplo exato de limit. O template (group.hbs:17) renderiza isso como texto para o admin: com 50 membros e limit 50 o indicador mostra \"1/2\" mesmo existindo apenas uma página, e como `showingLast` (currentPage === totalPages) é false na última página real, o link Next continua ativo e navega para uma lista de membros vazia exibida como \"2/2\". Use uma contagem de páginas correta, ex.: `Math.ceil(this.get(\"user_count\") / this.get(\"limit\"))`, para que o número da página exibido concorde com os dados."
+ },
+ "s_8f2939ce": {
+  "summaryPt": "totalPages usa floor(x/limit)+1 em vez de ceil, criando uma página extra fantasma quando user_count é múltiplo exato de limit.",
+  "contentPt": "totalPages deve ser a contagem de páginas não vazias: Math.ceil(user_count / limit). Com paginação baseada em offset, Math.floor(user_count / limit) + 1 conta uma a mais sempre que user_count é múltiplo exato de limit (o limit padrão é 50). Exemplo: user_count=100, limit=50 resulta em totalPages=3, mas o endpoint /groups/:name/members retorna apenas duas páginas de resultados. Como showingLast = propertyEqual(currentPage, totalPages), na página 2 (currentPage=2) o botão next continua habilitado; ao clicar, define offset = Math.min(50+50, 100) = 100, findMembers retorna uma lista de membros vazia, e currentPage passa a ser calculado como 3, deixando o usuário preso em uma página vazia '3/3' com o botão next agora desabilitado. Use Math.ceil(user_count / limit) (e retorne 0 apenas quando user_count for 0)."
+ },
+ "s_1ec09b12": {
+  "summaryPt": "O endpoint público de members agora limita rigidamente os resultados a 50, mas o template público de members não tem paginação, truncando silenciosamente as listas de membros do grupo.",
+  "contentPt": "O endpoint de members mudou de 'retornar todos os membros para grupos não automáticos' para 'sempre limitar a params[:limit] (padrão 50)' e agora retorna { members: [...], meta: {...} }. O modelo JS foi atualizado para o novo formato, mas a página pública de membros do grupo (app/assets/javascripts/discourse/templates/group/members.hbs) foi alterada apenas de `model` para `members` — ela não consome `meta.total`/`meta.offset` e não tem paginador. Como `Discourse.Group#findMembers` sempre solicita offset 0, um grupo público com mais de 50 membros agora exibe silenciosamente apenas os 50 primeiros, sem como ver o restante (uma regressão em relação ao resultado sem limite anterior para grupos não automáticos). Mantenha o comportamento sem limite para chamadores não automáticos/públicos, faça o limit padrão valer apenas para o chamador admin/paginado, ou adicione controles de paginação ao template público de members para que o novo limite seja realmente acessível."
+ },
+ "s_cbd46c6e": {
+  "summaryPt": "O spec chama remove_member com PUT enquanto a rota declara DELETE, uma discordância entre gerador/validador escondida pelos controller specs.",
+  "contentPt": "Esta requisição usa `:put, :remove_member`, mas a rota de remove_member é declarada como `delete` (config/routes.rb:49); `put` nesse caminho mapeia para `add_members`. A asserção só passa porque controller specs despacham a action diretamente e ignoram o roteamento. Use `:delete` para que o teste exercite o mesmo verbo declarado pela rota."
+ },
+ "s_94da1b69": {
+  "summaryPt": "A asserção `group.visible.should == true` no teste de update de grupo automático nunca pode falhar porque o grupo automático semeado já é visível e a requisição passa `visible: \"true\"`.",
+  "contentPt": "`group.visible.should == true` (linha 57) não é falseável para esta fixture: o grupo automático `admins` (id 1) é criado com `visible` com padrão true, e a requisição passa `visible: \"true\"`, então `group.visible = params[:visible] == \"true\"` na action update é um no-op. Se essa atribuição fosse removida, ou se o update parasse de aplicar visibilidade para grupos automáticos, a asserção ainda passaria — o teste afirma cobrir o caminho de update de grupo automático, mas não consegue detectar uma regressão no tratamento de visibilidade. Passe um valor diferente do padrão (ex.: `visible: \"false\"`) e verifique `false` para que a asserção possa realmente falhar."
+ },
+ "s_62fe45ea": {
+  "summaryPt": "As rotas de member fornecem params[:id], mas os handlers exigem params[:group_id], causando ParameterMissing em toda requisição.",
+  "contentPt": "`add_members` e `remove_member` leem `params.require(:group_id)`, mas suas rotas (config/routes.rb:49-50) são member routes de `resources :groups`, que fornecem `params[:id]`, não `params[:group_id]` (o js só coloca o id no caminho da URL). Em toda requisição real, `require(:group_id)` lança ActionController::ParameterMissing (400); o spec mascara isso passando `group_id:` diretamente. Corrija o controller para usar o parâmetro que a rota realmente fornece (ex.: `params.require(:id)`), ou defina as rotas para que realmente carreguem `group_id` (ex.: rota aninhada/`member` com parâmetro explícito)."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_acdadbe2",
+     "s_444e3754"
+    ],
+    "defect": "O ramo sem credentialId chama createEvent sem destination.externalId, deixando externalCalendarId indefinido na referência persistida."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S25 relatam a mesma omissão no mesmo ramo e propõem a mesma correção: passar destination.externalId para createEvent. S7 apenas detalha as consequências nas atualizações e exclusões, sem acrescentar outro defeito."
+ }
+}

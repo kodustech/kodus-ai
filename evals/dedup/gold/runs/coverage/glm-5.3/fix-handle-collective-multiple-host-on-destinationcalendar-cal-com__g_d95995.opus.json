@@ -1,0 +1,58 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Office365 createEvent (office365calendar CalendarService.ts ~73-77) always uses destinationCalendar[0].externalId instead of the destination matching the creating credential"
+   },
+   {
+    "id": "F2",
+    "description": "Lark createEvent (larkcalendar CalendarService.ts ~128-129) always uses destinationCalendar[0].externalId"
+   },
+   {
+    "id": "F3",
+    "description": "Lark createAttendees (larkcalendar CalendarService.ts ~164-165) always uses destinationCalendar[0].externalId"
+   },
+   {
+    "id": "F4",
+    "description": "BaseCalendarService createEvent (packages/lib/CalendarService.ts ~156-164) filters calendars by destinationCalendar[0].externalId"
+   },
+   {
+    "id": "F5",
+    "description": "Stored booking reference externalId (from CalendarManager/destination.externalId) disagrees with the calendar the event was actually created on, breaking later updates/deletes"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a23b880b",
+    "covers": [
+     "F1",
+     "F2",
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0fcfd2d6",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_a98dfe02",
+    "covers": [
+     "F1",
+     "F2",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

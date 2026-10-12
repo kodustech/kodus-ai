@@ -1,0 +1,15 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_d748cf84",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "TestMode3_Create never waits for or asserts the async Legacy.Create write (legacy expectation is vacuous)"
+   },
+   {
+    "id": "F2",
+    "description": "TestMode3_Update never waits for or asserts the async Legacy.Update write"
+   },
+   {
+    "id": "F3",
+    "description": "TestMode3_Delete registers no legacy expectations and never waits for or asserts the async Legacy.Delete"
+   },
+   {
+    "id": "F4",
+    "description": "TestMode3_DeleteCollection registers no legacy expectations and never waits for or asserts the async Legacy.DeleteCollection"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a1fd1880",
+    "covers": [
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6e8d049a",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,41 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "TestMode3_Create never asserts that the asynchronous legacy Create call occurred."
+   },
+   {
+    "id": "F2",
+    "description": "TestMode3_Delete lacks a legacy expectation and goroutine synchronization, leaving the legacy write unverified and the test racy."
+   },
+   {
+    "id": "F3",
+    "description": "TestMode3_Update lacks a legacy expectation and goroutine synchronization, leaving the legacy write unverified and the test racy."
+   },
+   {
+    "id": "F4",
+    "description": "TestMode3_DeleteCollection lacks a legacy expectation and goroutine synchronization, leaving the legacy write unverified and the test racy."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c5f2bfd6",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3d27a0be",
+    "covers": [
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8ab8d747",
+     "s_b5942d75",
+     "s_870608df",
+     "s_fe329d71",
+     "s_aef0f2d1"
+    ],
+    "defect": "MetricAlertDetectorHandler herda de StatefulDetectorHandler sem implementar os membros abstratos exigidos, causando TypeError ao ser instanciado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4, S6, S7 e S8 relatam o mesmo defeito na mesma classe: os membros abstratos não implementados impedem a instanciação de MetricAlertDetectorHandler. As diferenças de detalhamento e de correção proposta não representam defeitos distintos; nenhuma sugestão reúne defeitos adicionais."
+ }
+}

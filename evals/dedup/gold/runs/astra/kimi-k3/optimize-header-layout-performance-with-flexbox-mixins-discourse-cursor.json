@@ -1,0 +1,21 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "promptSha": "d11627b4f968141da2c9aff10e030e822850d0e8",
+  "attempt": 1,
+  "ms": 27390,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_e4f2f5b6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6bff5dd4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5ba66eb6",
+     "s_8324ba87",
+     "s_91d85c33",
+     "s_c08fb5ce"
+    ],
+    "defect": "O uso de && entre isTeamAdmin e isTeamOwner restringe indevidamente a autorização e impede administradores que não são proprietários de adicionar convidados."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S12, S16 e S23 apontam o mesmo defeito na mesma condição de autorização: o uso de && bloqueia administradores que não são proprietários. As diferenças de explicação e de correção proposta não mudam o defeito principal, e nenhuma sugestão relata um segundo defeito independente."
+ }
+}

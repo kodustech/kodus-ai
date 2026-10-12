@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create (line 45): recordLegacyDuration called with literal true on storage error path instead of the actual result"
+   },
+   {
+    "id": "F2",
+    "description": "Update (line 129): recordLegacyDuration called with literal true on storage error path instead of the actual result"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7dc5b2ce",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_fdf78d6e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

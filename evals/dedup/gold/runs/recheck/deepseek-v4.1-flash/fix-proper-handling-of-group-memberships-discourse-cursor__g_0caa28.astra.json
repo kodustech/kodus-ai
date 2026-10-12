@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bff179c0",
+     "s_1ec09b12"
+    ],
+    "defect": "A página pública de membros passa a exibir apenas os primeiros 50 integrantes de grupos não automáticos, sem paginação para acessar os demais."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S8 descrevem a mesma regressão: o limite aplicado pelo endpoint trunca a listagem pública, que não possui paginação. As alternativas de correção tratam o mesmo defeito, e nenhuma das sugestões reúne defeitos independentes."
+ }
+}

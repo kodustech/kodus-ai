@@ -1,0 +1,25 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_dc30b21a",
+    "mainDefect": "Office365CalendarService.createEvent does not accept the credentialId parameter required by the Calendar interface and always uses destinationCalendar[0] instead of selecting the entry matching credentialId.",
+    "secondary": [
+     {
+      "defect": "LarkCalendarService.createEvent does not accept the credentialId parameter required by the Calendar interface and does not select the calendar by credentialId.",
+      "coveredBy": [
+       "s_33ed9a24",
+       "s_08905d22",
+       "s_af4c6322"
+      ]
+     },
+     {
+      "defect": "BaseCalendarService.createEvent does not accept the credentialId parameter required by the Calendar interface and does not select the calendar by credentialId.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

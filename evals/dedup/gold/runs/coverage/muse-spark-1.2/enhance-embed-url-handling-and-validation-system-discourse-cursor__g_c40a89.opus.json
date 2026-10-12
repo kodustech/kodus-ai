@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "embed.html.erb line 11: the full request.referer URL is passed as the postMessage targetOrigin. That is not a valid origin (scheme://host[:port]), so the browser drops the resize message."
+   },
+   {
+    "id": "F2",
+    "description": "embed.html.erb line 11: request.referer is put into a JS string literal without JS escaping, which allows XSS through quotes or </script>."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_56e8eec5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_3ed07a3a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

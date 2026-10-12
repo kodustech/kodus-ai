@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6cf3f09f",
+    "mainDefect": "After acquiring the write lock, GetWebAssets does not re-check entryPointAssetsCache, so every goroutine that missed the cache at the same time re-reads and re-parses the manifest one after another.",
+    "secondary": [
+     {
+      "defect": "When loading the manifest fails, the cache is set to nil, which overwrites a good cached value and makes every later call miss the cache again.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

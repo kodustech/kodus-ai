@@ -1,0 +1,58 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "ContextualLoggerMiddleware.QueryData (line 40) dereferences req.PluginContext without a nil-request guard"
+   },
+   {
+    "id": "F2",
+    "description": "ContextualLoggerMiddleware.CallResource (line 45) dereferences req.PluginContext without a nil-request guard"
+   },
+   {
+    "id": "F3",
+    "description": "ContextualLoggerMiddleware.CheckHealth (line 50) dereferences req.PluginContext without a nil-request guard"
+   },
+   {
+    "id": "F4",
+    "description": "ContextualLoggerMiddleware.CollectMetrics (line 55) dereferences req.PluginContext without a nil-request guard"
+   },
+   {
+    "id": "F5",
+    "description": "MetricsMiddleware.QueryData (lines 146/149) dereferences req.Queries and req.PluginContext without a nil-request guard"
+   },
+   {
+    "id": "F6",
+    "description": "MetricsMiddleware.CallResource (line 161) dereferences req.PluginContext and req.Body without a nil-request guard"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_8d96da0a",
+    "covers": [
+     "F5",
+     "F6"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cd94ae6e",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_305b9098",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

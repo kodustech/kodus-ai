@@ -1,0 +1,15 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_82c5ef29",
+        "confidence": "high"
+      }
+    ]
+  }
+}

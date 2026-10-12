@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_69410500",
+     "s_37e96fa9"
+    ],
+    "defect": "A mensagem de erro é sempre truthy, impedindo o fallback e podendo exibir o prefixo literal \"undefined:\"."
+   }
+  ],
+  "unique": [
+   "s_b459ede8"
+  ],
+  "bundles": [
+   "s_b459ede8"
+  ],
+  "reasoningPt": "S7 e S12 relatam o mesmo defeito na construção da mensagem de erro. O defeito principal de S6 é a falta de limpeza do estado de validação do diálogo, que exige uma correção diferente. S6 também menciona o fallback, mas essa observação secundária apenas a caracteriza como bundle e não une os grupos."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8c2349e8",
+     "s_3adf9f4b"
+    ],
+    "defect": "PollFeed calls i.content.scrub without a nil check, so feed items with no content raise NoMethodError and stop the whole import."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_8c2349e8"
+  ],
+  "reasoningPt": "S1 e S16 reportam o mesmo defeito: `i.content.scrub` quebra quando `i.content` é nil e interrompe todo o job PollFeed. As duas correções diferem um pouco (S16 também tenta usar `i.description`), mas uma única correção resolve o problema nos dois casos. S1 entra em bundles porque a correção proposta também trata `i.title` nil, mas isso não muda o defeito principal."
+ }
+}

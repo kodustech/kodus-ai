@@ -1,0 +1,54 @@
+{
+ "s_db51092c": {
+  "summaryPt": "Create registra métrica legacy em falha do storage",
+  "contentPt": "O QUÊ: O caminho de erro do Create chama d.recordLegacyDuration em vez de d.recordStorageDuration.\nPOR QUÊ: O Create do storage falhou, mas a duração é registrada no histograma legacy com o label errado, corrompendo as métricas e mascarando erros do storage.\nCORREÇÃO: Altere para d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage), igual ao caminho de sucesso na linha 48."
+ },
+ "s_0f8576a3": {
+  "summaryPt": "Update registra métrica legacy em falha do storage",
+  "contentPt": "O QUÊ: O caminho de erro do Update chama d.recordLegacyDuration em vez de d.recordStorageDuration.\nPOR QUÊ: Mesma ligação incorreta do Create - falhas de update no storage são contadas como legacy, quebrando dashboards/alertas do mode 3.\nCORREÇÃO: Use d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)."
+ },
+ "s_0d3070ec": {
+  "summaryPt": "Delete usa label de métrica errado e perde o contexto do logger",
+  "contentPt": "O QUÊ: O caminho de sucesso do Delete registra `name` como label kind e define o contexto a partir de d.Log em vez do log enriquecido.\nPOR QUÊ: recordStorageDuration espera (isError,mode,kind,method) conforme metrics.go:59; passar o nome do objeto polui a cardinalidade de kind e quebra o agrupamento; ctx = klog.NewContext(ctx, d.Log) descarta o WithValues(name,kind,method) adicionado na linha 96, então a escrita assíncrona legacy perde os campos de tracing.\nCORREÇÃO: Altere para ctx = klog.NewContext(ctx, log) e d.recordStorageDuration(false, mode3Str, options.Kind, method, startStorage)."
+ },
+ "s_28699aa5": {
+  "summaryPt": "Goroutine assíncrona do DeleteCollection registra métrica de storage para chamada legacy",
+  "contentPt": "O QUÊ: A goroutine assíncrona do DeleteCollection registra a duração legacy via d.recordStorageDuration.\nPOR QUÊ: A latência/erros do DeleteCollection legacy são gravados no histograma de storage, tornando a saúde do legacy invisível e as métricas de storage imprecisas.\nCORREÇÃO: Altere para d.recordLegacyDuration(err != nil, mode3Str, options.Kind, method, startLegacy)."
+ },
+ "s_bc787d91": {
+  "summaryPt": "Goroutine legacy do DeleteCollection registra duração de storage em vez de duração legacy",
+  "contentPt": "Altere d.recordStorageDuration(...) para d.recordLegacyDuration(...) na goroutine legacy do DeleteCollection."
+ },
+ "s_02ad3834": {
+  "summaryPt": "Sucesso do Delete registra `name` como label kind em vez de options.Kind",
+  "contentPt": "Substitua `name` por `options.Kind` no recordStorageDuration do caminho de sucesso do Delete."
+ },
+ "s_e95c784c": {
+  "summaryPt": "Caminho de erro do Create (e Update) registra duração legacy com tempo de storage",
+  "contentPt": "Falhas de storage devem ser registradas com recordStorageDuration, não recordLegacyDuration. Mesma correção no Update, linha 129."
+ },
+ "s_d8591060": {
+  "summaryPt": "Delete constrói log enriquecido mas o descarta, usando d.Log no contexto",
+  "contentPt": "Use o `log` enriquecido em klog.NewContext(ctx, log) em vez de d.Log."
+ },
+ "s_705859db": {
+  "summaryPt": "Caminho de erro do Create registra duração legacy para uma operação de storage — identificador diverge do store medido",
+  "contentPt": "A falha de storage deve ser registrada com recordStorageDuration, não recordLegacyDuration, para corresponder à operação medida e manter o nome da métrica fiel."
+ },
+ "s_6451b2bb": {
+  "summaryPt": "Caminho de erro do Update registra duração legacy para uma operação de storage — mesma inversão de identificador/comportamento",
+  "contentPt": "Altere a métrica do branch de erro do Update para recordStorageDuration, para concordar com o tempo de Storage.Update sendo registrado."
+ },
+ "s_d464c133": {
+  "summaryPt": "Goroutine legacy do DeleteCollection registra duração de storage para uma operação legacy — identificador oposto ao comportamento",
+  "contentPt": "Registre o tempo do DeleteCollection legacy com recordLegacyDuration para que o nome do helper corresponda ao store Legacy medido."
+ },
+ "s_0256cf0e": {
+  "summaryPt": "Métrica de sucesso do Delete passa `name` onde todas as outras chamadas passam `options.Kind` — chave do label diverge do contrato documentado/usado",
+  "contentPt": "Passe options.Kind (não name) para recordStorageDuration no caminho de sucesso do Delete, por consistência com o caminho de erro e todos os outros métodos."
+ },
+ "s_4c68a502": {
+  "summaryPt": "Caminho de erro registra duração legacy para falha de storage e vice-versa",
+  "contentPt": "O caminho de erro do Create (45) e do Update (129) chamam recordLegacyDuration para falha do Storage, enquanto a goroutine legacy do DeleteCollection (166) chama recordStorageDuration para o resultado legacy. Troque-os: recordStorageDuration para erros de storage e recordLegacyDuration para goroutines legacy, e corrija a métrica de sucesso do Delete que passa name em vez de kind (linha 106)."
+ }
+}

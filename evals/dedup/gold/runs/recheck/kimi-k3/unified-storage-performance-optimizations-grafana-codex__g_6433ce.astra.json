@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_67912b06",
+     "s_48086659"
+    ],
+    "defect": "A remoção do bloqueio durante BuildIndex permite construções concorrentes para a mesma chave, causando disputa pelo diretório Bleve e sobrescrita do cache com vazamento do índice descartado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 descrevem o mesmo defeito: construções simultâneas de índices para a mesma NamespacedResource após a redução do escopo de cacheMu. Os problemas no diretório e no cache são consequências dessa mesma concorrência, resolvidas pela serialização por chave com reutilização do resultado; portanto, nenhuma sugestão é um bundle."
+ }
+}

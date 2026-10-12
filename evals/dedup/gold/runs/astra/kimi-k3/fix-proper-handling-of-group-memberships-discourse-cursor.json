@@ -1,0 +1,38 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "4fd14d5a8f37bfc3381e8c43513a6ae164cce79b",
+  "attempt": 1,
+  "ms": 33239,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_61e1edca",
+          "s_6a2f511a",
+          "s_f51c2a1e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The automatic-group remove_member spec uses PUT even though remove_member is routed through DELETE.",
+        "rationale": "All three identify the same request at line 115 and propose changing its verb to DELETE. Despite s_61e1edca naming a different spec path and differing explanations of test dispatch, they describe the same defect in the supplied diff."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_7f3b44f0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_eaa109ba",
+        "confidence": "high"
+      },
+      {
+        "id": "s_97f5bed4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d8cd6310",
+    "mainDefect": "On restart, a hung threading.Thread worker cannot be stopped (only multiprocessing.Process is killed), so a replacement worker runs alongside it, flushing the same shards and sharing state.",
+    "secondary": [
+     {
+      "defect": "_create_process_for_shards overwrites self.buffers[process_index] with a new SpansBuffer without closing the old one.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c0b73dfc",
+    "mainDefect": "The restart path's isinstance(process, multiprocessing.Process) check is False for SpawnProcess objects, so hung processes are never killed before a replacement is spawned.",
+    "secondary": [
+     {
+      "defect": "The same isinstance check in join() means terminate() is never called on the spawned flusher processes.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f3717cf6",
+    "mainDefect": "The hung-process kill on restart is guarded by isinstance(process, multiprocessing.Process), which is False for SpawnProcess objects, so kill() is never called and duplicate flushers run on the same shards.",
+    "secondary": [
+     {
+      "defect": "The same isinstance check in join() means terminate() is never called on the spawned flusher processes.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

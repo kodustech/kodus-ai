@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1e8b96cd",
+     "s_5dfded2e",
+     "s_3d6dcc45",
+     "s_2929e252"
+    ],
+    "defect": "The AccessTokenContext constructor checks grantType for null a second time where it should check rawTokenId, so a null rawTokenId is let through."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S5, S7 e S15 apontam o mesmo erro de copiar e colar na linha 73: o requireNonNull verifica grantType de novo em vez de rawTokenId. A correção é a mesma em todas, e nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

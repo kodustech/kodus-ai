@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d2d1c6a5",
+    "mainDefect": "Office365 event creation always uses the first destination calendar instead of the one matching the current credential, so secondary hosts in collective bookings write to the organizer's calendar.",
+    "secondary": [
+     {
+      "defect": "Lark and the base calendar service have the same problem: they always pick the first destination calendar instead of matching it by credential.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_0bb6afb4",
+    "mainDefect": "When a reference has no externalCalendarId, the Google Calendar update fallback looks for a destination whose externalId matches that missing value, so updates leave out the calendarId.",
+    "secondary": [
+     {
+      "defect": "When the reference has no externalCalendarId, the matching Google Calendar delete fallback targets the primary calendar, so events in secondary calendars are never deleted.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_97dfdc72",
+    "mainDefect": "When externalCalendarId is absent, the Google Calendar update fallback looks for a destination matching that missing value and cannot find a real one, so updates lose their calendar ID.",
+    "secondary": [
+     {
+      "defect": "The deletion fallback at lines 315-317 has the same flaw, so deletions go to the primary calendar instead of the configured non-primary calendar.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

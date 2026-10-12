@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6627628a",
+    "mainDefect": "The docstring describes a return shape that the code no longer produces.",
+    "secondary": [
+     {
+      "defect": "The docstring contains a typo.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

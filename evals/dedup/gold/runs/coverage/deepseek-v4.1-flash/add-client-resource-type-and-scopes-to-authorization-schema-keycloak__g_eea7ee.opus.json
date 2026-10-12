@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "requireView() javadoc (line 95-98) says 'Returns true if canView()...' but should say 'Throws ForbiddenException if canView() returns false'"
+   },
+   {
+    "id": "F2",
+    "description": "requireViewClientScopes() javadoc (line 100-103) says 'Returns true if canViewClientScopes()...' but should say 'Throws ForbiddenException if canViewClientScopes() returns false'"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_1a66b466",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8fa1fa63",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

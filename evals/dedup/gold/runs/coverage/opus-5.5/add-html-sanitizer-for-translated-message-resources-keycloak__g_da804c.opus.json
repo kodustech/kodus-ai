@@ -1,0 +1,55 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "admin-ui keycloak.v2 messages_en.properties line 3138: error-invalid-multivalued-size uses MessageFormat {n}/choice, which i18next does not interpolate"
+   },
+   {
+    "id": "F2",
+    "description": "account-ui keycloak.v3 messages_en.properties line 188: error-invalid-multivalued-size uses MessageFormat {n}/choice, which i18next does not interpolate"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_8507049f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_42582bb1",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_fae04201",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_111e270c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5dddabc9",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

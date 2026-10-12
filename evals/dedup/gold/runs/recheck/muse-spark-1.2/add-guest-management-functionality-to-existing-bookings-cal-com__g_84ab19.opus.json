@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d5ce31d3",
+     "s_663c3e53"
+    ],
+    "defect": "The server-side ZAddGuestsInputSchema does not enforce unique guest emails the way the client does, so duplicate guests can be inserted through the API."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S11 apontam o mesmo defeito: o schema do servidor não valida emails únicos como o frontend faz, e isso permite criar convidados duplicados pela API. A menção de S11 à comparação sem distinção de maiúsculas e minúsculas e à deduplicação antes do createMany é só outra forma de corrigir o mesmo problema, não um defeito separado."
+ }
+}

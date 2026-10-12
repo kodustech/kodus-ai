@@ -1,0 +1,51 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "FallbackLocaleList#[] calls default_locale.to_sym before compact, so a nil default locale raises."
+   },
+   {
+    "id": "F2",
+    "description": "FallbackLocaleList#[] mixes String and Symbol locales, defeating deduplication and causing English locale files to load twice."
+   },
+   {
+    "id": "F3",
+    "description": "FallbackLocaleList#[] performs an unguarded SiteSetting lookup, so translations can fail when SiteSetting or its database is unavailable."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_08cbca4d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_389b8963",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_831e218a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_df9ce485",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

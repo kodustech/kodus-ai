@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8dd313c2",
+    "mainDefect": "Pause disappears for Grafana rules in the list view because its menu item requires a ruler rule that is no longer passed.",
+    "secondary": [
+     {
+      "defect": "Delete disappears for Grafana rules in the list view because its menu item requires a ruler rule that is no longer passed.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f8dcf583",
+    "mainDefect": "Silence may do nothing in the list view because the drawer depends on a ruler rule while only promRule is passed.",
+    "secondary": [
+     {
+      "defect": "The clone/duplicate redirect may also depend on the absent ruler rule and fail when only promRule is passed.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

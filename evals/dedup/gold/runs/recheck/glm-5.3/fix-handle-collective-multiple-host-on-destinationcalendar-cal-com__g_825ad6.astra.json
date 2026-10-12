@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_992ef6e1",
+     "s_7c95d01e",
+     "s_2cae9425",
+     "s_b511b1ed",
+     "s_879dc325"
+    ],
+    "defect": "EventManager.create acessa mainHostDestinationCalendar.integration sem proteção quando destinationCalendar é null ou vazio, causando TypeError no fallback de Google Meet."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S8, S14, S20 e S25 descrevem o mesmo acesso sem proteção e a mesma falha com destinationCalendar nulo ou vazio. As referências a diferentes produtores apenas exemplificam como esse estado ocorre; adicionar optional chaining resolve todas as sugestões, e nenhuma relata um segundo defeito."
+ }
+}

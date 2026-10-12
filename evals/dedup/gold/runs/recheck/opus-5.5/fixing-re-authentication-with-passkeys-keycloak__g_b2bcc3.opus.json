@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_438385f5",
+     "s_bb646b1e"
+    ],
+    "defect": "In the username-form → password-form flow, PasswordForm calls fillContextForm for a user who has only typed a username and has not authenticated, so the page reveals whether the account has passkeys and exposes its WebAuthn credential IDs to an unauthenticated visitor."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 apontam o mesmo defeito, nas mesmas linhas do PasswordForm: o fillContextForm é chamado para um usuário identificado só pelo username digitado, o que expõe os IDs de credenciais WebAuthn e permite enumerar contas. As duas propõem a mesma correção: preencher os dados apenas na reautenticação real (USER_SET_BEFORE_USERNAME_PASSWORD_AUTH). A menção de S2 ao UsernamePasswordForm e à renderização condicional do #webauth faz parte desse mesmo vazamento, não é um segundo defeito."
+ }
+}

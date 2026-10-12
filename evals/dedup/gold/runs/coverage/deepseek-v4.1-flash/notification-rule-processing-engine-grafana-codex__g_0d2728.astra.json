@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "RuleActionsButtons.V2.tsx:53 passes optional rule to useRulerRuleAbility, whose parameter still requires RulerRuleDTO."
+   },
+   {
+    "id": "F2",
+    "description": "RuleActionsButtons.V2.tsx:66-70: getEditableIdentifier returns undefined for a non-Grafana prom-only rule, silently hiding the entire actions block."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_61ba8ef0",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9d5d3468",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

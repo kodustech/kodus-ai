@@ -1,0 +1,46 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Migration lines 9–11: indexing an empty embed_category query result crashes before fallback."
+   },
+   {
+    "id": "F2",
+    "description": "Migration line 25: directly interpolating the host into INSERT breaks SQL on quotes and permits SQL injection."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7cfecf36",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5ffb9255",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_74124a9e",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_9d76f63a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

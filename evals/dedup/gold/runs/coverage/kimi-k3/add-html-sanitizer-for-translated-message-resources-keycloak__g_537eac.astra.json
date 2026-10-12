@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Account messages_lt.properties line 101: totpStep1 contains Italian text instead of Lithuanian."
+   },
+   {
+    "id": "F2",
+    "description": "Login messages_lt.properties line 71: loginTotpStep1 contains Italian text instead of Lithuanian."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_e3f52c5e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b3a12b46",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6a250a7b",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

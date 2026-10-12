@@ -1,0 +1,29 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6a250a7b",
+    "mainDefect": "The `loginTotpStep1` value in the Lithuanian login bundle messages_lt.properties is Italian instead of Lithuanian.",
+    "secondary": [
+     {
+      "defect": "The same Italian sentence was pasted into the Lithuanian account bundle messages_lt.properties as `totpStep1`, so it is not Lithuanian either.",
+      "coveredBy": [
+       "s_e3f52c5e"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_31c73f83",
+    "mainDefect": "The admin-ui messages_en.properties attribute message moved from i18next `{{0}}` placeholders to Java MessageFormat `{0}`/`{2,choice,...}` syntax, which i18next does not understand.",
+    "secondary": [
+     {
+      "defect": "The same switch from i18next placeholders to MessageFormat syntax was made in the account-ui messages_en.properties at line 188.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

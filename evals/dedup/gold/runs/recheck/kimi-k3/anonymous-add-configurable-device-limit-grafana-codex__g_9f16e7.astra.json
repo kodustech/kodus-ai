@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_87524dc7",
+     "s_0ffadc5f"
+    ],
+    "defect": "Quando o limite é atingido, updateDevice retorna ErrDeviceLimitReached para um dispositivo existente fora da janela de 30 dias, causando rejeição da autenticação."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S10 descrevem o mesmo defeito: um dispositivo existente com updated_at fora da janela recebe ErrDeviceLimitReached e tem a autenticação rejeitada. As diferenças de linhas e de correção proposta não alteram a causa; ambas seriam resolvidas pela mesma correção."
+ }
+}

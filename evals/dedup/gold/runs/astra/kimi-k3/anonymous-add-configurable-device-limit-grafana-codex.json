@@ -1,0 +1,72 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "204e06caa05d9b6862e5df9e676228627a569a4c",
+  "attempt": 1,
+  "ms": 57305,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0ffadc5f",
+          "s_87524dc7"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The update-only path treats stale existing devices as over-limit new devices, returning ErrDeviceLimitReached and rejecting their authentication.",
+        "rationale": "Both report the same rejection of an existing device whose stored updated_at falls outside the update window when the limit is reached."
+      },
+      {
+        "members": [
+          "s_4fa29a08",
+          "s_3b794fbe",
+          "s_dbadf6da"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The non-atomic count-and-insert sequence allows concurrent new devices to exceed the configured limit.",
+        "rationale": "All three identify the same race between CountDevices and the subsequent insert, with equivalent concurrent-request examples."
+      },
+      {
+        "members": [
+          "s_c1891149",
+          "s_e593e36c",
+          "s_34336505"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Caching a device before its database write succeeds leaves failed registrations cached for 29 minutes, allowing retries to bypass device-limit rejection.",
+        "rationale": "All three explicitly identify the same premature SetDefault call in tagDeviceUI. The bypass reports explain the authentication consequence of the stale cache entry reported by the shorter suggestion."
+      },
+      {
+        "members": [
+          "s_6e7a56a6",
+          "s_07049f2c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Returning an untyped ErrDeviceLimitReached from Authenticate produces a generic authentication error rather than a controlled quota response.",
+        "rationale": "Both report the missing translation of the limit sentinel into an error carrying an appropriate HTTP status and message. The synchronous tagging change is context for this defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_f0e23c78",
+        "confidence": "high"
+      },
+      {
+        "id": "s_484d105a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ed41add2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

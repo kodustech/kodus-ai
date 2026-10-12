@@ -1,0 +1,98 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "f629c5da20897e6406ae4af3cc9353ec7bba3f4d",
+  "attempt": 1,
+  "ms": 57061,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0b48b37f",
+          "s_222ac473"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The age/timestamp mutual-exclusion validators use truthiness, allowing zero values to bypass presence checks.",
+        "rationale": "Both report the same validation defect in the same two checks and propose checking field presence explicitly."
+      },
+      {
+        "members": [
+          "s_cb573436",
+          "s_2a158b71",
+          "s_0ef0a25a",
+          "s_46b42f89",
+          "s_e8d1320e"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Zipping error_ids with nodestore dictionary values can associate IDs with the wrong event data, and the single-error test lacks coverage for missing entries among multiple errors.",
+        "rationale": "All five explicitly report the same positional-pairing defect. The test-focused suggestion additionally requests a regression case at a separate location, which the merged comment must preserve."
+      },
+      {
+        "members": [
+          "s_9c86f0c6",
+          "s_f9dadae9"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Delayed-workflow processing directly indexes potentially missing slow-condition keys; the broader report also identifies missing workflow-environment keys and the corresponding accesses in both helper functions.",
+        "rationale": "Both report unsafe indexing of dcg_to_slow_conditions in get_condition_query_groups. The broader suggestion also reports additional dictionary accesses requiring fixes."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_06fc42aa",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3fb5d8c4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9ae4f546",
+        "confidence": "high"
+      },
+      {
+        "id": "s_897c6f7d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d300fc2e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8ee66661",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bd6e5c15",
+        "confidence": "high"
+      },
+      {
+        "id": "s_edcf69f6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f7917ec5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0d0859c1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e168c9d8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7e019eee",
+        "confidence": "high"
+      }
+    ]
+  }
+}

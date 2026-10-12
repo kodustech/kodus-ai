@@ -1,0 +1,64 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "EmbeddableHostsController#update: where(id:).first can return nil and is passed to save_host, giving a 500 instead of a 404"
+   },
+   {
+    "id": "F2",
+    "description": "EmbeddableHostsController#destroy: where(id:).first can return nil and host.destroy is called on it, giving a 500 instead of a 404"
+   },
+   {
+    "id": "F3",
+    "description": "EmbeddableHost before_validation calls host.sub! on a possibly nil host, raising NoMethodError"
+   },
+   {
+    "id": "F4",
+    "description": "EmbeddableHost.record_for_host compares lower(host) against a uri.host that is not downcased, so mixed-case referers are rejected"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_5fd8900b",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_2a55c64a",
+    "covers": [
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8d184fdd",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5d6ec13d",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7958039f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

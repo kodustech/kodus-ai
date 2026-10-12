@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_1480fde3",
+    "mainDefect": "The align-items mixin emits `-ms-align-items`, which IE10/11 doesn't recognise (the correct property is `-ms-flex-align`), so IE ignores it and the fallback is lost.",
+    "secondary": [
+     {
+      "defect": "The align-items mixin doesn't emit `-moz-box-align`, so legacy Firefox gets no align-items fallback.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

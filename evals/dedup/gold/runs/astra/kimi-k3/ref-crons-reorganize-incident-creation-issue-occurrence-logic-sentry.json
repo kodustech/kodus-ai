@@ -1,0 +1,25 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+  "promptSha": "3ad8d25f95d9edb70820d67c5d8d588a7210e900",
+  "attempt": 1,
+  "ms": 40804,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_62f715ec",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e8ccb24a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4249d387",
+        "confidence": "high"
+      }
+    ]
+  }
+}

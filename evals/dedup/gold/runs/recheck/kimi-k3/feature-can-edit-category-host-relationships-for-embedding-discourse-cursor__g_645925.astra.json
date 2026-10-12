@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5462a854",
+     "s_c864cfd5"
+    ],
+    "defect": "O nome do contexto contém o erro de grafia 'emeddable' em vez de 'embeddable'."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c864cfd5"
+  ],
+  "reasoningPt": "S17 e S20 relatam primeiro o mesmo erro de grafia no mesmo contexto, portanto devem permanecer juntas. S20 também aponta a fabricação desnecessária de um registro, sendo marcada como bundle; esse segundo defeito não altera seu agrupamento."
+ }
+}

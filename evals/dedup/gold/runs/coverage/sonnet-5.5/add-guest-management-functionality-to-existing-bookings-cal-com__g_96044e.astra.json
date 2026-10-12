@@ -1,0 +1,51 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "addGuests.handler.ts:46-48 uses && instead of || for team admin/owner checks, wrongly denying admins who are not owners."
+   },
+   {
+    "id": "F2",
+    "description": "addGuests.handler.ts:52-54 allows any attendee matched by email to add guests, making permissions too permissive."
+   },
+   {
+    "id": "F3",
+    "description": "The FORBIDDEN message key you_do_not_have_permission at addGuests.handler.ts:55 is missing from en/common.json, potentially exposing the raw key in the toast."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_cc6b5fef",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bd0c0912",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_88211022",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b87c3cd2",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

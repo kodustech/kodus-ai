@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_2e6a48cf",
+    "mainDefect": "The new `retryCount: { gt: 1 }` OR branch in the SMS cron's deleteMany has no `method: WorkflowMethods.SMS` filter, so it also deletes reminders for other methods such as EMAIL.",
+    "secondary": [
+     {
+      "defect": "The new `retryCount > 1` delete branch also has no `scheduledDate` bound, so it deletes reminders whatever their scheduled date.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

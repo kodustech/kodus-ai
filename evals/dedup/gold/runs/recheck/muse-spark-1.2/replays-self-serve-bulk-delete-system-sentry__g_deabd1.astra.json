@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cb573436",
+     "s_46b42f89",
+     "s_e8d1320e",
+     "s_0ef0a25a",
+     "s_2a158b71"
+    ],
+    "defect": "fetch_error_details associa IDs aos dados por zip(error_ids, events.values()), podendo atribuir dados ao ID errado quando há entradas ausentes ou em ordem diferente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S10 e S16 descrevem o mesmo defeito de associação entre IDs e resultados do nodestore, corrigido pela consulta por chave. S12 aponta que o teste com um único erro não detecta esse mesmo defeito, portanto pertence ao grupo."
+ }
+}

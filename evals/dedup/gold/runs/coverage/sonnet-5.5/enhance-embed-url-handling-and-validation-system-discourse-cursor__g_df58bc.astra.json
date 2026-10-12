@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "app/models/topic_embed.rb:13 mutates the caller's contents string with <<, failing on frozen strings and duplicating the footer when reused."
+   },
+   {
+    "id": "F2",
+    "description": "app/models/topic_embed.rb:13 interpolates unescaped url into the imported_from link's href and text, allowing broken markup or HTML injection in raw_html posts."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_778e09a3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_22702472",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

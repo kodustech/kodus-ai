@@ -1,0 +1,45 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "app/models/embeddable_host.rb:17 compares lower(host) against an unnormalized URI hostname, rejecting mixed-case referers."
+   },
+   {
+    "id": "F2",
+    "description": "app/models/embeddable_host.rb:5-8 never downcases stored hosts during before_validation."
+   },
+   {
+    "id": "F3",
+    "description": "app/models/embeddable_host.rb:14-17 discards ports during lookup despite validation allowing stored host:port entries, making those entries unmatchable."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_d78df7ae",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_721295fb",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4b5af67b",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

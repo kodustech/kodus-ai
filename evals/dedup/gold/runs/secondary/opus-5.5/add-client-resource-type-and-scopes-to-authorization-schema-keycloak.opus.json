@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_e8a630ee",
+    "mainDefect": "getClientsWithPermission uses findByType(server, \"Clients\"), but per-client resources have no type, so it never finds permissions on individual clients.",
+    "secondary": [
+     {
+      "defect": "When the type-level permission grants the scope, the literal resource name \"Clients\" is added as a client id, which makes the caller AvailableRoleMappingResource.getRoleIdsWithPermissions throw a NullPointerException on realm.getClientById(cid).",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c2941d8f",
+    "mainDefect": "The test grants CONFIGURE, MAP_ROLES and MAP_ROLES_COMPOSITE together, so it can pass even when the MAP_ROLES / MAP_ROLES_COMPOSITE evaluation is broken, because CONFIGURE alone also allows some role paths.",
+    "secondary": [
+     {
+      "defect": "No test grants MAP_ROLES_COMPOSITE without MAP_ROLES, or MAP_ROLES without MAP_ROLES_COMPOSITE, to check that each scope is evaluated on its own.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

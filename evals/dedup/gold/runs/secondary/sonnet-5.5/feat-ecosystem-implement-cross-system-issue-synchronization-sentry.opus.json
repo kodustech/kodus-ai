@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_1de4d23b",
+    "mainDefect": "The `queued` default `timezone.now()` runs only once, at import time, so every AssignmentSource instance gets the same stale timestamp.",
+    "secondary": [
+     {
+      "defect": "The test only checks that `queued` is not None, so it would not catch the stale-timestamp bug.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_428c1b8f",
+    "mainDefect": "The `queued` default `timezone.now()` runs only once, at module import, so every AssignmentSource instance shares the process start time.",
+    "secondary": [
+     {
+      "defect": "`to_dict()` returns a datetime, which would break if the Celery serializer were switched from pickle to JSON.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

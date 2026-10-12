@@ -1,0 +1,96 @@
+{
+  "judge": "opus",
+  "model": "muse-spark-1.2",
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "promptSha": "b08a7f20b52ad1fb37618cbad66abfd5c3998de8",
+  "attempt": 1,
+  "ms": 11988,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 31016,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 865,
+    "output_tokens_details": {
+      "thinking_tokens": 404
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 31016,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 865,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 31016,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 31016
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.2672096,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_60b424b5",
+          "s_3c4b4f6b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "JSDoc in GrafanaGroupLoader still mentions the Ruler after the ruler query was removed. Two comments need updating: the expectedRulesCount prop doc and the component doc that says it loads from 'Prometheus and Ruler endpoints'.",
+        "rationale": "Both report the same stale ruler references in docs at nearby lines of the same file. Fixing it takes two separate comment edits."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_34baf824",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a3b03cbf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_409de42d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8955a30a",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_734b969b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7365ba08",
+        "confidence": "high"
+      },
+      {
+        "id": "s_48922cf0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1f77ab04",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_f3eeca23",
+        "confidence": "high"
+      }
+    ]
+  }
+}

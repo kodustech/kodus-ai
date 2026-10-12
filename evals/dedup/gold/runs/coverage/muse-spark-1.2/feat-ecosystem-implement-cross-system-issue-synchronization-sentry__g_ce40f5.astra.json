@@ -1,0 +1,72 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "assignment_source.py:18 evaluates queued at import time, giving all instances the same stale timestamp."
+   },
+   {
+    "id": "F2",
+    "description": "AssignmentSource.to_dict() returns a raw datetime that breaks Celery JSON serialization in sync_group_assignee_outbound's apply_async kwargs."
+   },
+   {
+    "id": "F3",
+    "description": "AssignmentSource tests do not catch the stale import-time queued default."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_34589453",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_84bd5bf4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b2100c10",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0a96d57b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4500db00",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e0de5ccd",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_597377f6",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

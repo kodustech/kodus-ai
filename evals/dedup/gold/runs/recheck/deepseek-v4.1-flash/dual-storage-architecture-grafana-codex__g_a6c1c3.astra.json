@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7dc5b2ce",
+     "s_fdf78d6e"
+    ],
+    "defect": "Create e Update registram falhas de Storage usando recordLegacyDuration no caminho de erro."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S18 e S28 apontam o mesmo erro repetido em Update e Create: registrar a falha de Storage como uma métrica de Legacy. A correção equivalente nos dois locais mantém as sugestões no mesmo grupo pela regra de erro repetido."
+ }
+}

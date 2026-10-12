@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a0a50caa",
+     "s_69b85b59"
+    ],
+    "defect": "useFeedbackSummary dereferences `data` unconditionally, so when the query is disabled by the feature flag `data` is undefined and the hook crashes before FeedbackSummary's guard runs."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S9 apontam o mesmo defeito, no mesmo trecho (linhas 61-65): o hook acessa `data.summary`/`data.numFeedbacksUsed` sem checar se `data` existe quando a query está desabilitada pela feature flag. A correção proposta é a mesma, retornar um estado vazio seguro, então o grupo fica como está."
+ }
+}

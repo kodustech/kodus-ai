@@ -1,0 +1,53 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "promptSha": "45f4dd7cd80425bead06e69fe3312f1ec50e051b",
+  "attempt": 1,
+  "ms": 39047,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_e3323d09",
+          "s_53c0e8ba",
+          "s_8cace1ff"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The new TotalDocs() call iterates the cache without locking while the watch goroutine can concurrently write to that map.",
+        "rationale": "All three describe the same concurrent map iteration/write defect, pointing either to the cache assignment or to the new TotalDocs() caller. Synchronizing TotalDocs() resolves all three reports."
+      },
+      {
+        "members": [
+          "s_d6a5a826",
+          "s_9d348b06"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Narrowing BuildIndex's lock permits concurrent builds for the same key, causing cache replacement and competing creation of the same file-backed index.",
+        "rationale": "Both report the same missing serialization around index construction and the same cache and directory consequences. Their examples of concurrent callers differ, but a single per-key build synchronization fix addresses both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_f78b766c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7d53f288",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7f6e9bee",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d9b8ced4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

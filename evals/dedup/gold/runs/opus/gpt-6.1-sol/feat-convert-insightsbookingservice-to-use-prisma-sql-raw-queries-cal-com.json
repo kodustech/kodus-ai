@@ -1,0 +1,10 @@
+{
+  "judge": "opus",
+  "model": "gpt-6.1-sol",
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "unique": []
+  }
+}

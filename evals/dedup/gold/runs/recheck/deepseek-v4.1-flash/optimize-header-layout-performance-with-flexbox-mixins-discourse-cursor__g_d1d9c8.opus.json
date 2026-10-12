@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1dbf5554",
+     "s_b1e0be12"
+    ],
+    "defect": "The align-items mixin emits the non-existent property -ms-align-items, which is dead output duplicating the valid -ms-flex-align line."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 apontam o mesmo defeito: o mixin align-items gera a propriedade inexistente -ms-align-items, que é redundante com -ms-flex-align. As duas propõem a mesma correção (remover a linha), e a única diferença é o intervalo de linhas. Por isso o grupo fica como está."
+ }
+}

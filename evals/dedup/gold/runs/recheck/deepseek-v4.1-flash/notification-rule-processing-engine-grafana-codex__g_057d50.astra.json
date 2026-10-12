@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_36916a0e",
+     "s_a95966cb"
+    ],
+    "defect": "A substituição de GrafanaRuleLoader por GrafanaRuleListItem removeu a prop key dos itens Grafana renderizados no map de FilterView."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S7 apontam a mesma ausência de key no mesmo componente e local. Restaurar uma chave estável resolve ambas; as diferenças descrevem consequências do mesmo defeito."
+ }
+}

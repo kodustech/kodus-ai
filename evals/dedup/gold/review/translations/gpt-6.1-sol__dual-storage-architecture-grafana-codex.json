@@ -1,0 +1,46 @@
+{
+ "s_faba93e0": {
+  "summaryPt": "As escritas legacy são canceladas junto com a requisição, em vez de sobreviverem à resposta.",
+  "contentPt": "O QUÊ: o create legacy assíncrono deriva seu contexto de timeout do contexto da requisição recebida. POR QUÊ: o contexto da requisição é cancelado assim que a requisição do unified-storage retorna, o que cancela este filho antes que Legacy.Create possa completar e anula a escrita legacy prometida pelo modo 3. CORREÇÃO: criar o contexto assíncrono em background de forma independente do cancelamento da requisição, preservando explicitamente apenas os valores de contexto/campos de logging necessários, e então aplicar o timeout de 10 segundos."
+ },
+ "s_a9049b82": {
+  "summaryPt": "O Update legacy recalcula o update em vez de aplicar o resultado do unified-store.",
+  "contentPt": "O QUÊ: o modo 3 encaminha o UpdatedObjectInfo original para o update legacy assíncrono, em vez do objeto/resultado produzido pelo update do unified-storage. POR QUÊ: UpdatedObject é avaliado separadamente pelas duas implementações de storage, então callbacks que geram um novo objeto, dependem do objeto antigo ou são de uso único podem produzir dados diferentes (ou falhar) no legacy, deixando os dois stores inconsistentes. CORREÇÃO: materializar o update uma única vez e passar ao legacy um wrapper de update contendo o resultado do unified-storage, como fazem as implementações dos modos anteriores."
+ },
+ "s_0469979e": {
+  "summaryPt": "O create legacy assíncrono herda o contexto da requisição, então retornar a resposta da API cancela a escrita legacy.",
+  "contentPt": "Desacople a operação legacy em background do cancelamento da requisição (preservando apenas os valores necessários da requisição), ou enfileire-a por meio de um worker com ciclo de vida gerenciado. `WithTimeoutCause(ctx, ...)` não ajuda quando `ctx` já está cancelado: a goroutine pode começar depois que o handler retorna e `Legacy.Create` observa imediatamente o cancelamento, deixando o objeto presente apenas no Storage. Aplique a mesma correção aos caminhos assíncronos de Delete, Update e DeleteCollection."
+ },
+ "s_11922f88": {
+  "summaryPt": "O tempo da falha no Create é atribuído ao LegacyStorage em vez do Storage.",
+  "contentPt": "Quando Storage.Create falha, este tempo cobre a operação do storage, mas é emitido via recordLegacyDuration. Registre-o com recordStorageDuration para que a métrica de falha seja atribuída ao backend realmente chamado."
+ },
+ "s_6cb9049c": {
+  "summaryPt": "O tempo da falha no Update é atribuído ao LegacyStorage em vez do Storage.",
+  "contentPt": "Este timer envolve d.Storage.Update, então um erro deve ser registrado com recordStorageDuration. Usar recordLegacyDuration envia as falhas de update do Storage para a série de métricas legacy."
+ },
+ "s_68108285": {
+  "summaryPt": "O tempo do delete bem-sucedido usa o nome do objeto em vez do label kind.",
+  "contentPt": "O tempo do Storage.Delete bem-sucedido usa `name` como argumento de resource da métrica, enquanto o caminho de erro e todas as outras operações usam `options.Kind`. Isso emite o nome do objeto no label kind/resource e torna as métricas de delete bem-sucedido inconsistentes e potencialmente de alta cardinalidade."
+ },
+ "s_b490b494": {
+  "summaryPt": "O tempo do DeleteCollection legacy é emitido como tempo do Storage.",
+  "contentPt": "A goroutine mede d.Legacy.DeleteCollection, mas registra esse tempo decorrido com recordStorageDuration. Use recordLegacyDuration para que a métrica identifique o backend realmente medido."
+ },
+ "s_3af77dc3": {
+  "summaryPt": "O nome do teste de Create afirma comportamento apenas no storage, enquanto o modo 3 também escreve no LegacyStorage.",
+  "contentPt": "O nome deste teste diz que o objeto é criado “apenas no unified store”, mas a implementação de Create do modo 3 em dualwriter_mode3.go:50-57 também chama LegacyStorage.Create de forma assíncrona. Renomeie o caso para descrever a escrita dupla (ou refletir que a escrita legacy é esperada), para que o contrato legível do teste não contradiga o código."
+ },
+ "s_751ded27": {
+  "summaryPt": "O nome do teste de List diz que a operação não está implementada, embora o método alterado a implemente.",
+  "contentPt": "O nome deste teste diz que listar no unified store “não está implementado”, mas o método List alterado agora delega para d.Storage.List e retorna seu resultado em dualwriter_mode3.go:78-91. Renomeie o caso para descrever o erro esperado do list, em vez de afirmar/documentar que a operação não está implementada."
+ },
+ "s_5a02bd8a": {
+  "summaryPt": "Os testes unitários do modo 3 não sincronizam com as escritas legacy assíncronas nem as verificam, então passam mesmo quando a escrita dupla está quebrada.",
+  "contentPt": "Este teste de Create afirma cobrir a escrita dupla do modo 3, mas apenas verifica o resultado síncrono do Storage. A expectativa de Legacy Create nas linhas 30-31 nunca é verificada, e a implementação a inicia em uma goroutine, então o teste pode passar se a escrita legacy for removida ou nunca for agendada. Aguarde a chamada legacy usando um canal de sincronização/callback do mock e verifique explicitamente que ela ocorreu (e verifique as expectativas do mock). O mesmo padrão se repete nos testes de Delete, Update e DeleteCollection."
+ },
+ "s_b8b19a32": {
+  "summaryPt": "O modo 3 não encaminha mais o resultado persistido do update do Storage para o LegacyStorage, quebrando o contrato anterior de consistência da escrita dupla.",
+  "contentPt": "O update legacy agora recebe o `objInfo` original depois que o Storage já o avaliou e persistiu. Antes, esse caminho encapsulava `objInfo` com o objeto exato retornado pelo Storage, garantindo que ambos os stores recebessem o mesmo objeto admitido. Reavaliar o updater de forma assíncrona pode produzir um objeto diferente (ou observar uma versão antiga diferente), deixando o LegacyStorage inconsistente com o Storage. Preserve/passe o resultado do Storage por meio de um wrapper de update ao invocar LegacyStorage.Update."
+ }
+}

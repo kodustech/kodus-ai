@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c9027ce1",
+     "s_30fe56e0"
+    ],
+    "defect": "The category and embeddable_host fabricator files have their contents swapped, so each file name points to the wrong fabricator."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S14 e S16 relatam o mesmo defeito: o conteúdo de category_fabricator.rb e de embeddable_host_fabricator.rb está trocado. Elas apontam para arquivos diferentes, mas a correção é a mesma, ou seja, destrocar o conteúdo dos dois. Nenhuma das duas traz um segundo defeito."
+ }
+}

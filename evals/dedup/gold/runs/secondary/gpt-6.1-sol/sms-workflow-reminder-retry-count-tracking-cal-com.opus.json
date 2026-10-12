@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_b96ddd5a",
+    "mainDefect": "The retry-exhaustion deletion branch (retryCount > 1) can delete reminders that were later scheduled successfully, because it does not require isScheduled: false and success does not reset retryCount.",
+    "secondary": [
+     {
+      "defect": "The retry-exhaustion deletion predicate is not restricted to method: SMS, so it also deletes non-SMS reminder rows.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a04e9a65",
+    "mainDefect": "The cleanup comment still says it only deletes scheduled SMS reminders whose dates have passed, so it no longer describes the new retry-limit deletion branch.",
+    "secondary": [
+     {
+      "defect": "The retry-limit deletion branch does not restrict its method to SMS, so it deletes reminders of every method.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

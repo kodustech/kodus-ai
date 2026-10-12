@@ -1,0 +1,59 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "62a3bbd49ec060d9889d22e462c881581a78f1d2",
+  "attempt": 1,
+  "ms": 45933,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_b2cc6608",
+          "s_555f4a4d",
+          "s_4ee392ad",
+          "s_7a1b8c6d",
+          "s_7f309577"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Incorrect process type checks prevent killing spawned workers during restart and terminating them during shutdown; join() also skips remaining workers when its deadline expires.",
+        "rationale": "The same incorrect type check appears in restart and shutdown, and s_b2cc6608 explicitly reports both occurrences. s_7a1b8c6d reports the shutdown type check plus the deadline defect, linking s_7f309577 through overlap; the merged comment must preserve both defects and both guard locations."
+      },
+      {
+        "members": [
+          "s_3a262130",
+          "s_ae578023"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "wait_produce uses the tag key 'shards' while sibling metrics use 'shard' for the same value.",
+        "rationale": "Both report the identical metric tag inconsistency, resolved by making the key consistent at the same location."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_4f1409aa",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2f884f80",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8e3fa247",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3bb79784",
+        "confidence": "high"
+      },
+      {
+        "id": "s_27e04631",
+        "confidence": "high"
+      }
+    ]
+  }
+}

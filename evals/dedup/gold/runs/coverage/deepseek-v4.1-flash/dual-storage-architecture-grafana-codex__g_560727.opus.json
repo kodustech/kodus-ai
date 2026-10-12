@@ -1,0 +1,41 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "TestMode3_Create never asserts the async legacy Create call (no AssertExpectations/AssertCalled), so the test still passes if the legacy write is removed"
+   },
+   {
+    "id": "F2",
+    "description": "TestMode3_Delete sets no legacy Delete expectation and never waits for the legacy goroutine, so it is racy and leaves the legacy delete unchecked"
+   },
+   {
+    "id": "F3",
+    "description": "TestMode3_Update never waits for or checks the async legacy Update goroutine, so it is racy and leaves the legacy update unchecked"
+   },
+   {
+    "id": "F4",
+    "description": "TestMode3_DeleteCollection sets no legacy DeleteCollection expectation and never waits for the legacy goroutine, so it is racy and leaves the legacy write unchecked"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c5f2bfd6",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3d27a0be",
+    "covers": [
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,75 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_74124a9e",
+    "mainDefect": "The migration reads execute(...)[0]['id'] without checking that a row exists, so it raises NoMethodError when the result is empty.",
+    "secondary": [
+     {
+      "defect": "The migration puts the host value straight into the INSERT SQL without escaping or parameters.",
+      "coveredBy": [
+       "s_5ffb9255"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_794de377",
+    "mainDefect": "The plural branch in Store hydration calls obj[k].map without checking for an array, so it throws a TypeError when category_ids is null, missing or a single value.",
+    "secondary": [
+     {
+      "defect": "Ids missing from the root payload come back as undefined from _lookupSubType and stay as undefined entries in the hydrated array.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b171a9e5",
+    "mainDefect": "The admin embeddable hosts controller does not handle a nil host after the lookup in update and destroy, so it dereferences nil.",
+    "secondary": [
+     {
+      "defect": "save_host does not guard against a missing params[:embeddable_host] and dereferences nil params.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_3480efde",
+    "mainDefect": "The migration inserts raw SiteSetting host values without removing the scheme and path the way the model does, so host_allowed? never matches migrated hosts.",
+    "secondary": [
+     {
+      "defect": "The migration INSERT interpolates the host value into SQL without sanitizing it.",
+      "coveredBy": [
+       "s_5ffb9255"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_2ea70c55",
+    "mainDefect": "The migration inserts host values without removing the scheme and path like the model's before_validation does, so host_allowed? never finds migrated hosts.",
+    "secondary": [
+     {
+      "defect": "The migration INSERT interpolates the host into SQL without escaping or parameters.",
+      "coveredBy": [
+       "s_5ffb9255"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_059ba6b1",
+    "mainDefect": "The migration writes raw SiteSetting values that still include the protocol and path to embeddable_hosts.host, which do not match the model's normalized lookup, so migrated hosts cannot be reached.",
+    "secondary": [
+     {
+      "defect": "The migration INSERT uses string interpolation instead of bound parameters.",
+      "coveredBy": [
+       "s_5ffb9255"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

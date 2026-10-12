@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7271d3e1",
+     "s_7175c4a5"
+    ],
+    "defect": "A mensagem interpolada do toast é sempre uma string não vazia, impedindo o uso do fallback unable_to_add_guests."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S8 apontam o mesmo defeito nas mesmas linhas: a mensagem interpolada é sempre verdadeira, tornando o fallback inalcançável. S2 detalha a consequência do prefixo \"undefined\", sem introduzir um defeito independente."
+ }
+}

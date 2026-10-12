@@ -1,0 +1,53 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "integration.py:503 unconditionally indexes optional sender metadata, causing KeyError/TypeError and a 500 instead of the error page when sender is missing or null."
+   },
+   {
+    "id": "F2",
+    "description": "integration.py:501-504 compares GitHub logins case-sensitively, potentially rejecting a legitimate installer whose login differs only in case."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_b6bcca54",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_faf6b973",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_2c66d685",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4c48d4f6",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_412f55af",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

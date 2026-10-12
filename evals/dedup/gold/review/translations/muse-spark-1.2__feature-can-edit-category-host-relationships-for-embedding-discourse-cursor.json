@@ -1,0 +1,18 @@
+{
+ "s_74124a9e": {
+  "summaryPt": "migration quebra em resultado vazio e permite SQL injection no valor de host",
+  "contentPt": "O QUÊ: A migration faz execute(...)[0]['id'].to_i assumindo que a linha existe, e interpola o valor de host diretamente no INSERT VALUES ('#{h}', ...). POR QUÊ: Um banco novo ou sem site_settings retorna 0 linhas -> [0] é nil -> nil['id'] lança NoMethodError abortando o migrate; e um host contendo ' quebra o SQL (controlado pelo admin, mas ainda corrompe o migrate) e ignora o escaping. CORREÇÃO: Proteja a presença do resultado `result = execute(...); category_id = result.ntuples>0 ? result[0]['id'].to_i : 0` e use execute parametrizado ou sanitize com `ActiveRecord::Base.connection.quote(h)`."
+ },
+ "s_7cfecf36": {
+  "summaryPt": "Migration quebra com nil[\"id\"] quando embed_category não existe",
+  "contentPt": "Verifique se o resultado está vazio antes de [0]['id'] e use um fallback seguro; use safe navigation ou um guard de nil antes de to_i."
+ },
+ "s_5ffb9255": {
+  "summaryPt": "Host interpolado diretamente quebra a migration com aspas",
+  "contentPt": "Parametrize o INSERT via sanitize_sql_array/exec_params ou ActiveRecord create!, não interpole h diretamente."
+ },
+ "s_9d76f63a": {
+  "summaryPt": "Migration acessa [0] sem guard para resultado vazio, quebrando antes do fallback",
+  "contentPt": "Proteja o acesso ao array: verifique ntuples/cmd_tuples ou a presença de result[0] antes de [0]. Use result.ntuples>0 ? result[0]['id'].to_i : 0 e o mesmo para a busca de uncategorized para permitir o fallback."
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_93eb20ca",
+     "s_29d8f6c2",
+     "s_59aa04a7"
+    ],
+    "defect": "record_for_host lowercases only the stored host column and not the incoming uri.host, so referer or embed URLs with uppercase letters never match an allowed host."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_93eb20ca"
+  ],
+  "reasoningPt": "S3, S9 e S11 têm o mesmo defeito principal: a consulta aplica lower() só à coluna e não ao uri.host, então hosts com letras maiúsculas são rejeitados. S3 também fala do sufixo de porta (:port), mas esse é um segundo defeito, por isso S3 entra em bundles e continua no grupo. A sugestão de S11 de normalizar o host ao salvar faz parte da mesma correção, então o grupo fica como está."
+ }
+}

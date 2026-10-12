@@ -1,0 +1,50 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "promptSha": "05697a62b504f1eef4754f4f5c85c25e1015d452",
+  "attempt": 1,
+  "ms": 34478,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_c8aed49e",
+          "s_e63608d7",
+          "s_9009c9ce",
+          "s_006ed08a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "FallbackLocaleList#[] mixes String and Symbol locales, breaking deduplication and loaded-locale checks, and calls to_sym on a potentially nil default_locale before compact can remove it.",
+        "rationale": "All four target the same fallback-list expression. s_e63608d7 and s_006ed08a explicitly report both defects, connecting the normalization-only and nil-conversion-only suggestions into one overlapping group."
+      },
+      {
+        "members": [
+          "s_bc7d00eb",
+          "s_22bcfbd2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "translate loads only the current locale, leaving fallback locales unloaded for callers outside ApplicationController#set_locale.",
+        "rationale": "Both report the same missing fallback-chain loading in translate and propose ensuring the full chain there."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_fbe2d845",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8c4bbbf2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a6008d55",
+        "confidence": "high"
+      }
+    ]
+  }
+}

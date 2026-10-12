@@ -1,0 +1,49 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GoogleCalendarService.createEvent (lines 147-154) picks the calendar only by credentialId match, so a destination with null credentialId falls back to 'primary' instead of its externalId"
+   },
+   {
+    "id": "F2",
+    "description": "EventManager.createAllCalendarEvents else-branch (lines 375-382) calls createEvent without destination.externalId, so the stored booking reference has no externalCalendarId"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_b7a8f74b",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_65bc8258",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_aa8b5b10",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_8ebfd962",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

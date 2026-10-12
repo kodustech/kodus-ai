@@ -1,0 +1,51 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "ClientResource management-permissions endpoints call isPermissionsEnabled/setPermissionsEnabled/resource/getPermissions unconditionally, so the V2 UnsupportedOperationException surfaces as HTTP 500"
+   },
+   {
+    "id": "F2",
+    "description": "Token exchange calls canExchangeTo, which throws UnsupportedOperationException in ClientPermissionsV2"
+   },
+   {
+    "id": "F3",
+    "description": "The ClientRemovedEvent listener in AdminPermissions (lines 77-95) calls clients().setPermissionsEnabled. With V2 active, this throws when a client is deleted"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a2452e35",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_583e834c",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_1aab7b37",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8758638b",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

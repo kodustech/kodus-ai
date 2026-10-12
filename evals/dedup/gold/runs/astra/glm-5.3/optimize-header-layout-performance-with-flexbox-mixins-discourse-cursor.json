@@ -1,0 +1,41 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "promptSha": "55ee6c3bd0ed7fc299f14f54b93a770378236423",
+  "attempt": 1,
+  "ms": 30825,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_4c71b68b",
+          "s_41db3057"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The align-items() mixin emits the nonexistent -ms-align-items property.",
+        "rationale": "Both report the same dead declaration and recommend removing it. The additional -moz-box-align change in s_4c71b68b appears only in its proposed fix and does not link it to the missing Mozilla alignment finding."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_4bc2e2e8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ab6b7183",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0a89c2ba",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ec3fd2e5",
+        "confidence": "high"
+      }
+    ]
+  }
+}

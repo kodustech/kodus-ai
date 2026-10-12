@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f7e19fe4",
+     "s_a72e0711"
+    ],
+    "defect": "A contagem e a inserção de dispositivos não são atômicas, permitindo que requisições concorrentes ultrapassem o limite configurado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S4 descrevem a mesma condição de corrida entre CountDevices e INSERT, no mesmo trecho. As diferenças nas soluções propostas não alteram o defeito principal, e nenhuma sugestão inclui um segundo defeito."
+ }
+}

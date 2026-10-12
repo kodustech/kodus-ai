@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_71d2527d",
+     "s_56e6f1eb",
+     "s_d30a42e6",
+     "s_bfacd192",
+     "s_2168dca2"
+    ],
+    "defect": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with only `pass`, so it is still abstract and instantiating it raises TypeError."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 a S5 apontam o mesmo defeito, nas mesmas linhas 11-12 de grouptype.py: MetricAlertDetectorHandler agora herda de StatefulDetectorHandler só com `pass`, sem implementar os métodos abstratos, então a classe continua abstrata e instanciá-la gera TypeError. As diferenças ficam só em quais métodos abstratos cada uma lista e na correção sugerida (implementar os métodos ou voltar a herdar de DetectorHandler). Nenhuma traz um segundo defeito."
+ }
+}

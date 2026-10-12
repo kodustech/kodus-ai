@@ -1,0 +1,18 @@
+{
+ "s_583e834c": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O handler de ClientRemovedEvent chama management(...).clients().setPermissionsEnabled(client, false). Com o V2 ativo, clients() é ClientPermissionsV2, cujo setPermissionsEnabled lança UnsupportedOperationException. POR QUÊ: remover um client enquanto o feature guard do V1 passa pode lançar uma exceção a partir do event listener e fazer a exclusão do client falhar ou ser abortada. CORREÇÃO: pule essa limpeza quando as permissões V2 estiverem em uso, ou faça o setPermissionsEnabled do V2 ser um no-op. Os caminhos de role e group do V2 devem ser verificados quanto ao mesmo problema."
+ },
+ "s_8758638b": {
+  "summaryPt": "",
+  "contentPt": "isPermissionsEnabled, setPermissionsEnabled, resource e getPermissions lançam UnsupportedOperationException no V2. ClientResource (linhas 710-742, o endpoint de permissões de management) as chama incondicionalmente, então com o V2 habilitado a requisição falha com uma exceção não tratada (HTTP 500) em vez de uma resposta 4xx limpa ou de uma resposta de desabilitado. Retorne false/no-op em isPermissionsEnabled e setPermissionsEnabled, ou faça o ClientResource rejeitar a chamada explicitamente quando o V2 estiver ativo. O mesmo throw também atingiria o listener de ClientRemovedEvent em AdminPermissions se as features V1 e V2 estiverem habilitadas."
+ },
+ "s_a2452e35": {
+  "summaryPt": "As permissões de client V2 agora lançam UnsupportedOperationException em métodos que os callers existentes invocam incondicionalmente.",
+  "contentPt": "Retorne valores seguros no V2 (isPermissionsEnabled -> false, setPermissionsEnabled -> no-op, canExchangeTo -> false), ou proteja os callers (endpoints de management do ClientResource, token exchange) contra o V2 e retorne uma resposta 4xx/feature-disabled adequada."
+ },
+ "s_1aab7b37": {
+  "summaryPt": "",
+  "contentPt": "O listener de remoção é protegido apenas por ADMIN_FINE_GRAINED_AUTHZ (V1), mas chama management(...).clients().setPermissionsEnabled(client, false). ClientPermissionsV2.setPermissionsEnabled lança UnsupportedOperationException. Quando o V2 também está habilitado, management() retorna a implementação V2, então excluir um client lança exceção. Proteja o listener para que só rode com o V2 desabilitado, por exemplo `V1 enabled && !V2 enabled`. Alternativamente, faça ClientPermissionsV2.setPermissionsEnabled e isPermissionsEnabled serem um no-op ou retornarem false."
+ }
+}

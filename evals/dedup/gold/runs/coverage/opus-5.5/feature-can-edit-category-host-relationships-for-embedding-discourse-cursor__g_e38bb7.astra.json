@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "app/models/embeddable_host.rb:14–17: Incoming uri.host is not lowercased, causing mixed-case hostnames to fail lookup."
+   },
+   {
+    "id": "F2",
+    "description": "app/models/embeddable_host.rb:14–17: Bare-host lookup cannot match allowed hosts stored with a :port suffix."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_29d8f6c2",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_93eb20ca",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_59aa04a7",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

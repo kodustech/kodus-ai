@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_111e270c",
+     "s_42582bb1",
+     "s_fae04201",
+     "s_8507049f",
+     "s_5dddabc9"
+    ],
+    "defect": "The React admin-ui/account-ui English bundles changed error-invalid-multivalued-size from i18next {{n}} placeholders to Java MessageFormat {n} and choice syntax, which i18next cannot interpolate, so users see the raw template."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S2, S8, S9, S12) apontam o mesmo defeito: a chave error-invalid-multivalued-size nos bundles React (admin-ui e account-ui) passou a usar a sintaxe MessageFormat/choice, que o i18next não interpola. S2 aponta o arquivo do account-ui e as demais o do admin-ui, mas é o mesmo erro repetido, corrigido voltando para {{n}}. As sugestões de correção extras, como restringir a exceção do verificador em S9, fazem parte da mesma correção e não são defeitos separados."
+ }
+}

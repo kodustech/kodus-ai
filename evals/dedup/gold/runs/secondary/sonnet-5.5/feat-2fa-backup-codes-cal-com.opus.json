@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d02f32dc",
+    "mainDefect": "Closing the enable-2FA dialog with the overlay or Esc on the DisplayBackupCodes step never calls onEnable(), so the settings UI is not refreshed even though 2FA is already enabled on the server.",
+    "secondary": [
+     {
+      "defect": "onOpenChange does not reset the modal's step state, so reopening the dialog shows the old backup codes and skips the password flow.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

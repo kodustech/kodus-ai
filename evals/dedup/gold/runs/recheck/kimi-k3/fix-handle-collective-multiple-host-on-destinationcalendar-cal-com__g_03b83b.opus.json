@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bd3efdf5",
+     "s_3e132d0d",
+     "s_5bea39da",
+     "s_52e4a667",
+     "s_1662ee7c",
+     "s_780c65e1"
+    ],
+    "defect": "EventManager.ts accesses mainHostDestinationCalendar.integration without optional chaining, so Google Meet bookings with a null or empty destinationCalendar crash with a TypeError instead of falling back to Cal Video."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S9, S11, S15, S19, S24) apontam o mesmo defeito: o acesso a mainHostDestinationCalendar.integration sem optional chaining em EventManager.ts. Quando destinationCalendar é nulo ou vazio, isso gera um TypeError. A correção é a mesma (usar ?.) e as diferenças estão só no intervalo de linhas e na redação. Nenhuma delas traz um segundo defeito."
+ }
+}

@@ -1,0 +1,96 @@
+{
+  "judge": "opus",
+  "model": "muse-spark-1.2",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "promptSha": "6c81393373d3574159cc3d27e80fd1e369487aad",
+  "attempt": 1,
+  "ms": 11872,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 14667,
+    "cache_read_input_tokens": 6564,
+    "output_tokens": 755,
+    "output_tokens_details": {
+      "thinking_tokens": 266
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 14667,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 755,
+        "cache_read_input_tokens": 6564,
+        "cache_creation_input_tokens": 14667,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 14667
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1337568,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_72746574",
+          "s_c0312a1d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The getForLogin login cache is never invalidated when an IdP is linked to or unlinked from an organization through OrganizationProvider.addIdentityProvider/removeIdentityProvider, so stale IdentityProviderListQuery entries remain.",
+        "rationale": "Both suggestions report the same missing invalidation path in InfinispanOrganizationProvider and propose the same fix. The org-enabled toggle appears only as an extra item in s_c0312a1d's proposed fix."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_36f8a064",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0b2dd54f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a2886074",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_bd3d6e44",
+        "confidence": "high"
+      },
+      {
+        "id": "s_dd4bb6a5",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_99f5f381",
+        "confidence": "high"
+      },
+      {
+        "id": "s_cdd90843",
+        "confidence": "high"
+      },
+      {
+        "id": "s_996b3792",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_8101d6f5",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

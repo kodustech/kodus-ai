@@ -1,0 +1,38 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Office365 createEvent (lines 72-77) always uses destinationCalendar[0] and ignores credentialId, so other hosts' credentials post to the main host's calendar"
+   },
+   {
+    "id": "F2",
+    "description": "Lark createEvent (line 128) has the same main-host-only destinationCalendar selection problem"
+   },
+   {
+    "id": "F3",
+    "description": "CalDAV BaseCalendarService createEvent (line 156) has the same main-host-only destinationCalendar selection problem"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_94084073",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cd578af7",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

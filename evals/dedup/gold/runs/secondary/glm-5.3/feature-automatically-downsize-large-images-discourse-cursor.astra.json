@@ -1,0 +1,84 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_87a03b73",
+    "mainDefect": "The resize loop checks a stale file-descriptor size after optimization replaces the file, causing unnecessary resize passes.",
+    "secondary": [
+     {
+      "defect": "Upload.create_for receives the stale size and records a filesize that does not match the stored image.",
+      "coveredBy": []
+     },
+     {
+      "defect": "FastImage may read the orphaned file descriptor and record dimensions that do not match the stored image.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c7c633cc",
+    "mainDefect": "The hardcoded client upload cap rejects attachments above 10MB even when the configured attachment limit permits them.",
+    "secondary": [
+     {
+      "defect": "The upload rejection message reports a hardcoded 10MB limit instead of the configured limit.",
+      "coveredBy": [
+       "s_278d3350"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a3648b8e",
+    "mainDefect": "The hardcoded client upload gate disagrees with the configured attachment limit enforced by the server.",
+    "secondary": [
+     {
+      "defect": "The 413 handler reports a hardcoded 10MB limit instead of the limit actually enforced.",
+      "coveredBy": [
+       "s_278d3350"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_fd8d15e4",
+    "mainDefect": "Five fixed resize passes do not guarantee the promised reduction to the allowed upload size.",
+    "secondary": [
+     {
+      "defect": "The loop ignores conversion failures returned as false and continues without shrinking the file.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_147b3836",
+    "mainDefect": "Five fixed 80% resize passes can leave an image above the configured size limit.",
+    "secondary": [
+     {
+      "defect": "The loop ignores downsize returning false, wasting all five attempts before submitting the unchanged file.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_aaaa47e8",
+    "mainDefect": "The hardcoded client upload cap rejects images above 10MB even when the configured image limit permits them.",
+    "secondary": [
+     {
+      "defect": "The 413 handler hardcodes the reported limit to 10MB instead of using the configured limit.",
+      "coveredBy": [
+       "s_278d3350"
+      ]
+     },
+     {
+      "defect": "The URL download cap is fixed at 10MB even when the configured image limit is higher.",
+      "coveredBy": [
+       "s_7e515b13",
+       "s_73fe7ee9"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

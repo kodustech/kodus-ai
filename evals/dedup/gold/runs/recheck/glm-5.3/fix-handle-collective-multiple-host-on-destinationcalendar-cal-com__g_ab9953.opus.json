@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_23f7d949",
+     "s_9518d664"
+    ],
+    "defect": "The new fallback loads a credential from the database by its stored credentialId and uses it without checking who owns it or whether it is invalid, so a lookup that used to fail closed now fails open."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S18 e S19 relatam o mesmo erro: o fallback faz prisma.credential.findUnique pelo credentialId e usa a credencial sem verificar dono (userId/teamId) nem o flag invalid. S18 aponta isso no EventManager e S19 no handleCancelBooking, e o próprio S19 diz que é a mesma derivação do EventManager. A mesma guarda corrige todos esses lugares, então o grupo continua como está."
+ }
+}

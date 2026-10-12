@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5617da88",
+     "s_06a69ac5",
+     "s_73ccec8d",
+     "s_b934e7bb"
+    ],
+    "defect": "Os validadores de exclusão mútua entre age e timestamp usam truthiness em vez de verificar a presença dos campos, tratando zero como ausência."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_06a69ac5"
+  ],
+  "reasoningPt": "S2, S6, S7 e S9 têm como defeito principal a mesma verificação por truthiness nos validadores de age e timestamp. S6 também relata a aceitação de registros sem nenhum dos campos, sendo marcada como bundle, mas permanece no grupo pelo primeiro defeito."
+ }
+}

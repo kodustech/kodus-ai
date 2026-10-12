@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "The prisma update inside the catch block (lines 190-197) has no guard of its own. If it throws, the loop aborts and the remaining reminders are skipped."
+   },
+   {
+    "id": "F2",
+    "description": "reminder.retryCount + 1 is a stale read-then-write. It should use an atomic increment: 1."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c8538465",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a5b002c4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

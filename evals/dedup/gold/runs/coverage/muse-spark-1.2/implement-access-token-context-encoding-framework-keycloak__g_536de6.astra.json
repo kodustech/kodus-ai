@@ -1,0 +1,62 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "AssertEvents.isAccessTokenId reads the grant shortcut at substring(3,5) instead of substring(4,6)."
+   },
+   {
+    "id": "F2",
+    "description": "AssertEvents.isAccessTokenId inverts the grant comparison, returning false on a match."
+   },
+   {
+    "id": "F3",
+    "description": "AssertEvents.isAccessTokenId lacks a prefix length guard, risking StringIndexOutOfBounds."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_cb4db53f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_2a4d8fa0",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9862ac83",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_f28d822f",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_c4f3874e",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

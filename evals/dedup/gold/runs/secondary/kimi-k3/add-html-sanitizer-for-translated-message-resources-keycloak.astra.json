@@ -1,0 +1,29 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6a250a7b",
+    "mainDefect": "The Lithuanian login bundle’s loginTotpStep1 contains Italian text instead of Lithuanian.",
+    "secondary": [
+     {
+      "defect": "The Lithuanian account bundle’s totpStep1 also contains Italian text instead of Lithuanian.",
+      "coveredBy": [
+       "s_e3f52c5e"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_31c73f83",
+    "mainDefect": "The admin console’s English bundle replaces i18next placeholders with Java MessageFormat syntax that would render literally if formatted by i18next.",
+    "secondary": [
+     {
+      "defect": "The account console’s English bundle also replaces i18next placeholders with Java MessageFormat syntax that would render literally if formatted by i18next.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

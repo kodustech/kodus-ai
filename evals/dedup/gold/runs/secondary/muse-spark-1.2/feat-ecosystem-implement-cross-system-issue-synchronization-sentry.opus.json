@@ -1,0 +1,99 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_597377f6",
+    "mainDefect": "AssignmentSource.to_dict returns a raw datetime, which Celery's JSON serialization in apply_async cannot encode, so it raises a TypeError.",
+    "secondary": [
+     {
+      "defect": "The queued default is evaluated once at import time, so every instance shares the same timestamp; it should use field(default_factory=timezone.now).",
+      "coveredBy": [
+       "s_0a96d57b",
+       "s_84bd5bf4",
+       "s_e0de5ccd",
+       "s_b2100c10"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_e0de5ccd",
+    "mainDefect": "The queued default timezone.now() is evaluated once at import time, so all AssignmentSource instances share the same timestamp.",
+    "secondary": [
+     {
+      "defect": "The queued datetime does not survive the Celery JSON round-trip, so it needs string serialization in to_dict and datetime parsing in from_dict.",
+      "coveredBy": [
+       "s_34589453",
+       "s_597377f6",
+       "s_4500db00"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_4500db00",
+    "mainDefect": "AssignmentSource.to_dict returns a live datetime that is sent through Celery JSON to sync_assignee_outbound, which cannot serialize it.",
+    "secondary": [
+     {
+      "defect": "The queued default is evaluated once at import time, so every instance shares the same timestamp; it should use field(default_factory=timezone.now).",
+      "coveredBy": [
+       "s_0a96d57b",
+       "s_84bd5bf4",
+       "s_e0de5ccd",
+       "s_b2100c10"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_b2100c10",
+    "mainDefect": "The queued default is evaluated at import time, so every AssignmentSource gets the same stale timestamp instead of a fresh one.",
+    "secondary": [
+     {
+      "defect": "The tests do not check that queued is a recent datetime or that from_dict(to_dict()) round-trips correctly, so they would not catch the stale-timestamp bug.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_05544e55",
+    "mainDefect": "The test test_from_dict_empty_array is misnamed because it actually tests an empty dict, not an empty array.",
+    "secondary": [
+     {
+      "defect": "The test name test_from_dict_inalid_data has a typo and should be test_from_dict_invalid_data.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The invalid-input tests are too thin: they don't cover an empty list or a payload with wrong types for queued or integration_id.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8aeebc2a",
+    "mainDefect": "No test checks that deassigning with a matching AssignmentSource also blocks the outbound sync.",
+    "secondary": [
+     {
+      "defect": "No test checks that assign/deassign with a different integration's AssignmentSource still syncs, so a guard that always blocks would go unnoticed.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_2bcd3f05",
+    "mainDefect": "Collectible allocates a new object on every spawn instead of using an object pool.",
+    "secondary": [
+     {
+      "defect": "Collectible relies on fragile runtime lookups instead of cached references.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Collectible has no explicit handling for null references.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

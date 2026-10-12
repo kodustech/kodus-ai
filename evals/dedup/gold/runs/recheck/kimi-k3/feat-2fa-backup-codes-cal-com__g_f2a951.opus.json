@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_eaeba116",
+     "s_30515fd3"
+    ],
+    "defect": "In disable.ts, req.body.backupCode only gets a truthiness check before .replaceAll is called on it, so a truthy value that is not a string throws an unhandled TypeError and the endpoint returns 500."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S12 relatam o mesmo defeito no mesmo ponto: em disable.ts, req.body.backupCode passa só por uma checagem de valor truthy antes de .replaceAll, e um valor que não é string causa TypeError e erro 500. A correção proposta é a mesma (checar o tipo e retornar 400). As duas citam o mesmo padrão em next-auth-options.ts, então são o mesmo erro repetido e não um segundo defeito; o grupo fica como está."
+ }
+}

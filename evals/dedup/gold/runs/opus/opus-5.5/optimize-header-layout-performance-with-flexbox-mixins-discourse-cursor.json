@@ -1,0 +1,15 @@
+{
+  "judge": "opus",
+  "model": "opus-5.5",
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_1a37c4a6",
+        "confidence": "high"
+      }
+    ]
+  }
+}

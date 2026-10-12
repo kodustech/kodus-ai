@@ -1,0 +1,81 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_3945cc4f",
+    "mainDefect": "TopicEmbed.import puts the external URL into the raw_html 'Imported from' footer link without escaping it, which allows stored XSS.",
+    "secondary": [
+     {
+      "defect": "Imported feed and page HTML (for example RSS content from poll_feed) is stored as raw_html without any sanitizing or tag whitelist, and is then rendered unescaped to viewers.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_686ed317",
+    "mainDefect": "The 'is 404 without an embed_url' spec fails at the ensure_embeddable filter before the action runs, so params.require(:embed_url) is never tested.",
+    "secondary": [
+     {
+      "defect": "The spec only checks should_not be_success and never checks for the 404 status it claims.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_6a2d7081",
+    "mainDefect": "The Disqus import now fetches every link over HTTP with no error handling, so one dead link raises and stops the whole import partway through.",
+    "secondary": [
+     {
+      "defect": "The imported topics no longer get the original created_at timestamp (and the category option was dropped), so every topic is dated today.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_42e6661a",
+    "mainDefect": "poll_feed calls i.content.scrub on feed items that may have no content, which raises NoMethodError and stops the whole items loop (the job has retry: false).",
+    "secondary": [
+     {
+      "defect": "String#scrub only exists on Ruby 2.1 and later, so the call can fail on the Ruby versions this code supports even when content is present.",
+      "coveredBy": []
+     },
+     {
+      "defect": "A nil item title is passed to PostCreator with skip_validations: true, which causes a null-title insert failure.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_5743ce29",
+    "mainDefect": "absolutize_urls only rewrites URLs that start with '/', so relative URLs without a leading slash are left as-is and resolve against the Discourse host.",
+    "secondary": [
+     {
+      "defect": "The default-port check compares against a fixed 80/443 pair instead of the URL scheme's own default port, so the port is wrongly dropped for http on 443 or https on 80.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_03b0d38a",
+    "mainDefect": "embed.js builds the iframe src assuming discourseUrl ends with '/', so a URL without a trailing slash produces a broken src.",
+    "secondary": [
+     {
+      "defect": "The postMessage origin check tests whether e.origin appears anywhere in discourseUrl, so resize messages are silently dropped when discourseUrl is protocol-relative.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7466b913",
+    "mainDefect": "The 'imported from' footer puts the URL into the raw_html post body without escaping it, which allows HTML attribute breakout and XSS.",
+    "secondary": [
+     {
+      "defect": "Imported content is stored as raw HTML without sanitizing, and CGI.unescapeHTML on feed content turns escaped HTML into live tags.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

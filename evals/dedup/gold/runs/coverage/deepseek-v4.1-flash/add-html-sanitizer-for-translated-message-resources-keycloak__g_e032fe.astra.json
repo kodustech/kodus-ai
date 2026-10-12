@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Lithuanian login bundle: loginTotpStep1 contains Italian text instead of Lithuanian."
+   },
+   {
+    "id": "F2",
+    "description": "Lithuanian account bundle: totpStep1 contains Italian text instead of Lithuanian."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_29c9524c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c8231ce6",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

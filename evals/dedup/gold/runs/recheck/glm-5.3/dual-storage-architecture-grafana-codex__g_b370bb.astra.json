@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_33a63d8e",
+     "s_912f86cd"
+    ],
+    "defect": "Delete retorna antecipadamente quando o armazenamento unificado responde NotFound, impedindo a exclusão de objetos que existem apenas no armazenamento legado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S21 descrevem o mesmo retorno antecipado em Delete e a mesma consequência: impedir a limpeza de objetos existentes apenas no legado. Ambas propõem preservar a execução da exclusão no legado quando o armazenamento unificado retorna NotFound, sem relatar defeitos adicionais."
+ }
+}

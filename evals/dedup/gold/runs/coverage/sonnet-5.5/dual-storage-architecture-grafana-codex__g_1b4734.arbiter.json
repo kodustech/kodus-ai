@@ -1,0 +1,57 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create goroutine (lines 50-57): the legacy write's context comes from the request ctx, which is cancelled when the handler returns, so legacy storage drifts"
+   },
+   {
+    "id": "F2",
+    "description": "Delete goroutine (lines 108-114): same request-derived context cancellation"
+   },
+   {
+    "id": "F3",
+    "description": "Update goroutine (lines 134-141): same request-derived context cancellation"
+   },
+   {
+    "id": "F4",
+    "description": "DeleteCollection goroutine (lines 161-167): same request-derived context cancellation"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_52fd068c",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_66a23edf",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_d8b196b6",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   }
+  ],
+  "decisive": true,
+  "reasoning": "All three members cover the same four facets, so all are complete. I agree with Labeler 1 and not Labeler 2.\n\n**How each member covers the four methods:**\n- **s_52fd068c** names Delete, Update and DeleteCollection with their line ranges, on top of its own Create location.\n- **s_66a23edf** says \"The same pattern appears in the Update, Delete and DeleteCollection goroutines,\" on top of Create.\n- **s_d8b196b6** lists all four methods with line ranges.\n\n**Why the deep copy is not a fifth facet:** s_52fd068c brings up the deep copy of obj only in its fix sentence (\"Use a detached context ... and take a deep copy of obj before starting the goroutine so it does not race...\"). The rules say that something mentioned only inside the proposed fix does not count as a reported facet. The group problem also describes it as something s_52fd068c \"asks for,\" not as the defect the group reports. So there are only four facets, and none of the members is missing anything."
+ }
+}

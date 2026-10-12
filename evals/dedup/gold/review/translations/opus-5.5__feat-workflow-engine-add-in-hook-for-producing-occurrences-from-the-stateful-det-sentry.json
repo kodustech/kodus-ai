@@ -1,0 +1,38 @@
+{
+ "s_f6a234b4": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: MetricAlertDetectorHandler agora herda de StatefulDetectorHandler, mas tem apenas um corpo `pass`. Ele não implementa os membros abstratos `counter_names`, `get_dedupe_value`, `get_group_key_values` nem o recém-adicionado `build_occurrence_and_event_data`, então continua sendo uma classe abstrata. POR QUÊ: `Detector.detector_handler` instancia `group_type.detector_handler(self)`, então qualquer detector `metric_alert_fire` lança `TypeError: Can't instantiate abstract class`. `process_detectors` não captura isso, então todo o lote de detectores falha. Antes deste PR, o handler antigo retornava [] com segurança. COMO: implemente os métodos abstratos (podem ser stubs que retornam valores padrão seguros, ex.: `counter_names = []`, `get_group_key_values` retornando {}), ou mantenha o stub não stateful anterior até que a implementação real seja entregue."
+ },
+ "s_2d8453a7": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: build_mock_occurrence_and_event sempre usa o mesmo `id` fixo, e `IssueOccurrence.__eq__` compara apenas `id` (issue_occurrence.py:181-184). POR QUÊ: nenhuma das novas asserções de occurrence verifica o fingerprint, a group key ou a prioridade. Por exemplo, TestEvaluateGroupKeyValue.test_dedupe monta a occurrence esperada para 'val1' mas avalia 'group_key', e ainda assim passa. Em test_state_results_multi_group, `occurrence` e `occurrence_2` são considerados iguais, então as asserções de `produce_occurrence_to_kafka` não conseguem detectar o envio da occurrence errada para um grupo. COMO: gere um id distinto a cada chamada (ex.: derivado de group_key) e/ou faça asserções explícitas sobre `fingerprint` e `initial_issue_priority`."
+ },
+ "s_171c4881": {
+  "summaryPt": "",
+  "contentPt": "MetricAlertDetectorHandler agora herda de StatefulDetectorHandler com apenas `pass`, então não implementa os métodos abstratos: build_occurrence_and_event_data (adicionado neste PR), get_dedupe_value e get_group_key_values. Instanciar o handler, o que acontece quando Detector.detector_handler é acessado para um detector de metric-alert em process_detectors, vai lançar `TypeError: Can't instantiate abstract class`. Antes desta mudança, evaluate() tinha um stub concreto que retornava []. Correção: implemente os métodos abstratos (stubs servem por enquanto), ou mantenha um evaluate() concreto que retorna {} até que o handler seja construído."
+ },
+ "s_6e65311a": {
+  "summaryPt": "MetricAlertDetectorHandler agora herda de StatefulDetectorHandler sem implementar seus métodos abstratos (incluindo o recém-adicionado build_occurrence_and_event_data), então instanciá-lo lança TypeError.",
+  "contentPt": "MetricAlertDetectorHandler foi movido de DetectorHandler, onde implementava evaluate como um stub, para StatefulDetectorHandler com apenas `pass`. StatefulDetectorHandler tem os métodos abstratos get_dedupe_value e get_group_key_values, e este PR adiciona um terceiro, build_occurrence_and_event_data. A subclasse não implementa nenhum deles, então `MetricAlertDetectorHandler(detector)` lança TypeError. Qualquer detector de metric-alert que chegue em Detector.detector_handler / process_detectors causaria um crash em vez de ser um no-op inofensivo. Implemente os métodos abstratos, mesmo que como stubs, ou mantenha o stub anterior baseado em DetectorHandler até que a versão stateful esteja pronta."
+ },
+ "s_68f8d790": {
+  "summaryPt": "O construtor de occurrence mock ignora `value`, então nenhum teste verifica que o valor avaliado chega a `build_occurrence_and_event_data`.",
+  "contentPt": "`build_mock_occurrence_and_event` recebe `value`, mas nunca o coloca na occurrence nem nos dados do evento. Vários testes montam a occurrence esperada com `value=6` mesmo que o código testado veja 10, 100 ou 8: group_2 de `test_state_results_multi_group`, `TestEvaluate.test_results_on_change`, `TestEvaluate.test_dedupe` e `TestEvaluateGroupKeyValue.test_dedupe`. Eles passam apenas porque o valor é descartado. Se `evaluate_group_key_value` deixasse de repassar corretamente o valor avaliado para `build_occurrence_and_event_data`, por exemplo passando `dedupe_value` ou uma constante, todos os testes continuariam passando. Correção: inclua `value` na occurrence mock, ex.: `evidence_data={\"value\": value}`, e passe o valor real que cada teste usa ao montar o resultado esperado."
+ },
+ "s_4badb5ae": {
+  "summaryPt": "MetricAlertDetectorHandler agora estende StatefulDetectorHandler sem implementar seus métodos abstratos, incluindo o novo build_occurrence_and_event_data, então criá-lo lança TypeError.",
+  "contentPt": "Em processors/detector.py, `StatefulDetectorHandler` ganha um novo método abstrato, `build_occurrence_and_event_data`. Ele também exige `get_dedupe_value` e `get_group_key_values`. `MetricAlertDetectorHandler` agora herda dele apenas com `pass`, e o `evaluate` concreto que ele tinha foi removido. Portanto, a classe continua abstrata. Quando `Detector.detector_handler` cria o handler para um detector de metric-alert, o Python lança `TypeError: Can't instantiate abstract class`. Isso quebra process_detectors para esses detectores. Adicione implementações stub, ou mantenha a classe fora da base abstrata até que seja implementada."
+ },
+ "s_ba6363b5": {
+  "summaryPt": "A docstring de evaluate() ainda diz que retorna uma lista, mas agora retorna um dict indexado por group key.",
+  "contentPt": "Este PR mudou `evaluate` para retornar `dict[DetectorGroupKey, DetectorEvaluationResult]`, mas a docstring ainda diz que \"returns a list of `DetectorEvaluationResult`\". Quem ler pode indexar ou iterar o resultado como uma lista. Atualize a docstring para descrever o dict indexado por group key. Como os resultados agora são indexados por group key, o tratamento antigo de chaves duplicadas deixou de existir."
+ },
+ "s_ffcfea51": {
+  "summaryPt": "O TODO desatualizado diz que o handler se tornará stateful, mas ele agora herda de StatefulDetectorHandler.",
+  "contentPt": "O comentário \"TODO: This will be a stateful detector when we build that abstraction\" não é mais verdadeiro. Este PR faz de MetricAlertDetectorHandler uma subclasse de StatefulDetectorHandler. Remova o TODO, ou reescreva-o para dizer o que de fato ainda falta (ex.: implementar get_dedupe_value, get_group_key_values e build_occurrence_and_event_data)."
+ },
+ "s_b65662bd": {
+  "summaryPt": "",
+  "contentPt": "`PriorityLevel(new_status)` converte um DetectorPriorityLevel em PriorityLevel por valor. Se algum valor de DetectorPriorityLevel diferente de OK não tiver um membro correspondente em PriorityLevel, isso lança ValueError durante a avaliação e interrompe o processamento de todas as group keys do packet. Use um mapeamento explícito, ou verifique se os valores dos enums coincidem."
+ }
+}

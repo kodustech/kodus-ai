@@ -1,0 +1,55 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Migration lines 9–11: an empty embed_category lookup is indexed without a nil check, crashing the migration."
+   },
+   {
+    "id": "F2",
+    "description": "Migration line 15: an empty uncategorized_category_id lookup is indexed without a nil check, crashing the migration."
+   },
+   {
+    "id": "F3",
+    "description": "Migration line 25: raw host interpolation into the INSERT can break the SQL, explicitly reported for quotes or blank lines."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c715ef0c",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_1b696765",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0fd17a9d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dca123ba",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

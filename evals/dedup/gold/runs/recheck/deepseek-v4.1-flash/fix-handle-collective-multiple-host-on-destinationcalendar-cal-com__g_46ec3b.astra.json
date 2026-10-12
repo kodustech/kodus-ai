@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_40565196",
+     "s_77f00126",
+     "s_03a86b3c",
+     "s_e60cb4a6"
+    ],
+    "defect": "O fallback de updateEvent e deleteEvent busca um destino pelo externalCalendarId já falsy, deixando de recuperar o calendário de destino configurado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S9 descrevem o mesmo erro de fallback em updateEvent e deleteEvent; S12 e S13 relatam cada uma dessas ocorrências separadamente. A mesma correção da seleção do destino resolve ambas, portanto todos permanecem juntos e nenhum membro reúne defeitos distintos."
+ }
+}

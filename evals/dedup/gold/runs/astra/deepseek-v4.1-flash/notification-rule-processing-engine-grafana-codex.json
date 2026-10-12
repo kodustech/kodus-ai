@@ -1,0 +1,60 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "promptSha": "818e5b982c6d10f94552556cfdc47bc501a0a252",
+  "attempt": 1,
+  "ms": 37654,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_dd0b9d2b",
+          "s_5dfdf59a",
+          "s_03602ec1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Delegating to useAllRulerRuleAbilities drops federated-group detection, allowing mutation abilities previously blocked by immutability.",
+        "rationale": "All three report the same lost federation check and hardcoded false value. Preserving the federation signal in the ability computation addresses all three."
+      },
+      {
+        "members": [
+          "s_9d5d3468",
+          "s_61ba8ef0"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The optional rule prop is passed to a hook requiring RulerRuleDTO, and non-Grafana prom-only inputs silently lose the actions block when identifier construction fails.",
+        "rationale": "Both explicitly report the optional-rule hook contract mismatch. s_9d5d3468 additionally reports the unhandled prom-only input case returning null, which must survive consolidation."
+      },
+      {
+        "members": [
+          "s_a95966cb",
+          "s_36916a0e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The GrafanaRuleListItem rendered in FilterView's map lacks a stable React key.",
+        "rationale": "Both identify the same dropped key prop and resulting reconciliation problems. Restoring key={key} resolves both reports."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_7d21a7d6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6789c43e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_23066b6c",
+        "confidence": "high"
+      }
+    ]
+  }
+}

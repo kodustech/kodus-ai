@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9e1a3d59",
+     "s_2d189e44",
+     "s_00216386",
+     "s_de5fad1d",
+     "s_c273daf4"
+    ],
+    "defect": "Os caminhos de falha de Storage.Create e Storage.Update usam recordLegacyDuration em vez de recordStorageDuration, atribuindo métricas de falhas do armazenamento unificado ao legado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S13 apontam o erro em Create; S14 aponta a mesma troca de helper em Update. S3 e S26 abrangem ambas as ocorrências, corrigidas pela mesma substituição, portanto todos pertencem ao mesmo grupo e nenhum reúne defeitos distintos."
+ }
+}

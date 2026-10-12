@@ -1,0 +1,71 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Migration lines 9–11: indexing an empty embed_category query result crashes before the fallback."
+   },
+   {
+    "id": "F2",
+    "description": "Migration line 15: indexing an empty uncategorized_category_id query result also crashes."
+   },
+   {
+    "id": "F3",
+    "description": "Migration lines 22–25: host schemes and paths are preserved, preventing matches against URI#host."
+   },
+   {
+    "id": "F4",
+    "description": "Migration lines 22–25: trailing carriage returns and whitespace are preserved, preventing host matches."
+   },
+   {
+    "id": "F5",
+    "description": "Migration line 25: unescaped host values containing quotes break the INSERT."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_dbcf98a4",
+    "covers": [
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7900c369",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c76cedb8",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_13c616c7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0621eb9a",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

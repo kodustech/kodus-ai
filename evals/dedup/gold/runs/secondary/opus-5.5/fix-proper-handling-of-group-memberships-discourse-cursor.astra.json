@@ -1,0 +1,41 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8c558d51",
+    "mainDefect": "Removing a member with group.users.delete skips callbacks, leaving groups.user_count too high.",
+    "secondary": [
+     {
+      "defect": "Removing a member skips primary_group_id cleanup, so the removed user can retain the group as their primary group.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_bbf4f23f",
+    "mainDefect": "Negative limit or offset values reach PostgreSQL and cause a 500 response.",
+    "secondary": [
+     {
+      "defect": "Very large limits are accepted, allowing a request to load every group member.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4bf82420",
+    "mainDefect": "Negative offset or limit values reach PostgreSQL and cause a 500 response.",
+    "secondary": [
+     {
+      "defect": "A zero limit is returned in metadata and causes client pagination calculations to produce NaN or Infinity.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Very large limits are accepted, allowing a request to load every group member.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

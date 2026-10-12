@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_461ac7aa",
+     "s_989e1020"
+    ],
+    "defect": "useAllGrafanaPromRuleAbilities treats an undefined rule (skipToken) as AlwaysSupported, so Duplicate can be granted and, OR-ed with the ruler ability in AlertRuleMenu, wrongly shown for cloud rules."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 apontam o mesmo defeito: com rule indefinida (skipToken), loading=false deixa MaybeSupported como AlwaysSupported, e Duplicate aparece para regras cloud por causa do OR no AlertRuleMenu. As duas propõem a mesma correção (!rule || loading ? NotSupported : AlwaysSupported), então o grupo se mantém."
+ }
+}

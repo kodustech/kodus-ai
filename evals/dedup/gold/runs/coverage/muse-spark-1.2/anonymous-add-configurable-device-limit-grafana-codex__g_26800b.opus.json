@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "client.go Authenticate: TagDevice now runs synchronously, so every anonymous auth blocks on COUNT+UPDATE/INSERT DB latency (no longer best-effort async)"
+   },
+   {
+    "id": "F2",
+    "description": "TagDevice now uses the request context instead of a detached background context with timeout, so request cancellation aborts device tagging"
+   },
+   {
+    "id": "F3",
+    "description": "ErrDeviceLimitReached now fails anonymous Authenticate, but callers (authn service/HTTP handlers) were not updated to handle the new refusal case"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f91fbc78",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3a7464c4",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

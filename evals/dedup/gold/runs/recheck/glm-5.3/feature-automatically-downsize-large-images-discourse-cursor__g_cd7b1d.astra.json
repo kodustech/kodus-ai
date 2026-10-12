@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3af1aec9",
+     "s_fd8d15e4",
+     "s_147b3836"
+    ],
+    "defect": "O limite de cinco reduções de 80% pode deixar a imagem acima de max_image_size_kb, causando sua rejeição por Upload.create_for."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_fd8d15e4",
+   "s_147b3836"
+  ],
+  "reasoningPt": "S10, S13 e S16 relatam primeiro o mesmo defeito: as cinco tentativas podem terminar com a imagem ainda acima do limite. S13 e S16 também apontam falhas de conversão ignoradas, um defeito adicional que exige tratamento próprio; por isso são bundles, mas permanecem no grupo pelo defeito principal."
+ }
+}

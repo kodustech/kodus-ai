@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8c558d51",
+    "mainDefect": "Removing a member with group.users.delete skips callbacks, so the user_count counter cache is never decremented and the group's member count stays too high.",
+    "secondary": [
+     {
+      "defect": "The removed user's primary_group_id is not cleared, so they keep the group's title/flair.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4bf82420",
+    "mainDefect": "The limit/offset params are not bounds-checked, so negative values reach the SQL and cause a 500 error.",
+    "secondary": [
+     {
+      "defect": "limit=0 is returned in meta.limit, and the client divides by it in currentPage/totalPages, which produces NaN/Infinity.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

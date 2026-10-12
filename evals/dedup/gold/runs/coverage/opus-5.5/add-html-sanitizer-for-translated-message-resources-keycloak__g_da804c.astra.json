@@ -1,0 +1,55 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "admin-ui messages_en.properties:3138 uses MessageFormat placeholders and choice syntax that i18next renders literally."
+   },
+   {
+    "id": "F2",
+    "description": "account-ui messages_en.properties:188 uses MessageFormat placeholders and choice syntax that i18next renders literally."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_8507049f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_42582bb1",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_fae04201",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_111e270c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5dddabc9",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

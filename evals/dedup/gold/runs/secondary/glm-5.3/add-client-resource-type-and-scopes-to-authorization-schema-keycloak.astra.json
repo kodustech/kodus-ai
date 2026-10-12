@@ -1,0 +1,65 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_9201a4d6",
+    "mainDefect": "With both authorization features enabled, client removal calls the throwing V2 setPermissionsEnabled implementation and aborts deletion.",
+    "secondary": [
+     {
+      "defect": "In V2-only mode, client removal skips cleanup and leaves orphaned per-client authorization resources and permissions.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_924e2d8b",
+    "mainDefect": "Per-client authorization resources lack the Clients type, so getClientsWithPermission omits per-client grants.",
+    "secondary": [
+     {
+      "defect": "getClientsWithPermission returns the type-level resource name \"Clients\" as a client ID, causing incorrect results or null dereferences.",
+      "coveredBy": [
+       "s_accc352b"
+      ]
+     },
+     {
+      "defect": "Missing cleanup on client removal leaves stale authorization resources whose deleted-client IDs can cause null dereferences.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8797ead7",
+    "mainDefect": "The requireViewClientScopes javadoc incorrectly describes a boolean return instead of throwing ForbiddenException when access is denied.",
+    "secondary": [
+     {
+      "defect": "The adjacent requireView javadoc also incorrectly describes a boolean return instead of its exception contract.",
+      "coveredBy": [
+       "s_8c884e4a"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c13dd2bf",
+    "mainDefect": "testManageOnlyOneClient reads index 1 after asserting only that the list is nonempty, so a one-element list causes IndexOutOfBoundsException.",
+    "secondary": [
+     {
+      "defect": "testConfigureOnlyOneClient reads index 0 without checking for an empty list, potentially producing IndexOutOfBoundsException instead of the expected ForbiddenException.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_85b8c9a1",
+    "mainDefect": "The client-removal listener invokes the throwing V2 setPermissionsEnabled implementation, causing client deletion to fail.",
+    "secondary": [
+     {
+      "defect": "Client removal fails to clean up per-client authorization resources, leaving orphaned resources.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9d348b06",
+     "s_d6a5a826"
+    ],
+    "defect": "A redução do escopo de cacheMu permite builds concorrentes para a mesma chave, com sobrescrita do cache e conflito no diretório do índice."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S6 apontam o mesmo defeito de concorrência causado pela redução do escopo do lock em BuildIndex. Os cenários e impactos descritos variam, mas decorrem da mesma falha e são resolvidos pela mesma sincronização por chave."
+ }
+}

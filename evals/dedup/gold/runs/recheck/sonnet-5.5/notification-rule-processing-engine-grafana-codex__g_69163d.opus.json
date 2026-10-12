@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_898bc376",
+     "s_cb496a37",
+     "s_ce276048"
+    ],
+    "defect": "isFederated is hardcoded to false in the shared hook, so useAllAlertRuleAbilities no longer applies the isFederatedRuleGroup check and federated Mimir rules are no longer protected from edits."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S5 relatam o mesmo defeito: isFederated fixo em false depois da delegação para useAllRulerRuleAbilities, o que perde a proteção de imutabilidade para grupos federados do Mimir. As faixas de linhas diferem um pouco, mas a correção é a mesma: calcular o estado federado no wrapper e repassá-lo. Nenhuma sugestão traz um segundo defeito."
+ }
+}

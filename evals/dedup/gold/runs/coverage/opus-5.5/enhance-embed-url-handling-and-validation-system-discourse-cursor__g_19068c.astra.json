@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "app/jobs/scheduled/poll_feed.rb:35: RSS 2.0 items have nil i.content, so i.content.scrub raises NoMethodError and aborts feed polling and the calling TopicRetriever."
+   },
+   {
+    "id": "F2",
+    "description": "app/jobs/scheduled/poll_feed.rb:35: String#scrub is unavailable on Ruby 2.0 used by CI, causing NoMethodError."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3abf3cfd",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_5748a076",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

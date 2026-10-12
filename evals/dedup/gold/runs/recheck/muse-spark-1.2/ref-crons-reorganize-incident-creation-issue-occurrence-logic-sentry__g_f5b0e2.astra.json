@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8fd4a0ab",
+     "s_3897ff04",
+     "s_5adb8ad3"
+    ],
+    "defect": "get_monitor_environment_context transforma schedule_type na cópia config, mas retorna a configuração original, descartando a transformação."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S2 e S5 descrevem o mesmo defeito na mesma função: a cópia transformada de config é descartada no retorno. Retornar essa cópia resolve as três sugestões, e nenhuma relata um segundo defeito."
+ }
+}

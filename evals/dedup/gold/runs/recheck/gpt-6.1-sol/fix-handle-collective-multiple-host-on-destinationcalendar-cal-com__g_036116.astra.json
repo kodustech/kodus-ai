@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d4b02182",
+     "s_cf65a107",
+     "s_a77731dd",
+     "s_7d89e4f9",
+     "s_8cb55fd3"
+    ],
+    "defect": "Acesso sem optional chaining a mainHostDestinationCalendar.integration lança uma exceção quando não há calendário de destino, impedindo o fallback de Google Meet para Cal Video."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S8, S11, S14 e S15 relatam o mesmo acesso desprotegido e propõem a mesma correção. As referências adicionais de S8 e S14 aos produtores apenas explicam como o valor ausente chega ao ponto da falha; não descrevem outros defeitos."
+ }
+}

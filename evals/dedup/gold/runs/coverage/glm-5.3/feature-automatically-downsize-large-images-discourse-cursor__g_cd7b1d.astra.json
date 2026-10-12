@@ -1,0 +1,40 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "uploads_controller.rb:63–70: Five 80% downsizes can leave the file above max_image_size_kb and pass it to Upload.create_for, violating the comment's size guarantee."
+   },
+   {
+    "id": "F2",
+    "description": "uploads_controller.rb:67: Downsize failures returning false are ignored, allowing an unchanged oversized file to reach Upload.create_for."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_147b3836",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_fd8d15e4",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_3af1aec9",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

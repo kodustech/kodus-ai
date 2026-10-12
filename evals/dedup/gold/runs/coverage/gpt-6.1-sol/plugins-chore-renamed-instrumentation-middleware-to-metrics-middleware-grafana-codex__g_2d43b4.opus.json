@@ -1,0 +1,51 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "MetricsMiddleware.QueryData (metrics_middleware.go ~line 144) reads req.Queries/req.PluginContext without a nil-request guard, so a nil request panics"
+   },
+   {
+    "id": "F2",
+    "description": "MetricsMiddleware.CallResource (metrics_middleware.go ~line 160) reads req.Body/req.PluginContext without a nil-request guard, so a nil request panics"
+   },
+   {
+    "id": "F3",
+    "description": "ContextualLoggerMiddleware unary methods (QueryData/CallResource/CheckHealth/CollectMetrics, contextual_logger_middleware.go lines 39-56) read req.PluginContext without a nil-request guard, so a nil request panics"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_29d4df72",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_87ece20e",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ca7aeab6",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c4bfaaf2",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

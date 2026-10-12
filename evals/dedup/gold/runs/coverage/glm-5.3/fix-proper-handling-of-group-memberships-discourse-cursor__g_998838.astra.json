@@ -1,0 +1,48 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Admin::GroupsController#add_members, line 66, requires group_id instead of the routed id, causing HTTP 400."
+   },
+   {
+    "id": "F2",
+    "description": "Admin::GroupsController#remove_member, line 85, requires group_id instead of the routed id, causing HTTP 400."
+   },
+   {
+    "id": "F3",
+    "description": "The .add_members controller specs pass group_id directly, masking the routing parameter mismatch."
+   },
+   {
+    "id": "F4",
+    "description": "The .remove_member controller specs pass group_id directly, masking the routing parameter mismatch."
+   },
+   {
+    "id": "F5",
+    "description": "Membership AJAX promise rejections are unhandled, leaving add/remove failures silent in the UI."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_191ff583",
+    "covers": [
+     "F1",
+     "F2",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9ede52cf",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

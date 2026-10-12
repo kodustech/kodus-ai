@@ -1,0 +1,39 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "c6129a4986b41b3e48333e09e85e79ff1cf22e15",
+  "attempt": 1,
+  "ms": 38096,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_2438c807",
+          "s_b531a8e1",
+          "s_2673b2c5",
+          "s_2431eed5"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "AssignmentSource emits a raw datetime into the Celery JSON payload, and its queued default is evaluated at import time rather than per instance.",
+        "rationale": "s_2673b2c5 explicitly reports both serialization and the shared import-time timestamp, linking the serialization-only suggestion with both timestamp-only suggestions. The merged comment must preserve both defects."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_3df28f24",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1da89b55",
+        "confidence": "high"
+      },
+      {
+        "id": "s_421594bd",
+        "confidence": "high"
+      }
+    ]
+  }
+}

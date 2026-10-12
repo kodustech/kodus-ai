@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a55aac5f",
+     "s_869f5ab5"
+    ],
+    "defect": "Ambos os caminhos de falha calculam retryCount a partir de um snapshot, perdendo incrementos quando execuções concorrentes gravam o mesmo valor."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 relatam o mesmo defeito: execuções concorrentes sobrescrevem incrementos de retryCount e permitem tentativas além do limite. Ambas propõem incremento atômico nos dois caminhos de falha, portanto o grupo deve ser mantido."
+ }
+}

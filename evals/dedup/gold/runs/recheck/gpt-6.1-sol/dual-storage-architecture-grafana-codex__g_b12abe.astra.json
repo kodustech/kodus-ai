@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a9049b82",
+     "s_b8b19a32"
+    ],
+    "defect": "Legacy.Update recebe o objInfo original e reavalia a atualização, em vez de aplicar o resultado persistido por Storage, podendo deixar os dois armazenamentos inconsistentes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S11 apontam o mesmo defeito: a reavaliação do objInfo original na atualização do legado. Ambas propõem encaminhar o resultado de Storage por um update wrapper, portanto uma única correção resolve os dois relatos."
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_3869a81c",
+   "s_9bf99a8b"
+  ],
+  "bundles": [
+   "s_3869a81c",
+   "s_9bf99a8b"
+  ],
+  "reasoningPt": "O defeito principal de S5 é o TypeError de `obj[k].map` quando o valor `*_ids` é null, porque falta uma verificação. Os itens `undefined` no array aparecem depois, como segundo defeito. O defeito principal de S8 é outro: o ramo plural sempre apaga a chave e a troca por um array com buracos `undefined`, sem a verificação que o ramo singular tem. Como os defeitos principais e as correções são diferentes, o grupo deve ser dividido, e as duas sugestões juntam mais de um defeito."
+ }
+}

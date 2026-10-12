@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_2a4d8fa0",
+     "s_9862ac83",
+     "s_f28d822f",
+     "s_c4f3874e",
+     "s_cb4db53f"
+    ],
+    "defect": "The isAccessTokenId matcher in AssertEvents reads the grant shortcut at the wrong offset (substring(3,5) instead of (4,6)) and uses an inverted equals check, so it never really validates the grant type."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S6, S7, S9 e S16 apontam o mesmo problema no matcher isAccessTokenId: ele usa substring(3,5) em vez de (4,6) e a comparação está invertida. Todos propõem a mesma correção em uma única linha. As proteções extras de tamanho citadas em S6, S7 e S16 só complementam essa correção e não são um defeito à parte."
+ }
+}

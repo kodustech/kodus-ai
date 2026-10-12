@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8919f827",
+    "mainDefect": "verifySafeHtml() wraps IOException in an unchecked RuntimeException that escapes verify()'s declared MojoExecutionException/IOException handling and aborts the whole verifier.",
+    "secondary": [
+     {
+      "defect": "The English file path is derived textually ('resources-community'→'resources', locale→'_en') without checking it exists, so a valid message file can fail because its English sibling is missing.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

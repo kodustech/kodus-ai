@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_6f563687",
+     "s_907d17d3",
+     "s_cfee9f21"
+    ],
+    "defect": "The concurrency test asserts on caughtExceptions without joining the reader thread, so exceptions thrown after the assertion are missed and the test can pass spuriously."
+   }
+  ],
+  "unique": [
+   "s_4687a409"
+  ],
+  "bundles": [
+   "s_4687a409"
+  ],
+  "reasoningPt": "S2, S3 e S4 relatam o mesmo defeito principal: a thread leitora nunca recebe join antes da asserção, e a correção é a mesma. O defeito principal de S5 é outro: deletedAll não é setado num finally, então uma remoção que lança exceção trava o teste. A falta de join aparece só em segundo lugar, por isso S5 fica separado e é marcado como bundle."
+ }
+}

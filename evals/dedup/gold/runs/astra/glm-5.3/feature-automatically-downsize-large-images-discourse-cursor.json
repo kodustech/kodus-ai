@@ -1,0 +1,69 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "740205003b15780f9768a7700a61baa651b181b4",
+  "attempt": 1,
+  "ms": 50352,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_7e515b13",
+          "s_aaaa47e8",
+          "s_278d3350",
+          "s_a3648b8e",
+          "s_73fe7ee9",
+          "s_c7c633cc"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Hardcoded 10MB limits in client validation, upload error messages, and API downloads conflict with configurable upload limits, blocking permitted uploads, admitting oversized attachments, and displaying incorrect limits.",
+        "rationale": "These reports overlap through explicit complaints about the client cap, API download cap, and inaccurate error messages. The repeated hardcoding requires edits at multiple locations."
+      },
+      {
+        "members": [
+          "s_147b3836",
+          "s_3af1aec9",
+          "s_fd8d15e4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The five-pass 80% downsize loop can leave images above the configured limit and ignores downsize failures, undermining the promised automatic reduction.",
+        "rationale": "All three report the insufficient fixed iteration budget in the same loop. Two additionally report ignored conversion failures, which the merged comment must preserve."
+      },
+      {
+        "members": [
+          "s_cbd3b669",
+          "s_203824b0",
+          "s_b461ae4f",
+          "s_8b2d465f",
+          "s_ef1eb159",
+          "s_8980c0e3",
+          "s_171153b8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The second downsize definition overrides the width/height signature, leaving the earlier definition dead and breaking existing positional callers.",
+        "rationale": "Every report identifies the same method replacement and incompatible calling contract. The four-argument type errors and five-argument ResizeEmoji failures are manifestations of that single defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_fcc7145a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_16516803",
+        "confidence": "high"
+      },
+      {
+        "id": "s_87a03b73",
+        "confidence": "high"
+      }
+    ]
+  }
+}

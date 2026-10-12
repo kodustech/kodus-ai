@@ -1,0 +1,59 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "491763531d3546c679fc9c4913e98022996aab70",
+  "attempt": 1,
+  "ms": 56745,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_8797ead7",
+          "s_8c884e4a"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The Javadocs for requireView() and requireViewClientScopes() incorrectly describe boolean return values instead of ForbiddenException on denial.",
+        "rationale": "Both report the same documentation mistake repeated in two void methods; each documentation block needs correction."
+      },
+      {
+        "members": [
+          "s_85b8c9a1",
+          "s_9201a4d6"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Client-removal cleanup can invoke the throwing V2 setPermissionsEnabled implementation and abort deletion, while skipped cleanup in V2-only mode leaves orphaned authorization resources.",
+        "rationale": "Both identify the same listener-to-V2 dispatch failure at setPermissionsEnabled and missing cleanup. The merged comment must also preserve the second suggestion's distinct V2-only skipped-cleanup case."
+      },
+      {
+        "members": [
+          "s_924e2d8b",
+          "s_accc352b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "getClientsWithPermission returns the \"Clients\" sentinel as a client ID, misses untyped per-client resources, and fails to represent real client IDs covered by all-clients grants.",
+        "rationale": "Both report sentinel pollution in the same enumeration. The first additionally reports missing resource types on individual resources, while the second explicitly identifies the need to represent all-clients grants after excluding the sentinel."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_c13dd2bf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0a30f3eb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_14f4aeae",
+        "confidence": "high"
+      }
+    ]
+  }
+}

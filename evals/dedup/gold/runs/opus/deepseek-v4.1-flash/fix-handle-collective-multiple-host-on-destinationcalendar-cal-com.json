@@ -1,0 +1,107 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "4aac8cc5c27119285ea9b90a4cc623c87a534baf",
+  "attempt": 1,
+  "ms": 14601,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 26938,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 1032,
+    "output_tokens_details": {
+      "thinking_tokens": 247
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 26938,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1032,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 26938,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 26938
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.2363104,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_5e595406",
+          "s_6ee5a633",
+          "s_61b47067",
+          "s_24bc143e",
+          "s_8944a234"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "EventManager reads `mainHostDestinationCalendar.integration` without optional chaining, so it throws a TypeError when destinationCalendar is empty or null.",
+        "rationale": "All five point at the same line in EventManager and describe the same missing guard, with the same fix."
+      },
+      {
+        "members": [
+          "s_e60cb4a6",
+          "s_77f00126",
+          "s_03a86b3c",
+          "s_40565196"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "In GoogleCalendarService updateEvent and deleteEvent, the fallback `find(cal => cal.externalId === externalCalendarId)` only runs when externalCalendarId is falsy, so it never matches and the destination-calendar fallback is lost.",
+        "rationale": "The same broken copy-pasted fallback appears in both updateEvent and deleteEvent. Each location needs its own edit, but one change of approach fixes both."
+      },
+      {
+        "members": [
+          "s_3eac123e",
+          "s_920837b4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Video (non-calendar) references now get credentialId undefined instead of result.credentialId, so the video credential is lost.",
+        "rationale": "Both flag the same line, which drops credentialId from video references."
+      },
+      {
+        "members": [
+          "s_ad515981",
+          "s_fd5d22ad",
+          "s_6e5785bb"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "evt.destinationCalendar can be null, so `evt.destinationCalendar?.push(...teamDestinationCalendars)` does nothing and collective team members' calendars are silently dropped.",
+        "rationale": "All three describe the same no-op push on a null array in handleNewBooking, with the same fix."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_71e1a7f5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_195f096d",
+        "confidence": "high"
+      }
+    ]
+  }
+}

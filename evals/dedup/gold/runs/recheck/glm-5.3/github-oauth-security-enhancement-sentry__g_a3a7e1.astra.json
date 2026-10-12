@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4faeab88",
+     "s_a03526cd",
+     "s_2c46aaba"
+    ],
+    "defect": "O acesso sem proteção a integration.metadata[\"sender\"][\"login\"] causa KeyError e HTTP 500 quando a integração não possui esses metadados, em vez de exibir a página de erro de verificação."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S6 e S7 relatam o mesmo acesso desprotegido, no mesmo ponto, com a mesma consequência quando falta o metadado sender. As diferenças são exemplos e evidências de como esse estado ocorre; uma única correção resolve as três sugestões, e nenhuma relata um segundo defeito."
+ }
+}

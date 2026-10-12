@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_9db07af0",
+    "mainDefect": "The blacklist check compares lowercased blacklist entries against non-normalized guest emails, so mixed-case emails get past the blocklist.",
+    "secondary": [
+     {
+      "defect": "The attendee-duplicate check (`guest === attendee.email`) is case-sensitive, so the same email in a different case is not caught as a duplicate.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_76d4416b",
+    "mainDefect": "The duplicate-guest check is a non-atomic check-then-write with no DB uniqueness guarantee, so concurrent addGuests calls can insert duplicate attendee rows.",
+    "secondary": [
+     {
+      "defect": "The incoming guests array is not deduplicated on the server, so a single request that repeats an email creates duplicate attendee rows.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

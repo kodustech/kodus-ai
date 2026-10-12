@@ -1,0 +1,54 @@
+{
+ "s_c4e9c10a": {
+  "summaryPt": "O matcher isAccessTokenId tem uma comparação invertida e o offset de substring errado.",
+  "contentPt": "O QUÊ: O matcher isAccessTokenId tem uma comparação invertida e o offset de substring errado. Ele retorna false quando o shortcut é igual ao esperado, e lê substring(3, 5) em vez do grant shortcut em substring(4, 6). POR QUÊ: IDs de token corretos falham na verificação, e a checagem não valida o grant shortcut como pretendido. Os testes que usam expectCodeToToken, expectRefresh e similares vão falhar. CORREÇÃO: `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`"
+ },
+ "s_3fcf3843": {
+  "summaryPt": "O null check de rawTokenId está sendo aplicado a grantType.",
+  "contentPt": "O QUÊ: O null check de rawTokenId é aplicado a grantType (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`). POR QUÊ: Um rawTokenId nulo é aceito, o que produz IDs de token terminando em \"null\" e pula a validação pretendida. CORREÇÃO: Chame `Objects.requireNonNull(rawTokenId, ...)`."
+ },
+ "s_dedf90ac": {
+  "summaryPt": "O matcher isAccessTokenId extrai o grant shortcut nos índices errados (3,5 em vez de 4,6) e inverte a checagem de igualdade, então não valida nada.",
+  "contentPt": "O prefixo codificado tem 6 caracteres (session 0-2, token type 2-4, grant 4-6). Use `items[0].length() == 6 && items[0].substring(4, 6).equals(expectedGrantShortcut)` e retorne false quando NÃO for igual: `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+ },
+ "s_0f11c762": {
+  "summaryPt": "",
+  "contentPt": "A comparação do grant shortcut em isAccessTokenId está invertida e com erro de um (off by one). O id codificado é sessionType(2)+tokenType(2)+grant(2), então o grant shortcut é substring(4,6). Use `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`. O código atual retorna false quando há correspondência, então a checagem do grant esperado está errada."
+ },
+ "s_f9a913f1": {
+  "summaryPt": "",
+  "contentPt": "A mensagem diz 'Null rawTokenId not allowed', mas a checagem é feita em grantType, que já é verificado na linha acima. rawTokenId nunca é validado, então um id nulo passa e a mensagem não descreve o que é verificado. Altere para Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+ },
+ "s_9fe47bb1": {
+  "summaryPt": "",
+  "contentPt": "O comentário diz que o grant shortcut tem 2 caracteres começando no 4º caractere. O formato do ID é sessionType(2) + tokenType(2) + grant(2), então o shortcut está no índice 4..6, ou seja, substring(4,6). O código usa substring(3,5), que abrange o último caractere do token type e o primeiro do grant. A condição também está invertida: retorna false quando o shortcut é igual ao esperado. Corrija para `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;` e corrija o comentário."
+ },
+ "s_48023927": {
+  "summaryPt": "",
+  "contentPt": "isAccessTokenId nunca verifica o grant shortcut. O formato do token id é `ssttgg:uuid`, então o grant shortcut está nos índices 4..6, mas o código usa substring(3,5). A comparação também está invertida: retorna false quando a substring É IGUAL ao shortcut esperado. Como resultado, as asserções de grant type em expectCodeToToken, expectRefresh e as demais passam independentemente do grant codificado. Correção: `if (items[0].length() != 6 || !items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`"
+ },
+ "s_09ef53db": {
+  "summaryPt": "",
+  "contentPt": "testIncorrectGrantType captura qualquer RuntimeException. A factory não tem sessionFactory definido, então o caminho do shortcut desconhecido lança uma NPE dentro de getGrantTypeByShortcut. O teste passa por causa da NPE, não porque a IllegalArgumentException para um grant desconhecido é lançada. Capture IllegalArgumentException especificamente e defina o sessionFactory da factory (por exemplo, um mock) para que o branch pretendido seja alcançado."
+ },
+ "s_843e5d06": {
+  "summaryPt": "",
+  "contentPt": "O matcher lê a substring errada e inverte a comparação. O grant shortcut está nos índices 4..6, não 3..5. Além disso, `equals` retornando false faz o matcher falhar exatamente quando o shortcut corresponde, e passar para qualquer outro shortcut. Isso faz as asserções em expectCodeToToken, expectRefresh e métodos similares falharem em IDs corretos. Também pode lançar StringIndexOutOfBounds em IDs curtos. Correção: `if (items[0].length() != 6 || !items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`"
+ },
+ "s_edcf5e7e": {
+  "summaryPt": "",
+  "contentPt": "O null check de rawTokenId na verdade testa grantType (erro de copiar e colar). Um rawTokenId nulo é aceito apesar da mensagem 'Null rawTokenId not allowed', e produziria um ID como 'xxxxxx:null'. Correção: `Objects.requireNonNull(rawTokenId, ...)`."
+ },
+ "s_3fc72bd5": {
+  "summaryPt": "",
+  "contentPt": "Bug de copiar e colar: o null check de rawTokenId na verdade checa grantType novamente. Um rawTokenId nulo passa na validação e é codificado como 'xxxxxx:null'. Correção: Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\");"
+ },
+ "s_febeb791": {
+  "summaryPt": "",
+  "contentPt": "initToken agora chama getShouldUseLightweightToken(session) a cada criação de token. Esse método desreferencia session.getContext().getClient(), que pode ser null (ou um client diferente do passado para initToken) em alguns fluxos. O resultado seria uma NPE durante a criação do token. Proteja contra client nulo, ou derive a configuração a partir do client que está sendo processado."
+ },
+ "s_16105147": {
+  "summaryPt": "",
+  "contentPt": "isAccessTokenId diverge do encoder em DefaultTokenContextEncoderProvider.encodeTokenId. O encoder produz um prefixo de 6 caracteres (sessionType 2 + tokenType 2 + grant 2), então o grant shortcut está em substring(4,6). O matcher lê substring(3,5) e retorna false quando é IGUAL ao shortcut esperado. O efeito é que ele aceita qualquer grant shortcut e nunca verifica o grant. Correção: `if (items[0].length() != 6 || !items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`"
+ }
+}

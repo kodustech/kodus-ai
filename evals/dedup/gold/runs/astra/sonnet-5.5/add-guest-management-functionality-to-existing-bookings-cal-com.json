@@ -1,0 +1,60 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "promptSha": "0e3dad2950f13b8aac6c686ae8d0e6f70c644cf0",
+  "attempt": 1,
+  "ms": 54480,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_bdaa90a8",
+          "s_7a5dc6fd",
+          "s_66ed9605",
+          "s_dc76b747"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Guest filtering permits case-based blacklist bypasses, case-variant duplicates of existing attendees, and duplicate emails within the submitted list.",
+        "rationale": "All four report the blacklist normalization defect; overlapping members additionally report missing attendee normalization and input deduplication. The appended email-dispatch and authorization changes appear only as proposed fixes, so they do not link this group to other defects."
+      },
+      {
+        "members": [
+          "s_c03cd3b4",
+          "s_d430022b",
+          "s_72a13bc3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Email dispatch uses raw guests instead of filtered uniqueGuests, and an unhandled calendar-update failure after persistence leaves guests saved despite the request failing.",
+        "rationale": "s_c03cd3b4 explicitly reports both defects, connecting the email-classification finding in s_d430022b with the persistence/calendar failure finding in s_72a13bc3."
+      },
+      {
+        "members": [
+          "s_88211022",
+          "s_b87c3cd2",
+          "s_cc6b5fef",
+          "s_bd0c0912"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Authorization requires both admin and owner roles instead of either, permits overly broad attendee access, and uses a reportedly missing translation key for permission failures.",
+        "rationale": "Every member reports the same incorrect conjunction. s_cc6b5fef additionally reports attendee authorization scope, while s_bd0c0912 additionally reports the missing translation; both extras must survive consolidation."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_4206cf1f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ddc0673e",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_86d26218",
+    "mainDefect": "When the join deadline expires, the loop breaks before terminating the current and remaining flusher workers, so they keep running after join returns.",
+    "secondary": [
+     {
+      "defect": "The join cleanup checks the process type in a way that does not recognize spawn-context (SpawnProcess) workers, so their termination is skipped.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_3e9d106e",
+    "mainDefect": "Breaking out of worker cleanup when the join deadline expires means later workers never get a termination attempt.",
+    "secondary": [
+     {
+      "defect": "The cleanup's process type check does not recognize SpawnProcess workers.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_49ba849a",
+    "mainDefect": "Breaking out of the cleanup loop when the join deadline expires skips terminating the remaining workers, which stay alive after join and across partition reassignment.",
+    "secondary": [
+     {
+      "defect": "The termination pass uses the wrong process-type check, so spawn-context workers are not recognized.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

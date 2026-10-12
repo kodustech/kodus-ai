@@ -16,10 +16,16 @@
           "relevantLinesStart": 119,
           "relevantLinesEnd": 119,
           "suggestionContent": "The Google Meet fallback dereferences mainHostDestinationCalendar when destinationCalendar is null or empty. Booking creation with Google Meet and no destination calendar now throws instead of falling back to Cal Video. Restore optional chaining on mainHostDestinationCalendar.integration.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_7d89e4f9",
+            "s_8cb55fd3",
+            "s_a77731dd",
+            "s_cf65a107"
+          ],
+          "groupId": "g_036116",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_6da68a46",
@@ -33,7 +39,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_d2d1c6a5",
@@ -44,10 +51,23 @@
           "relevantLinesStart": 73,
           "relevantLinesEnd": 76,
           "suggestionContent": "Office365 event creation always uses the first host's destination calendar rather than the destination matching the current credential. For collective bookings, EventManager invokes this service with each host's credential but the same full array, so secondary hosts write to the organizer's calendar ID and fail or target the wrong calendar; Lark and the base calendar service have the same first-element selection problem. Select the destination by credentialId, as Google creation does, and use that selection throughout provider creation.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_23010781",
+            "s_41c96050",
+            "s_60571361",
+            "s_6a0ae591",
+            "s_8dd680d0"
+          ],
+          "groupId": "g_ddeba9",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "complete",
+          "covers": [
+            "F1",
+            "F2",
+            "F3"
+          ]
         },
         {
           "id": "s_0bb6afb4",
@@ -58,10 +78,18 @@
           "relevantLinesStart": 254,
           "relevantLinesEnd": 256,
           "suggestionContent": "The fallback searches for a destination whose externalId equals the absent externalCalendarId. For references without a stored calendar ID, this returns undefined even when a destination is available, causing updates to omit calendarId; the analogous delete fallback instead targets primary and leaves events in secondary calendars untouched. Restore a valid destination fallback when the reference has no externalCalendarId.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_97dfdc72"
+          ],
+          "groupId": "g_c37ce2",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "complete",
+          "covers": [
+            "F1",
+            "F2"
+          ]
         },
         {
           "id": "s_9ed13737",
@@ -75,7 +103,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_7b14dd71",
@@ -89,7 +118,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_60571361",
@@ -100,10 +130,21 @@
           "relevantLinesStart": 73,
           "relevantLinesEnd": 76,
           "suggestionContent": "Select the destination matching the credential being used, not always the first destination. Collective bookings now pass the entire organizer-first destination array to each host's calendar service. For the second Office365 host, this constructs `/me/calendars/<organizer-calendar-id>/events` using the second host's authentication, so creation fails or targets the wrong calendar instead of that host's selected calendar. Accept the credential ID passed by CalendarManager and find its matching destination (or pass a destination-scoped event).",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_23010781",
+            "s_41c96050",
+            "s_6a0ae591",
+            "s_8dd680d0",
+            "s_d2d1c6a5"
+          ],
+          "groupId": "g_ddeba9",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_cf65a107",
@@ -114,10 +155,16 @@
           "relevantLinesStart": 118,
           "relevantLinesEnd": 119,
           "suggestionContent": "Preserve the nullable destination fallback by using `mainHostDestinationCalendar?.integration`. `handleNewBooking` explicitly supplies null when neither the event type nor organizer has a destination, and confirmation/payment handlers can supply an empty array. For a Google Meet location, destructuring either yields undefined and this condition now throws instead of falling back to Cal Video as the previous optional-chained condition did.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_7d89e4f9",
+            "s_8cb55fd3",
+            "s_a77731dd",
+            "s_d4b02182"
+          ],
+          "groupId": "g_036116",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_23010781",
@@ -128,10 +175,21 @@
           "relevantLinesStart": 73,
           "relevantLinesEnd": 76,
           "suggestionContent": "Select the destination belonging to the credential being used, rather than always taking the first element (accept the credentialId now passed by CalendarManager). Collective bookings now pass all hosts' destinations to each provider. For the second Office365 host this sends `/me/calendars/<first-host-calendar>/events` using the second host's credentials, usually failing with a calendar-not-found/access error; if creation succeeds against a shared calendar, the saved reference still records the second destination, so subsequent updates/deletes target a different calendar. Google’s implementation already matches the new credential-specific contract.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_41c96050",
+            "s_60571361",
+            "s_6a0ae591",
+            "s_8dd680d0",
+            "s_d2d1c6a5"
+          ],
+          "groupId": "g_ddeba9",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_8dd680d0",
@@ -142,10 +200,21 @@
           "relevantLinesStart": 73,
           "relevantLinesEnd": 76,
           "suggestionContent": "Select the destination matching the credential used for this creation, rather than always taking the first destination. Collective bookings now call createEvent once per destination with the entire array. For the second Office365 host this sends the first host's calendar ID using the second host's token, typically failing creation; CalendarManager nevertheless labels the result with the second destination's externalId. Accept the credentialId passed by CalendarManager and use it to select the matching destination.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_23010781",
+            "s_41c96050",
+            "s_60571361",
+            "s_6a0ae591",
+            "s_d2d1c6a5"
+          ],
+          "groupId": "g_ddeba9",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_a77731dd",
@@ -156,10 +225,16 @@
           "relevantLinesStart": 119,
           "relevantLinesEnd": 119,
           "suggestionContent": "Retain optional chaining on mainHostDestinationCalendar when checking its integration. When a Google Meet booking has no destination calendar, destructuring the empty array leaves no first element and this condition throws instead of switching the location to Cal Video. Use mainHostDestinationCalendar?.integration.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_7d89e4f9",
+            "s_8cb55fd3",
+            "s_cf65a107",
+            "s_d4b02182"
+          ],
+          "groupId": "g_036116",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_97dfdc72",
@@ -170,10 +245,18 @@
           "relevantLinesStart": 254,
           "relevantLinesEnd": 256,
           "suggestionContent": "Restore a real destination fallback when externalCalendarId is absent, and apply the same correction to deletion at lines 315-317. In the false branch externalCalendarId is already absent, so finding a calendar whose externalId equals that absent value cannot select a normal destination. Updates lose their calendar ID and deletions fall back to primary rather than the configured non-primary calendar, affecting references without a stored externalCalendarId.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_0bb6afb4"
+          ],
+          "groupId": "g_c37ce2",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "complete",
+          "covers": [
+            "F1",
+            "F2"
+          ]
         },
         {
           "id": "s_41c96050",
@@ -184,10 +267,21 @@
           "relevantLinesStart": 73,
           "relevantLinesEnd": 76,
           "suggestionContent": "Select the destination belonging to the credential used for this service, rather than always taking the first destination. handleNewBooking.ts:992-993 and 1077-1078 now append collective hosts' calendars, and EventManager.ts:339-370 invokes creation for each host while passing the same full event. CalendarManager.ts:236 supplies the current credential ID, but this adapter ignores it. Consequently a second Office365 host sends a request authenticated as that host to `/me/calendars/<first host's calendar>/events`, typically failing because that calendar is not in their mailbox. Accept the credential ID and match destinationCalendar by it (with an appropriate default), as the Google adapter now does.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_23010781",
+            "s_60571361",
+            "s_6a0ae591",
+            "s_8dd680d0",
+            "s_d2d1c6a5"
+          ],
+          "groupId": "g_ddeba9",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_7d89e4f9",
@@ -198,10 +292,16 @@
           "relevantLinesStart": 118,
           "relevantLinesEnd": 119,
           "suggestionContent": "Keep the optional guard on the first destination when deciding whether to fall back from Google Meet: use `mainHostDestinationCalendar?.integration`. The changed producer in handleNewBooking.ts:1063-1067 explicitly emits null when neither the event type nor organizer has a destination calendar, and the CalendarEvent contract continues to permit null or an empty array. For a Google Meet booking in that state, destructuring produces no first element and this access throws instead of falling back to Cal Video.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_8cb55fd3",
+            "s_a77731dd",
+            "s_cf65a107",
+            "s_d4b02182"
+          ],
+          "groupId": "g_036116",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_8cb55fd3",
@@ -212,10 +312,16 @@
           "relevantLinesStart": 119,
           "relevantLinesEnd": 119,
           "suggestionContent": "Preserve optional chaining on mainHostDestinationCalendar.integration. When Google Meet is selected without a destination calendar, destructuring produces undefined and this condition throws instead of falling back to Cal Video.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_7d89e4f9",
+            "s_a77731dd",
+            "s_cf65a107",
+            "s_d4b02182"
+          ],
+          "groupId": "g_036116",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_6a0ae591",
@@ -226,14 +332,143 @@
           "relevantLinesStart": 73,
           "relevantLinesEnd": 76,
           "suggestionContent": "Select the destination matching the credential used for this create call, rather than always selecting the first destination. The new collective creation loop passes the full destination array to every host's provider. For a second Office365 host this sends their authenticated request to the first host's calendar, so creation fails or targets the wrong calendar; the saved reference nevertheless identifies the second destination.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_23010781",
+            "s_41c96050",
+            "s_60571361",
+            "s_8dd680d0",
+            "s_d2d1c6a5"
+          ],
+          "groupId": "g_ddeba9",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_7d89e4f9",
+            "s_8cb55fd3",
+            "s_a77731dd",
+            "s_cf65a107",
+            "s_d4b02182"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "The Google Meet fallback in EventManager reads mainHostDestinationCalendar.integration without optional chaining, so it throws when destinationCalendar is null or empty.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_036116"
+        },
+        {
+          "members": [
+            "s_23010781",
+            "s_41c96050",
+            "s_60571361",
+            "s_6a0ae591",
+            "s_8dd680d0",
+            "s_d2d1c6a5"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": true,
+          "confidence": "high",
+          "defect": "Office365 createEvent always uses the first destination calendar instead of the one matching the current credentialId, so secondary collective hosts write to the organizer's calendar. Lark and the base CalendarService have the same first-element selection problem.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_ddeba9",
+          "facets": [
+            {
+              "id": "F1",
+              "description": "Office365 createEvent (office365calendar/lib/CalendarService.ts lines 73-76) always takes the first destination calendar instead of matching the current credentialId, so secondary collective hosts target the organizer's calendar"
+            },
+            {
+              "id": "F2",
+              "description": "Lark CalendarService (larkcalendar/lib/CalendarService.ts) has the same first-element destinationCalendar selection problem"
+            },
+            {
+              "id": "F3",
+              "description": "Base CalendarService (packages/lib/CalendarService.ts) has the same first-element destinationCalendar selection problem"
+            }
+          ],
+          "coverageVaries": true,
+          "coverageConfidence": "mid",
+          "coverageVotes": {
+            "opus": {
+              "s_41c96050": false,
+              "s_23010781": false,
+              "s_8dd680d0": false,
+              "s_60571361": false,
+              "s_d2d1c6a5": true,
+              "s_6a0ae591": false
+            },
+            "astra": {
+              "s_41c96050": false,
+              "s_23010781": false,
+              "s_8dd680d0": false,
+              "s_60571361": false,
+              "s_d2d1c6a5": false,
+              "s_6a0ae591": false
+            }
+          },
+          "coverageArbiterReasoning": "The group problem names three places that each need their own edit: Office365 createEvent, the Lark CalendarService and the base CalendarService. Only s_d2d1c6a5 says Lark and the base service have the same first-element problem, so it is the only complete member. Labeler 2 added a separate facet for the saved reference pointing at the second destination. That isn't a separate defect: it happens because Office365 picks the wrong destination, and fixing the Office365 selection fixes it too. So it doesn't need its own edit, and it isn't a separate fact the merged comment has to carry. Every member reports the Office365 selection problem."
+        },
+        {
+          "members": [
+            "s_0bb6afb4",
+            "s_97dfdc72"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": true,
+          "confidence": "high",
+          "defect": "In Google updateEvent and deleteEvent, the fallback searches for a destination whose externalId equals the missing externalCalendarId, so it never finds a valid calendar. Updates lose their calendarId and deletes fall back to primary.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_c37ce2",
+          "facets": [
+            {
+              "id": "F1",
+              "description": "updateEvent fallback (lines 254-256) matches destination externalId against the absent externalCalendarId, so updates lose calendarId"
+            },
+            {
+              "id": "F2",
+              "description": "deleteEvent fallback (lines 315-317) has the same broken match, so deletes fall back to primary instead of the configured calendar"
+            }
+          ],
+          "coverageVaries": false,
+          "coverageConfidence": "high",
+          "coverageVotes": {
+            "opus": {
+              "s_0bb6afb4": true,
+              "s_97dfdc72": true
+            },
+            "astra": {
+              "s_0bb6afb4": true,
+              "s_97dfdc72": true
+            }
+          }
+        }
+      ],
+      "uniqueConfidence": {
+        "s_6da68a46": "high",
+        "s_9ed13737": "high",
+        "s_7b14dd71": "high"
+      },
+      "partialOverlap": []
     },
     "add-guest-management-functionality-to-existing-bookings-cal-com": {
       "sourceSha": "4d05fb545f419c37de13dbf8c1aa9650aa03f59c",
@@ -485,10 +720,19 @@
           "relevantLinesEnd": 96,
           "oneSentenceSummary": "Google refresh crashes because the new sync wrapper returns Fetch Response while the caller reads `res.data`.",
           "suggestionContent": "WHAT: the sync-enabled Google refresh path treats the Fetch `Response` returned by `refreshOAuthTokens` as if it had an Axios-style `data` property. WHY: `res.data` is undefined for a Fetch response, so `token.access_token` throws and Google credential refresh fails whenever credential syncing is enabled. HOW: await and parse the Fetch response body in this path (or make `refreshOAuthTokens` return a consistent parsed token shape) before reading the access token and expiry.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_a6b7494b",
+            "s_a724fc12",
+            "s_f18b98f6"
+          ],
+          "groupId": "g_099971",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_9ec54363",
@@ -500,10 +744,15 @@
           "relevantLinesEnd": 100,
           "oneSentenceSummary": "Google credential persistence now stores the Zod safeParse wrapper instead of the parsed token object.",
           "suggestionContent": "WHAT: `parseRefreshTokenResponse` returns the `safeParse` result wrapper, but the changed Google code persists that wrapper directly as the credential key. WHY: the credential key becomes `{ success, data }` instead of the token object expected by `googleCredentialSchema` and subsequent Google auth code, causing later refreshes/API calls to read missing token fields. HOW: persist `key.data` after a successful parse, or change the helper to return the parsed data rather than the safeParse result.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_3c819eb4",
+            "s_6776d59e",
+            "s_6c846a7d"
+          ],
+          "groupId": "g_b4c3eb",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_a724fc12",
@@ -515,10 +764,19 @@
           "relevantLinesEnd": 15,
           "oneSentenceSummary": "Credential sync returns fetch Response while Zoho Bigin consumes an Axios response, so synchronized token refresh cannot be read.",
           "suggestionContent": "The sync-enabled branch returns a native fetch Response, but Zoho Bigin's changed caller expects an Axios-shaped response with the token payload in `.data` (and other consumers may likewise rely on their provider-specific response shape). Normalize the sync endpoint response to the contract expected by each caller, or make the callers parse `Response.json()` before accessing token data; otherwise enabling credential sync breaks Bigin token refresh at `tokenInfo.data`.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_758c1e0e",
+            "s_a6b7494b",
+            "s_f18b98f6"
+          ],
+          "groupId": "g_099971",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F3"
+          ]
         },
         {
           "id": "s_6c846a7d",
@@ -530,10 +788,15 @@
           "relevantLinesEnd": 100,
           "oneSentenceSummary": "The Google refresh path persists the Zod parse-result wrapper instead of its parsed credential data.",
           "suggestionContent": "`parseRefreshTokenResponse` returns Zod's safe-parse wrapper, not the parsed credential object. Persist `key: key.data` (after checking success, or change the helper to return `.data`) so the credential remains shaped as `{ access_token, expiry_date, refresh_token, ... }`; storing the wrapper breaks all later OAuth credential reads.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_3c819eb4",
+            "s_6776d59e",
+            "s_9ec54363"
+          ],
+          "groupId": "g_b4c3eb",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_a6b7494b",
@@ -545,10 +808,20 @@
           "relevantLinesEnd": 15,
           "oneSentenceSummary": "Credential-sync refresh returns a fetch Response even to callers expecting Axios-style `.data` responses.",
           "suggestionContent": "The sync branch always returns the native `fetch` Response, but callers such as HubSpot and Zoho consume refresh results as Axios responses (`tokenInfo.data`). Normalize the sync response to the same response shape expected by each caller, or make all callers parse the native Response before reading `.data`; otherwise enabled credential sharing causes token refreshes to use undefined token fields.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_758c1e0e",
+            "s_a724fc12",
+            "s_f18b98f6"
+          ],
+          "groupId": "g_099971",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F2",
+            "F3"
+          ]
         },
         {
           "id": "s_6776d59e",
@@ -560,10 +833,15 @@
           "relevantLinesEnd": 98,
           "oneSentenceSummary": "Google stores the safeParse result wrapper as the credential key instead of the parsed token data.",
           "suggestionContent": "`parseRefreshTokenResponse` returns `safeParse(...)`'s wrapper, not the parsed credential object. Assigning `data: { key }` stores `{ success: true, data: {...tokens} }` in the credential, so later Google auth reads `credential.key.access_token`/`refresh_token` from the wrong level. Store `key.data` after validating success, or make the helper return the parsed data (and update all callers consistently).",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_3c819eb4",
+            "s_6c846a7d",
+            "s_9ec54363"
+          ],
+          "groupId": "g_b4c3eb",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_f18b98f6",
@@ -575,10 +853,21 @@
           "relevantLinesEnd": 15,
           "oneSentenceSummary": "Credential-sync refresh returns fetch Response while migrated consumers still require provider response objects with token data.",
           "suggestionContent": "The sync-enabled branch returns a native `fetch` `Response`, but this helper replaced provider-specific refresh calls whose consumers expect their original shapes. For example, Google immediately reads `res.data`, and Axios-based HubSpot/Bigin consumers read `tokenInfo.data`; a fetch `Response` has no `.data`, so enabling credential sync causes token parsing or field access to fail. Normalize the sync response to the same token shape expected by each caller (or make every consumer parse `Response` consistently).",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_758c1e0e",
+            "s_a6b7494b",
+            "s_a724fc12"
+          ],
+          "groupId": "g_099971",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1",
+            "F2",
+            "F3"
+          ]
         },
         {
           "id": "s_3c819eb4",
@@ -590,10 +879,15 @@
           "relevantLinesEnd": 100,
           "oneSentenceSummary": "Google refresh persists the Zod safeParse wrapper instead of the credential payload, corrupting stored OAuth credentials.",
           "suggestionContent": "`parseRefreshTokenResponse` returns a Zod safe-parse wrapper, but this code persists that wrapper as the credential key. Store the parsed payload (`key.data`) after checking success, or change the helper to return `data`, so the credential remains shaped as `{ access_token, refresh_token, expiry_date, ... }` rather than `{ success, data }`.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_6776d59e",
+            "s_6c846a7d",
+            "s_9ec54363"
+          ],
+          "groupId": "g_b4c3eb",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_e1d09a1c",
@@ -608,7 +902,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_71c70b35",
@@ -623,11 +918,93 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_3c819eb4",
+            "s_6776d59e",
+            "s_6c846a7d",
+            "s_9ec54363"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "Google refresh stores the Zod safeParse wrapper returned by parseRefreshTokenResponse as the credential key instead of the parsed token data.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_b4c3eb"
+        },
+        {
+          "members": [
+            "s_758c1e0e",
+            "s_a6b7494b",
+            "s_a724fc12",
+            "s_f18b98f6"
+          ],
+          "kind": "cross_location",
+          "needsUnifiedComment": true,
+          "confidence": "low",
+          "defect": "When credential sync is enabled, refreshOAuthTokens returns a native fetch Response, but migrated callers expect provider- or Axios-shaped results. Google reads res.data, and the HubSpot, Zoho Bigin and Zoho CRM callers read tokenInfo.data. Those fields are undefined, so the token refresh breaks.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "adjudication",
+          "arbiterReasoning": "All four suggestions report the same root defect. In refreshOAuthTokens, the sync branch returns a raw fetch Response, but callers expect a different shape. s_758c1e0e reports it from the Google call site, and the other three report it from the helper while naming different affected callers: s_a6b7494b names HubSpot and Zoho, s_a724fc12 names Bigin, and s_f18b98f6 names Google, HubSpot and Bigin. Normalizing what the helper returns, or parsing the response in each caller, fixes all of them, so the grouping is clear: one cross_location group. Both judges agree on the grouping. They disagree only on needsUnifiedComment. I set it to true because the members name different affected callers. Callers expect different shapes (Google and Axios callers want .data, while HubSpot uses the token object directly), so the merged comment has to list every affected caller, and a fix may need edits at several call sites. That flag is a judgment call, so decisive is false.",
+          "groupId": "g_099971",
+          "facets": [
+            {
+              "id": "F1",
+              "description": "Google Calendar refreshAccessToken reads res.data from the fetch Response returned by refreshOAuthTokens"
+            },
+            {
+              "id": "F2",
+              "description": "HubSpot refresh caller expects a provider/Axios-shaped result but gets a fetch Response"
+            },
+            {
+              "id": "F3",
+              "description": "Zoho Bigin refresh caller reads tokenInfo.data from the fetch Response"
+            },
+            {
+              "id": "F4",
+              "description": "Zoho CRM refresh caller reads zohoCrmTokenInfo.data from the fetch Response"
+            }
+          ],
+          "coverageVaries": true,
+          "coverageConfidence": "high",
+          "coverageVotes": {
+            "opus": {
+              "s_758c1e0e": false,
+              "s_a724fc12": false,
+              "s_f18b98f6": false,
+              "s_a6b7494b": false
+            },
+            "astra": {
+              "s_758c1e0e": false,
+              "s_a724fc12": false,
+              "s_f18b98f6": false,
+              "s_a6b7494b": false
+            }
+          },
+          "humanReview": {
+            "verdict": "ok",
+            "note": "",
+            "at": "2026-10-08T16:31:37.713Z"
+          }
+        }
+      ],
+      "uniqueConfidence": {
+        "s_e1d09a1c": "high",
+        "s_71c70b35": "high"
+      },
+      "partialOverlap": []
     },
     "sms-workflow-reminder-retry-count-tracking-cal-com": {
       "sourceSha": "b7653b36fdba4cfe98997154c5a56c9e84280d58",
@@ -642,10 +1019,13 @@
           "relevantLinesEnd": 184,
           "oneSentenceSummary": "Concurrent failed attempts overwrite retry increments.",
           "suggestionContent": "Both failure paths assign retryCount from the reminder snapshot instead of incrementing the persisted value atomically. If two cron runs fetch retryCount = 0 and both fail scheduling, both write 1, so two failed attempts do not reach the deletion threshold and additional scheduling attempts continue. Use Prisma's retryCount: { increment: 1 } in both failure updates.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_869f5ab5"
+          ],
+          "groupId": "g_e60e3e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_c123b6c9",
@@ -657,10 +1037,14 @@
           "relevantLinesEnd": 197,
           "oneSentenceSummary": "The retry update can throw out of the per-reminder catch and abort the batch.",
           "suggestionContent": "The new database update inside catch is not protected against a failure of its own. If a reminder is deleted while scheduling is in flight, this update fails because the row no longer exists, escapes the catch, and prevents all subsequent reminders in the batch from being processed. Handle retry-persistence failures separately, including an already-deleted reminder, so the loop can continue.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_1c7da030",
+            "s_de9f9f9c"
+          ],
+          "groupId": "g_900e28",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_de9f9f9c",
@@ -671,10 +1055,14 @@
           "relevantLinesStart": 190,
           "relevantLinesEnd": 197,
           "suggestionContent": "Keep retry-count persistence best-effort inside this catch block. Previously, a scheduling failure was logged and the loop continued; now, if this update rejects (for example because the reminder was deleted concurrently, or the database failure that caused the original error persists), the rejection escapes the catch and aborts the request and all remaining reminders. Protect this update with its own error handling so recording a failed attempt cannot defeat the existing per-reminder failure isolation.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_1c7da030",
+            "s_c123b6c9"
+          ],
+          "groupId": "g_900e28",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_b96ddd5a",
@@ -688,7 +1076,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_869f5ab5",
@@ -699,10 +1088,13 @@
           "relevantLinesStart": 184,
           "relevantLinesEnd": 184,
           "suggestionContent": "Both failure paths write an increment computed from the earlier findMany snapshot. If two overlapping scheduler requests read retryCount = 0 and both fail, both write 1, losing one failure and allowing more attempts than the retry limit. Use Prisma's atomic `retryCount: { increment: 1 }` in both updates instead of assigning `reminder.retryCount + 1`.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_a55aac5f"
+          ],
+          "groupId": "g_e60e3e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_1c7da030",
@@ -713,10 +1105,14 @@
           "relevantLinesStart": 190,
           "relevantLinesEnd": 197,
           "suggestionContent": "The retry update inside catch can itself reject when another scheduler invocation deletes this reminder. For example, overlapping runs select a reminder at retryCount 1; one records its second failure, a subsequent run deletes the row via the new cleanup predicate, and the other run's retry update fails with a record-not-found error. Its catch then repeats the same update outside any protection, aborting the handler and skipping remaining reminders. Use an atomic updateMany scoped to the ID (which tolerates a concurrently deleted row), or explicitly handle record-not-found in the failure bookkeeping.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_c123b6c9",
+            "s_de9f9f9c"
+          ],
+          "groupId": "g_900e28",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_a04e9a65",
@@ -730,11 +1126,50 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_1c7da030",
+            "s_c123b6c9",
+            "s_de9f9f9c"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "The retryCount update inside the catch block has no error handling of its own. If it rejects (for example, because the reminder was deleted concurrently), the error aborts the handler and the remaining reminders are skipped.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_900e28"
+        },
+        {
+          "members": [
+            "s_869f5ab5",
+            "s_a55aac5f"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "Both failure paths write retryCount as the stale snapshot value + 1 instead of using an atomic increment. Overlapping runs then overwrite each other's increments and lose failures.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_e60e3e"
+        }
+      ],
+      "uniqueConfidence": {
+        "s_b96ddd5a": "mid",
+        "s_a04e9a65": "mid"
+      },
+      "partialOverlap": []
     },
     "feat-2fa-backup-codes-cal-com": {
       "sourceSha": "13fd87684847740c22be6835845fe2427f8ebb2f",
@@ -749,10 +1184,13 @@
           "relevantLinesEnd": 155,
           "oneSentenceSummary": "Consume backup codes atomically to preserve their one-use contract.",
           "suggestionContent": "Backup-code consumption overwrites the array read earlier without checking whether it has changed. Two simultaneous logins with the same code can both succeed, and simultaneous logins with different codes can restore a code consumed by the other request. Use an atomic compare-and-set against the original encrypted backupCodes value and retry validation on conflicts, or serialize consumption with a database row lock.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_b0ff443d"
+          ],
+          "groupId": "g_2c034e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_7c7c3238",
@@ -767,7 +1205,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_ed0e31d7",
@@ -779,10 +1218,17 @@
           "relevantLinesEnd": 145,
           "oneSentenceSummary": "Backup-code login uses direct string equality with early exit for an authentication secret, exposing timing information.",
           "suggestionContent": "Do not authenticate backup codes with `backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"))`. Normalize the submitted code, validate its exact length, and compare it against every stored code using a constant-time byte comparison (for example, `crypto.timingSafeEqual` on equal-length buffers), without early-exiting on the first match. Preserve the matched index only after all comparisons complete.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_9602943b"
+          ],
+          "groupId": "g_1e309c",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F2"
+          ]
         },
         {
           "id": "s_9602943b",
@@ -794,10 +1240,17 @@
           "relevantLinesEnd": 63,
           "oneSentenceSummary": "The backup-code path for disabling 2FA directly compares the authentication secret with `indexOf`, leaking comparison timing.",
           "suggestionContent": "Replace the direct `Array.indexOf` comparison with a constant-time comparison against every stored backup code. Normalize and length-check the input, use `crypto.timingSafeEqual` over equal-length buffers, and avoid returning on the first matching/mismatching candidate until all comparisons have run.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_ed0e31d7"
+          ],
+          "groupId": "g_1e309c",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_0ace72fe",
@@ -812,7 +1265,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_b0ff443d",
@@ -824,10 +1278,13 @@
           "relevantLinesEnd": 155,
           "oneSentenceSummary": "Concurrent logins can reuse the same backup code because validation and deletion are separate operations.",
           "suggestionContent": "Backup-code validation and consumption are not atomic. Concurrent authorize calls can both find the same code in the decrypted array and both proceed to create sessions before either replacement update is visible, violating the documented one-time-use invariant. Consume the code with an atomic database operation/transaction (or serialize per user and re-read under a lock) so only one request can validate and persist removal.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_72b1da29"
+          ],
+          "groupId": "g_2c034e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_6bd3ee84",
@@ -842,17 +1299,80 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_9602943b",
+            "s_ed0e31d7"
+          ],
+          "kind": "systemic_pattern",
+          "needsUnifiedComment": true,
+          "confidence": "high",
+          "defect": "Backup codes are checked with a non-constant-time indexOf in both the login authorize path and the disable-2FA endpoint, which leaks timing information.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_1e309c",
+          "facets": [
+            {
+              "id": "F1",
+              "description": "disable.ts (lines 58-63): the disable-2FA endpoint checks backup codes with a non-constant-time indexOf"
+            },
+            {
+              "id": "F2",
+              "description": "next-auth-options.ts (lines 139-145): the login authorize path checks backup codes with a non-constant-time indexOf"
+            }
+          ],
+          "coverageVaries": true,
+          "coverageConfidence": "high",
+          "coverageVotes": {
+            "opus": {
+              "s_9602943b": false,
+              "s_ed0e31d7": false
+            },
+            "astra": {
+              "s_9602943b": false,
+              "s_ed0e31d7": false
+            }
+          }
+        },
+        {
+          "members": [
+            "s_72b1da29",
+            "s_b0ff443d"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "mid",
+          "defect": "Backup-code consumption in authorize() is a non-atomic read-modify-write. It reads backupCodes, checks them, then overwrites them with prisma.user.update without checking for changes. Concurrent logins can therefore reuse the same code, or overwrite each other's updates and bring back a code that was already used.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "adjudication",
+          "arbiterReasoning": "Both suggestions point at the same block in next-auth-options.ts (lines 143-155 and 148-155). Both describe the same root cause: the code checks the decrypted backupCodes and then writes back a modified copy without an atomic check. Both propose the same fix: an atomic compare-and-set, a transaction, or a row lock. s_72b1da29 also describes the lost-update case, where requests using different codes can bring back a used code. That case has the same cause and the same fix, so it is another symptom of one defect, not a separate defect. s_72b1da29 already covers everything s_b0ff443d says. Posting s_72b1da29 alone would be enough, and one edit at one place fixes both, so no merged comment is needed (needsUnifiedComment=false). That the two are duplicates is clear from the text and the diff. The needsUnifiedComment value is the only point that is even slightly arguable.",
+          "groupId": "g_2c034e"
+        }
+      ],
+      "uniqueConfidence": {
+        "s_7c7c3238": "high",
+        "s_0ace72fe": "high",
+        "s_6bd3ee84": "high"
+      },
+      "partialOverlap": []
     },
     "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
       "sourceSha": "0bd0063ff11fdfecc4ca136774729590c11749e7",
       "suggestions": [],
       "groups": [],
-      "uniqueConfidence": {}
+      "uniqueConfidence": {},
+      "partialOverlap": []
     },
     "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
       "sourceSha": "eeccd79a93c85d879a93179433fbeb78c12807bd",
@@ -869,7 +1389,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_b2fec2e9",
@@ -883,7 +1404,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_d66938c6",
@@ -897,7 +1419,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_d64d4f89",
@@ -912,7 +1435,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_ecbe8ddb",
@@ -927,7 +1451,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_15ac66d7",
@@ -942,7 +1467,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_6eca779f",
@@ -954,10 +1480,13 @@
           "relevantLinesEnd": 12,
           "oneSentenceSummary": "The layout sends postMessage to a full referer URL instead of an origin, so iframe resizing fails.",
           "suggestionContent": "Use only the embedding page's origin as postMessage's targetOrigin, not `request.referer` in its entirety. `postMessage` rejects a target containing a path/query, preventing the `discourse-resize` message from reaching embed.js and leaving the iframe incorrectly sized.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_c31ce8c2"
+          ],
+          "groupId": "g_809d3c",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_c31ce8c2",
@@ -969,10 +1498,13 @@
           "relevantLinesEnd": 11,
           "oneSentenceSummary": "Using the full referer URL as postMessage's target origin prevents iframe resize messages from being delivered.",
           "suggestionContent": "The `postMessage` target is built from `request.referer`, which is typically a full URL such as `http://example.com/article`; `targetOrigin` must be only the origin (`scheme://host[:port]`). This makes the resize message fail for normal embeds, leaving the iframe at its initial height. Parse the referer and pass its origin, or use the configured embeddable origin.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_6eca779f"
+          ],
+          "groupId": "g_809d3c",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_f0aa2978",
@@ -987,11 +1519,38 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_6eca779f",
+            "s_c31ce8c2"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "postMessage in the embed layout uses the full request.referer URL as targetOrigin instead of just the origin, so resize messages fail.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_809d3c"
+        }
+      ],
+      "uniqueConfidence": {
+        "s_95a4cffc": "high",
+        "s_b2fec2e9": "high",
+        "s_d66938c6": "high",
+        "s_d64d4f89": "high",
+        "s_ecbe8ddb": "high",
+        "s_15ac66d7": "high",
+        "s_f0aa2978": "high"
+      },
+      "partialOverlap": []
     },
     "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
       "sourceSha": "c924527ad692a845bb79141a1ad15521abb5f93f",
@@ -1006,10 +1565,13 @@
           "relevantLinesEnd": 16,
           "oneSentenceSummary": "Missing embeddable-host ids crash update and destroy instead of producing a controlled response.",
           "suggestionContent": "WHAT: update and destroy dereference the result of a lookup that can be nil. WHY: requests for a deleted, stale, or nonexistent embeddable-host id call save_host(nil) or host.destroy and raise NoMethodError instead of returning a normal not-found/error response. HOW: require the record and render an appropriate 404/error before calling save_host or destroy.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_ad0aab9e"
+          ],
+          "groupId": "g_834ebf",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_d6a91e5d",
@@ -1024,7 +1586,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_79ef5edc",
@@ -1039,7 +1602,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_7b556db8",
@@ -1054,7 +1618,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_ad0aab9e",
@@ -1066,10 +1631,13 @@
           "relevantLinesEnd": 17,
           "oneSentenceSummary": "Invalid or concurrently deleted host IDs crash the admin update/destroy endpoints.",
           "suggestionContent": "Handle a missing host before dereferencing it. `where(...).first` can return nil for an invalid or concurrently deleted id, causing update to call `save_host(nil)` and destroy to call `nil.destroy`, both of which raise an unhandled exception. Return a not-found/error response (or use a lookup that is consistently rescued) instead.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_ee0c2eb0"
+          ],
+          "groupId": "g_834ebf",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_05f2f501",
@@ -1084,7 +1652,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_72f624a1",
@@ -1099,7 +1668,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_9ba3dcbe",
@@ -1114,17 +1684,51 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_ad0aab9e",
+            "s_ee0c2eb0"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "update and destroy in EmbeddableHostsController dereference a possibly-nil `where(...).first` result, so a missing id raises NoMethodError instead of returning a not-found response.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_834ebf"
+        }
+      ],
+      "uniqueConfidence": {
+        "s_d6a91e5d": "high",
+        "s_79ef5edc": "high",
+        "s_7b556db8": "mid",
+        "s_05f2f501": "mid",
+        "s_72f624a1": "high",
+        "s_9ba3dcbe": "high"
+      },
+      "partialOverlap": [],
+      "humanReviewUnique": {
+        "s_05f2f501": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T16:31:53.247Z"
+        }
+      }
     },
     "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
       "sourceSha": "0eea2c97505e85360acad4a42a2ae1c589f0ca72",
       "suggestions": [],
       "groups": [],
-      "uniqueConfidence": {}
+      "uniqueConfidence": {},
+      "partialOverlap": []
     },
     "feature-automatically-downsize-large-images-discourse-cursor": {
       "sourceSha": "6231de26749f06780a67508b0d2e594d32e7065a",
@@ -1139,10 +1743,14 @@
           "relevantLinesEnd": 151,
           "oneSentenceSummary": "The replacement downsize signature breaks the existing ResizeEmoji caller at runtime.",
           "suggestionContent": "WHAT: the new `downsize(from, to, dimensions, opts={})` definition replaces the existing five-argument `downsize(from, to, max_width, max_height, opts={})` instead of overloading it. WHY: Ruby keeps only the last definition, so `Jobs::ResizeEmoji` still calling `OptimizedImage.downsize(path, path, 100, 100, opts)` now raises `ArgumentError` and prevents emoji resizing jobs from completing. HOW: preserve the numeric width/height API (for example by converting it inside a single variadic/signature-compatible method) while also accepting the dimensions-string form used by uploads.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_6d66fb8e",
+            "s_82c35c19"
+          ],
+          "groupId": "g_5f65c8",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_82c35c19",
@@ -1154,10 +1762,14 @@
           "relevantLinesEnd": 151,
           "oneSentenceSummary": "A duplicate `downsize` definition overwrites the legacy signature and breaks callers that provide width and height.",
           "suggestionContent": "The new `downsize(from, to, dimensions, opts={})` definition overwrites the existing `downsize(from, to, max_width, max_height, opts={})` definition in Ruby. Any existing caller passing separate width and height arguments now raises `ArgumentError` instead of being converted to a dimensions string. Rename the new entry point or merge both calling conventions into one method so the old signature remains supported.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_6d66fb8e",
+            "s_72e910b1"
+          ],
+          "groupId": "g_5f65c8",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_6d66fb8e",
@@ -1169,10 +1781,14 @@
           "relevantLinesEnd": 153,
           "oneSentenceSummary": "The new downsize overload is not an overload in Ruby and breaks existing five-argument callers.",
           "suggestionContent": "This second `downsize` definition overrides the preceding `(from, to, max_width, max_height, opts={})` method in Ruby. Existing callers using the old five-argument signature will now raise `ArgumentError: wrong number of arguments`; preserve the old API or update every caller before changing the signature.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_72e910b1",
+            "s_82c35c19"
+          ],
+          "groupId": "g_5f65c8",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_5a3bcb7f",
@@ -1184,10 +1800,17 @@
           "relevantLinesEnd": 184,
           "oneSentenceSummary": "The client tells users the limit is always 10 MB even though the server's configured upload limit can differ.",
           "suggestionContent": "The error message now always interpolates 10240 KB (10 MB), but the server still uses the configurable `SiteSetting.max_image_size_kb` and can reject or resize at a different limit. Users on installations with a non-default setting will be told the wrong maximum; use the configured setting (or otherwise pass the actual server limit) when constructing this message.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_ba068ffa"
+          ],
+          "groupId": "g_aee6fe",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_ba068ffa",
@@ -1199,10 +1822,17 @@
           "relevantLinesEnd": 247,
           "oneSentenceSummary": "The 413 message hard-codes a maximum that may not match the server's configured image limit.",
           "suggestionContent": "The 413 error message always reports 10 MB, although the server's accepted image size remains configurable via `SiteSetting.max_image_size_kb`. A 413 response caused by a smaller or larger configured limit will therefore show an incorrect maximum; use the configured limit supplied by the application instead of a hard-coded value.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_5a3bcb7f"
+          ],
+          "groupId": "g_aee6fe",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F2"
+          ]
         },
         {
           "id": "s_835cc57c",
@@ -1217,11 +1847,76 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_6d66fb8e",
+            "s_72e910b1",
+            "s_82c35c19"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "The new downsize(from, to, dimensions, opts) definition replaces the earlier five-argument downsize in Ruby, so existing callers that pass width and height (e.g. ResizeEmoji) now raise ArgumentError.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_5f65c8"
+        },
+        {
+          "members": [
+            "s_5a3bcb7f",
+            "s_ba068ffa"
+          ],
+          "kind": "systemic_pattern",
+          "needsUnifiedComment": true,
+          "confidence": "mid",
+          "defect": "The client hard-codes a 10 MB maximum in its file-too-large messages (in the pre-upload size check and in the 413 handler) instead of using the server's configurable max_image_size_kb, so users can be shown the wrong limit.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_aee6fe",
+          "facets": [
+            {
+              "id": "F1",
+              "description": "Pre-upload size check in utilities.js (line 182-184) hard-codes 10 MB instead of using the configured max size setting"
+            },
+            {
+              "id": "F2",
+              "description": "413 handler in utilities.js (line 246-247) hard-codes 10 MB instead of using SiteSettings.max_image_size_kb"
+            }
+          ],
+          "coverageVaries": true,
+          "coverageConfidence": "high",
+          "coverageVotes": {
+            "opus": {
+              "s_ba068ffa": false,
+              "s_5a3bcb7f": false
+            },
+            "astra": {
+              "s_ba068ffa": false,
+              "s_5a3bcb7f": false
+            }
+          },
+          "humanReview": {
+            "verdict": "ok",
+            "note": "",
+            "at": "2026-10-08T16:32:43.669Z"
+          }
+        }
+      ],
+      "uniqueConfidence": {
+        "s_835cc57c": "high"
+      },
+      "partialOverlap": []
     },
     "fix-proper-handling-of-group-memberships-discourse-cursor": {
       "sourceSha": "3345b2b14fe473d8f01027da839bcc29cd44442c",
@@ -1362,7 +2057,8 @@
       "sourceSha": "b38a55b28b55d75fb7c45d3eef53a55713b4754d",
       "suggestions": [],
       "groups": [],
-      "uniqueConfidence": {}
+      "uniqueConfidence": {},
+      "partialOverlap": []
     },
     "anonymous-add-configurable-device-limit-grafana-codex": {
       "sourceSha": "ed0b267ecf417a3fb7f0b51ddecf969c63e3464e",
@@ -1526,10 +2222,13 @@
           "relevantLinesEnd": 49,
           "oneSentenceSummary": "Recheck the cache after acquiring the write lock to prevent every concurrent waiter from reloading assets.",
           "suggestionContent": "WHAT: the write-lock path does not recheck entryPointAssetsCache after waiting for another request to populate it. WHY: concurrent non-Dev callers that all observe a nil cache serialize on this lock and each rereads assets-manifest.json (and may repeat CDN work), causing a startup request burst to perform redundant I/O instead of using the newly populated cache. HOW: after acquiring the write lock, re-read the cache and return it when cfg.Env is not setting.Dev and it is non-nil before loading the manifest.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_b93643f2"
+          ],
+          "groupId": "g_b0af97",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_b93643f2",
@@ -1541,14 +2240,35 @@
           "relevantLinesEnd": 49,
           "oneSentenceSummary": "The write-lock path must re-check the cache to prevent concurrent callers from rebuilding it repeatedly.",
           "suggestionContent": "After acquiring entryPointAssetsCacheMu.Lock, re-check entryPointAssetsCache (and cfg.Env) before rebuilding the assets. Without this second check, concurrent callers that all observe a nil cache before the lock serialize but each still performs the expensive asset discovery and overwrites the cache, defeating the synchronization and allowing duplicate initialization work.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_d788d88a"
+          ],
+          "groupId": "g_b0af97",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_b93643f2",
+            "s_d788d88a"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "The write-lock path doesn't check the cache again after the lock is acquired, so concurrent callers that saw a nil cache each rebuild the assets.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_b0af97"
+        }
+      ],
+      "uniqueConfidence": {},
+      "partialOverlap": []
     },
     "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
       "sourceSha": "e37754bc16609a6d3eaa3ff969064aea05553f6d",
@@ -1566,7 +2286,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_c4bfaaf2",
@@ -1578,10 +2299,20 @@
           "relevantLinesEnd": 162,
           "oneSentenceSummary": "New metrics instrumentation dereferences nullable plugin requests and introduces nil-pointer panics.",
           "suggestionContent": "Guard nil requests before accessing req.Queries, req.Body, or req.PluginContext, and forward them to the next client (as LoggerMiddleware does). With the new middleware installed before the logger, QueryData(nil) and CallResource(nil) currently panic during metrics collection instead of preserving the existing nil-request behavior.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_29d4df72",
+            "s_87ece20e",
+            "s_ca7aeab6"
+          ],
+          "groupId": "g_2d43b4",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1",
+            "F2"
+          ]
         },
         {
           "id": "s_7118acb2",
@@ -1596,7 +2327,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_a2ef7a52",
@@ -1611,7 +2343,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_29d4df72",
@@ -1623,10 +2356,20 @@
           "relevantLinesEnd": 175,
           "oneSentenceSummary": "Metrics middleware dereferences nil request pointers at the client boundary and can panic before forwarding them.",
           "suggestionContent": "Guard nil requests before reading request fields (and forward them to the next client without instrumentation, or otherwise handle them consistently). QueryData and CallResource currently dereference req, while the existing LoggerMiddleware explicitly supports nil requests; a nil request therefore panics after this middleware is installed.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_87ece20e",
+            "s_c4bfaaf2",
+            "s_ca7aeab6"
+          ],
+          "groupId": "g_2d43b4",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1",
+            "F2"
+          ]
         },
         {
           "id": "s_87ece20e",
@@ -1638,10 +2381,19 @@
           "relevantLinesEnd": 56,
           "oneSentenceSummary": "Contextual logger middleware dereferences nil unary request pointers while constructing context.",
           "suggestionContent": "Add nil-request guards before accessing req.PluginContext, forwarding nil requests directly to the next client. The middleware currently assumes every unary request pointer is non-nil, so installing it makes nil requests panic even though the downstream-facing LoggerMiddleware explicitly supports nil requests.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_29d4df72",
+            "s_c4bfaaf2",
+            "s_ca7aeab6"
+          ],
+          "groupId": "g_2d43b4",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F3"
+          ]
         },
         {
           "id": "s_ca7aeab6",
@@ -1653,10 +2405,19 @@
           "relevantLinesEnd": 56,
           "oneSentenceSummary": "Nil plugin requests now panic in the new contextual middleware.",
           "suggestionContent": "These methods dereference req.PluginContext without checking req for nil. The existing LoggerMiddleware explicitly supports nil requests by forwarding them unchanged, but this middleware runs earlier in the chain and will panic before the downstream client can handle a nil request. Add nil guards (or otherwise avoid instrumentation) for nil requests.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_29d4df72",
+            "s_87ece20e",
+            "s_c4bfaaf2"
+          ],
+          "groupId": "g_2d43b4",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F3"
+          ]
         },
         {
           "id": "s_46745551",
@@ -1671,11 +2432,67 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_29d4df72",
+            "s_87ece20e",
+            "s_c4bfaaf2",
+            "s_ca7aeab6"
+          ],
+          "kind": "systemic_pattern",
+          "needsUnifiedComment": true,
+          "confidence": "mid",
+          "defect": "The new MetricsMiddleware (QueryData/CallResource) and ContextualLoggerMiddleware (unary methods) dereference nil request pointers without guards, so they panic before reaching LoggerMiddleware, which does support nil requests.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_2d43b4",
+          "facets": [
+            {
+              "id": "F1",
+              "description": "MetricsMiddleware.QueryData (metrics_middleware.go ~line 144) reads req.Queries/req.PluginContext without a nil-request guard, so a nil request panics"
+            },
+            {
+              "id": "F2",
+              "description": "MetricsMiddleware.CallResource (metrics_middleware.go ~line 160) reads req.Body/req.PluginContext without a nil-request guard, so a nil request panics"
+            },
+            {
+              "id": "F3",
+              "description": "ContextualLoggerMiddleware unary methods (QueryData/CallResource/CheckHealth/CollectMetrics, contextual_logger_middleware.go lines 39-56) read req.PluginContext without a nil-request guard, so a nil request panics"
+            }
+          ],
+          "coverageVaries": true,
+          "coverageConfidence": "high",
+          "coverageVotes": {
+            "opus": {
+              "s_29d4df72": false,
+              "s_87ece20e": false,
+              "s_ca7aeab6": false,
+              "s_c4bfaaf2": false
+            },
+            "astra": {
+              "s_29d4df72": false,
+              "s_87ece20e": false,
+              "s_ca7aeab6": false,
+              "s_c4bfaaf2": false
+            }
+          }
+        }
+      ],
+      "uniqueConfidence": {
+        "s_76186e72": "high",
+        "s_7118acb2": "high",
+        "s_a2ef7a52": "high",
+        "s_46745551": "high"
+      },
+      "partialOverlap": []
     },
     "dual-storage-architecture-grafana-codex": {
       "sourceSha": "f7764326707be3927ba7ee72b3115f6f9f105cb9",
@@ -1690,10 +2507,13 @@
           "relevantLinesEnd": 57,
           "oneSentenceSummary": "Legacy writes are canceled with the request instead of surviving the response.",
           "suggestionContent": "WHAT: the asynchronous legacy create derives its timeout context from the incoming request context. WHY: the request context is canceled as soon as the unified-storage request returns, which cancels this child before Legacy.Create can complete and defeats mode 3's promised legacy write. HOW: create the background async context independently of the request cancellation while explicitly preserving only the required context values/logging fields, then apply the 10-second timeout.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_0469979e"
+          ],
+          "groupId": "g_27f65f",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_a9049b82",
@@ -1705,10 +2525,13 @@
           "relevantLinesEnd": 140,
           "oneSentenceSummary": "Legacy Update recomputes the update instead of applying the unified-store result.",
           "suggestionContent": "WHAT: mode 3 forwards the original UpdatedObjectInfo to the asynchronous legacy update instead of the object/result produced by the unified-storage update. WHY: UpdatedObject is evaluated separately by the two storage implementations, so callbacks that generate a new object, depend on the old object, or are one-shot can yield different data (or fail) in legacy, leaving the two stores inconsistent. HOW: materialize the update once and pass legacy an update wrapper containing the unified-storage result, as the previous mode implementations do.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_b8b19a32"
+          ],
+          "groupId": "g_b12abe",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_0469979e",
@@ -1720,10 +2543,13 @@
           "relevantLinesEnd": 57,
           "oneSentenceSummary": "The asynchronous legacy create inherits the request context, so returning the API response cancels the legacy write.",
           "suggestionContent": "Detach the background legacy operation from the request cancellation (while preserving only the needed request values), or enqueue it through a lifecycle-managed worker. `WithTimeoutCause(ctx, ...)` does not help when `ctx` is already canceled: the goroutine can begin after the handler returns and `Legacy.Create` immediately observes cancellation, leaving the object present only in Storage. Apply the same fix to the asynchronous Delete, Update, and DeleteCollection paths.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_faba93e0"
+          ],
+          "groupId": "g_27f65f",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_11922f88",
@@ -1735,10 +2561,18 @@
           "relevantLinesEnd": 46,
           "oneSentenceSummary": "Create failure timing is attributed to LegacyStorage instead of Storage.",
           "suggestionContent": "When Storage.Create fails, this timing covers the storage operation, but it is emitted via recordLegacyDuration. Record it with recordStorageDuration so the failure metric is attributed to the backend actually called.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_6cb9049c",
+            "s_b490b494"
+          ],
+          "groupId": "g_5c2ccc",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_6cb9049c",
@@ -1750,10 +2584,18 @@
           "relevantLinesEnd": 130,
           "oneSentenceSummary": "Update failure timing is attributed to LegacyStorage instead of Storage.",
           "suggestionContent": "This timer surrounds d.Storage.Update, so an error must be recorded with recordStorageDuration. Using recordLegacyDuration sends Storage update failures into the legacy metric series.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_11922f88",
+            "s_b490b494"
+          ],
+          "groupId": "g_5c2ccc",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F2"
+          ]
         },
         {
           "id": "s_68108285",
@@ -1768,7 +2610,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_b490b494",
@@ -1780,10 +2623,18 @@
           "relevantLinesEnd": 167,
           "oneSentenceSummary": "Legacy DeleteCollection timing is emitted as Storage timing.",
           "suggestionContent": "The goroutine times d.Legacy.DeleteCollection, but records that elapsed time with recordStorageDuration. Use recordLegacyDuration so the metric identifies the backend actually measured.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_11922f88",
+            "s_6cb9049c"
+          ],
+          "groupId": "g_5c2ccc",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F3"
+          ]
         },
         {
           "id": "s_3af77dc3",
@@ -1798,7 +2649,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_751ded27",
@@ -1813,7 +2665,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_5a02bd8a",
@@ -1828,7 +2681,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_b8b19a32",
@@ -1840,14 +2694,109 @@
           "relevantLinesEnd": 140,
           "oneSentenceSummary": "Mode 3 no longer forwards Storage's persisted update result to LegacyStorage, breaking the prior dual-write consistency contract.",
           "suggestionContent": "The legacy update now receives the original `objInfo` after Storage has already evaluated and persisted it. Previously this path wrapped `objInfo` with the exact object returned by Storage, ensuring both stores received the same admitted object. Re-evaluating the updater asynchronously can produce a different object (or observe a different old version), leaving LegacyStorage inconsistent with Storage. Preserve/pass the Storage result via an update wrapper when invoking LegacyStorage.Update.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_a9049b82"
+          ],
+          "groupId": "g_b12abe",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_a9049b82",
+            "s_b8b19a32"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "The async Legacy.Update gets the original objInfo instead of an updateWrapper holding the Storage result, so the legacy store can end up inconsistent with Storage.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_b12abe"
+        },
+        {
+          "members": [
+            "s_11922f88",
+            "s_6cb9049c",
+            "s_b490b494"
+          ],
+          "kind": "systemic_pattern",
+          "needsUnifiedComment": true,
+          "confidence": "mid",
+          "defect": "Duration metrics go to the wrong backend: Storage failures in Create and Update are recorded with recordLegacyDuration, and the legacy DeleteCollection timing is recorded with recordStorageDuration.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_5c2ccc",
+          "facets": [
+            {
+              "id": "F1",
+              "description": "Create (line 45): a Storage.Create failure is recorded with recordLegacyDuration when it should use recordStorageDuration"
+            },
+            {
+              "id": "F2",
+              "description": "Update (line 129): a Storage.Update failure is recorded with recordLegacyDuration when it should use recordStorageDuration"
+            },
+            {
+              "id": "F3",
+              "description": "DeleteCollection goroutine (line 166): the timing for Legacy.DeleteCollection is recorded with recordStorageDuration when it should use recordLegacyDuration"
+            }
+          ],
+          "coverageVaries": true,
+          "coverageConfidence": "high",
+          "coverageVotes": {
+            "opus": {
+              "s_11922f88": false,
+              "s_6cb9049c": false,
+              "s_b490b494": false
+            },
+            "astra": {
+              "s_11922f88": false,
+              "s_6cb9049c": false,
+              "s_b490b494": false
+            }
+          }
+        },
+        {
+          "members": [
+            "s_0469979e",
+            "s_faba93e0"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "mid",
+          "defect": "The async legacy Create goroutine (lines 50-57) builds its timeout context from the request context. The legacy write is therefore canceled once the handler returns, so it does not survive the response. s_0469979e adds that the Delete, Update and DeleteCollection goroutines have the same problem.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "adjudication",
+          "arbiterReasoning": "Both suggestions point at the same lines (50-57) and report the same defect: the background legacy Create uses a context derived from the request, so it gets canceled when the response returns. Both propose the same fix, which is to detach the context from request cancellation while keeping the values it needs. That makes them a same_location duplicate. The two judges only disagree on needsUnifiedComment. s_0469979e already says everything s_faba93e0 says, including the note to apply the fix to the Delete, Update and DeleteCollection paths. s_faba93e0 is a strict subset of it and adds nothing. So posting s_0469979e alone covers the whole group, and no merged comment has to say more than one member already says. needsUnifiedComment is false.",
+          "groupId": "g_27f65f"
+        }
+      ],
+      "uniqueConfidence": {
+        "s_68108285": "mid",
+        "s_3af77dc3": "high",
+        "s_751ded27": "high",
+        "s_5a02bd8a": "high"
+      },
+      "partialOverlap": [],
+      "humanReviewUnique": {
+        "s_68108285": {
+          "verdict": "ok",
+          "note": "",
+          "at": "2026-10-08T16:32:56.028Z"
+        }
+      }
     },
     "unified-storage-performance-optimizations-grafana-codex": {
       "sourceSha": "d7bbc61b0c38cab509f1dbbdf8dacc81d7dcb73b",
@@ -1865,7 +2814,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_60785058",
@@ -1880,11 +2830,16 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
       "groups": [],
-      "uniqueConfidence": {}
+      "uniqueConfidence": {
+        "s_d8daa441": "high",
+        "s_60785058": "high"
+      },
+      "partialOverlap": []
     },
     "notification-rule-processing-engine-grafana-codex": {
       "sourceSha": "2e048f160b989184c7ba6c2a89fe3476e52c0173",
@@ -1902,7 +2857,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_60a14d18",
@@ -1914,10 +2870,13 @@
           "relevantLinesEnd": 59,
           "oneSentenceSummary": "The new prom-only caller passes undefined to a ruler ability hook whose cross-file signature still requires a ruler rule.",
           "suggestionContent": "`RuleActionsButtons` now permits a prom-only rule, but still passes its optional `rule` to `useRulerRuleAbility`, whose declaration requires `RulerRuleDTO`. This violates the hook contract for every `GrafanaRuleListItem` call (which supplies only `promRule`); make the singular ruler hook accept/skip undefined, or avoid calling it for prom-only items and use the Grafana ability hook instead.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_31df1725"
+          ],
+          "groupId": "g_7a968a",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_174860f6",
@@ -1932,7 +2891,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_965ccb15",
@@ -1947,7 +2907,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_31df1725",
@@ -1959,14 +2920,39 @@
           "relevantLinesEnd": 59,
           "oneSentenceSummary": "The new optional `rule` prop is passed to a singular hook whose contract was not widened.",
           "suggestionContent": "`rule` is optional for the new `promRule`-only call path, but `useRulerRuleAbility` still expects a `RulerRuleDTO`; passing `rule` unconditionally breaks the hook's parameter contract. Use a skip-token/optional-safe singular ruler hook, or update the hook signature and return a neutral ability when no ruler rule is supplied, before combining it with the Grafana ability.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_60a14d18"
+          ],
+          "groupId": "g_7a968a",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_31df1725",
+            "s_60a14d18"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "RuleActionsButtons passes the now-optional `rule` (possibly undefined) to useRulerRuleAbility, which still requires a RulerRuleDTO.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_7a968a"
+        }
+      ],
+      "uniqueConfidence": {
+        "s_4c7c7829": "high",
+        "s_174860f6": "high",
+        "s_965ccb15": "high"
+      },
+      "partialOverlap": []
     },
     "implement-access-token-context-encoding-framework-keycloak": {
       "sourceSha": "54a700ced245807bf3c3263e2d8b61dd03b451ea",
@@ -2008,7 +2994,11 @@
           ],
           "groupId": "g_f7edc1",
           "needsUnifiedComment": true,
-          "partialOverlapWith": []
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_f5e7d9a5",
@@ -2031,7 +3021,11 @@
           ],
           "groupId": "g_f7edc1",
           "needsUnifiedComment": true,
-          "partialOverlapWith": []
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_5bd24a7d",
@@ -2054,7 +3048,11 @@
           ],
           "groupId": "g_f7edc1",
           "needsUnifiedComment": true,
-          "partialOverlapWith": []
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_cd0716d2",
@@ -2077,7 +3075,12 @@
           ],
           "groupId": "g_f7edc1",
           "needsUnifiedComment": true,
-          "partialOverlapWith": []
+          "partialOverlapWith": [],
+          "coverage": "complete",
+          "covers": [
+            "F1",
+            "F2"
+          ]
         },
         {
           "id": "s_5454e119",
@@ -2100,7 +3103,12 @@
           ],
           "groupId": "g_f7edc1",
           "needsUnifiedComment": true,
-          "partialOverlapWith": []
+          "partialOverlapWith": [],
+          "coverage": "complete",
+          "covers": [
+            "F1",
+            "F2"
+          ]
         },
         {
           "id": "s_0767cf64",
@@ -2123,7 +3131,11 @@
           ],
           "groupId": "g_f7edc1",
           "needsUnifiedComment": true,
-          "partialOverlapWith": []
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_4ecef7a9",
@@ -2162,7 +3174,11 @@
           ],
           "groupId": "g_f7edc1",
           "needsUnifiedComment": true,
-          "partialOverlapWith": []
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         }
       ],
       "groups": [
@@ -2190,6 +3206,38 @@
             "verdict": "ok",
             "note": "",
             "at": "2026-10-08T13:38:49.405Z"
+          },
+          "facets": [
+            {
+              "id": "F1",
+              "description": "isAccessTokenId (AssertEvents.java line 483) has the grant-shortcut check inverted: it returns false when the shortcut matches expectedGrantShortcut, so valid IDs are rejected and wrong grants can pass"
+            },
+            {
+              "id": "F2",
+              "description": "isAccessTokenId reads the grant shortcut with substring(3,5); the shortcut is actually at indices 4..6 (2-char session + 2-char token type + 2-char grant)"
+            }
+          ],
+          "coverageVaries": true,
+          "coverageConfidence": "high",
+          "coverageVotes": {
+            "opus": {
+              "s_f5e7d9a5": false,
+              "s_5454e119": true,
+              "s_5bd24a7d": false,
+              "s_5f605bbb": false,
+              "s_0767cf64": false,
+              "s_cd0716d2": true,
+              "s_b26743e8": false
+            },
+            "astra": {
+              "s_f5e7d9a5": false,
+              "s_5454e119": true,
+              "s_5bd24a7d": false,
+              "s_5f605bbb": false,
+              "s_0767cf64": false,
+              "s_cd0716d2": true,
+              "s_b26743e8": false
+            }
           }
         }
       ],
@@ -2224,10 +3272,13 @@
           "relevantLinesEnd": 157,
           "oneSentenceSummary": "Join the concurrent reader before asserting so late exceptions cannot be missed.",
           "suggestionContent": "WHAT: the concurrency test asserts caughtExceptions before joining the reader thread after setting deletedAll. WHY: the reader can still be executing (and can add an exception after the assertion), allowing the test to pass without observing a failure and leaving a background thread running beyond the test. HOW: retain the Thread, signal termination, join it (with interruption handling), and assert only after the reader has stopped.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_3e52a596"
+          ],
+          "groupId": "g_fb7194",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_3e52a596",
@@ -2239,14 +3290,35 @@
           "relevantLinesEnd": 157,
           "oneSentenceSummary": "The test asserts asynchronous exceptions without joining the reader thread, so it can pass despite a concurrent read failure.",
           "suggestionContent": "Synchronize with the reader thread before asserting: retain the Thread returned by new Thread, signal it to stop, then join it (with appropriate interruption/timeout handling) before checking caughtExceptions. As written, the assertion races the asynchronous request and can pass before a failure is captured.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_dc7f347e"
+          ],
+          "groupId": "g_fb7194",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_3e52a596",
+            "s_dc7f347e"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "The concurrency test asserts caughtExceptions without joining the reader thread, so exceptions captured late can be missed and the thread can outlive the test.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_fb7194"
+        }
+      ],
+      "uniqueConfidence": {},
+      "partialOverlap": []
     },
     "add-html-sanitizer-for-translated-message-resources-keycloak": {
       "sourceSha": "abb30aa267622b0fd5d41f67f81c0ec25cf0e1a2",
@@ -2264,7 +3336,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_a221d835",
@@ -2276,10 +3349,17 @@
           "relevantLinesEnd": 101,
           "oneSentenceSummary": "The Lithuanian account bundle now displays Italian text.",
           "suggestionContent": "This is an Italian sentence in the Lithuanian (`lt`) message bundle. Replace it with a Lithuanian translation so the TOTP setup step remains localized for Lithuanian users.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_a34eab52"
+          ],
+          "groupId": "g_407190",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F1"
+          ]
         },
         {
           "id": "s_a34eab52",
@@ -2291,14 +3371,63 @@
           "relevantLinesEnd": 71,
           "oneSentenceSummary": "The Lithuanian login bundle now displays Italian text.",
           "suggestionContent": "This is an Italian sentence in the Lithuanian (`lt`) login message bundle. Replace it with a Lithuanian translation so Lithuanian users receive localized TOTP setup instructions.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_a221d835"
+          ],
+          "groupId": "g_407190",
+          "needsUnifiedComment": true,
+          "partialOverlapWith": [],
+          "coverage": "partial",
+          "covers": [
+            "F2"
+          ]
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_a221d835",
+            "s_a34eab52"
+          ],
+          "kind": "systemic_pattern",
+          "needsUnifiedComment": true,
+          "confidence": "high",
+          "defect": "The same Italian sentence ('Installa una delle seguenti applicazioni sul tuo cellulare:') was pasted as the TOTP step-1 text into both Lithuanian bundles (login loginTotpStep1 and account totpStep1); each needs a Lithuanian translation.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_407190",
+          "facets": [
+            {
+              "id": "F1",
+              "description": "account/messages_lt.properties totpStep1 (line 101) contains Italian text instead of Lithuanian"
+            },
+            {
+              "id": "F2",
+              "description": "login/messages_lt.properties loginTotpStep1 (line 71) contains Italian text instead of Lithuanian"
+            }
+          ],
+          "coverageVaries": true,
+          "coverageConfidence": "high",
+          "coverageVotes": {
+            "opus": {
+              "s_a221d835": false,
+              "s_a34eab52": false
+            },
+            "astra": {
+              "s_a221d835": false,
+              "s_a34eab52": false
+            }
+          }
+        }
+      ],
+      "uniqueConfidence": {
+        "s_70350e56": "high"
+      },
+      "partialOverlap": []
     },
     "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
       "sourceSha": "943c64bc2343fd0c8519bbe401dbc5ac8240f76a",
@@ -2312,10 +3441,13 @@
           "relevantLinesStart": 78,
           "relevantLinesEnd": 79,
           "suggestionContent": "canView(ClientModel) short-circuits on the global fine-grained view permission before evaluating client-specific permissions. A caller granted view on all Clients can therefore still view a client with an explicit client-level view denial, unlike the resource-specific override semantics used by UserPermissionsV2. Keep the built-in admin-role shortcut, but evaluate fine-grained view against the client resource and fall back to the Clients resource only when no client resource exists.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_52703d76"
+          ],
+          "groupId": "g_9ce12e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_7b271f70",
@@ -2329,7 +3461,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_52703d76",
@@ -2340,10 +3473,13 @@
           "relevantLinesStart": 77,
           "relevantLinesEnd": 82,
           "suggestionContent": "Do not short-circuit individual client authorization with the V2 all-clients VIEW check. With an all-clients VIEW grant and an explicit negative VIEW permission on one client, canView() returns true here and the individual client's policy is never evaluated. This makes client-specific exclusions ineffective (unlike the all-users/individual-user precedence exercised by UserResourceTypeEvaluationTest). Restrict the initial shortcut to the default administrative roles, then evaluate the individual resource through hasPermission(client, VIEW), which already falls back to the all-clients resource when no individual resource exists.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_bd0cbb6b"
+          ],
+          "groupId": "g_9ce12e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_b4e86fdf",
@@ -2357,7 +3493,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_5401b348",
@@ -2371,7 +3508,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_06f85daf",
@@ -2385,7 +3523,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_d9eefa97",
@@ -2399,17 +3538,43 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_52703d76",
+            "s_bd0cbb6b"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "canView(ClientModel) short-circuits on the global all-clients VIEW permission (via canView()) before evaluating client-specific permissions, so explicit negative per-client view permissions are ineffective.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_9ce12e"
+        }
+      ],
+      "uniqueConfidence": {
+        "s_7b271f70": "mid",
+        "s_b4e86fdf": "high",
+        "s_5401b348": "high",
+        "s_06f85daf": "high",
+        "s_d9eefa97": "mid"
+      },
+      "partialOverlap": []
     },
     "fixing-re-authentication-with-passkeys-keycloak": {
       "sourceSha": "5dda08868d9f02272e9bd664ecdb979dc8d6998a",
       "suggestions": [],
       "groups": [],
-      "uniqueConfidence": {}
+      "uniqueConfidence": {},
+      "partialOverlap": []
     },
     "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
       "sourceSha": "a5ff749d32d8f0b37c3ec133405f0274091926e3",
@@ -2427,11 +3592,15 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
       "groups": [],
-      "uniqueConfidence": {}
+      "uniqueConfidence": {
+        "s_82c5ef29": "high"
+      },
+      "partialOverlap": []
     },
     "replays-self-serve-bulk-delete-system-sentry": {
       "sourceSha": "b10d21b69783718dbadd5f70349b2e3bb94f4958",
@@ -2449,7 +3618,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_856eb85a",
@@ -2461,10 +3631,13 @@
           "relevantLinesEnd": 60,
           "oneSentenceSummary": "Falsy age/timestamp values bypass the presence validation and allow mutually exclusive fields together.",
           "suggestionContent": "The mutual-exclusion checks use truthiness (`self.initial_data.get(\"age\")` and `.get(\"timestamp\")`). This fails for valid falsy values: `{timestamp: 0, age: 1}` bypasses `validate_timestamp`, and `{age: 0, timestamp: 1}` bypasses `validate_age`, allowing a report containing both spec formats. Check key presence explicitly (for example, `\"age\" in self.initial_data` / `\"timestamp\" in self.initial_data`) instead.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_509ab8e8"
+          ],
+          "groupId": "g_a4a94c",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_d67909de",
@@ -2479,7 +3652,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_9905bdbc",
@@ -2494,7 +3668,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_e0999225",
@@ -2509,7 +3684,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_509ab8e8",
@@ -2521,10 +3697,13 @@
           "relevantLinesEnd": 60,
           "oneSentenceSummary": "Zero-valued age/timestamp fields bypass the added mutually-exclusive format validation.",
           "suggestionContent": "The mutual-exclusion checks use `self.initial_data.get(...)`, which is false for legitimate zero values. A report containing `timestamp: 0` and `age: 1` skips `validate_age`, and one containing `age: 0` and a timestamp skips `validate_timestamp`, allowing both spec formats at once. Check field presence (for example, `\"timestamp\" in self.initial_data`) rather than truthiness so zero-valued fields are still rejected.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_856eb85a"
+          ],
+          "groupId": "g_a4a94c",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_a0a50caa",
@@ -2536,10 +3715,13 @@
           "relevantLinesEnd": 65,
           "oneSentenceSummary": "Disabled feedback-summary queries can leave `data` undefined, causing the hook to crash before the component's feature guard runs.",
           "suggestionContent": "The hook dereferences `data` unconditionally after the disabled-query path. `FeedbackSummary` calls this hook even when the organization lacks `user-feedback-ai-summaries`, so a disabled query can leave `data` undefined and throw while evaluating `data.summary`/`data.numFeedbacksUsed`. Return a safe empty state when `data` is absent (or enable the query only behind a hook-level fallback).",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_69b85b59"
+          ],
+          "groupId": "g_378c3e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_4dffb6b1",
@@ -2554,7 +3736,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_69b85b59",
@@ -2565,14 +3748,57 @@
           "relevantLinesStart": 61,
           "relevantLinesEnd": 65,
           "suggestionContent": "`data` is undefined when the query is disabled by the feature flag (and can also be undefined before a successful response), but this branch dereferences it unconditionally. Return a safe disabled/empty result when `data` is absent, or guard `data` before reading `summary` and `numFeedbacksUsed`; otherwise FeedbackSummary can crash even though it intends to return null for organizations without the feature.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_a0a50caa"
+          ],
+          "groupId": "g_378c3e",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_509ab8e8",
+            "s_856eb85a"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "The age/timestamp mutual-exclusion validators check truthiness, so a zero value lets both fields through together.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_a4a94c"
+        },
+        {
+          "members": [
+            "s_69b85b59",
+            "s_a0a50caa"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "useFeedbackSummary reads data.summary and data.numFeedbacksUsed without a guard, so it crashes when the query is disabled and data is undefined.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_378c3e"
+        }
+      ],
+      "uniqueConfidence": {
+        "s_d9bac71d": "high",
+        "s_d67909de": "high",
+        "s_9905bdbc": "high",
+        "s_e0999225": "high",
+        "s_4dffb6b1": "high"
+      },
+      "partialOverlap": []
     },
     "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
       "sourceSha": "4bfbd2a788360ef1bdbe76e33064743ab0f49f64",
@@ -2842,7 +4068,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_c58572a1",
@@ -2857,11 +4084,16 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
       "groups": [],
-      "uniqueConfidence": {}
+      "uniqueConfidence": {
+        "s_18960249": "high",
+        "s_c58572a1": "high"
+      },
+      "partialOverlap": []
     },
     "github-oauth-security-enhancement-sentry": {
       "sourceSha": "854a8de744e4495fcdc040fb173c8f4cbb9a9579",
@@ -2879,7 +4111,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_4e685465",
@@ -2894,7 +4127,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_2a28a379",
@@ -2909,11 +4143,17 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
       "groups": [],
-      "uniqueConfidence": {}
+      "uniqueConfidence": {
+        "s_6ff88df6": "high",
+        "s_4e685465": "high",
+        "s_2a28a379": "high"
+      },
+      "partialOverlap": []
     },
     "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
       "sourceSha": "3683230ea03ba56ee043c5cb15ada36fb0e5ea46",
@@ -2928,10 +4168,16 @@
           "relevantLinesEnd": 12,
           "oneSentenceSummary": "The registered metric-alert handler is left abstract and cannot be instantiated.",
           "suggestionContent": "WHAT: MetricAlertDetectorHandler is changed to an empty subclass of StatefulDetectorHandler even though it does not implement the abstract counter/state extraction and occurrence-building methods. WHY: Detector.detector_handler will try to instantiate this registered handler for the metric_alert_fire group type and Python will raise TypeError because the class remains abstract, preventing metric-alert detectors from being processed. HOW: Implement all StatefulDetectorHandler abstract methods (including build_occurrence_and_event_data), or keep this group type on a concrete handler until those implementations exist.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_144b01e9",
+            "s_4edcb19f",
+            "s_aa4af8aa",
+            "s_addb3ff9"
+          ],
+          "groupId": "g_0d4d7d",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_addb3ff9",
@@ -2943,10 +4189,16 @@
           "relevantLinesEnd": 12,
           "oneSentenceSummary": "The new stateful base contract makes the empty metric-alert handler non-instantiable.",
           "suggestionContent": "`MetricAlertDetectorHandler` now subclasses `StatefulDetectorHandler`, but the empty class does not implement the abstract stateful hooks (`counter_names`, `get_dedupe_value`, `get_group_key_values`, and `build_occurrence_and_event_data`) declared in `detector.py`. It therefore remains abstract and cannot be instantiated when the metric-alert group type selects this handler. Implement all required stateful methods, or keep this handler on the non-stateful base until those methods exist.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_144b01e9",
+            "s_4edcb19f",
+            "s_a9cb3ea0",
+            "s_aa4af8aa"
+          ],
+          "groupId": "g_0d4d7d",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_144b01e9",
@@ -2958,10 +4210,16 @@
           "relevantLinesEnd": 12,
           "oneSentenceSummary": "The registered metric-alert handler is abstract and crashes on instantiation because it does not implement the newly required occurrence hook.",
           "suggestionContent": "MetricAlertDetectorHandler now inherits StatefulDetectorHandler, whose new abstract build_occurrence_and_event_data method is not implemented here. Instantiating the registered handler for a metric-alert detector raises TypeError ('Can't instantiate abstract class ... with abstract method build_occurrence_and_event_data'), so detector processing cannot start. Implement the hook (including occurrence/event-data construction) or keep this handler on a non-abstract base until it is implemented.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_4edcb19f",
+            "s_a9cb3ea0",
+            "s_aa4af8aa",
+            "s_addb3ff9"
+          ],
+          "groupId": "g_0d4d7d",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_4edcb19f",
@@ -2973,10 +4231,16 @@
           "relevantLinesEnd": 12,
           "oneSentenceSummary": "The metric alert handler was switched to an abstract stateful base without implementing its required methods.",
           "suggestionContent": "MetricAlertDetectorHandler now inherits StatefulDetectorHandler, whose abstract methods include counter_names, get_dedupe_value, get_group_key_values, and build_occurrence_and_event_data, but this class implements none of them. It is therefore abstract and cannot be instantiated by the detector handler lookup, causing metric-alert detector processing to fail rather than evaluate alerts. Implement the required stateful detector hooks (or keep this example on the non-stateful base until they exist).",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_144b01e9",
+            "s_a9cb3ea0",
+            "s_aa4af8aa",
+            "s_addb3ff9"
+          ],
+          "groupId": "g_0d4d7d",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_752d6b1b",
@@ -2991,7 +4255,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_e7faf21d",
@@ -3006,7 +4271,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_90079911",
@@ -3021,7 +4287,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_aa4af8aa",
@@ -3033,14 +4300,45 @@
           "relevantLinesEnd": 12,
           "oneSentenceSummary": "Switching the metric-alert handler to the stateful interface leaves it abstract and unusable.",
           "suggestionContent": "MetricAlertDetectorHandler now inherits StatefulDetectorHandler but remains an empty class. It therefore remains abstract because it does not implement the required stateful hooks (including build_occurrence_and_event_data), and any detector using this group type will fail when detector_handler instantiates the handler. Either implement all required hooks or keep this handler on the non-stateful base until those behaviors exist.",
-          "isDuplicate": false,
-          "duplicateIds": [],
-          "groupId": null,
-          "needsUnifiedComment": false
+          "isDuplicate": true,
+          "duplicateIds": [
+            "s_144b01e9",
+            "s_4edcb19f",
+            "s_a9cb3ea0",
+            "s_addb3ff9"
+          ],
+          "groupId": "g_0d4d7d",
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
-      "groups": [],
-      "uniqueConfidence": {}
+      "groups": [
+        {
+          "members": [
+            "s_144b01e9",
+            "s_4edcb19f",
+            "s_a9cb3ea0",
+            "s_aa4af8aa",
+            "s_addb3ff9"
+          ],
+          "kind": "same_location",
+          "needsUnifiedComment": false,
+          "confidence": "high",
+          "defect": "MetricAlertDetectorHandler is an empty subclass of the abstract StatefulDetectorHandler, so it stays abstract and raises TypeError when it is instantiated.",
+          "votes": {
+            "opus": "same",
+            "astra": "same"
+          },
+          "resolvedBy": "agreement",
+          "groupId": "g_0d4d7d"
+        }
+      ],
+      "uniqueConfidence": {
+        "s_752d6b1b": "high",
+        "s_e7faf21d": "high",
+        "s_90079911": "high"
+      },
+      "partialOverlap": []
     },
     "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
       "sourceSha": "19deb80d13bb30d01ac9138d3ff2b4d70cfe749b",
@@ -3058,7 +4356,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_f66df8a9",
@@ -3073,7 +4372,8 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         },
         {
           "id": "s_8a2ece02",
@@ -3088,11 +4388,17 @@
           "isDuplicate": false,
           "duplicateIds": [],
           "groupId": null,
-          "needsUnifiedComment": false
+          "needsUnifiedComment": false,
+          "partialOverlapWith": []
         }
       ],
       "groups": [],
-      "uniqueConfidence": {}
+      "uniqueConfidence": {
+        "s_64427fe7": "high",
+        "s_f66df8a9": "high",
+        "s_8a2ece02": "high"
+      },
+      "partialOverlap": []
     }
   }
 }

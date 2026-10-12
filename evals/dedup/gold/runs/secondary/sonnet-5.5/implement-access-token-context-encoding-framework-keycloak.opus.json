@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_843e5d06",
+    "mainDefect": "isAccessTokenId in AssertEvents reads the grant shortcut from substring(3,5) instead of substring(4,6) and inverts the equals comparison, so correct token IDs fail the match.",
+    "secondary": [
+     {
+      "defect": "isAccessTokenId does not check the prefix length, so substring can throw StringIndexOutOfBoundsException on short IDs.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

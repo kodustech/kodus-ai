@@ -1,0 +1,116 @@
+{
+  "judge": "opus",
+  "model": "glm-5.3",
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "promptSha": "646857949069af7b1f06a6e2cfaef0fc1f69e5dc",
+  "attempt": 1,
+  "ms": 27410,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 21465,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 1170,
+    "output_tokens_details": {
+      "thinking_tokens": 354
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 21465,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1170,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 21465,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 21465
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.19528640000000003,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_4d5582bd",
+          "s_14cc2bfd",
+          "s_3fe2d5bd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "sendAddGuestsEmails is passed the raw guests input instead of uniqueGuests, so existing attendees who are submitted again get the full 'You're scheduled' email.",
+        "rationale": "All three point at the same call on line 168 and propose the same fix: pass uniqueGuests."
+      },
+      {
+        "members": [
+          "s_78b72537",
+          "s_7182f67f",
+          "s_fe950d9b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "isTeamAdminOrOwner is computed with && instead of ||, so plain team admins are denied.",
+        "rationale": "Same wrong operator on lines 46-48, with the same fix."
+      },
+      {
+        "members": [
+          "s_400ea655",
+          "s_7d8e5cc8",
+          "s_bcca7cc3",
+          "s_0b97f8ef",
+          "s_c4f90580",
+          "s_17395beb"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "The guest filter compares emails case-sensitively, so mixed-case emails get past the lowercased blacklist and the existing-attendee check. It also never dedupes the submitted array server-side, so duplicate attendee rows are created. On top of that, the check-then-write is a race with no handling of unique-constraint errors.",
+        "rationale": "These overlap and chain together: bcca7cc3 covers both the case-sensitivity issue (400ea655, 7d8e5cc8) and the missing in-array dedupe (0b97f8ef, c4f90580). 17395beb covers the case-sensitive attendee check plus the in-array dupes."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_cdc0bf84",
+        "confidence": "high"
+      },
+      {
+        "id": "s_da43918b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f64ad686",
+        "confidence": "high"
+      },
+      {
+        "id": "s_40ee6cd3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d4c2263b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_884e1094",
+        "confidence": "high"
+      },
+      {
+        "id": "s_adf922e3",
+        "confidence": "high"
+      }
+    ]
+  }
+}

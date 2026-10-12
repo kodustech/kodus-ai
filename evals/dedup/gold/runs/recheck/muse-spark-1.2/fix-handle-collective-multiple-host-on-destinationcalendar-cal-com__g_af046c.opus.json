@@ -1,0 +1,24 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e877f786",
+     "s_67a98570",
+     "s_7b202983",
+     "s_9acef6ae",
+     "s_3c79f482",
+     "s_aa76ef5a",
+     "s_5ce67a29",
+     "s_5c8e19ea"
+    ],
+    "defect": "In GoogleCalendarService updateEvent/deleteEvent, the fallback searches destinationCalendar for externalId === externalCalendarId only when externalCalendarId is falsy, so it never matches and the calendarId is never taken from the destination calendar."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S2, S7, S8, S9, S10, S14, S18) apontam o mesmo erro: o fallback que busca por externalCalendarId justamente quando ele é falso, nunca resolvendo o calendário de destino. O mesmo erro se repete em updateEvent e deleteEvent e se corrige com uma única mudança, então o grupo continua como está. Nenhuma delas traz um segundo defeito."
+ }
+}

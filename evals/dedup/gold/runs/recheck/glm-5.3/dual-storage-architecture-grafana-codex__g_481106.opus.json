@@ -1,0 +1,26 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_f5076626",
+     "s_ce012dec",
+     "s_abda811f",
+     "s_1f0c2877"
+    ],
+    "defect": "The storage-error paths in Create and Update call recordLegacyDuration instead of recordStorageDuration, so unified-storage failures are recorded in the legacy metric."
+   }
+  ],
+  "unique": [
+   "s_a19a1898",
+   "s_8649b5e3"
+  ],
+  "bundles": [
+   "s_f5076626",
+   "s_1f0c2877"
+  ],
+  "reasoningPt": "O defeito principal de S2 e S17 é o primeiro que eles citam: a falha de storage em Create/Update registrada com recordLegacyDuration. É o mesmo erro que S9 e S10 relatam. S2 e S17 também apontam o goroutine de DeleteCollection registrando com recordStorageDuration e o uso de `name` como kind em Delete, por isso são bundles. Esses defeitos extras não os ligam a S8 e S7, que tratam de defeitos distintos, com correções distintas, e ficam isolados."
+ }
+}

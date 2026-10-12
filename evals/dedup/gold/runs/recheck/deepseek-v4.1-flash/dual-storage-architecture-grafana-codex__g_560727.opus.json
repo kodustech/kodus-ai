@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c5f2bfd6",
+     "s_3d27a0be"
+    ],
+    "defect": "The Mode3 tests never check the legacy write done in the background goroutine, so they still pass if that dual write is removed."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S17 e S27 apontam o mesmo erro: os testes do Mode3 não verificam a escrita legada feita na goroutine. Por isso eles continuam passando mesmo se essa escrita for removida. S17 aponta isso no teste de Create e S27 aponta o mesmo erro em Delete, Update e DeleteCollection. Os dois se resolvem com a mesma correção (registrar a expectativa da escrita legada, esperar a goroutine e fazer o assert), então o grupo continua junto."
+ }
+}

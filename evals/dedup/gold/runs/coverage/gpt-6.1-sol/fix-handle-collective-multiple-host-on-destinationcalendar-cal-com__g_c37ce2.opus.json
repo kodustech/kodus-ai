@@ -1,0 +1,33 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "updateEvent fallback (lines 254-256) matches destination externalId against the absent externalCalendarId, so updates lose calendarId"
+   },
+   {
+    "id": "F2",
+    "description": "deleteEvent fallback (lines 315-317) has the same broken match, so deletes fall back to primary instead of the configured calendar"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0bb6afb4",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_97dfdc72",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

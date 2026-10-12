@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b407f10e",
+     "s_f68a49c4"
+    ],
+    "defect": "In TopicEmbed.import, `embed.post` is used without a nil check, so if the post was deleted, PostRevisor.new(nil).revise! raises and the feed poll aborts."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S16 apontam o mesmo defeito no mesmo trecho: `embed.post` pode ser nil quando o post foi apagado, e aí PostRevisor.new(nil).revise! levanta exceção. As duas citam o mesmo efeito, que é interromper os itens restantes do feed, e propõem a mesma correção: tratar o caso nil. Por isso o grupo fica como está."
+ }
+}

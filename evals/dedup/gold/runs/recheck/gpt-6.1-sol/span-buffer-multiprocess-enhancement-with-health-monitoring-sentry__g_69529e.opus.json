@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The isinstance(process, multiprocessing.Process) guard fails for SpawnProcess workers, so hung workers are not killed before a replacement starts, which lets two flushers run on the same shards and leaks processes.",
+    "members": [
+     "s_b2d766be",
+     "s_c04f59af",
+     "s_d1fa2794"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S7 apontam o mesmo defeito nas linhas 254-255: o isinstance com multiprocessing.Process não reconhece SpawnProcess, então o worker travado não é morto antes da substituição. Todos propõem a mesma correção (usar BaseProcess ou a classe do contexto spawn). Nenhuma sugestão traz um segundo defeito."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_67912b06",
+     "s_48086659"
+    ],
+    "defect": "Narrowing cacheMu in BuildIndex to only the cache write lets concurrent builds for the same key race on the same bleve directory and overwrite each other's cache entry, leaking the losing index."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 apontam o mesmo defeito: com a remoção do lock que cobria toda a função BuildIndex, builds simultâneos para a mesma chave disputam o mesmo diretório do bleve e sobrescrevem a entrada do cache. Ambas propõem a mesma correção, um mutex/singleflight por chave. O vazamento do índice que perde a corrida é consequência desse mesmo problema, não um defeito à parte."
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_8ac429ca",
+     "s_bfc86ebc"
+    ],
+    "defect": "The embed URL is interpolated without escaping into the 'imported from' link HTML, which is then rendered raw, enabling XSS."
+   }
+  ],
+  "unique": [
+   "s_8882a392"
+  ],
+  "bundles": [
+   "s_8ac429ca"
+  ],
+  "reasoningPt": "S2 e S8 têm o mesmo defeito principal: a `url` é interpolada sem escape no link 'imported from' em topic_embed.rb, e a correção é escapar com html_escape. S3 trata de outro defeito: Post#cook devolve `raw` sem sanitização para posts raw_html, e a correção fica no próprio cook. S2 também fala em sanitizar o HTML importado, mas isso é um defeito secundário, então S2 entra em bundles e não se liga a S3."
+ }
+}

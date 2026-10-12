@@ -1,0 +1,86 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "promptSha": "b1ad7a9bc97e6babd0fabbdc2291118854b06c0a",
+  "attempt": 1,
+  "ms": 64758,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_1c8a0bc2",
+          "s_e5d1d746"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The missing-backup-codes message directs users to an unavailable settings recovery action, leaving existing 2FA users with an impossible instruction.",
+        "rationale": "Both describe the same dead-end instruction and missing regeneration capability. One points at the translation and the other at its login consumer."
+      },
+      {
+        "members": [
+          "s_be1b7939",
+          "s_ac3a5ed0"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "The backup-code tests do not validate actual code contents, including clipboard output, and the copy handler reports success without awaiting the clipboard write.",
+        "rationale": "The broader content-validation finding explicitly includes missing clipboard-text assertions, overlapping the copy-test finding. The merged comment must retain the broader code-content coverage and the copy-specific false-success behavior."
+      },
+      {
+        "members": [
+          "s_32fdabb3",
+          "s_e721eff4"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Both backup-code validators use non-constant-time comparisons, and the disable endpoint additionally throws on non-string backup-code input.",
+        "rationale": "Both report the same comparison mistake repeated in login and disable verification, requiring changes at both sites. The disable finding also reports an input-type failure that must survive consolidation."
+      },
+      {
+        "members": [
+          "s_b44b2f52",
+          "s_e52baaa1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The BackupCode component is incorrectly declared with the function name TwoFactor.",
+        "rationale": "Both identify the same declaration and the same misleading component identity; one rename resolves both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_816910f9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9b82dee8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_311eeeaf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_dd33bcba",
+        "confidence": "high"
+      },
+      {
+        "id": "s_93d23259",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0d15e0a5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a9a22761",
+        "confidence": "high"
+      }
+    ]
+  }
+}

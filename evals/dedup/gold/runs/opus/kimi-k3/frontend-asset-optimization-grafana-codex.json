@@ -1,0 +1,15 @@
+{
+  "judge": "opus",
+  "model": "kimi-k3",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_0bbe8c44",
+        "confidence": "high"
+      }
+    ]
+  }
+}

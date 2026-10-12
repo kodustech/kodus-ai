@@ -1,0 +1,58 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "7d0df716b628938d0e8e45f12cc249aa8ee929de",
+  "attempt": 1,
+  "ms": 30335,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_298069c3",
+          "s_ef28ad3a",
+          "s_e74b5d11"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The cook_method migration defaults to raw_html rather than regular, causing ordinary posts to bypass cooking.",
+        "rationale": "All three report the same incorrect default on the same migration line and describe the resulting skipped rendering pipeline. One change to the default addresses all three."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_46a32b26",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9c86ed19",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bd53f7a8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_12dbd287",
+        "confidence": "high"
+      },
+      {
+        "id": "s_023987f4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3198bc01",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d69f9639",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c67f5df6",
+        "confidence": "high"
+      }
+    ]
+  }
+}

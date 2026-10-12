@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bff179c0",
+     "s_1ec09b12"
+    ],
+    "defect": "The public GroupsController#members endpoint now caps every group at 50 members by default, but the public members page has no pagination, so groups with more than 50 members are silently truncated."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S8 relatam o mesmo defeito: o endpoint público de membros agora limita todos os grupos a 50 por padrão, e a página pública não tem paginação. Por isso, grupos não automáticos com mais de 50 membros aparecem truncados, o que é uma regressão. As duas sugestões propõem a mesma correção e não trazem um defeito secundário, então o grupo fica como está."
+ }
+}

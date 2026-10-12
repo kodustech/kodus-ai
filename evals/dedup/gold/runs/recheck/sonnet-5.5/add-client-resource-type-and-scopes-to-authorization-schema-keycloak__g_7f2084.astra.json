@@ -1,0 +1,28 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_583e834c",
+     "s_1aab7b37"
+    ],
+    "defect": "A exclusão de clientes pode falhar quando o listener protegido apenas pela flag V1 chama setPermissionsEnabled da implementação V2."
+   },
+   {
+    "members": [
+     "s_8758638b",
+     "s_a2452e35"
+    ],
+    "defect": "Os endpoints de management permissions chamam métodos não suportados em V2, causando exceções sem tratamento."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_8758638b",
+   "s_a2452e35"
+  ],
+  "reasoningPt": "S1 e S7 têm como defeito principal a falha na exclusão de clientes pelo listener; S5 e S6 apontam primeiro a falha nos endpoints de management permissions. Esses caminhos exigem tratamentos independentes, apesar de compartilharem métodos que lançam exceções. S5 também menciona o listener e S6 inclui token exchange, portanto são bundles, sem unir os grupos."
+ }
+}

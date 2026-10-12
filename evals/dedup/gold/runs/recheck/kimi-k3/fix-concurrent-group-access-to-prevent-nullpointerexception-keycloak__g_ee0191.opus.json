@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The concurrency regression test asserts caughtExceptions is empty without joining the reader thread, so an exception from an in-flight request can arrive after the assertion and the test passes falsely.",
+    "members": [
+     "s_a04f7645",
+     "s_aac44397",
+     "s_5d6e93db",
+     "s_ce320063",
+     "s_d110f3c0"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S5, S6, S7 e S9 apontam o mesmo defeito: a thread leitora nunca recebe join antes do assertThat, então exceções que chegam depois passam despercebidas. Todas propõem a mesma correção (guardar a referência da thread e chamar join()). A menção de S7 ao vazamento de uma thread não-daemon é só um benefício extra da mesma correção, e não um segundo defeito."
+ }
+}

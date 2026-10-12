@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c67f5df6",
+    "mainDefect": "String#scrub is unavailable in the project's targeted Ruby 2.0, causing the feed-poll job to fail.",
+    "secondary": [
+     {
+      "defect": "Feeds exposing only a description leave i.content nil, so calling i.content.scrub raises an exception.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_12dbd287",
+    "mainDefect": "Interpolating the attacker-controlled request.referer into a JavaScript string without encoding allows script injection.",
+    "secondary": [
+     {
+      "defect": "Echoing the full referer URL into the response exposes potentially private query parameters or tokens.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

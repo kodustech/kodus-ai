@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e88e59a8",
+     "s_9e022e40",
+     "s_0c7af5ab",
+     "s_d12e4569"
+    ],
+    "defect": "destinationCalendar falls back to null instead of [], so `evt.destinationCalendar?.push(...teamDestinationCalendars)` does nothing and the COLLECTIVE team members' calendars are silently dropped."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S14, S17 e S23 relatam o mesmo defeito nas mesmas linhas: o fallback para null em destinationCalendar transforma o push dos calendários do time em no-op. Todas propõem a mesma correção, usar [] como padrão. Nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

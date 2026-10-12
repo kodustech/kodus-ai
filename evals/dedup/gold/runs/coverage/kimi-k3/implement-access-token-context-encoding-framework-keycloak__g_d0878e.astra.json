@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "OAuth2GrantTypeFactory.getShortcut javadoc advertises 3-letter shortcuts despite the decoder requiring exactly 2 characters."
+   },
+   {
+    "id": "F2",
+    "description": "DefaultTokenContextEncoderProvider.encodeTokenId does not validate shortcut length, allowing token IDs that cannot be decoded."
+   },
+   {
+    "id": "F3",
+    "description": "DefaultTokenContextEncoderProviderFactory.postInit does not validate that registered grant shortcuts have exactly 2 characters."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_efbf1629",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_071b2150",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

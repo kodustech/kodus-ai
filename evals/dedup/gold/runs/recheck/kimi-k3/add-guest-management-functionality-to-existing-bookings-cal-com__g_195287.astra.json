@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c8acf696",
+     "s_9e2d0fde"
+    ],
+    "defect": "A validação no servidor permite emails repetidos na mesma requisição, criando registros duplicados de participantes."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c8acf696"
+  ],
+  "reasoningPt": "S3 e S20 têm o mesmo defeito principal: falta de validação de unicidade dos emails dentro de uma requisição no servidor. S3 também relata uma condição de corrida entre requisições concorrentes, que exige uma correção distinta; por isso entra em bundles, sem alterar seu agrupamento com S20."
+ }
+}

@@ -1,0 +1,41 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d2d1c6a5",
+    "mainDefect": "Office365 event creation selects the first host's destination calendar instead of the destination matching the current credential.",
+    "secondary": [
+     {
+      "defect": "Lark event creation also selects the first destination instead of the destination matching the current credential.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The base calendar service also selects the first destination instead of the destination matching the current credential.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_0bb6afb4",
+    "mainDefect": "Google Calendar updates lack a valid destination fallback when the reference has no externalCalendarId.",
+    "secondary": [
+     {
+      "defect": "Google Calendar deletion falls back to primary when externalCalendarId is absent, leaving events in configured secondary calendars undeleted.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_97dfdc72",
+    "mainDefect": "Google Calendar updates search for a destination matching an absent externalCalendarId, preventing a valid destination fallback.",
+    "secondary": [
+     {
+      "defect": "Google Calendar deletion falls back to primary when externalCalendarId is absent instead of using the configured non-primary destination.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

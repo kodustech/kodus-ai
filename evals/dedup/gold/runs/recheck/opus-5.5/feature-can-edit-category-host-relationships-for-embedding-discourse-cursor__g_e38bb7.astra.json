@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_93eb20ca",
+     "s_29d8f6c2",
+     "s_59aa04a7"
+    ],
+    "defect": "A consulta normaliza apenas o host armazenado, rejeitando URLs cujo hostname contém letras maiúsculas."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_93eb20ca"
+  ],
+  "reasoningPt": "S3, S9 e S11 relatam como primeiro defeito a ausência de normalização do host recebido para minúsculas, portanto permanecem juntas. S3 também relata um defeito distinto na comparação de hosts com porta e, por isso, está em bundles."
+ }
+}

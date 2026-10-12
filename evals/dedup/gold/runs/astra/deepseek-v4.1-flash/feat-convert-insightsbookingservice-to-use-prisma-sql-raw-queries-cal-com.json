@@ -1,0 +1,29 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "promptSha": "786ab67ca311865485290b5051867bcf8ab858ec",
+  "attempt": 1,
+  "ms": 23445,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_af2d264c",
+          "s_777be53f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "getBaseConditions contains unreachable filter-only and deny-all fallback branches because authorization conditions always return a truthy Prisma.Sql.",
+        "rationale": "Both suggestions identify the same unreachable branches and the same cause. A single change to the conditional structure resolves both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_a87a7b08",
+        "confidence": "high"
+      }
+    ]
+  }
+}

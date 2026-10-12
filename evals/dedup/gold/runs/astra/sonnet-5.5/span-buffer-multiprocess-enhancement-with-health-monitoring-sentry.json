@@ -1,0 +1,56 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "3887c2233e550e7b7ece2e24503eaaa5e1b16536",
+  "attempt": 1,
+  "ms": 44739,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_95a93597",
+          "s_91f6b187"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The wait_produce metric uses the tag key \"shards\" while related metrics use \"shard\".",
+        "rationale": "Both report the same inconsistent tag key on the same timer; changing that key resolves both."
+      },
+      {
+        "members": [
+          "s_f3717cf6",
+          "s_c0b73dfc"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The multiprocessing.Process type checks exclude SpawnProcess workers, skipping kill during restart and terminate during shutdown.",
+        "rationale": "Both identify the same incorrect restart guard and explicitly report the identical shutdown guard problem. Neither adds a defect beyond the other."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_cd0b3c17",
+        "confidence": "high"
+      },
+      {
+        "id": "s_86b092f6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bbaff0a0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d8cd6310",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e019621a",
+        "confidence": "high"
+      }
+    ]
+  }
+}

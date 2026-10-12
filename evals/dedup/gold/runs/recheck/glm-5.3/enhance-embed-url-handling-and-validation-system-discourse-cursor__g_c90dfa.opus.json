@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6903bc10",
+     "s_5f3bd478"
+    ],
+    "defect": "`<%- end if %>` in best.html.erb is a dangling `if` that turns the compiled template into invalid Ruby, so every embed/best render that finds a topic fails with a 500."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S13 relatam o mesmo defeito: o `<%- end if %>` na linha 6 de best.html.erb gera um SyntaxError e quebra a renderização do embed. As duas propõem a mesma correção, trocar por `<%- end %>`. A sugestão de teste de integração em S13 é só um complemento da correção, não um segundo defeito."
+ }
+}

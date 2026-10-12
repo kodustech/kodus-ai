@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1ed631f1",
+     "s_1bd86873"
+    ],
+    "defect": "O tipo público permite scope: \"team\" sem teamId, aceitando uma chamada que falha na validação em runtime e retorna resultados vazios silenciosamente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 descrevem o mesmo defeito no mesmo tipo público: teamId passou a ser opcional mesmo para scope: \"team\". Ambas apontam a mesma consequência e propõem correções equivalentes, portanto são redundantes e devem permanecer juntas."
+ }
+}

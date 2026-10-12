@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_72b1da29",
+     "s_b0ff443d"
+    ],
+    "defect": "Backup codes are checked and then consumed in two separate, non-atomic steps, so concurrent logins can reuse a single-use backup code."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S6 apontam o mesmo defeito: a validação e a remoção do backup code em next-auth-options.ts não são atômicas. Por isso, logins concorrentes podem reutilizar o mesmo código. A observação de S1 sobre restaurar um código já consumido é consequência da mesma condição de corrida e se resolve com a mesma correção atômica. Assim, o grupo deve ser mantido."
+ }
+}

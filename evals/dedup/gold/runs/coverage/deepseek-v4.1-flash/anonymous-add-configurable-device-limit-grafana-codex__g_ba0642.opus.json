@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Authenticate (client.go): the panic recovery around TagDevice was removed, so a panic during tagging now reaches the anonymous auth request"
+   },
+   {
+    "id": "F2",
+    "description": "Authenticate (client.go): the bounded 2-minute background timeout was removed; tagging now uses the request ctx and has no deadline of its own"
+   },
+   {
+    "id": "F3",
+    "description": "Authenticate (client.go): calling TagDevice synchronously puts a DB write on the auth path and adds latency to each request"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_def15064",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3a4fa9ea",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

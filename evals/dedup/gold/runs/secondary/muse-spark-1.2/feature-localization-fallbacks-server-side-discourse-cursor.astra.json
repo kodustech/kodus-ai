@@ -1,0 +1,51 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_006ed08a",
+    "mainDefect": "Calling to_sym on a nil SiteSetting.default_locale raises NoMethodError before compact can remove it.",
+    "secondary": [
+     {
+      "defect": "Mixed String and Symbol locales prevent deduplication and loaded-locale matching, causing duplicate loads and incorrect fallback resolution.",
+      "coveredBy": [
+       "s_c8aed49e"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a6008d55",
+    "mainDefect": "The translation cache does not account for default_locale changes, allowing stale fallback translations to remain cached.",
+    "secondary": [
+     {
+      "defect": "translate calls include? on @loaded_locales without initializing it, potentially raising NoMethodError on the first translation.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e63608d7",
+    "mainDefect": "Calling to_sym on a nil SiteSetting.default_locale raises before compact can remove it.",
+    "secondary": [
+     {
+      "defect": "The fallback list mixes String and Symbol locales, breaking locale matching in the fallback chain.",
+      "coveredBy": [
+       "s_c8aed49e"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_fbe2d845",
+    "mainDefect": "The method is public when it should be private for proper encapsulation.",
+    "secondary": [
+     {
+      "defect": "The method lacks an early return of null when CBM.isAbleToAccessHealingItems(opponent, player) is false, causing unnecessary processing.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

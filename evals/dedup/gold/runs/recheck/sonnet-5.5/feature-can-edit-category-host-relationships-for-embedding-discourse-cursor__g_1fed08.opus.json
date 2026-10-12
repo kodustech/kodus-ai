@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7882dbd4",
+     "s_e721f2fc"
+    ],
+    "defect": "The fabricator contents are swapped: category_fabricator.rb defines :embeddable_host, while embeddable_host_fabricator.rb holds the category fabricators."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S8 apontam o mesmo defeito: o conteúdo dos fabricators foi trocado entre category_fabricator.rb e embeddable_host_fabricator.rb. A única diferença é o arquivo de onde cada uma observa o problema, e a correção é a mesma: devolver cada fabricator ao seu arquivo. Nenhuma das duas traz um segundo defeito."
+ }
+}

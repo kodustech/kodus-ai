@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_326027c2",
+     "s_92bfacc6"
+    ],
+    "defect": "Os conteúdos de category_fabricator.rb e embeddable_host_fabricator.rb foram trocados, deixando as definições em arquivos com nomes incompatíveis."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S12 descrevem a mesma troca de conteúdo entre os dois arquivos, apenas destacando locais diferentes. A mesma correção resolve ambas: devolver cada fabricator ao arquivo correspondente."
+ }
+}

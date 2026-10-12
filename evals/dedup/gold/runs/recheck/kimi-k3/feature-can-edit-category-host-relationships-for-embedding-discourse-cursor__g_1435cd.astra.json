@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c5b0ee53",
+     "s_4b72607c"
+    ],
+    "defect": "Os conteúdos dos arquivos category_fabricator.rb e embeddable_host_fabricator.rb foram trocados, deixando as definições nos arquivos errados."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S15 relatam a mesma troca de conteúdo entre os dois arquivos de fabricators e propõem a mesma correção. As diferenças nas consequências descritas não representam defeitos distintos, portanto o grupo deve ser mantido."
+ }
+}

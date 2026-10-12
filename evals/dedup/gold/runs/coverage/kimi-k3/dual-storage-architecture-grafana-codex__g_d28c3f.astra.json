@@ -1,0 +1,55 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create, line 45: unified-storage failures call recordLegacyDuration instead of recordStorageDuration, misattributing the metric."
+   },
+   {
+    "id": "F2",
+    "description": "Update, line 129: unified-storage failures call recordLegacyDuration instead of recordStorageDuration, misattributing the metric."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_2d189e44",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_de5fad1d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_c273daf4",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_00216386",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9e1a3d59",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

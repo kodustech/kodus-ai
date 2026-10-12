@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8d184fdd",
+     "s_7958039f"
+    ],
+    "defect": "Update e destroy usam o resultado potencialmente nulo de where(id:).first, causando erro 500 em vez de 404 para IDs inexistentes."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_8d184fdd",
+   "s_7958039f"
+  ],
+  "reasoningPt": "S2 e S12 relatam primeiro o mesmo defeito: ausência de tratamento para IDs inexistentes em update e destroy. Ambas incluem defeitos adicionais relacionados a valores nulos na entrada, por isso entram em bundles, sem alterar o agrupamento pelo defeito principal."
+ }
+}

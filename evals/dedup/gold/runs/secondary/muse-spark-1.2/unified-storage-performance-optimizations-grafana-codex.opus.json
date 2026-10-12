@@ -1,0 +1,30 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_4cfadd1d",
+    "mainDefect": "Narrowing cacheMu in BuildIndex while TotalDocs iterates b.cache without a read lock creates a data race on the cache map.",
+    "secondary": [
+     {
+      "defect": "Concurrent BuildIndex calls for the same key are no longer serialized, so they duplicate work and collide on the same index directory; a per-key singleflight or locked check-then-build is needed.",
+      "coveredBy": [
+       "s_53aa8e91",
+       "s_6f655174"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_66f35f2a",
+    "mainDefect": "Concurrent builds in searchSupport.init share the totalBatchesIndexed counter and the outer err variable without synchronization, so the count can be corrupted and group.Wait() can return the wrong error.",
+    "secondary": [
+     {
+      "defect": "The goroutine closures capture the loop variable info instead of receiving it as a per-iteration copy.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

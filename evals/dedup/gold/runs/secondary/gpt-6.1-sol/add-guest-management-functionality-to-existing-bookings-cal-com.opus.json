@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0f78e9fc",
+    "mainDefect": "The guest email is not lowercased before it is checked against the lowercased blacklist, so a blacklisted address with different casing gets past the filter.",
+    "secondary": [
+     {
+      "defect": "The comparison against existing attendees is case-sensitive, so the same email in different casing can be added as a duplicate attendee.",
+      "coveredBy": [
+       "s_969329e8"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_969329e8",
+    "mainDefect": "The comparison against existing attendees is case-sensitive, so the same email in different casing is treated as new and added as a duplicate attendee.",
+    "secondary": [
+     {
+      "defect": "Uppercase guest emails are not matched against the lowercased blacklist, so blacklisted addresses can get through.",
+      "coveredBy": [
+       "s_2eda8d39",
+       "s_0f78e9fc"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

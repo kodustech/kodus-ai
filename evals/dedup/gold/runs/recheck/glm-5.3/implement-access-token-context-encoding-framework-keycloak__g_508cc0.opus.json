@@ -1,0 +1,25 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_40f5268c",
+     "s_47286227",
+     "s_271c9373",
+     "s_8d844482",
+     "s_cabf60f8",
+     "s_0df1d418",
+     "s_7f53154c"
+    ],
+    "defect": "The isAccessTokenId matcher reads the grant shortcut with substring(3,5) instead of substring(4,6), and its equality check is inverted, so the grant-type assertion never checks anything."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_271c9373"
+  ],
+  "reasoningPt": "Todas as sugestões (S1, S4, S6, S9, S11, S13, S14) apontam o mesmo defeito no matcher isAccessTokenId: índice errado (3,5 em vez de 4,6) e condição invertida, corrigidos pela mesma alteração. S6 acrescenta ao final um segundo problema (StringIndexOutOfBoundsException para prefixos curtos), por isso é bundle, mas seu defeito principal é o mesmo do grupo. O guard de tamanho em S9 e S11 aparece só no fix e não muda o defeito principal."
+ }
+}

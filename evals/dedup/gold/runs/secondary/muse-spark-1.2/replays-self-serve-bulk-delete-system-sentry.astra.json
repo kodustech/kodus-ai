@@ -1,0 +1,52 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_9c86f0c6",
+    "mainDefect": "Direct indexing into dcg_to_slow_conditions can raise KeyError when a buffered condition group is missing.",
+    "secondary": [
+     {
+      "defect": "Direct indexing into workflows_to_envs can raise KeyError when a workflow_id is missing.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_bd6e5c15",
+    "mainDefect": "Raw error titles and messages are sent to Seer without scrubbing sensitive information.",
+    "secondary": [
+     {
+      "defect": "Error content sent to Seer has no length limit.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_0ef0a25a",
+    "mainDefect": "The single-error test does not cover pairing errors when multiple IDs include a missing nodestore entry.",
+    "secondary": [
+     {
+      "defect": "Zipping error_ids with events.values() can associate event data with the wrong error ID when nodestore entries are missing.",
+      "coveredBy": [
+       "s_cb573436",
+       "s_46b42f89",
+       "s_e8d1320e",
+       "s_2a158b71"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_edcf69f6",
+    "mainDefect": "Removing Visualize.yAxes breaks existing consumers unless a compatibility getter is retained or callers are migrated.",
+    "secondary": [
+     {
+      "defect": "The changed Visualize.fromJSON contract breaks compatibility with the old shape and callers expecting a single object instead of an array.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

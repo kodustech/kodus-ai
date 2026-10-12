@@ -1,0 +1,94 @@
+{
+  "judge": "opus",
+  "model": "opus-5.5",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "3fe1b8fe696b0c631b71530db66723a08fc56f62",
+  "attempt": 1,
+  "ms": 21229,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 13410,
+    "cache_read_input_tokens": 6564,
+    "output_tokens": 1251,
+    "output_tokens_details": {
+      "thinking_tokens": 651
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 13410,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1251,
+        "cache_read_input_tokens": 6564,
+        "cache_creation_input_tokens": 13410,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 13410
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1336208,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_ae578023",
+          "s_3a262130"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "wait_produce metric uses tag key `shards` while the sibling produce/segment_size_bytes metrics use `shard` for the same value.",
+        "rationale": "Both report the same inconsistent tag key on the same metric lines."
+      },
+      {
+        "members": [
+          "s_555f4a4d",
+          "s_b2cc6608",
+          "s_4ee392ad",
+          "s_7a1b8c6d",
+          "s_7f309577"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "`isinstance(process, multiprocessing.Process)` is always False for SpawnProcess, so hung processes are never killed on restart (duplicate flushing) and terminate() never runs in join(); separately, join() breaks out of the loop when the deadline expires and skips terminating the remaining processes.",
+        "rationale": "The three kill-check suggestions report the same wrong isinstance check. s_b2cc6608 and s_7a1b8c6d both report the same check in join()'s terminate path, and s_7a1b8c6d also reports the deadline break that s_7f309577 reports, so the overlap chain links all five."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_4f1409aa",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2f884f80",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3bb79784",
+        "confidence": "high"
+      },
+      {
+        "id": "s_27e04631",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8e3fa247",
+        "confidence": "high"
+      }
+    ]
+  }
+}

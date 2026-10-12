@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cd578af7",
+     "s_94084073"
+    ],
+    "defect": "Office365 createEvent always uses the first (main host's) destination calendar and ignores the credentialId, so collective team members' events go to the wrong calendar or fail."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S19 apontam o mesmo defeito no createEvent do Office365: ele usa sempre destinationCalendar[0] e ignora o credentialId. Por isso, em eventos coletivos, as credenciais dos outros hosts apontam para o calendário errado. As duas propõem a mesma correção, filtrar pelo credentialId como o Google faz. A menção ao Lark/CalDAV é o mesmo erro repetido em outros lugares, então não conta como defeito à parte."
+ }
+}

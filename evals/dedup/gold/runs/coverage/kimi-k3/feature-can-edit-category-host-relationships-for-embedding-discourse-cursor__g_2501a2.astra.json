@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Migration lines 9–11 index an empty embed_category query result, crashing before the fallback runs."
+   },
+   {
+    "id": "F2",
+    "description": "Migration line 15 indexes an empty uncategorized_category_id query result, crashing when the setting row is missing."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_073fc623",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_6fa3626d",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ec94f60b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

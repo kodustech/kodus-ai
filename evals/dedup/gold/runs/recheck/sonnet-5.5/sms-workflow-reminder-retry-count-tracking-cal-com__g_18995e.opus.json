@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1d7d17c1",
+     "s_085b2df5",
+     "s_eb6c867b",
+     "s_9ff75425",
+     "s_d87c9c97"
+    ],
+    "defect": "The `retryCount > 1` branch of the OR in deleteMany has no `method: WorkflowMethods.SMS` filter, so the SMS cron can delete non-SMS reminders such as email and WhatsApp."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_085b2df5"
+  ],
+  "reasoningPt": "S1, S3, S4, S5 e S6 apontam o mesmo defeito principal: o ramo `retryCount > 1` do OR não tem o filtro de método SMS e por isso apaga lembretes que não são SMS. S3 também fala do comentário que ficou desatualizado e da exclusão de lembretes SMS futuros, então entra em bundles, mas seu defeito principal é o mesmo do grupo. O grupo fica como está."
+ }
+}

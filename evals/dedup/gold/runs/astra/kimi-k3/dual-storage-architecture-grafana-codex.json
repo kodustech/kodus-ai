@@ -1,0 +1,110 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "97d1c045d0a98dfb8049d43cc19a332131455135",
+  "attempt": 1,
+  "ms": 92512,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_4d3c3dc5",
+          "s_63bda620",
+          "s_cc993937"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Legacy Update recomputes the object through raw objInfo instead of persisting the unified-storage result, repeats potentially non-idempotent callbacks, and can apply asynchronous updates out of order.",
+        "rationale": "All three report removal of the result-pinning wrapper. s_4d3c3dc5 additionally reports write reordering, which must survive consolidation."
+      },
+      {
+        "members": [
+          "s_6e8d049a",
+          "s_a1fd1880"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Mode 3 mutation tests do not await and independently assert legacy writes, allowing the legacy half of dual writing to disappear without failing tests.",
+        "rationale": "The first suggestion covers all mutation tests, including the Delete and DeleteCollection omissions described by the second. Each affected test needs synchronization and meaningful legacy assertions."
+      },
+      {
+        "members": [
+          "s_39ce7ed0",
+          "s_442861c7",
+          "s_ccf38f53",
+          "s_20756cac",
+          "s_7922ab52",
+          "s_d0f19bee",
+          "s_6b11a209"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Delete installs the unenriched logger in its context and labels successful duration metrics with the object name instead of kind, losing log context and exposing high-cardinality object identifiers.",
+        "rationale": "s_6b11a209 explicitly reports both defects and connects the logger-only and metric-only suggestions. Both local corrections must remain in the merged comment."
+      },
+      {
+        "members": [
+          "s_a4f55b36",
+          "s_e87a2835",
+          "s_73967244"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "All four asynchronous legacy mutation paths inherit request cancellation and omit failure logging, allowing legacy writes to be aborted without a diagnostic log.",
+        "rationale": "Each suggestion identifies the same request-context lifetime mistake across Create, Delete, Update, and DeleteCollection. Consolidation must retain the affected paths and missing failure diagnostics."
+      },
+      {
+        "members": [
+          "s_38c1c7d8",
+          "s_e75f841d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Delete returns on unified-storage NotFound before attempting legacy deletion, leaving legacy-only objects behind.",
+        "rationale": "Both identify the removed NotFound fall-through and require the same control-flow correction."
+      },
+      {
+        "members": [
+          "s_c273daf4",
+          "s_de5fad1d",
+          "s_24958cb2",
+          "s_2d189e44",
+          "s_b6ded21f",
+          "s_00216386",
+          "s_daf946e9",
+          "s_9e1a3d59",
+          "s_ec6af647"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Duration recording uses the wrong backend helper for unified-storage Create and Update failures and for the legacy DeleteCollection operation.",
+        "rationale": "These are repeated backend-attribution mistakes in metric calls. The merged comment must cover all three call sites, including the inverse helper mix-up in DeleteCollection."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_eae9e1f0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e028b6c0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bd966b6d",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_e39b511f",
+        "confidence": "high"
+      }
+    ]
+  }
+}

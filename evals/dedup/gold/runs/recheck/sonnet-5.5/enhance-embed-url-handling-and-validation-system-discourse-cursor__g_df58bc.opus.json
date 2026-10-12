@@ -1,0 +1,15 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_22702472",
+   "s_778e09a3"
+  ],
+  "bundles": [
+   "s_778e09a3"
+  ],
+  "reasoningPt": "O defeito principal de S2 é a mutação in-place da string `contents` com `<<`. Já o defeito principal de S8 é a interpolação do `url` no HTML sem escape, o que permite injeção de HTML porque o conteúdo é renderizado com `raw`. S8 só cita a mutação no final, como observação extra, então pela regra do defeito principal os dois ficam separados e S8 entra em bundles."
+ }
+}

@@ -1,0 +1,72 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Blacklist check (handler line 77) compares the raw guest email against the lowercased BLACKLISTED_GUEST_EMAILS list, so a mixed-case email gets past the blacklist"
+   },
+   {
+    "id": "F2",
+    "description": "Existing-attendee check (handler line 76, guest === attendee.email) is case-sensitive, so a case variant of an existing attendee is inserted again"
+   },
+   {
+    "id": "F3",
+    "description": "No server-side dedupe of the submitted guests array: the schema has no uniqueness refine and the handler filter doesn't dedupe, so createMany inserts duplicate attendee rows and sends duplicate emails"
+   },
+   {
+    "id": "F4",
+    "description": "The attendee read (line 26) and write (line 92) happen without a transaction, so concurrent calls both pass the check and insert duplicates or throw an unhandled Prisma unique-constraint (P2002) error"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_17395beb",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7d8e5cc8",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0b97f8ef",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bcca7cc3",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_400ea655",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c4f90580",
+    "covers": [
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

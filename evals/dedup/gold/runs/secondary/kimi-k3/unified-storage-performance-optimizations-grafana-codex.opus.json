@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_17a7fb74",
+    "mainDefect": "The new postgres skip means TestIntegrationWillRunInstrumentationServerWhenTargetHasNoHttpServer never runs on postgres, so a broken instrumentation /metrics endpoint on postgres would go unnoticed.",
+    "secondary": [
+     {
+      "defect": "The skip is broader than its stated reason: it disables the test for local postgres runs too, not just in Drone CI, so it should check a CI environment variable or skip only the failing assertion.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,40 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "No re-check of the cache after the write lock is taken (webassets.go:48), so every concurrent cold-start caller re-reads and re-parses the manifest one after another"
+   },
+   {
+    "id": "F2",
+    "description": "In Dev mode every call takes the exclusive write lock and holds it during the manifest disk I/O, which serializes all concurrent callers"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_25eea308",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7e94bcff",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a043dacd",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

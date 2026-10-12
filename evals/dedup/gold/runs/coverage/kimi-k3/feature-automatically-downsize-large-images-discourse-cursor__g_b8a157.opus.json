@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Hardcoded 10MB limit (10.megabytes) in uploads_controller.rb should be a named constant/setting"
+   },
+   {
+    "id": "F2",
+    "description": "Hardcoded 10MB limit (10 * 1024) in utilities.js should be a named constant/setting"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_d6e025e2",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_82fe504b",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

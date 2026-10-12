@@ -1,0 +1,67 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Office365 createEvent (office365calendar/lib/CalendarService.ts lines 73-76) always takes the first destination calendar instead of matching the current credentialId, so secondary collective hosts target the organizer's calendar"
+   },
+   {
+    "id": "F2",
+    "description": "Lark CalendarService (larkcalendar/lib/CalendarService.ts) has the same first-element destinationCalendar selection problem"
+   },
+   {
+    "id": "F3",
+    "description": "Base CalendarService (packages/lib/CalendarService.ts) has the same first-element destinationCalendar selection problem"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_41c96050",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_23010781",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8dd680d0",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_60571361",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d2d1c6a5",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_6a0ae591",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": true,
+  "reasoning": "The group problem names three places that each need their own edit: Office365 createEvent, the Lark CalendarService and the base CalendarService. Only s_d2d1c6a5 says Lark and the base service have the same first-element problem, so it is the only complete member. Labeler 2 added a separate facet for the saved reference pointing at the second destination. That isn't a separate defect: it happens because Office365 picks the wrong destination, and fixing the Office365 selection fixes it too. So it doesn't need its own edit, and it isn't a separate fact the merged comment has to carry. Every member reports the Office365 selection problem."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ee1a9510",
+     "s_21537ff1"
+    ],
+    "defect": "A delegação de useAllAlertRuleAbilities para useAllRulerRuleAbilities remove a verificação de grupos federados, permitindo ações que deveriam ser bloqueadas por imutabilidade."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S7 relatam o mesmo defeito: a perda da verificação de grupos federados na delegação entre os hooks. Ambas são resolvidas preservando essa verificação; as diferenças nas ações mencionadas e nas propostas de correção não justificam separar o grupo."
+ }
+}

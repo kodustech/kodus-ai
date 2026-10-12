@@ -1,0 +1,13 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_1aa94032",
+   "s_b202afb8"
+  ],
+  "bundles": [],
+  "reasoningPt": "S2 aponta a incompatibilidade entre a assinatura de sync_status_outbound e a implementação de ExampleIntegration. S7 aponta a ausência de assignment_source no contrato abstrato de sync_assignee_outbound, apesar de o argumento ser passado pelo chamador. São defeitos distintos: corrigir a implementação citada em S2 não resolve a inconsistência descrita em S7."
+ }
+}

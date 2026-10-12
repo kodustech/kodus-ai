@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "The age/timestamp mutual-exclusion checks in validate_timestamp/validate_age use truthiness, so a value of 0 counts as absent and reports that mix both fields pass"
+   },
+   {
+    "id": "F2",
+    "description": "A report with neither age nor timestamp passes validation because both fields are optional"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_4580ba49",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0f836d52",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

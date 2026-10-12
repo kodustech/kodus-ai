@@ -1,0 +1,47 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_93d23259",
+    "mainDefect": "The backup-code branch in authorize() skips the password check when totpCode is non-empty, so a session can be granted with only a valid backup code and no password.",
+    "secondary": [
+     {
+      "defect": "The backup code is consumed and saved before the rest of authorize() finishes, so a later throw uses up the code without granting a session.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e721eff4",
+    "mainDefect": "disable.ts checks the backup code with indexOf, a short-circuiting comparison that is not constant-time, instead of crypto.timingSafeEqual.",
+    "secondary": [
+     {
+      "defect": "req.body.backupCode.replaceAll throws a TypeError when the value is not a string, so a bad request returns a 500.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a9a22761",
+    "mainDefect": "The e2e assertion expect(isChecked()).toBeTruthy() can never fail because it checks a Promise, which is always truthy.",
+    "secondary": [
+     {
+      "defect": "The first test never closes the new backup-codes dialog, so onEnable never fires and the switch is not actually checked when the assertion runs.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ac3a5ed0",
+    "mainDefect": "The copy-button test only checks that the toast appears and never checks the clipboard contents.",
+    "secondary": [
+     {
+      "defect": "The copy handler does not await navigator.clipboard.writeText and always shows the success toast, even if the write fails.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

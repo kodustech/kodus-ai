@@ -1,0 +1,66 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0bd77fe1",
+    "mainDefect": "When Storage.Create fails, the code calls recordLegacyDuration instead of recordStorageDuration, so the storage failure is counted in the legacy metric.",
+    "secondary": [
+     {
+      "defect": "When Storage.Update fails (line 129), the code also calls recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_30992443",
+       "s_d040909a"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_2719ce4a",
+    "mainDefect": "When Storage.Create fails, the code calls recordLegacyDuration instead of recordStorageDuration, so the failure is counted as a legacy failure.",
+    "secondary": [
+     {
+      "defect": "When Storage.Update fails (line 129), the code also calls recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_30992443",
+       "s_d040909a"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_289657e8",
+    "mainDefect": "When Storage.Create fails, the code calls recordLegacyDuration instead of recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "When Storage.Update fails (line 129), the code also calls recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_30992443",
+       "s_d040909a"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_b0ebef03",
+    "mainDefect": "The background goroutine that writes to legacy gets its timeout context from the request context, which is cancelled when the request ends, so the legacy write can be aborted.",
+    "secondary": [
+     {
+      "defect": "Errors from the legacy write are no longer logged and only show up in metrics, so a failed write goes unnoticed.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_0fa90f2c",
+    "mainDefect": "Legacy writes now run in a background goroutine whose context comes from the request context, so the write is likely cancelled when the handler returns, and callers lose the guarantee that legacy is updated before the response.",
+    "secondary": [
+     {
+      "defect": "Errors from the legacy write are only recorded in a metric and never logged.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

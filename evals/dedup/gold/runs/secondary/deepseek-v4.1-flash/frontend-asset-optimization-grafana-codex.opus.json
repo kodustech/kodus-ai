@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_12bc3466",
+    "mainDefect": "After taking the write lock, the code does not check entryPointAssetsCache again, so every concurrent caller with a cold cache recomputes the assets and overwrites the cache.",
+    "secondary": [
+     {
+      "defect": "The write lock is held during the manifest file/CDN I/O, so concurrent GetWebAssets callers wait on blocking I/O during the first load, and on every request in Dev mode.",
+      "coveredBy": [
+       "s_efe46b6a"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

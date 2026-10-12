@@ -1,0 +1,26 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_aa8b5b10",
+     "s_b7a8f74b",
+     "s_65bc8258"
+    ],
+    "defect": "GoogleCalendarService.createEvent picks the calendar only by credentialId, so a destination with a null credentialId ends up on \"primary\" instead of its configured externalId."
+   }
+  ],
+  "unique": [
+   "s_8ebfd962"
+  ],
+  "bundles": [
+   "s_aa8b5b10",
+   "s_b7a8f74b",
+   "s_65bc8258",
+   "s_8ebfd962"
+  ],
+  "reasoningPt": "S5, S11 e S22 têm o mesmo defeito principal: o createEvent do Google procura o calendário só pelo credentialId e cai em \"primary\" quando o destino não tem credentialId. Os três citam depois a perda do externalCalendarId na referência, por isso são bundles. O primeiro defeito de S27 é outro: o else-branch do EventManager chama createEvent sem externalId, e a referência fica salva sem externalCalendarId. Isso pede outra correção (passar destination.externalId), e o problema do Google aparece em S27 só como segundo defeito, por isso S27 fica sozinho."
+ }
+}

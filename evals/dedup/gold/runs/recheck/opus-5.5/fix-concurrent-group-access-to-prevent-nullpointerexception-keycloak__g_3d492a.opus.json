@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_8fb311b9",
+     "s_bdeb7dae",
+     "s_0dfb07e9"
+    ],
+    "defect": "The reader thread is never joined, so the assertion on caughtExceptions runs before in-flight reads finish and can miss their exceptions."
+   }
+  ],
+  "unique": [
+   "s_3d7a717e"
+  ],
+  "bundles": [
+   "s_bdeb7dae"
+  ],
+  "reasoningPt": "S1, S3 e S4 têm como defeito principal a falta de join() na thread leitora antes da asserção. S2 trata de outro defeito, com outra correção: nada garante que a leitora rodou ao menos uma vez (contador ou latch). S3 também cita esse segundo ponto, mas só depois do defeito principal, então é um bundle e fica no grupo do join."
+ }
+}

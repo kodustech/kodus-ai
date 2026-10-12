@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9d348b06",
+     "s_d6a5a826"
+    ],
+    "defect": "Narrowing cacheMu to just the final cache assignment in BuildIndex removes per-key serialization, so concurrent builds of the same key can create duplicate indexes on the same directory and overwrite the cache entry."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S6 apontam o mesmo defeito nas mesmas linhas de bleve.go. Ao tirar o lock que cobria todo o BuildIndex, a mesma chave pode ser construída duas vezes ao mesmo tempo, com bleve.New no mesmo diretório e sobrescrita do cache. As correções propostas são equivalentes (lock por chave, singleflight ou voltar ao lock amplo), então o grupo se mantém."
+ }
+}

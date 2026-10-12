@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_93595c3f",
+     "s_e4393123",
+     "s_4aa5d124",
+     "s_3c85c91e"
+    ],
+    "defect": "In Google updateEvent/deleteEvent, the fallback branch searches destinationCalendar for cal.externalId === externalCalendarId while externalCalendarId is falsy, so it always returns undefined and the old fallback to the destination calendar's externalId is lost."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4, S13, S16 e S21 relatam o mesmo defeito: o fallback em updateEvent compara com o externalCalendarId falsy e por isso sempre retorna undefined. Todas mencionam a mesma repetição em deleteEvent (L315-317), que é o mesmo erro corrigido da mesma forma. Nenhuma traz um segundo defeito diferente, então o grupo fica como está."
+ }
+}

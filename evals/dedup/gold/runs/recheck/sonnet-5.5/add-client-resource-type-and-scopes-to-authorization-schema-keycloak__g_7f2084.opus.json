@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_583e834c",
+     "s_1aab7b37"
+    ],
+    "defect": "The client-removal listener in AdminPermissions is gated only on V1 but calls ClientPermissionsV2.setPermissionsEnabled, which throws UnsupportedOperationException and breaks client deletion."
+   },
+   {
+    "members": [
+     "s_8758638b",
+     "s_a2452e35"
+    ],
+    "defect": "ClientPermissionsV2 stubs (isPermissionsEnabled/setPermissionsEnabled/etc.) throw UnsupportedOperationException while callers like the ClientResource management-permissions endpoints invoke them unconditionally, causing HTTP 500."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_8758638b"
+  ],
+  "reasoningPt": "S1 e S7 tratam do listener de remoção de cliente em AdminPermissions, que só verifica o V1 e chama setPermissionsEnabled do V2, que lança exceção. S5 e S6 tratam dos endpoints de ClientResource (e de outros chamadores) que chamam os métodos do V2 que lançam exceção, o que gera HTTP 500. S5 cita o listener só no final, como defeito secundário, e por isso é um bundle e não se junta a S1/S7."
+ }
+}

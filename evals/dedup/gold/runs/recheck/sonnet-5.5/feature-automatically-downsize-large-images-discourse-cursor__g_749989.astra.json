@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ba5fb2e8",
+     "s_82bc776a",
+     "s_a0c4295e",
+     "s_ac42de81",
+     "s_bd97a81c",
+     "s_c23a39bb"
+    ],
+    "defect": "A segunda definição de downsize sobrescreve a primeira e quebra a compatibilidade com chamadas que passam largura e altura separadamente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3, S4, S5 e S6 descrevem a mesma sobrescrita de downsize e a quebra da chamada em resize_emoji.rb. S7 descreve esse mesmo defeito de forma genérica, sem verificar os chamadores; as consequências alternativas citadas não constituem defeitos independentes."
+ }
+}

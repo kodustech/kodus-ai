@@ -1,0 +1,69 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "updateEvent (lines 254-256): the fallback find() compares against an externalCalendarId that is already falsy, so selectedCalendar is undefined; it should fall back to the destination calendar's externalId"
+   },
+   {
+    "id": "F2",
+    "description": "deleteEvent (lines 314-317): the same dead find() fallback leaves calendarId undefined or falls back to primary; it should fall back to the destination calendar's externalId"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f5b59d63",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_6293a6a3",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_a907ae4b",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_02b6e8cb",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3ab53f11",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0a0cb899",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ac235e40",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_22702472",
+   "s_778e09a3"
+  ],
+  "bundles": [
+   "s_778e09a3"
+  ],
+  "reasoningPt": "S2 relata a mutação da string recebida; o defeito principal de S8 é a interpolação da URL no HTML sem escape, que exige outra correção. S8 também menciona a mutação, mas esse defeito secundário apenas a caracteriza como bundle e não justifica agrupá-la com S2."
+ }
+}

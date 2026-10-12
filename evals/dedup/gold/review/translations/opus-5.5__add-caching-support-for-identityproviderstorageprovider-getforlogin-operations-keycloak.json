@@ -1,0 +1,14 @@
+{
+ "s_33f2d08d": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `registerIDPLoginInvalidationOnUpdate` compara um `original` encapsulado e ciente de organização (vindo de `getById`) com o modelo `updated` bruto. O isEnabled() do wrapper retorna false sempre que a organização vinculada está desabilitada, mas as listas de IDs de login em cache vêm de `idpDelegate.getForLogin` e ignoram o estado da organização. POR QUÊ: enquanto uma organização está desabilitada, seus IDPs públicos permanecem nas listas em cache ORG_ONLY/ALL. Se um admin então atualizar um deles para hideOnLogin=true, linkOnly=true ou BROKER_PUBLIC=false, ambos os lados falham no predicado e o primeiro early return pula a invalidação. Depois que a organização é reabilitada, o ID obsoleto passa pela nova verificação de isEnabled() do bean e o IDP oculto/privado aparece na página de login. CORREÇÃO: avalie o original com o estado armazenado, sem o wrapper, por exemplo `registerIDPLoginInvalidationOnUpdate(idpDelegate.getById(model.getInternalId()), model)`. Alternativamente, sempre invalide quando o original estiver vinculado a uma organização."
+ },
+ "s_2ab6ce36": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: o cleanup é registrado como `testRealm().identityProviders().get(\"alias\")::remove`, usando a string literal \"alias\" em vez do alias do IDP criado (`\"idp-alias-\" + i`). A linha 425 tem o mesmo erro para `idp-alias-20`. POR QUÊ: nenhum dos 21 IDPs criados por este teste é removido. Eles vazam para os outros testes desta classe, que leem o estado de IDP/organização do realm e as listas de login em cache, e o próprio cleanup aponta para um IDP que não existe. CORREÇÃO: capture o alias, por exemplo `String alias = idpRep.getAlias(); getCleanup().addCleanup(testRealm().identityProviders().get(alias)::remove);`."
+ },
+ "s_7c209af1": {
+  "summaryPt": "O cleanup do teste remove o alias literal \"alias\" em vez dos providers que ele criou.",
+  "contentPt": "O teste cria providers chamados `\"idp-alias-\" + i` e, na linha 425, um chamado `idp-alias-20`. Mas o cleanup que ele registra é `testRealm().identityProviders().get(\"alias\")::remove`, que aponta para um provider chamado \"alias\". Esse provider não existe, então nenhum dos providers criados é removido. Eles permanecem no realm de teste e podem quebrar outros testes que contam providers ou dependem de caches de login. Use o alias real, por exemplo `String alias = \"idp-alias-\" + i; ... getCleanup().addCleanup(testRealm().identityProviders().get(alias)::remove);`, e faça o mesmo na linha 425 com `idp-alias-20`."
+ }
+}

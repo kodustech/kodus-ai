@@ -1,0 +1,60 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "AddGuestsDialog.tsx onError (lines 42–45): the always-truthy template string prevents the unable_to_add_guests fallback."
+   },
+   {
+    "id": "F2",
+    "description": "AddGuestsDialog.tsx onError (line 43): missing err.data produces an 'undefined: ...' toast."
+   },
+   {
+    "id": "F3",
+    "description": "AddGuestsDialog.tsx onSuccess (lines 36–40): isInvalidEmail is not reset."
+   },
+   {
+    "id": "F4",
+    "description": "AddGuestsDialog.tsx email editing (line 73): isInvalidEmail is not reset when emails change."
+   },
+   {
+    "id": "F5",
+    "description": "AddGuestsDialog.tsx onOpenChange (line 61): closing through overlay or Esc does not reset isInvalidEmail."
+   },
+   {
+    "id": "F6",
+    "description": "AddGuestsDialog.tsx onOpenChange (line 61): closing through overlay or Esc does not clear multiEmailValue."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_69410500",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b459ede8",
+    "covers": [
+     "F1",
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_37e96fa9",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

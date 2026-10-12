@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3a262130",
+     "s_ae578023"
+    ],
+    "defect": "The flusher metrics use inconsistent tag keys: `shard` on produce/segment_size_bytes but `shards` on wait_produce."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S9 relatam o mesmo defeito: a métrica wait_produce usa a chave de tag \"shards\" enquanto as métricas irmãs usam \"shard\". Só muda o intervalo de linhas, e a correção é a mesma (padronizar a chave). Nenhuma das duas traz um segundo defeito."
+ }
+}

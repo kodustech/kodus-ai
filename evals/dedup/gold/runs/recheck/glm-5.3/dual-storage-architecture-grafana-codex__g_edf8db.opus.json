@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "Update's async legacy write passes the raw objInfo instead of wrapping the storage result in updateWrapper, so legacy recomputes the update against its own old object and can diverge from unified storage.",
+    "members": [
+     "s_48464c58",
+     "s_27f7b4ca",
+     "s_d80b979f"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_27f7b4ca"
+  ],
+  "reasoningPt": "S3, S18 e S20 relatam o mesmo defeito principal: o Update deixou de usar o updateWrapper na chamada ao legacy. Com isso, o legacy recalcula o objeto a partir do próprio estado e pode divergir do unified storage. A correção é a mesma para os três: restaurar o updateWrapper com o objeto retornado pelo Storage.Update. S18 traz no final uma observação à parte sobre o contexto cancelado pela requisição, por isso entra em bundles, mas continua no grupo do seu defeito principal."
+ }
+}

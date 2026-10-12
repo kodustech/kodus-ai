@@ -1,0 +1,24 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_b8b58cda",
+     "s_5ce0b553",
+     "s_76132555"
+    ],
+    "defect": "A comparação da blacklist com o email do convidado sem normalização permite contornar o bloqueio usando diferenças de maiúsculas e minúsculas."
+   }
+  ],
+  "unique": [
+   "s_0005a575"
+  ],
+  "bundles": [
+   "s_b8b58cda",
+   "s_76132555"
+  ],
+  "reasoningPt": "S4, S9 e S13 têm como defeito principal o bypass da blacklist por diferenças de capitalização. S10 trata da criação de participantes duplicados, uma verificação distinta que exige sua própria correção. S4 e S13 também mencionam a deduplicação, por isso são bundles, mas essa menção secundária não une S10 ao grupo."
+ }
+}

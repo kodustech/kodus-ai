@@ -1,0 +1,33 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_a9a769d7",
+    "mainDefect": "Skipping the PostgreSQL integration test removes coverage of storage-server startup and its metrics endpoint.",
+    "secondary": [
+     {
+      "defect": "The eager initialization change may have broken PostgreSQL startup, with the skip concealing that suspected regression.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The PostgreSQL branch of addStorageServerToConfig is now unreachable dead test code.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b3fa293f",
+    "mainDefect": "NewResourceServer now blocks synchronously for the entire search-index build, potentially delaying construction by minutes.",
+    "secondary": [
+     {
+      "defect": "Search initialization errors now fail resource-server construction and prevent Grafana startup instead of merely degrading search.",
+      "coveredBy": [
+       "s_b1fa092d"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a6c93c38",
+     "s_b364bc36"
+    ],
+    "defect": "evt.destinationCalendar can be null, so evt.destinationCalendar?.push(...teamDestinationCalendars) does nothing and a collective event drops all team members' destination calendars."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_a6c93c38"
+  ],
+  "reasoningPt": "S4 e S11 relatam o mesmo defeito principal: o push opcional em evt.destinationCalendar não faz nada quando o valor é null e descarta os calendários dos membros do evento coletivo. S4 também menciona, com \"Separately\", o preenchimento frágil de teamDestinationCalendars dentro de callbacks async, por isso entra em bundles, mas isso não muda seu grupo."
+ }
+}

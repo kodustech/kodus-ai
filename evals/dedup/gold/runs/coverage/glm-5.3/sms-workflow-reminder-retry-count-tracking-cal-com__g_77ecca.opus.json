@@ -1,0 +1,42 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Catch block (lines 189-197) increments retryCount for transient/unrelated errors (DB, parse, profile lookup), so reminders are deleted after 2 strikes"
+   },
+   {
+    "id": "F2",
+    "description": "Else branch (lines 178-187) increments retryCount when scheduleSMS returns falsy for locked/rate-limited accounts, deleting reminders that should wait for the lock to clear"
+   },
+   {
+    "id": "F3",
+    "description": "A failed DB update after Twilio scheduling succeeds still increments retryCount, which leaves an orphaned SMS that can't be cancelled and gets scheduled twice"
+   },
+   {
+    "id": "F4",
+    "description": "deleteMany OR branch (lines 38-42) has no method:SMS or scheduled:false scope"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_4d254d59",
+    "covers": [
+     "F1",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ad72bd96",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

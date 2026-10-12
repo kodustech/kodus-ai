@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_94ef8b50",
+     "s_9e5e643b"
+    ],
+    "defect": "updateDevice treats rowsAffected == 0 as ErrDeviceLimitReached, so a device that already exists (for example under MySQL's changed-rows semantics) is wrongly rejected; the fix is to check whether the device exists explicitly."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S9 apontam o mesmo defeito: updateDevice usa rowsAffected == 0 para decidir que o limite de dispositivos foi atingido. Com isso, um dispositivo que já existe é rejeitado por engano, e as duas propõem a mesma correção: verificar a existência do dispositivo de forma explícita. O clock skew citado em S7 é só mais uma causa do mesmo problema, não um defeito à parte, então o grupo fica como está."
+ }
+}

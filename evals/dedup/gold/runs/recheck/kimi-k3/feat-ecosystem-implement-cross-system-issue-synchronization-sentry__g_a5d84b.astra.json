@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ade14568",
+     "s_4394a939"
+    ],
+    "defect": "O nome test_from_dict_inalid_data contém o erro de digitação 'inalid' em vez de 'invalid'."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S9 apontam o mesmo erro de digitação no mesmo teste, corrigido pela mesma renomeação. As diferenças de justificativa e intervalo de linhas não representam defeitos distintos."
+ }
+}

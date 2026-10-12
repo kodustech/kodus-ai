@@ -1,0 +1,31 @@
+{
+  "model": "opus-5.5",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "component": [
+    "s_111e270c",
+    "s_42582bb1",
+    "s_5dddabc9",
+    "s_8507049f",
+    "s_fae04201"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_111e270c",
+          "s_42582bb1",
+          "s_5dddabc9",
+          "s_8507049f",
+          "s_fae04201"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "defect": "error-invalid-multivalued-size in the React admin-ui and account-ui English bundles was switched from i18next {{n}} placeholders to Java MessageFormat {n}/choice syntax. i18next does not interpolate it, so users see the raw template."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "All five suggestions describe the same defect: the same key in the i18next-rendered React bundles now uses MessageFormat syntax that i18next cannot interpolate. Four point at line 3138 of the admin-ui file and one points at line 188 of the account-ui file. Three of the admin-ui ones also name the account-ui line. The same copy-pasted change sits in two separate files, and each file needs its own edit. That makes this a systemic pattern rather than one fix at one place, so a unified comment is needed to cover both files. Both judges agree on the membership; they differ only on the kind."
+  }
+}

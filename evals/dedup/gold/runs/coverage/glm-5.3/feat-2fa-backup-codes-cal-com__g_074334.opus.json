@@ -1,0 +1,36 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "next-auth-options.ts authorize() (line 144): backup code checked with indexOf, which is not constant-time and can leak timing information"
+   },
+   {
+    "id": "F2",
+    "description": "disable.ts (line 61): backup code checked with indexOf, which is not constant-time and can leak timing information"
+   },
+   {
+    "id": "F3",
+    "description": "disable.ts (line 61): req.body.backupCode.replaceAll throws a TypeError when backupCode is not a string, so a bad request returns a 500"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_32fdabb3",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e721eff4",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

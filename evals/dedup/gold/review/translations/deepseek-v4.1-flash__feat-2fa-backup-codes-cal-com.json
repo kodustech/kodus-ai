@@ -1,0 +1,50 @@
+{
+ "s_4b5537ed": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O novo branch de backup-code autentica apenas com um backup code válido e nunca verifica a senha da conta, pois a única verificação de senha (linha 121: `if (user.password && !credentials.totpCode)`) é ignorada sempre que qualquer totpCode não vazio estiver presente. POR QUÊ: Uma requisição de credentials forjada, como `{ email, password: \"\", totpCode: \"000000\", backupCode: \"<valid code>\" }`, chega à linha 131, corresponde ao backup code e retorna sucesso — concedendo login completo com o backup code como único fator, enfraquecendo o 2FA para um único fator para qualquer pessoa que obtenha um backup code. CORREÇÃO: rejeitar a requisição quando `credentials.totpCode` e `credentials.backupCode` forem fornecidos juntos (ou exigir explicitamente que a senha seja verificada no caminho do backup-code, em vez de depender do atalho `!credentials.totpCode`)."
+ },
+ "s_cda09d4d": {
+  "summaryPt": "O novo parâmetro obrigatório backupCode de TwoFactorAuthAPI.disable não foi aplicado ao chamador mais antigo security/DisableTwoFactorModal.tsx.",
+  "contentPt": "`TwoFactorAuthAPI.disable` agora exige um terceiro argumento `backupCode: string` (ele é serializado incondicionalmente no corpo da requisição). O consumidor apps/web/components/security/DisableTwoFactorModal.tsx:38 ainda chama `TwoFactorAuthAPI.disable(password, totpCode)` com apenas dois argumentos, então não satisfaz o novo contrato: o TypeScript acusa erro pelo parâmetro obrigatório ausente e o body enviado omite `backupCode`. Atualize esse ponto de chamada (ou torne `backupCode` opcional na assinatura) para que todos os consumidores sigam o novo formato."
+ },
+ "s_5937758e": {
+  "summaryPt": "A verificação do backup code compara o segredo com indexOf (não é constant-time), vazando correspondências via timing.",
+  "contentPt": "O backup code fornecido pelo usuário é validado com `backupCodes.indexOf(req.body.backupCode.replaceAll(\"-\", \"\"))`, uma comparação simples de valores com short-circuit contra códigos secretos. Array.prototype.indexOf para no primeiro mismatch, então o tempo de execução vaza quantos caracteres iniciais de um código tentado coincidem com um armazenado, permitindo recuperar byte a byte um backup code válido. Use uma comparação constant-time para cada candidato (por exemplo, crypto.timingSafeEqual em buffers de mesmo tamanho, com uma verificação de tamanho) e verifique todas as entradas sem short-circuit."
+ },
+ "s_3e96920f": {
+  "summaryPt": "",
+  "contentPt": "O export default neste novo arquivo se chama `TwoFactor`, mas o módulo é `BackupCode` e renderiza o campo de backup code (t(\"backup_code\"), placeholder XXXXX-XXXXX, register(\"backupCode\")). Chamadores como login.tsx e DisableTwoFactorModal.tsx o importam como `BackupCode from \"@components/auth/BackupCode\"`, então o nome da função contradiz tanto o nome do arquivo quanto o ponto de chamada, e aparece como o componente TwoFactor de TOTP em stack traces/dev tools. Renomeie a função para `BackupCode` para que o identificador corresponda ao que o código realmente é."
+ },
+ "s_4b6dba2f": {
+  "summaryPt": "A verificação do backup code faz um read-modify-write não atômico, permitindo que um código de uso único seja usado duas vezes em logins concorrentes.",
+  "contentPt": "O novo branch de backup-code descriptografa `user.backupCodes`, verifica a pertinência, depois anula a entrada e salva novamente com `prisma.user.update`. Não há guarda atômica: duas chamadas concorrentes de authorize() apresentando o mesmo backup code válido passam em `indexOf(...) !== -1` sobre o mesmo array descriptografado e ambas persistem, então um código anunciado como de uso único (`backup_code_instructions`) é consumido duas vezes. Torne o consumo atômico — por exemplo, um `updateMany` condicional que só tenha sucesso enquanto o ciphertext armazenado ainda for igual ao valor lido (compare-and-swap otimista em `backupCodes`), ou envolva leitura/descriptografia/consumo em uma transaction com row lock — e rejeite quando o update condicional afetar 0 linhas."
+ },
+ "s_7b2abff5": {
+  "summaryPt": "O teste de cópia apenas verifica que um toast aparece, então passa mesmo se a cópia estiver quebrada.",
+  "contentPt": "A assertion de cópia não testa a cópia. Em EnableTwoFactorModal.tsx o toast de sucesso é exibido incondicionalmente após um `navigator.clipboard.writeText(...)` sem await, então `await page.getByTestId(\"toast-success\").waitFor()` passa independentemente de a escrita no clipboard ter acontecido ou conter os códigos corretos. Faça assertion sobre o conteúdo do clipboard (conceda permissões de clipboard e use `page.evaluate(() => navigator.clipboard.readText())`, ou intercepte a chamada do clipboard) e compare com os backup codes exibidos, de modo que remover/quebrar `writeText` faça o teste falhar."
+ },
+ "s_82fc6f7e": {
+  "summaryPt": "O teste de download verifica apenas um nome de arquivo estático, então passa mesmo se o payload baixado estiver vazio/quebrado.",
+  "contentPt": "A assertion de download não pode falhar com um payload quebrado. `cal-backup-codes.txt` é o atributo `download` estático no anchor (EnableTwoFactorModal.tsx), independente de `href={backupCodesUrl}`; se a construção do blob/URL estiver quebrada, o anchor ainda baixa com o mesmo nome. Leia o arquivo baixado e verifique que ele contém 10 códigos com hífen, para que um download quebrado faça o teste falhar."
+ },
+ "s_a9040f8f": {
+  "summaryPt": "test4",
+  "contentPt": "test1"
+ },
+ "s_7ae7f156": {
+  "summaryPt": "resetState não limpa o state de backupCodes e backupCodesUrl.",
+  "contentPt": "resetState em EnableTwoFactorModal não limpa backupCodes/backupCodesUrl, então o state antigo de backup codes permanece após o reset."
+ },
+ "s_4f88e788": {
+  "summaryPt": "Backup codes são gerados em hex minúsculo mas validados com diferenciação de maiúsculas/minúsculas, então entrada em maiúsculas falha.",
+  "contentPt": "setup.ts:61 gera backup codes via `crypto.randomBytes(5).toString(\"hex\")`, que é sempre minúsculo. Os validadores em next-auth-options.ts:144 e disable.ts:61 comparam `backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"))` de forma case-sensitive. Como o placeholder da UI está em maiúsculas (BackupCode.tsx:21 \"XXXXX-XXXXX\"), usuários que digitam o código em maiúsculas (ou com qualquer mudança de caixa) recebem IncorrectBackupCode mesmo com o código correto. Normalize a entrada do usuário nos pontos de validação, por exemplo `const code = credentials.backupCode.replaceAll(\"-\", \"\").toLowerCase();` antes do `indexOf`."
+ },
+ "s_8e161876": {
+  "summaryPt": "resetState não limpa o state de backup code que este PR adicionou ao mesmo componente, diferentemente do resetForm irmão.",
+  "contentPt": "`resetState` reseta password/errorMessage/step, mas não `backupCodes` (linha 64) nem `backupCodesUrl` (linha 65), ambos introduzidos por este PR neste mesmo componente. O reset irmão em DisableTwoFactorModal (`resetForm`, DisableTwoFactorModal.tsx:43-48) limpa todos os campos que possui. Como está, cancelar/fechar após um setup bem-sucedido deixa os códigos antigos no state e mantém a blob URL viva até o próximo `handleSetup` bem-sucedido (o único lugar onde ela é revogada, linha 98), então um modal reaberto ainda pode referenciar os códigos/URL anteriores. Adicione `setBackupCodes([])` e revogue+limpe a URL (por exemplo `URL.revokeObjectURL(backupCodesUrl); setBackupCodesUrl(\"\");`) — considere também limpar `dataUri`/`secret`."
+ },
+ "s_7b1466dd": {
+  "summaryPt": "O componente BackupCode é declarado como `function TwoFactor` (copy-paste de TwoFactor.tsx) embora renderize o campo de backup code.",
+  "contentPt": "Este arquivo foi copiado de TwoFactor.tsx e a declaração do componente nunca foi renomeada: o componente renderiza um input backupCode e é importado como `BackupCode` em login.tsx:32 e DisableTwoFactorModal.tsx:8, mas se declara como `function TwoFactor`. Só funciona porque é um export default; o nome obsoleto faz a declaração discordar do uso real e vai confundir quem estiver depurando qual componente registrou o campo `backupCode`. Renomeie para `BackupCode`."
+ }
+}

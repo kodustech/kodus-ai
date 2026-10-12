@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1de4d23b",
+     "s_d328cce0",
+     "s_428c1b8f"
+    ],
+    "defect": "O valor padrão de queued é calculado na importação, fazendo as instâncias compartilharem um timestamp desatualizado."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_428c1b8f"
+  ],
+  "reasoningPt": "S1, S2 e S3 relatam primeiro o mesmo defeito em queued, corrigido com field(default_factory=timezone.now). S3 também aponta um possível problema de serialização JSON, por isso é um bundle, mas permanece no grupo pelo defeito principal."
+ }
+}

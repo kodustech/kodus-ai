@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_1f6fc379",
+   "s_2383a0c6"
+  ],
+  "bundles": [
+   "s_1f6fc379"
+  ],
+  "reasoningPt": "O defeito principal de S3 é incluir o recurso global 'Clients' no conjunto de IDs de clientes; a divergência de tipos aparece como um segundo defeito, tornando S3 um bundle. S8 trata principalmente da divergência entre as chaves usadas nas buscas, cuja correção não resolve necessariamente a inclusão do recurso global relatada em S3."
+ }
+}

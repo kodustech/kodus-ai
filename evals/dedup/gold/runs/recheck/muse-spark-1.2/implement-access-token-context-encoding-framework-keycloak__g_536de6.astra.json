@@ -1,0 +1,28 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_9862ac83",
+     "s_f28d822f",
+     "s_c4f3874e",
+     "s_cb4db53f"
+    ],
+    "defect": "O matcher extrai o grant com substring(3,5), embora ele ocupe os índices 4 a 6 do prefixo."
+   }
+  ],
+  "unique": [
+   "s_2a4d8fa0"
+  ],
+  "bundles": [
+   "s_2a4d8fa0",
+   "s_9862ac83",
+   "s_f28d822f",
+   "s_c4f3874e",
+   "s_cb4db53f"
+  ],
+  "reasoningPt": "S2 relata primeiro a condição de igualdade invertida; S6, S7, S9 e S16 relatam primeiro os índices incorretos da substring. São defeitos com correções independentes, portanto a regra do defeito principal exige separar S2. Todas as sugestões são bundles porque incluem ambos os defeitos."
+ }
+}

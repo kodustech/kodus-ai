@@ -1,0 +1,30 @@
+{
+ "s_0a96d57b": {
+  "summaryPt": "AssignmentSource.queued usa timezone.now() no momento da definição da classe, então todas as instâncias compartilham o mesmo timestamp desatualizado",
+  "contentPt": "O QUÊ: o default de queued é avaliado no momento do import, então todas as instâncias de AssignmentSource compartilham o timestamp idêntico. POR QUÊ: quebra qualquer lógica de recência/ordenação e torna o campo inútil para evitar ciclos rápidos de re-sync do Jira. CORREÇÃO: importe field e use default_factory: queued: datetime = field(default_factory=timezone.now)."
+ },
+ "s_34589453": {
+  "summaryPt": "assignment_source.to_dict() embute um datetime que a serialização JSON do Celery não consegue tratar, quebrando a task outbound de supressão de ciclo",
+  "contentPt": "O QUÊ: to_dict()/apply_async passa um datetime bruto em assignment_source_dict que o JSON do Celery não consegue serializar, então a task outbound falha quando o source de quebra de ciclo está presente. POR QUÊ: a atribuição via webhook inbound vai quebrar/ser reexecutada em vez de suprimir o loop, reintroduzindo o ciclo sob atualizações rápidas do Jira. CORREÇÃO: serialize queued para ISO8601 em to_dict() e faça o parse de volta em from_dict() (ex.: queued: datetime.isoformat() / datetime.fromisoformat), ou exclua queued do dict por completo, já que should_sync só precisa de integration_id."
+ },
+ "s_597377f6": {
+  "summaryPt": "AssignmentSource.to_dict inclui datetime bruto, o que quebra a serialização JSON nos kwargs do apply_async",
+  "contentPt": "to_dict retorna datetime bruto via asdict, o apply_async do Celery codifica os kwargs em JSON e lança TypeError na fronteira de serialização; serialize o datetime para isoformat e faça o parse de volta em from_dict, e use field(default_factory=timezone.now)"
+ },
+ "s_84bd5bf4": {
+  "summaryPt": "default de queued avaliado uma única vez no momento do import, todas as instâncias compartilham o mesmo timestamp desatualizado",
+  "contentPt": "Use field(default_factory=timezone.now) para que cada AssignmentSource receba um timestamp novo em vez do valor compartilhado do momento do import"
+ },
+ "s_e0de5ccd": {
+  "summaryPt": "default de queued avaliado no import, não por instância — use default_factory",
+  "contentPt": "queued: datetime = timezone.now() é avaliado uma única vez na definição da classe/import, então todas as instâncias de AssignmentSource compartilham o mesmo timestamp. Isso é uma medição incorreta do tempo de fila. Use dataclass field com default_factory, além de parsing adequado de string→datetime no from_dict para o round-trip JSON do Celery."
+ },
+ "s_4500db00": {
+  "summaryPt": "to_dict emite datetime não compatível com JSON via Celery e o default de queued é o horário estático do import",
+  "contentPt": "AssignmentSource.to_dict() retorna um datetime real (queued) mas é enviado via JSON do Celery em sync_group_assignee_outbound -> sync_assignee_outbound. Use field(default_factory=timezone.now) e serialize o datetime para isoformat em to_dict, com o parse correspondente em from_dict."
+ },
+ "s_b2100c10": {
+  "summaryPt": "default de queued avaliado no momento do import não é detectado pelos testes",
+  "contentPt": "Corrija o default de queued para usar field(default_factory=timezone.now) (adicione `from dataclasses import field`) para que cada AssignmentSource receba um timestamp novo, e reforce os testes: verifique que queued é um datetime, que está dentro de, por exemplo, 5s de agora, e que o round-trip via from_dict(to_dict()) preserva source_name/integration_id e o tipo de queued. Isso faz os testes falharem se o bug do horário de import desatualizado for reintroduzido."
+ }
+}

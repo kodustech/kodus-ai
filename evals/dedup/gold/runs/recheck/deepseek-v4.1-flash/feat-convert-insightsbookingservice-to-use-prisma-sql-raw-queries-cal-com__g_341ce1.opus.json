@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_777be53f",
+     "s_af2d264c"
+    ],
+    "defect": "In getBaseConditions, the `else if (filterConditions)` and final `else { return NOTHING_CONDITION }` branches can never run, because getAuthorizationConditions always returns a Prisma.Sql."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 apontam o mesmo defeito: em getBaseConditions, os ramos `else if (filterConditions)` e `else { NOTHING_CONDITION }` são inalcançáveis porque authConditions é sempre um Prisma.Sql. As duas propõem a mesma correção: remover o fallback morto ou aceitar null no tipo de retorno. Nenhuma delas traz um segundo defeito."
+ }
+}

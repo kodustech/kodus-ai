@@ -1,0 +1,81 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Office365CalendarService.createEvent does not accept the credentialId parameter required by the Calendar interface"
+   },
+   {
+    "id": "F2",
+    "description": "LarkCalendarService.createEvent does not accept the credentialId parameter required by the Calendar interface"
+   },
+   {
+    "id": "F3",
+    "description": "BaseCalendarService (packages/lib/CalendarService.ts) createEvent does not accept the credentialId parameter"
+   },
+   {
+    "id": "F4",
+    "description": "These implementations always use destinationCalendar[0] instead of picking the entry whose credentialId matches"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_33ed9a24",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_af4c6322",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dc30b21a",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_99ffaedb",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_08905d22",
+    "covers": [
+     "F2",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_47e65bca",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7335ccdf",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

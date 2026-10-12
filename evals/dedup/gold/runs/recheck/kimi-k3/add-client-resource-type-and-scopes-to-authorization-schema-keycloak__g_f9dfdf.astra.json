@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_75e8893d",
+     "s_db009948"
+    ],
+    "defect": "Os Javadocs de requireView() e requireViewClientScopes(), ambos void, afirmam retornar true em vez de documentar ForbiddenException quando a verificação correspondente retorna false."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S10 relatam o mesmo erro de documentação repetido em dois métodos: atribuir retorno booleano a métodos void. Ambos são corrigidos pela mesma substituição do padrão de Javadoc, portanto permanecem juntos pela regra de erro repetido."
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "database.go:78-81: Clock skew beyond the one-minute window excludes an existing device, causing a false ErrDeviceLimitReached."
+   },
+   {
+    "id": "F2",
+    "description": "database.go:95-97: MySQL reports zero changed rows for an identical update to an existing device, causing a false ErrDeviceLimitReached."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_94ef8b50",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_9e5e643b",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

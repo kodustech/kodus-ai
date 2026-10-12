@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_920837b4",
+     "s_3eac123e"
+    ],
+    "defect": "In createEvent results, credentialId is now hardcoded to undefined for non-calendar (video) results, so video references lose their credentialId."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S14 apontam o mesmo defeito em EventManager.ts: o credentialId passa a ser undefined nas referências de vídeo, quando antes vinha de result.credentialId. S3 só detalha melhor o impacto no cancelamento, e a correção é a mesma, então o grupo continua como está."
+ }
+}

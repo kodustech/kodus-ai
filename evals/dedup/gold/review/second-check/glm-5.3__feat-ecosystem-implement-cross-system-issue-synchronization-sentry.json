@@ -1,0 +1,21 @@
+{
+ "key": "e906de42d1",
+ "checks": {
+  "s_1aa94032": [
+   {
+    "id": "s_b202afb8",
+    "likelihood": "borderline",
+    "reasonPt": "Ambas apontam problemas na adição de `assignment_source` a `sync_status_outbound`: esta destaca a incompatibilidade com `ExampleIntegration`, enquanto a outra denuncia que o parâmetro foi declarado no método errado. Há possível sobreposição nessa alteração da interface, embora a segunda também reporte a ausência do parâmetro em `sync_assignee_outbound`."
+   }
+  ],
+  "s_b202afb8": [
+   {
+    "id": "s_1aa94032",
+    "likelihood": "borderline",
+    "reasonPt": "A declaração de `assignment_source` em `sync_status_outbound`, apontada aqui como feita no método errado, também origina a incompatibilidade com `ExampleIntegration` relatada pela outra sugestão. A sobreposição é discutível porque esta também trata de um contrato distinto, o de `sync_assignee_outbound`."
+   }
+  ],
+  "s_9f03c9cf": [],
+  "s_adc64e50": []
+ }
+}

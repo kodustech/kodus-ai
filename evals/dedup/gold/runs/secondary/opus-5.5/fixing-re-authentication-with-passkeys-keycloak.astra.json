@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_438385f5",
+    "mainDefect": "The unauthenticated password form exposes a username-selected user's WebAuthn credential IDs in hidden HTML inputs.",
+    "secondary": [
+     {
+      "defect": "The password form reveals whether a username-selected account has passkeys.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_bb646b1e",
+    "mainDefect": "The unauthenticated password form exposes a username-selected user's WebAuthn credential IDs in hidden HTML inputs.",
+    "secondary": [
+     {
+      "defect": "Rendering the WebAuthn form only for accounts with passkeys reveals whether a username-selected account has passkeys.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

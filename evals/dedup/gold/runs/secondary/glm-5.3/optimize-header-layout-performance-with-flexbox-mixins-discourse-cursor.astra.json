@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ab6b7183",
+    "mainDefect": "The header panel loses right alignment in legacy flexbox implementations because they do not support main-axis auto margins.",
+    "secondary": [
+     {
+      "defect": "The align-items() mixin lacks -moz-box-align, so alignment does not apply in old Firefox using -moz-box.",
+      "coveredBy": [
+       "s_0a89c2ba"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_4c71b68b",
+    "mainDefect": "The align-items() mixin emits the nonexistent -ms-align-items property, leaving a dead and misleading declaration.",
+    "secondary": [
+     {
+      "defect": "The align-items() mixin lacks -moz-box-align, so alignment does not apply in old Firefox using -moz-box.",
+      "coveredBy": [
+       "s_0a89c2ba"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

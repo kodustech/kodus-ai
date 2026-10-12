@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_51ce1fbc",
+    "mainDefect": "The new `retryCount > 1` branch of the cleanup deleteMany has no `method: SMS` filter, so the SMS cron deletes EMAIL and WHATSAPP reminders too.",
+    "secondary": [
+     {
+      "defect": "The `retryCount > 1` branch also has no `scheduled: false` filter, so it can delete SMS reminders that are already scheduled.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8701b717",
+    "mainDefect": "The comment above the cleanup query still says it deletes only past SMS reminders, which no longer matches the new retryCount branch.",
+    "secondary": [
+     {
+      "defect": "The `retryCount > 1` branch has no `method: SMS` filter, so it deletes non-SMS reminders.",
+      "coveredBy": [
+       "s_51ce1fbc",
+       "s_6fbe394f",
+       "s_4680bb7e"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

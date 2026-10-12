@@ -1,0 +1,58 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "a848d10194f9f7817e5eaf13f1ae1fb081b6b0a2",
+  "attempt": 1,
+  "ms": 35426,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_e0de5ccd",
+          "s_4500db00",
+          "s_34589453",
+          "s_597377f6",
+          "s_b2100c10",
+          "s_0a96d57b",
+          "s_84bd5bf4"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "AssignmentSource.queued uses a shared import-time timestamp, and to_dict emits a raw datetime reported to break Celery JSON serialization.",
+        "rationale": "s_4500db00 explicitly reports both defects, linking the timestamp reports and serialization reports into one overlapping group. The serialization reports identify the same defect at its definition and its apply_async call site."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_531c3c64",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3b22810a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_05544e55",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2bcd3f05",
+        "confidence": "high"
+      },
+      {
+        "id": "s_91cbc7dd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_76995fcf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8aeebc2a",
+        "confidence": "high"
+      }
+    ]
+  }
+}

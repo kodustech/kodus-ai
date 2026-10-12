@@ -1,0 +1,53 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_e22fa0b2",
+    "mainDefect": "add_members calls group.add for every username without checking existing membership, so re-adding an existing member triggers a duplicate GroupUser INSERT that raises RecordNotUnique and returns a 500.",
+    "secondary": [
+     {
+      "defect": "The client-side addMembers call has no error handler, so the server failure goes unnoticed by the admin.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_927f6da6",
+    "mainDefect": "remove_member uses group.users.delete, which skips the old cleanup, so a removed user's primary_group_id can still point at a group they no longer belong to.",
+    "secondary": [
+     {
+      "defect": "Deleting the join record directly can skip the user_count counter cache update, leaving group.user_count wrong.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The spec only checks group.users.count, so it can't catch these removal regressions.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_9ede52cf",
+    "mainDefect": "The add_members/remove_member specs pass group_id straight to the controller, skipping routing and using the wrong parameter name, so they pass while real requests fail.",
+    "secondary": [
+     {
+      "defect": "The controller reads params group_id, but the member routes send the id as params[:id], so every real request fails with 400.",
+      "coveredBy": [
+       "s_191ff583"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_191ff583",
+    "mainDefect": "add_members and remove_member call params.require(:group_id), but the member routes deliver the group id as params[:id], so every real request fails with ParameterMissing (400).",
+    "secondary": [
+     {
+      "defect": "The frontend never handles the rejected AJAX promises, so these failures are invisible to the admin.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

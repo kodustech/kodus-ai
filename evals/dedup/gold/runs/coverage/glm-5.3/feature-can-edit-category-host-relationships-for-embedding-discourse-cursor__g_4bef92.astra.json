@@ -1,0 +1,46 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Migration lines 22–26 insert legacy hosts without scheme/path normalization, leaving URL-form entries unmatched by record_for_host."
+   },
+   {
+    "id": "F2",
+    "description": "Migration line 25 interpolates host values without SQL escaping, so apostrophes break the INSERT."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3284f51d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_82cdee2b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e1df980e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bccd111a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

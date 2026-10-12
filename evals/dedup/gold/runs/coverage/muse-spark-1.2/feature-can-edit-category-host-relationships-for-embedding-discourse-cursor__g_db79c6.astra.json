@@ -1,0 +1,54 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "update (lines 9–11) passes a nil host to save_host for an unknown id, causing a 500 instead of a 404."
+   },
+   {
+    "id": "F2",
+    "description": "destroy (lines 14–16) calls destroy on a nil host for an unknown id, causing a 500 instead of a 404."
+   },
+   {
+    "id": "F3",
+    "description": "save_host (lines 22–24) dereferences missing params[:embeddable_host]."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0eba4ccb",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_1f9c507d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_39848fe6",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b171a9e5",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

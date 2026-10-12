@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9bd0df8c",
+     "s_8c64225e"
+    ],
+    "defect": "No MySQL, updateDevice interpreta RowsAffected igual a zero como dispositivo inexistente, rejeitando dispositivos registrados quando o UPDATE não altera valores."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S12 e S13 descrevem o mesmo defeito no mesmo trecho, com o mesmo cenário de atualização sem mudanças no MySQL. A falha de autenticação mencionada em S12 é uma consequência desse defeito, e ambas as sugestões são resolvidas pela mesma correção."
+ }
+}

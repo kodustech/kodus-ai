@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c67f5df6",
+    "mainDefect": "`i.content.scrub` calls `String#scrub`, which doesn't exist in Ruby 2.0 (the project's target version), so it raises NoMethodError and kills the feed-poll job.",
+    "secondary": [
+     {
+      "defect": "`i.content` is nil for feeds that only expose a `description` element, so `nil.scrub` raises an error.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_9c86ed19",
+    "mainDefect": "`TopicEmbed.import` checks whether the embed exists and then calls `create!` without any atomic step in between, so concurrent writers can hit the unique index on `embed_url` and raise `RecordNotUnique`, which rolls back the topic/post that was created.",
+    "secondary": [
+     {
+      "defect": "`TopicRetriever#perform_retrieve` has the same check-then-create race on `TopicEmbed.where(embed_url:).exists?`, and its redis throttle doesn't protect against PollFeed running at the same time.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_12dbd287",
+    "mainDefect": "`request.referer`, which an attacker controls, is written unescaped into a single-quoted JS string in the embed layout, which allows script injection (XSS).",
+    "secondary": [
+     {
+      "defect": "The full referer URL, which may contain private query params or tokens, is echoed back in the response body.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

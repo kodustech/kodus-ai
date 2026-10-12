@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_548ddd10",
+     "s_801d97bf"
+    ],
+    "defect": "Verificação de backup codes com Array.indexOf sem comparação em tempo constante, repetida no login e na desativação de 2FA."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S9 relatam o mesmo erro de comparação de backup codes, repetido em dois endpoints e corrigível pela mesma substituição por comparação em tempo constante. A diferença de autenticação exigida pelos endpoints altera a exposição descrita, mas não distingue os defeitos."
+ }
+}

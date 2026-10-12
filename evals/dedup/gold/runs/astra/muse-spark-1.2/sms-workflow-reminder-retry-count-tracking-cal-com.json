@@ -1,0 +1,50 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "promptSha": "1691218d47e4e1788240e43d0c6ddc1a04046b05",
+  "attempt": 1,
+  "ms": 43910,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_847266f2",
+          "s_6f6fcf09",
+          "s_a43d5a76"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The retryCount > 1 deletion branch lacks an SMS method filter and can delete non-SMS reminders.",
+        "rationale": "All three report the same unscoped OR branch. Adding the SMS constraint resolves all three."
+      },
+      {
+        "members": [
+          "s_973148f4",
+          "s_4e2a8deb",
+          "s_dc093c16"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Retry updates use stale read-modify-write values that lose concurrent increments, and the unguarded catch-path update can throw and abort the batch.",
+        "rationale": "s_dc093c16 explicitly reports both defects, linking the separate stale-increment and unguarded-catch findings. A unified comment must preserve both problems."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_b3cf10e6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5424b0ef",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6083bacf",
+        "confidence": "high"
+      }
+    ]
+  }
+}

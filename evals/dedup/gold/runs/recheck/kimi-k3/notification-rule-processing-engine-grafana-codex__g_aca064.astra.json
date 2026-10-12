@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_dbfac681",
+     "s_24eb89ae",
+     "s_4d7c990b"
+    ],
+    "defect": "O GrafanaRuleListItem retornado pelo map em FilterView perdeu a prop key={key}, permitindo que o React reutilize estado entre linhas de regras diferentes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S6 e S8 apontam a mesma ausência de key no mesmo elemento e propõem a mesma correção. As diferenças são apenas na descrição das consequências; nenhuma sugestão relata um defeito adicional."
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_3a4fa9ea",
+   "s_def15064"
+  ],
+  "bundles": [
+   "s_3a4fa9ea",
+   "s_def15064"
+  ],
+  "reasoningPt": "S3 aponta primeiro o bloqueio da autenticação pela chamada síncrona de TagDevice; a perda do recover aparece como defeito adicional. S7 aponta primeiro a perda da proteção contra pânico e também relata a remoção do timeout próprio. Pela regra do defeito principal, ficam separadas, e ambas agrupam mais de um defeito."
+ }
+}

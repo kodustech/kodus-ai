@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_94ef8b50",
+   "s_9e5e643b"
+  ],
+  "bundles": [
+   "s_94ef8b50"
+  ],
+  "reasoningPt": "S7 relata primeiro a rejeição de dispositivos existentes por diferença de relógio entre instâncias, que deixa updated_at fora da janela aceita. S9 trata da contagem de linhas alteradas do MySQL, um defeito distinto que exige outra correção. S7 também inclui esse segundo defeito, mas, pela regra do defeito principal, deve ficar separada de S9."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1480fde3",
+     "s_0303e051"
+    ],
+    "defect": "O mixin align-items emite a propriedade inválida -ms-align-items."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_1480fde3"
+  ],
+  "reasoningPt": "S2 e S7 têm o mesmo defeito principal: a declaração inválida -ms-align-items no mesmo mixin. S2 também aponta a ausência de -moz-box-align, um defeito distinto e secundário, por isso entra em bundles sem alterar o agrupamento."
+ }
+}

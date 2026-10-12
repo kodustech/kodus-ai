@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_97a87a12",
+    "mainDefect": "The recurring-series delete block sits inside the per-reference loop, so with multiple calendar references the whole series is deleted repeatedly, causing redundant API calls and 404/410 errors.",
+    "secondary": [
+     {
+      "defect": "Other hosts' recurring events are never deleted, because only the organizer's credentials (bookingToDelete.user.credentials) are used.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e4fc8c56",
+    "mainDefect": "The refactored loadUsers no longer selects organization { slug } for dynamic users, so reading user.organization.slug downstream gives undefined.",
+    "secondary": [
+     {
+      "defect": "The rewritten error handling turns every non-Prisma error, including an empty dynamic user list, into a generic 500 instead of a 4xx.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

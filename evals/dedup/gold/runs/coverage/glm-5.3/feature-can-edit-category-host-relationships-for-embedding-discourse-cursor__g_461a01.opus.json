@@ -1,0 +1,60 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Lines 9-11: execute(...)[0]['id'] on the embed_category query has no zero-row check, so NoMethodError aborts db:migrate and the category_id == 0 fallback can never run"
+   },
+   {
+    "id": "F2",
+    "description": "Line 15: the uncategorized_category_id lookup has the same unguarded [0]['value'] read"
+   },
+   {
+    "id": "F3",
+    "description": "Lines 9-11: the JOIN compares the stored setting value to c.name, but the setting may hold a category id, so it never matches"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7128b0ce",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_17201292",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_afaedccf",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_14dcd034",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_f33a3118",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "ClientPermissionEvaluator.java:95-98: requireView() Javadoc incorrectly claims a boolean return instead of documenting ForbiddenException when canView() is false."
+   },
+   {
+    "id": "F2",
+    "description": "ClientPermissionEvaluator.java:100-103: requireViewClientScopes() Javadoc incorrectly claims a boolean return instead of documenting ForbiddenException when canViewClientScopes() is false."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a3224d7a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_c29b13de",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cff36f10",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

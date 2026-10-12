@@ -1,0 +1,58 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "e6126dc785f94a4813be6743e03b0d8fc418601c",
+  "attempt": 1,
+  "ms": 39088,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_524f81d1",
+          "s_efd3a597",
+          "s_6628baaf",
+          "s_f11cce9a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Pairing error_ids with nodestore results by position can associate an error ID with another event's data.",
+        "rationale": "All four report the same positional zip assumption. Reordering, duplicate IDs, and missing entries are alternative triggers for that defect; lookup by node ID resolves them."
+      },
+      {
+        "members": [
+          "s_0f836d52",
+          "s_4580ba49"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Time-field validation uses truthiness instead of presence for mutual exclusion and also permits reports with neither age nor timestamp.",
+        "rationale": "Both report the truthiness defect in the same validators. s_0f836d52 additionally reports acceptance when both fields are absent, which must survive in the merged comment."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_48bd5a0d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_04a34e1d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_619962f4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_09bccd7c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1fba4348",
+        "confidence": "high"
+      }
+    ]
+  }
+}

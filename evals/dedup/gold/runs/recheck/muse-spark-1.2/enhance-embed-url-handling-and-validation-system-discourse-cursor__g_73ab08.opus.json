@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "O spec do EmbedController (linhas 40-45) ainda espera uma chamada síncrona a TopicRetriever.new(...).retrieve, mas o controller agora enfileira Jobs.enqueue(:retrieve_topic) e renderiza 'loading'.",
+    "members": [
+     "s_f8bb1b1d",
+     "s_020c1288"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S17 e S19 tratam do mesmo defeito: o controller passou a enfileirar um job, mas o spec ainda espera o TopicRetriever síncrono. S17 mostra o problema a partir do controller e S19 a partir do spec, e ajustar o spec resolve os dois. A menção a referer/host em S19 só faz parte da correção proposta, então não conta como um segundo defeito."
+ }
+}

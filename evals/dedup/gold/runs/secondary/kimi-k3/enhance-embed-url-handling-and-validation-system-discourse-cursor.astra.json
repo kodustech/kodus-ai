@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_4eb5310c",
+    "mainDefect": "Cross-host redirects bypass the original embed URL host validation, enabling SSRF and response-data exfiltration.",
+    "secondary": [
+     {
+      "defect": "Missing fetch timeouts allow a slow endpoint to tie up a job worker.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_2a3a58c7",
+    "mainDefect": "The new Disqus import path loses original thread timestamps, stamping topics at import time and scrambling chronology.",
+    "secondary": [
+     {
+      "defect": "Removing the category option and category forwarding causes imported Disqus topics to land uncategorized.",
+      "coveredBy": []
+     },
+     {
+      "defect": "An unhandled synchronous fetch failure for one dead thread URL aborts the entire Disqus import run.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

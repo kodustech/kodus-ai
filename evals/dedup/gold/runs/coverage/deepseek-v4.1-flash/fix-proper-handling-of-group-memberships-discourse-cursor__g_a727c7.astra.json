@@ -1,0 +1,38 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Admin::GroupsController#add_members (line 66) requires group_id, which the routes do not supply."
+   },
+   {
+    "id": "F2",
+    "description": "Admin::GroupsController#remove_member (line 85) requires group_id, which the routes do not supply."
+   },
+   {
+    "id": "F3",
+    "description": "config/routes.rb (lines 49–50) defines /admin/groups/members paths without a group identifier, so the client's /admin/groups/:id/members.json URLs do not match."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_5c133571",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_62fe45ea",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

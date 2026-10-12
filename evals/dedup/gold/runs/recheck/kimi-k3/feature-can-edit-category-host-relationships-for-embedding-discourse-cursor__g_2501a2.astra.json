@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ec94f60b",
+     "s_6fa3626d",
+     "s_073fc623"
+    ],
+    "defect": "A migração acessa a primeira linha de consultas potencialmente vazias sem verificar sua existência, causando uma exceção que interrompe a execução."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S9 e S21 relatam o mesmo acesso sem proteção ao resultado vazio da consulta de embed_category. S9 e S21 também apontam a repetição desse erro no fallback da linha 15, corrigida pela mesma verificação de existência; isso não constitui outro defeito nem um bundle."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "In the AccessTokenContext constructor, the fourth requireNonNull checks grantType again instead of rawTokenId, so a null rawTokenId is never rejected.",
+    "members": [
+     "s_79880069",
+     "s_f5c72b60",
+     "s_d1fe5072",
+     "s_1af271fe"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4, S8 e S11 apontam o mesmo defeito: o requireNonNull da linha 73 de AccessTokenContext verifica grantType de novo em vez de rawTokenId. Todas propõem a mesma correção. As faixas de linhas e a ênfase mudam (S4 destaca a mensagem enganosa), mas nenhuma traz um segundo defeito."
+ }
+}

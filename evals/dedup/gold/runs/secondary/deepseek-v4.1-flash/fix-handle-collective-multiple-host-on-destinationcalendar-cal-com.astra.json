@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_40565196",
+    "mainDefect": "In updateEvent, the fallback searches for an already-falsy externalCalendarId, failing to select the host's destination calendar.",
+    "secondary": [
+     {
+      "defect": "In deleteEvent, the fallback likewise searches for an already-falsy externalCalendarId, failing to select the host's destination calendar.",
+      "coveredBy": [
+       "s_e60cb4a6"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_77f00126",
+    "mainDefect": "In updateEvent, the fallback searches for an already-falsy externalCalendarId, failing to select the host's destination calendar.",
+    "secondary": [
+     {
+      "defect": "In deleteEvent, the fallback likewise searches for an already-falsy externalCalendarId, failing to select the host's destination calendar.",
+      "coveredBy": [
+       "s_e60cb4a6"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

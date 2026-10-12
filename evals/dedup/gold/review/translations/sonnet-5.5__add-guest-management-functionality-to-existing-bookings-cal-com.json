@@ -1,0 +1,30 @@
+{
+ "s_66ed9605": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: as comparações de dedupe e blacklist diferenciam maiúsculas de minúsculas (case-sensitive). A blacklist está em minúsculas, mas o guest não, e a verificação de attendee existente compara strings brutas. POR QUÊ: Foo@x.com burla a blacklist e duplica um attendee foo@x.com já existente. Duplicatas dentro da lista enviada também não são removidas no servidor. CORREÇÃO: converter cada guest para minúsculas antes de comparar e fazer o dedupe da lista."
+ },
+ "s_c03cd3b4": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: sendAddGuestsEmails(evt, guests) recebe os guests brutos da entrada em vez dos uniqueGuests filtrados. POR QUÊ: guests na blacklist ou duplicados são tratados como novos e recebem o e-mail de 'scheduled', e attendees existentes cujo e-mail está na entrada também recebem esse e-mail. Além disso, updateCalendarAttendees não está envolvido em tratamento de erros, então uma falha no calendário acontece depois da escrita no DB e deixa os attendees adicionados, mas a requisição retornando erro. CORREÇÃO: passar uniqueGuests e tratar os erros do calendário."
+ },
+ "s_dc76b747": {
+  "summaryPt": "",
+  "contentPt": "A blacklist está em minúsculas, mas o e-mail do guest não, então a verificação é burlada alterando a caixa (ex.: 'Blocked@Example.com'). O dedupe de attendees tem o mesmo problema. Normalize ambos os lados: compare guest.toLowerCase() com as entradas da blacklist em minúsculas e com trim, e compare attendee.email.toLowerCase() no filtro de dedupe. Além disso, converta para minúsculas a comparação de isAttendee na linha 52 (attendee.email.toLowerCase() === user.email.toLowerCase())."
+ },
+ "s_d430022b": {
+  "summaryPt": "",
+  "contentPt": "O handler calcula `uniqueGuests` (com attendees existentes e e-mails da blacklist removidos), mas passa os `guests` brutos para sendAddGuestsEmails. Qualquer e-mail enviado que foi filtrado, como um attendee existente ou um endereço da blacklist, continua em `newGuests`. Se ele corresponder a um attendee, esse attendee recebe o e-mail de 'scheduled' em vez do aviso de 'guests added'. Passe `uniqueGuests` no lugar."
+ },
+ "s_bdaa90a8": {
+  "summaryPt": "",
+  "contentPt": "As entradas da blacklist estão em minúsculas, mas o e-mail do guest é comparado sem converter para minúsculas. Um endereço da blacklist enviado com caixa mista, como Foo@x.com, burla a blacklist. Compare `guest.toLowerCase()`."
+ },
+ "s_7a5dc6fd": {
+  "summaryPt": "",
+  "contentPt": "A unicidade no servidor não é garantida dentro da lista de entrada: e-mails duplicados em `guests` passam todos pelo filtro e o createMany insere attendees duplicados (apenas o dialog do cliente verifica unicidade). A verificação da blacklist também é case-sensitive (guest não está em minúsculas). Normalize os guests para minúsculas e faça o dedupe com um Set antes de filtrar. Além disso, passe uniqueGuests, não guests, para sendAddGuestsEmails."
+ },
+ "s_72a13bc3": {
+  "summaryPt": "",
+  "contentPt": "Os attendees são commitados no DB antes de eventManager.updateCalendarAttendees ser executado, e essa chamada não está envolvida em try/catch. Se ela lançar uma exceção, o usuário vê um erro, mas os guests já foram persistidos e o evento do calendário não é atualizado. Uma nova tentativa então falha com emails_must_be_unique_valid. Trate a falha (catch e log ou compensação), ou faça a atualização do calendário antes da persistência, ou torne as duas etapas atômicas."
+ }
+}

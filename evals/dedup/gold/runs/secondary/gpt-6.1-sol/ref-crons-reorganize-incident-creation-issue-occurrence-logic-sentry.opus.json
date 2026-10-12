@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8a2ece02",
+    "mainDefect": "The docstring has a typo: \"humam readible\" should be \"human readable\".",
+    "secondary": [
+     {
+      "defect": "The docstring's singular example is wrong: for one failed check-in, get_failure_reason returns a status-specific message such as \"A missed check-in was detected\", not the generic \"A failed check-in was detected\".",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

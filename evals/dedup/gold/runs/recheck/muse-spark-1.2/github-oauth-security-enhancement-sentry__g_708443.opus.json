@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_93c3db3c",
+     "s_8b0f7d96"
+    ],
+    "defect": "Accessing integration.metadata[\"sender\"][\"login\"] directly raises KeyError when sender is missing, producing a 500 instead of the invalid-installation error page."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 apontam o mesmo defeito: o acesso direto a integration.metadata[\"sender\"][\"login\"] gera KeyError e um erro 500 quando não existe sender. As duas propõem a mesma correção, usar .get() e retornar error(). Nenhuma delas traz um segundo defeito."
+ }
+}

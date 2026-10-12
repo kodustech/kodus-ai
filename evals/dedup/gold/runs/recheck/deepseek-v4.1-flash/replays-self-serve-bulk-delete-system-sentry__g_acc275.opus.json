@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1bfd1481",
+     "s_a4288eef"
+    ],
+    "defect": "When the use-table-widget-visualization flag is on, TableWidgetVisualization gets hardcoded empty columns and tableData instead of the real result data, so table widgets show up empty."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S6 apontam o mesmo defeito nas mesmas linhas (164-174) de chart.tsx: o branch da feature flag passa columns e tableData vazios fixos para TableWidgetVisualization, e a tabela aparece vazia. O caminho do arquivo em S6 é um pouco diferente, mas as linhas e o código são os mesmos. Ambas propõem a mesma correção (passar result.data/result.meta e as colunas derivadas), e nenhuma traz um segundo defeito."
+ }
+}

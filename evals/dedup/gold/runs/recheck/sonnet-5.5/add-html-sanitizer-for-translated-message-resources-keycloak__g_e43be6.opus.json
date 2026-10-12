@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_732d5528",
+     "s_ee4e0e15",
+     "s_0b9e8b6a",
+     "s_f60fe56a",
+     "s_a8060ba7"
+    ],
+    "defect": "The Lithuanian totpStep1/loginTotpStep1 strings were replaced with Italian text, so Lithuanian users see an Italian sentence on the TOTP setup screen."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S3, S4, S6, S10) apontam o mesmo defeito: o texto em italiano colocado nas chaves totpStep1/loginTotpStep1 dos arquivos lituanos. A diferença entre elas é só o arquivo citado e quantos locais cada uma menciona. É o mesmo erro repetido em dois lugares, resolvido com a mesma correção."
+ }
+}

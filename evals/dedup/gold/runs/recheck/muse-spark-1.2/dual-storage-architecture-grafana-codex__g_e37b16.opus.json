@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3eda2f5b",
+     "s_a6079adb",
+     "s_95d38bcb"
+    ],
+    "defect": "Async legacy writes in Mode3 derive their context from the request ctx, which is cancelled when the handler returns, so the legacy operations are aborted."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_a6079adb"
+  ],
+  "reasoningPt": "S5, S21 e S23 apontam o mesmo defeito principal: as goroutines de escrita no legacy usam o contexto da requisição, que é cancelado no retorno. A correção é a mesma para os três (context.WithoutCancel ou Background). S21 também cita uma data race no objeto capturado, mas isso aparece só no fim, como defeito secundário, então ela entra em bundles e continua no grupo."
+ }
+}

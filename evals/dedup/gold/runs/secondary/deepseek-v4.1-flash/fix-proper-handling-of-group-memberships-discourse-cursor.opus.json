@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_5c133571",
+    "mainDefect": "The add/remove member routes are declared as bare routes inside `resources :groups`, so they produce `/admin/groups/members` with no id segment and never match the client's `/admin/groups/<id>/members.json` URL.",
+    "secondary": [
+     {
+      "defect": "The controller actions read the group id with `params.require(:group_id)`, but the route never supplies that parameter, so the param name and the route don't agree.",
+      "coveredBy": [
+       "s_62fe45ea"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

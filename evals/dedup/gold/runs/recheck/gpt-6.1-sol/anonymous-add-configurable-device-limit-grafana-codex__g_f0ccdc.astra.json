@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c22edcd3",
+     "s_c4aad7e2"
+    ],
+    "defect": "A contagem e a inserção não são atômicas, permitindo que requisições concorrentes ultrapassem o limite de dispositivos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S3 relatam a mesma condição de corrida entre a contagem e a inserção de dispositivos. Ambas apontam o mesmo trecho e seriam resolvidas pela mesma correção de atomicidade; nenhuma inclui outro defeito."
+ }
+}

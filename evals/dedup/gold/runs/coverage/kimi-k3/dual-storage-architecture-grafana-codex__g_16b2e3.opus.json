@@ -1,0 +1,67 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Delete success path (line 106) passes the object name instead of options.Kind as the metric kind label, which mislabels the series and creates unbounded cardinality"
+   },
+   {
+    "id": "F2",
+    "description": "Delete (line 97) puts the plain d.Log into the context instead of the enriched log, so the name/kind/method fields are lost"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_442861c7",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6b11a209",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_ccf38f53",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7922ab52",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d0f19bee",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_20756cac",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_39ce7ed0",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

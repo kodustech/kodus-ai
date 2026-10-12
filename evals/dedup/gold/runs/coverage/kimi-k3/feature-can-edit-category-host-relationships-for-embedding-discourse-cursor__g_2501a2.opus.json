@@ -1,0 +1,40 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Lines 9-11: embed_category lookup indexes [0]['id'] on a possibly empty result, so it raises NoMethodError before the category_id == 0 fallback can run"
+   },
+   {
+    "id": "F2",
+    "description": "Line 15: uncategorized_category_id fallback lookup indexes [0]['value'] on a possibly empty result, so it fails the same way"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_073fc623",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_6fa3626d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_ec94f60b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

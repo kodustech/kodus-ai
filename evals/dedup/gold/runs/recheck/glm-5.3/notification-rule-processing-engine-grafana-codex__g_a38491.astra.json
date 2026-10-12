@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0d6f8146",
+     "s_8a22592e"
+    ],
+    "defect": "A delegação de useAllAlertRuleAbilities para useAllRulerRuleAbilities elimina a verificação de grupos federados Mimir, permitindo ações que deveriam ser bloqueadas por imutabilidade."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 relatam a mesma perda da verificação de grupos federados no caminho de useAllAlertRuleAbilities. As diferenças de linhas e consumidores citados não alteram o defeito: restaurar essa verificação resolve ambas as sugestões."
+ }
+}

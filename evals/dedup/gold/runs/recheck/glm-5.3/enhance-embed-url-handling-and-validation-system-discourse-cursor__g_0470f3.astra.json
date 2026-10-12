@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_090409bf",
+     "s_42e6661a"
+    ],
+    "defect": "PollFeed acessa i.content.scrub sem tratar conteúdo ausente, fazendo um item sem content interromper a importação dos demais."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_42e6661a"
+  ],
+  "reasoningPt": "S4 e S14 têm o mesmo defeito principal: o acesso desprotegido a i.content.scrub quando o item não contém conteúdo. S14 também relata incompatibilidade de String#scrub com versões antigas de Ruby e falha por título nulo, sendo um bundle que permanece no grupo pelo primeiro defeito."
+ }
+}

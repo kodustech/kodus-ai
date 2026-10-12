@@ -1,0 +1,44 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "OAuth2GrantType.Context constructor dereferences null formParams when initializing grantType, causing an NPE."
+   },
+   {
+    "id": "F2",
+    "description": "OAuth2GrantType.Context.setFormParams() leaves cached grantType stale, causing incorrect grant shortcuts in token IDs."
+   },
+   {
+    "id": "F3",
+    "description": "OAuth2GrantType.Context(Context) copy constructor was removed."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f886b821",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ce1639a8",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_611afbf2",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

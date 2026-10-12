@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "record_for_host passes lower(host) only on the DB column and not on the lookup value, so hosts that differ only in letter case never match and valid embeds are rejected.",
+    "members": [
+     "s_7d922aa5",
+     "s_9c6d1a3d",
+     "s_193a4147"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4, S7 e S12 relatam o mesmo defeito em record_for_host: a consulta aplica lower() só na coluna e não no valor buscado, então hosts com maiúsculas não batem. Todas propõem a mesma correção (downcase no parâmetro). As notas extras de S7 e S12 (falha fechada, before_validation sem downcase) fazem parte do mesmo problema e não são defeitos separados."
+ }
+}

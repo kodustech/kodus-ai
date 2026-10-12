@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0d8c193d",
+    "mainDefect": "Delete remains gated on rulerRule, so users cannot delete rules from the prom-only list view despite having permission.",
+    "secondary": [
+     {
+      "defect": "Pause remains gated on a Grafana rulerRule, so users cannot pause rules from the prom-only list view despite having permission.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

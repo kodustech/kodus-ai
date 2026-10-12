@@ -1,0 +1,72 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_17395beb",
+    "mainDefect": "Case-sensitive comparison against existing attendees allows case variants of their emails to be added again.",
+    "secondary": [
+     {
+      "defect": "The server does not enforce uniqueness within the submitted guest array, allowing duplicate attendees and notifications.",
+      "coveredBy": [
+       "s_c4f90580",
+       "s_bcca7cc3",
+       "s_0b97f8ef"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_7d8e5cc8",
+    "mainDefect": "Comparing raw guest emails against the lowercased blacklist allows case variations to bypass it.",
+    "secondary": [
+     {
+      "defect": "Case-sensitive comparison against existing attendees allows case variants of their emails to be added again.",
+      "coveredBy": [
+       "s_17395beb"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c4f90580",
+    "mainDefect": "The server does not deduplicate the submitted guest array, allowing repeated emails to reach createMany.",
+    "secondary": [
+     {
+      "defect": "Concurrent requests can both pass the existing-attendee check and insert the same guest, producing duplicate rows or an unhandled constraint error.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_da43918b",
+    "mainDefect": "The booking query fetches organizer credentials that are never used.",
+    "secondary": [
+     {
+      "defect": "Calendar updates use the requesting user's identity and credentials instead of the organizer's, preventing non-organizers from updating the organizer's event correctly.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_bcca7cc3",
+    "mainDefect": "The server does not enforce uniqueness within the submitted guest array, allowing duplicate attendee rows and notifications.",
+    "secondary": [
+     {
+      "defect": "Comparing raw guest emails against the lowercased blacklist allows case variations to bypass it.",
+      "coveredBy": [
+       "s_400ea655",
+       "s_7d8e5cc8"
+      ]
+     },
+     {
+      "defect": "Case-sensitive comparison against existing attendees allows case variants of their emails to be added again.",
+      "coveredBy": [
+       "s_17395beb"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

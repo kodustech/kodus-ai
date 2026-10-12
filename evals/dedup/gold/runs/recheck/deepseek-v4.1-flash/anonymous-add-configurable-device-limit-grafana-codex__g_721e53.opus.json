@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f0772bc6",
+     "s_0631d17a",
+     "s_23136ec7",
+     "s_e1a4bcff"
+    ],
+    "defect": "tagDeviceUI writes the device key to the local cache before CreateOrUpdateDevice and never clears it on ErrDeviceLimitReached, so the device limit is bypassed on later requests."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S6 e S9 relatam o mesmo defeito: o tagDeviceUI grava a chave no localCache antes do CreateOrUpdateDevice e não a remove quando ocorre ErrDeviceLimitReached. Por isso, o limite de dispositivos é contornado já na requisição seguinte. Todas propõem a mesma correção (gravar no cache só após o sucesso ou apagar a chave no erro), então o grupo fica como está."
+ }
+}

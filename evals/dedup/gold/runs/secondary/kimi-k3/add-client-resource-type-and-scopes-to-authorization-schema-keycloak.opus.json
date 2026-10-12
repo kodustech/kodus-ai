@@ -1,0 +1,29 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_4772139b",
+    "mainDefect": "ClientPermissionsV2.canExchangeTo throws UnsupportedOperationException on the live token-exchange path, so token-exchange requests fail with an unhandled 500 when V2 is active.",
+    "secondary": [
+     {
+      "defect": "exchangeToPermission also throws UnsupportedOperationException even though it is reachable through the same client-permission machinery.",
+      "coveredBy": [
+       "s_886d9c42"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a39e9ef4",
+    "mainDefect": "The private getEvaluationContext(ClientModel, AccessToken) method is dead code because canExchangeTo, the only method that would use it, always throws.",
+    "secondary": [
+     {
+      "defect": "ClientPermissionsV2 declares a logger that is never used.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

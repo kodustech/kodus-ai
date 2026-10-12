@@ -1,0 +1,53 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "addGuests.handler.ts:77: Mixed-case guest emails bypass the lowercased blacklist."
+   },
+   {
+    "id": "F2",
+    "description": "addGuests.handler.ts:76: Case-sensitive existing-attendee comparison allows duplicate attendees with different email casing."
+   },
+   {
+    "id": "F3",
+    "description": "addGuests.handler.ts:74-78: Duplicate emails within the submitted guest list are not removed server-side."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_dc76b747",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bdaa90a8",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_66ed9605",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7a5dc6fd",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

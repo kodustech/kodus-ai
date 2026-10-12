@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7b9105ff",
+     "s_53838d83"
+    ],
+    "defect": "The test cleanup removes the literal alias \"alias\" instead of the created \"idp-alias-N\"/\"idp-alias-20\" brokers, so the created IDPs leak into the shared test realm."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 apontam o mesmo defeito: o cleanup usa o alias literal \"alias\" em vez de \"idp-alias-\" + i e \"idp-alias-20\". Os IDPs criados vazam para o realm compartilhado. A correção é a mesma nas linhas 381 e 425, e só os intervalos de linha mudam um pouco, então o grupo fica como está."
+ }
+}

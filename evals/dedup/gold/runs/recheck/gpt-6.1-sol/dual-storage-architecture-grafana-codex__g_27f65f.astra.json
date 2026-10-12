@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_faba93e0",
+     "s_0469979e"
+    ],
+    "defect": "As operações assíncronas no armazenamento legado herdam o cancelamento do contexto da requisição, podendo ser interrompidas quando a resposta é enviada."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 apontam o mesmo defeito no Create: o contexto da operação assíncrona continua vinculado ao cancelamento da requisição. S3 também identifica a repetição desse erro em Delete, Update e DeleteCollection, o que mantém o agrupamento e não caracteriza um bundle."
+ }
+}

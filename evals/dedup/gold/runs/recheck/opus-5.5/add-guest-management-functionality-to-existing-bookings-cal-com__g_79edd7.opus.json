@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ff822a38",
+     "s_2fa589ab",
+     "s_77ce515e",
+     "s_a421800b"
+    ],
+    "defect": "The handler passes the raw `guests` input to `sendAddGuestsEmails` instead of the filtered `uniqueGuests`, so existing attendees get the new-booking email instead of the 'guests added' notice."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_ff822a38"
+  ],
+  "reasoningPt": "S3, S10, S15 e S20 relatam o mesmo defeito principal: `sendAddGuestsEmails` recebe `guests` em vez de `uniqueGuests`, e a correção é a mesma. S3 também aponta, no final, que o catch engole o erro sem registrá-lo. Isso é um defeito secundário, então S3 entra em bundles sem sair do grupo."
+ }
+}

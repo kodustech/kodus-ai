@@ -1,0 +1,50 @@
+{
+ "s_c715ef0c": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `execute(...)[0]['id']` é executado sobre um resultado vazio quando nenhum nome de categoria corresponde à configuração embed_category, ou quando a linha dessa configuração não existe. `[0]` retorna nil e `nil['id']` levanta NoMethodError. O mesmo acontece na linha 15 se a linha de uncategorized_category_id não existir. POR QUÊ: este é o caso padrão em uma instalação nova ou em um site que nunca definiu embed_category, então a migration quebra. CORREÇÃO: use `row = result.first; category_id = row ? row['id'].to_i : 0` e proteja a busca de uncategorized da mesma forma. Além disso, faça o escape do valor de host no INSERT, pois o `'#{h}'` interpolado quebra com uma aspa ou uma linha em branco."
+ },
+ "s_8d184fdd": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `EmbeddableHost.where(id: ...).first` pode retornar nil, e update e destroy usam o resultado sem um nil check. POR QUÊ: um id desconhecido ou já excluído levanta NoMethodError e retorna 500 em vez de 404. CORREÇÃO: use `find` ou levante Discourse::NotFound. Separadamente, o before_validation do model chama `host.sub!` em um host possivelmente nil, então uma requisição sem `embeddable_host[host]` também levanta NoMethodError."
+ },
+ "s_7882dbd4": {
+  "summaryPt": "",
+  "contentPt": "Os nomes e os conteúdos dos arquivos estão trocados. embeddable_host_fabricator.rb agora contém os fabricators :category, :diff_category, :happy_category e :private_category. category_fabricator.rb agora contém Fabricator(:embeddable_host). Os fabricators ainda carregam, mas quem procurar um fabricator pelo nome do arquivo vai olhar no lugar errado. Mova os fabricators de category de volta para category_fabricator.rb e mantenha apenas Fabricator(:embeddable_host) (host 'eviltrout.com', category) em embeddable_host_fabricator.rb."
+ },
+ "s_5fd8900b": {
+  "summaryPt": "",
+  "contentPt": "A busca compara lower(host) no banco com uri.host, que não está em minúsculas. Um referer com host em maiúsculas e minúsculas, como http://EvilTrout.com, não vai corresponder ao próprio host armazenado. Normalize os dois lados: `host = uri.host.downcase` antes da query. Isso falha de forma segura em vez de abrir um bypass, então o impacto é baixo."
+ },
+ "s_0d169170": {
+  "summaryPt": "",
+  "contentPt": "O teste 'is false if embeddable_host is blank' não verifica o que seu nome diz. O topic não faz stub de has_topic_embed? e embed_truncate não está habilitado, então expandable_first_post? é false independentemente dos hosts existentes. Faça stub de has_topic_embed? para true e habilite embed_truncate dentro deste teste. Depois, verifique que o resultado é true quando existe um host, para que o teste mostre que o estado do host é o que muda o resultado. Se a verificação de host foi removida de propósito, apague o teste."
+ },
+ "s_0fd17a9d": {
+  "summaryPt": "",
+  "contentPt": "A migration indexa `[0]` nos resultados das queries sem verificar se alguma linha foi retornada. Se `embed_category` não estiver definido (o padrão, então não existe linha em site_settings) ou não corresponder a nenhuma categoria, a primeira query retorna zero linhas. `[0]` então é nil e `nil['id']` levanta NoMethodError, o que aborta a migration. A query de fallback de `uncategorized_category_id` tem o mesmo problema. Use `.first`, proteja contra nil e use um fallback, por exemplo `row = execute(...).first; category_id = row ? row['id'].to_i : 0`."
+ },
+ "s_1b696765": {
+  "summaryPt": "",
+  "contentPt": "A migration indexa `[0]['id']` e `[0]['value']` nos resultados das queries sem verificar se há linhas vazias. Se não existir linha da configuração `embed_category`, que é o padrão, `execute(...)[0]` é nil e a migration levanta NoMethodError. A mesma falha acontece se `uncategorized_category_id` não estiver em site_settings. Proteja com `.first` e nil checks, ou use `cmd_tuples > 0`, e use a categoria uncategorized como fallback."
+ },
+ "s_e721f2fc": {
+  "summaryPt": "",
+  "contentPt": "Os conteúdos dos fabricators estão trocados entre os arquivos. `category_fabricator.rb` agora define `:embeddable_host`, e `embeddable_host_fabricator.rb` (linhas 1-27) contém os fabricators `:category`, `:diff_category`, `:happy_category` e `:private_category`. O nome de cada arquivo não corresponde mais ao que ele define. Coloque os fabricators de category de volta em `category_fabricator.rb` e o fabricator `:embeddable_host` em `embeddable_host_fabricator.rb`."
+ },
+ "s_5d6ec13d": {
+  "summaryPt": "",
+  "contentPt": "A query compara `lower(host)` com `uri.host` sem aplicar downcase. Um referer como `http://EvilTrout.com` tem `uri.host` igual a `EvilTrout.com` (URI pode ou não normalizar a caixa, dependendo da versão do Ruby). Ele nunca corresponderia à coluna em minúsculas. Use `host.downcase` na comparação."
+ },
+ "s_dca123ba": {
+  "summaryPt": "",
+  "contentPt": "A migration indexa `execute(...)[0]['id']` sem nil check. Se não houver linha `embed_category` em site_settings, que é o padrão em instalações que nunca a alteraram, `[0]` é nil e a migration levanta NoMethodError. O mesmo vale para a busca de `uncategorized_category_id`, pois essa linha pode ainda não existir. Proteja os dois casos: use `.first`, verifique nil e use a categoria padrão como fallback. Além disso, `INSERT ... '#{h}'` interpola valores brutos da configuração, então um host contendo aspa quebra o insert, e os valores devem passar por strip e escape."
+ },
+ "s_2a55c64a": {
+  "summaryPt": "",
+  "contentPt": "before_validation chama `self.host.sub!` sem nil check. `EmbeddableHost.new` (a action create) com `params[:embeddable_host][:host]` ausente deixa host nil, então a validação levanta NoMethodError e retorna 500 em vez de um erro de validação. Use `self.host = host.to_s.sub(...)` protegido por `host.present?`. Além disso, `record_for_host` compara `lower(host) = ?` com `uri.host` sem aplicar downcase, então referers com maiúsculas e minúsculas misturadas são rejeitados."
+ },
+ "s_7958039f": {
+  "summaryPt": "",
+  "contentPt": "`update` e `destroy` usam `.where(id:).first`, que retorna nil para um id desconhecido. `save_host(nil)` e `host.destroy` então levantam NoMethodError. Use `find`, ou retorne 404 quando o host não existir. `params[:embeddable_host]` sendo nil também levantaria erro em `save_host`."
+ }
+}

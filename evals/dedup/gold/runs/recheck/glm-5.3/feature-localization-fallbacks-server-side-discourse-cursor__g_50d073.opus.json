@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1ed3adad",
+     "s_99e2bf32"
+    ],
+    "defect": "The translate accelerator's cache key omits SiteSetting.default_locale, so stale fallback translations are served after the default locale changes at runtime."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S4 apontam o mesmo defeito: a chave do cache LRU do translate_accelerator não inclui o default_locale, e por isso traduções de fallback desatualizadas continuam sendo servidas depois que essa configuração muda. As duas propõem a mesma correção (incluir o default_locale na chave ou invalidar o cache), então o grupo fica como está."
+ }
+}

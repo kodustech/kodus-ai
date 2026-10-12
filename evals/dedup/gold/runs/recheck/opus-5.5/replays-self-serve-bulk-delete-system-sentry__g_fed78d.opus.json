@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0f836d52",
+     "s_4580ba49"
+    ],
+    "defect": "The age/timestamp mutual-exclusion validators check truthiness instead of key presence, so a value of 0 counts as absent and mixed reports pass validation."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_0f836d52"
+  ],
+  "reasoningPt": "S4 e S5 apontam como defeito principal o mesmo problema: a checagem de exclusão mútua entre age e timestamp usa truthiness, então o valor 0 é tratado como ausente. S4 acrescenta um segundo defeito, o de que um relatório sem nenhum dos dois campos também passa. Isso o coloca em bundles, mas não muda o grupo, que continua definido pelo defeito principal."
+ }
+}

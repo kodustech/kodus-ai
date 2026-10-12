@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bd0cbb6b",
+     "s_52703d76"
+    ],
+    "defect": "canView(ClientModel) aceita a permissão global VIEW antes de avaliar a permissão específica do cliente, ignorando uma negação explícita nesse cliente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 descrevem o mesmo curto-circuito em canView(ClientModel), que permite à concessão global de VIEW ignorar uma negação específica. Ambas propõem preservar o atalho dos papéis administrativos e avaliar a permissão pelo recurso do cliente; uma única correção resolve os dois relatos."
+ }
+}

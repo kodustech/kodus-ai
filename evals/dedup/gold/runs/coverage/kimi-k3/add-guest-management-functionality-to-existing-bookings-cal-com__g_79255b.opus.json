@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "BLACKLISTED_GUEST_EMAILS check (line 77): blacklist entries are lowercased but the guest email isn't, so a different-case guest email gets past the blacklist"
+   },
+   {
+    "id": "F2",
+    "description": "Existing-attendee duplicate check (line 76): `guest === attendee.email` is case-sensitive, so a different-case email is added as a duplicate attendee"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0005a575",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5ce0b553",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b8b58cda",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_76132555",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

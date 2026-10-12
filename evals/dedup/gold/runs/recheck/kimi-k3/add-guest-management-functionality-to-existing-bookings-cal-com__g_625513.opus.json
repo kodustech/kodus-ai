@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bfda6ce2",
+     "s_af58ea2b"
+    ],
+    "defect": "The organizer lookup `prisma.user.findFirstOrThrow({ id: booking.userId || 0 })` throws a raw Prisma error, which becomes an unhandled 500, when the booking's userId is null, instead of a clean TRPCError."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_bfda6ce2"
+  ],
+  "reasoningPt": "S8 e S22 apontam o mesmo defeito principal: findFirstOrThrow com `booking.userId || 0` gera um erro 500 não tratado quando userId é null. A correção é a mesma nos dois: tratar o caso null com um TRPCError ou usar booking.user. S8 também comenta, no WHY, a consulta extra desnecessária, por isso fica em bundles, mas continua no mesmo grupo."
+ }
+}

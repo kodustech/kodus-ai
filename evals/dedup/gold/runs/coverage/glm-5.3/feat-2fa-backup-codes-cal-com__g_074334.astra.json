@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Login authorize() in next-auth-options.ts uses non-constant-time indexOf to verify backup codes."
+   },
+   {
+    "id": "F2",
+    "description": "disable.ts line 61 uses non-constant-time indexOf to verify backup codes."
+   },
+   {
+    "id": "F3",
+    "description": "disable.ts line 61 throws a TypeError and returns 500 when backupCode is a non-string value."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_32fdabb3",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e721eff4",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

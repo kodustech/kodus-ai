@@ -1,0 +1,113 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_bc207073",
+    "mainDefect": "isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&, so only owners pass and team admins are wrongly refused with FORBIDDEN.",
+    "secondary": [
+     {
+      "defect": "When booking.eventType.teamId is null, the team admin/owner queries still run against teamId 0 instead of being skipped.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ff822a38",
+    "mainDefect": "sendAddGuestsEmails gets the raw guests input instead of uniqueGuests, so an existing attendee in the request gets a duplicate scheduled email.",
+    "secondary": [
+     {
+      "defect": "The catch around sendAddGuestsEmails swallows the error without logging it.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_12e66445",
+    "mainDefect": "The blacklist check compares guest emails without lowercasing them, so a blacklisted address written in different case gets past it.",
+    "secondary": [
+     {
+      "defect": "The duplicate check against existing attendees is case-sensitive, so the same person can be added twice with different casing.",
+      "coveredBy": [
+       "s_aed18a73"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_647627fa",
+    "mainDefect": "The blacklist check compares guest emails without lowercasing them, so a blacklisted address written in different case gets past it.",
+    "secondary": [
+     {
+      "defect": "The exact-match check against existing attendees lets duplicates in through case differences.",
+      "coveredBy": [
+       "s_aed18a73"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ef00ffaa",
+    "mainDefect": "The blacklist check compares guest emails without lowercasing them, so a blacklisted address written in different case gets past it.",
+    "secondary": [
+     {
+      "defect": "The existing-attendee check is also case-sensitive, so duplicates get through with different casing.",
+      "coveredBy": [
+       "s_aed18a73"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c542f448",
+    "mainDefect": "The guests array has no maximum size, so one request can add thousands of attendees and turn the endpoint into an email-spam relay.",
+    "secondary": [
+     {
+      "defect": "Seat limits and seatsShowAttendees are not enforced on seated events, so capacity can be exceeded and attendee emails exposed.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Guests can be added to cancelled or past bookings because booking status is not checked.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b459ede8",
+    "mainDefect": "isInvalidEmail is never reset on success, on email edits, or on close through onOpenChange, so the error banner stays visible.",
+    "secondary": [
+     {
+      "defect": "Closing the dialog through onOpenChange does not clear multiEmailValue, so stale emails remain.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The onError message is a template string that is always truthy, so the unable_to_add_guests fallback never runs.",
+      "coveredBy": [
+       "s_69410500",
+       "s_37e96fa9"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_aed18a73",
+    "mainDefect": "Guest uniqueness is only enforced on the client; the server does not normalize case or dedupe guests against each other or against existing attendees.",
+    "secondary": [
+     {
+      "defect": "Concurrent requests can insert duplicate attendees because the read and insert are not in a transaction and there is no unique constraint.",
+      "coveredBy": []
+     },
+     {
+      "defect": "sendAddGuestsEmails is passed the raw guests list instead of the deduplicated uniqueGuests.",
+      "coveredBy": [
+       "s_ff822a38",
+       "s_2fa589ab",
+       "s_77ce515e",
+       "s_a421800b"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

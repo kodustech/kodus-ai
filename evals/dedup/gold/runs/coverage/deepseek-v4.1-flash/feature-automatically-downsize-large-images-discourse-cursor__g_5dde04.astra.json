@@ -1,0 +1,46 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "utilities.js:182 hardcodes 10MB for upload validation, ignoring configured per-type size limits."
+   },
+   {
+    "id": "F2",
+    "description": "utilities.js:246 hardcodes 10MB in the 413 alert, reporting the wrong configured limit."
+   },
+   {
+    "id": "F3",
+    "description": "Non-image attachments lack an equivalent server-side size check, leaving max_attachment_size_kb unenforced on either side."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_550877fa",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_ac29b93c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_78b42b19",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,52 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "promptSha": "d54a48b22546f3f8ddb4de8623841c189618d175",
+  "attempt": 1,
+  "ms": 31353,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_e1e9ba57",
+          "s_60bff4e1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The unguarded awaited retry-count update in the catch block can throw and abort processing of the remaining reminders.",
+        "rationale": "Both describe the same error-path database write escaping the per-reminder catch. Guarding that write resolves both reports."
+      },
+      {
+        "members": [
+          "s_2e6a48cf",
+          "s_d2d5f53e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The retry-exhaustion deletion branch lacks an SMS method filter and can delete reminders belonging to other methods.",
+        "rationale": "Both identify the same unscoped OR branch. The shared schema and missing date bound provide context for the same deletion-scope defect; adding the SMS filter addresses both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_5184ab81",
+        "confidence": "high"
+      },
+      {
+        "id": "s_277567c2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_fde2e5d4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_826cc354",
+        "confidence": "high"
+      }
+    ]
+  }
+}

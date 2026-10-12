@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1fcaa473",
+     "s_1dd107cd"
+    ],
+    "defect": "Interpolação de valores em uma string de comando shell executada por convert_with, apontada como superfície de injeção."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S13 e S15 apontam a mesma superfície de injeção em convert_with; S15 apenas acompanha o argumento de dimensões até esse ponto. A divergência sobre o risco ser preexistente ou introduzido pelo PR não cria outro defeito, e a mesma correção na execução do comando atende às duas sugestões."
+ }
+}

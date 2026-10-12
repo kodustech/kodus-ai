@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6a01472a",
+    "mainDefect": "Translation calls outside controllers do not load fallback locales, causing missing translations that can remain cached after those locales load.",
+    "secondary": [
+     {
+      "defect": "The translation cache omits the site default locale, so changing it leaves stale fallback text cached.",
+      "coveredBy": [
+       "s_e15dc8b6"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,57 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create async legacy goroutine (line 51) derives its timeout ctx from the request ctx, so it is cancelled when the handler returns"
+   },
+   {
+    "id": "F2",
+    "description": "Delete async legacy goroutine (line 110) derives its ctx from the request ctx"
+   },
+   {
+    "id": "F3",
+    "description": "Update async legacy goroutine (line 135) derives its ctx from the request ctx"
+   },
+   {
+    "id": "F4",
+    "description": "DeleteCollection async legacy goroutine (line 163) derives its ctx from the request ctx"
+   },
+   {
+    "id": "F5",
+    "description": "Goroutine captures the shared runtime.Object pointer, causing a data race (needs DeepCopy)"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3eda2f5b",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_a6079adb",
+    "covers": [
+     "F1",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_95d38bcb",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

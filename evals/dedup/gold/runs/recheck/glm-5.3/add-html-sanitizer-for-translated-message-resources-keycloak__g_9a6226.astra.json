@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a63922db",
+     "s_d1bdd70e"
+    ],
+    "defect": "A sobreposição entre prefixo e sufixo comuns no diagnóstico de HTML inválido gera índices inválidos para substring e interrompe o verificador com StringIndexOutOfBoundsException."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S12 descrevem o mesmo defeito no cálculo dos limites usados por substring, no mesmo trecho do diagnóstico. Os exemplos diferem, mas impedir a sobreposição entre prefixo e sufixo resolve ambos; nenhuma sugestão relata um segundo defeito."
+ }
+}

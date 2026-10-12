@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cc6b5fef",
+     "s_88211022",
+     "s_b87c3cd2",
+     "s_bd0c0912"
+    ],
+    "defect": "A verificação isTeamAdminOrOwner usa && em vez de ||, negando acesso a administradores que não sejam também proprietários."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_cc6b5fef",
+   "s_bd0c0912"
+  ],
+  "reasoningPt": "S1, S6, S11 e S13 têm como primeiro defeito o uso de && no lugar de || na mesma verificação de permissão, portanto o grupo deve ser mantido. S1 também questiona o acesso de participantes e S13 aponta uma tradução ausente; ambos são bundles, mas esses defeitos secundários não alteram o agrupamento."
+ }
+}

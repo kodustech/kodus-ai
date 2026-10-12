@@ -1,0 +1,55 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6f563687",
+    "mainDefect": "The assertion can run before the reader finishes, allowing late exceptions to escape detection.",
+    "secondary": [
+     {
+      "defect": "The non-daemon reader thread can outlive the test method.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_907d17d3",
+    "mainDefect": "The assertion can run before the reader finishes, allowing late exceptions to escape detection.",
+    "secondary": [
+     {
+      "defect": "The reader loop may never execute, so the test can pass without exercising concurrent reads and deletions.",
+      "coveredBy": [
+       "s_cfee9f21"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_cfee9f21",
+    "mainDefect": "The test does not guarantee that any reader iteration overlaps the deletions.",
+    "secondary": [
+     {
+      "defect": "An in-flight reader request can add an exception after the assertion runs, producing a false pass.",
+      "coveredBy": [
+       "s_6f563687",
+       "s_907d17d3"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_4687a409",
+    "mainDefect": "If a deletion throws, the stop flag is never set and the non-daemon reader can loop forever.",
+    "secondary": [
+     {
+      "defect": "The assertion runs without waiting for reader termination, so late reader exceptions can produce a false pass.",
+      "coveredBy": [
+       "s_6f563687",
+       "s_907d17d3"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

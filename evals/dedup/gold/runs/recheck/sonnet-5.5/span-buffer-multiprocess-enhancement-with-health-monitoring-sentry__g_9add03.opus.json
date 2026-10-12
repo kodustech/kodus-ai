@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_95a93597",
+     "s_91f6b187"
+    ],
+    "defect": "The wait_produce metric is tagged with the key \"shards\", while the other new metrics use \"shard\", so the tag key is inconsistent across metrics."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S8 apontam o mesmo defeito: a métrica wait_produce usa a chave de tag \"shards\" enquanto as outras métricas usam \"shard\". A observação de S8 sobre o valor ser uma lista separada por vírgulas é só um detalhe da correção e não é um defeito separado. Por isso o grupo fica como está."
+ }
+}

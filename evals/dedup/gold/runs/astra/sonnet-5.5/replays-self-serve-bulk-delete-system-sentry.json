@@ -1,0 +1,58 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "c9c5a6d4b39cb6b91e6bf15dfd9e33f452700dec",
+  "attempt": 1,
+  "ms": 40897,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_5a268069",
+          "s_9352f0cd",
+          "s_bdf9a1e7",
+          "s_bd9befb8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Pairing error_ids with events.values() by position can associate IDs with the wrong event data when nodes are missing or reordered.",
+        "rationale": "All four suggestions identify the same positional pairing in fetch_error_details and propose looking up event data by node ID."
+      },
+      {
+        "members": [
+          "s_c2a5e9e7",
+          "s_fecd973c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Age/timestamp validation uses truthiness, allowing zero values to bypass exclusivity checks, and does not require either field to be present.",
+        "rationale": "Both report the zero-value bypass in the same validators. s_c2a5e9e7 also reports acceptance when both fields are absent, which the merged comment must preserve."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_2bcad9d4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_33cb2e33",
+        "confidence": "high"
+      },
+      {
+        "id": "s_37fe1b8f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c721b9d2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b6da4f38",
+        "confidence": "high"
+      }
+    ]
+  }
+}

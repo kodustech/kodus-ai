@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_40565196",
+    "mainDefect": "In updateEvent in CalendarService, the fallback `find(cal => cal.externalId === externalCalendarId)` only runs when externalCalendarId is falsy, so it never matches and the update goes to the wrong calendar instead of the destination calendar.",
+    "secondary": [
+     {
+      "defect": "The same dead fallback in deleteEvent (around line 317) leaves calendarId undefined, so deletes go to the wrong calendar.",
+      "coveredBy": [
+       "s_e60cb4a6"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_77f00126",
+    "mainDefect": "In updateEvent in CalendarService, the fallback `find(cal => cal.externalId === externalCalendarId)` only runs when externalCalendarId is falsy, so it never finds the destination calendar.",
+    "secondary": [
+     {
+      "defect": "deleteEvent at lines 315-317 has the same dead fallback, so it never resolves to the destination calendar.",
+      "coveredBy": [
+       "s_e60cb4a6"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

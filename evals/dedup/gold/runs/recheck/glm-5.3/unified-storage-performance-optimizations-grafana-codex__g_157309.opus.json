@@ -1,0 +1,15 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_b1fa092d",
+   "s_b3fa293f"
+  ],
+  "bundles": [
+   "s_b3fa293f"
+  ],
+  "reasoningPt": "S1 aponta um bug concreto: o bleve.New falha com ErrorIndexPathExists quando o diretório do índice já existe, o que agora impede o boot a cada reinício. A correção principal fica no bleve.go, com fallback para bleve.Open. S4 trata de outra coisa: a mudança de contrato do construtor, que passou a bloquear durante o build do índice e a falhar em erros transitórios, sem que os chamadores fossem ajustados. Como os defeitos e as correções principais são diferentes, o grupo deve ser separado, e S4 também junta dois problemas (bloqueio e falha fatal)."
+ }
+}

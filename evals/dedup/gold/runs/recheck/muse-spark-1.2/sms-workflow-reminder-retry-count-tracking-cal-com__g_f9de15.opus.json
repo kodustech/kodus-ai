@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_dc093c16",
+     "s_4e2a8deb"
+    ],
+    "defect": "retryCount is incremented from a stale in-memory value (reminder.retryCount + 1) instead of an atomic DB increment, so concurrent runs lose increments."
+   }
+  ],
+  "unique": [
+   "s_973148f4"
+  ],
+  "bundles": [
+   "s_dc093c16"
+  ],
+  "reasoningPt": "O defeito principal de S3 é o incremento não atômico de retryCount a partir de um valor lido antes, o mesmo de S7. Por isso S3 fica no grupo de S7. A falta de proteção no update dentro do catch aparece em S3 só como segundo defeito, então S3 entra em bundles e não se liga a S8. S8 trata apenas desse update sem proteção, que exige outra correção, e fica sozinho."
+ }
+}

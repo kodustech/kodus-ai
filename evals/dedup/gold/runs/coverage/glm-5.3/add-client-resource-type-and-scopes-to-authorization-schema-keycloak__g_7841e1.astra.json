@@ -1,0 +1,42 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "ClientPermissionsV2.getClientsWithPermission adds the type-level \"Clients\" resource name as a client ID."
+   },
+   {
+    "id": "F2",
+    "description": "AdminPermissionsSchema.getOrCreateResource leaves per-client resources untyped, so getClientsWithPermission misses per-client grants."
+   },
+   {
+    "id": "F3",
+    "description": "V2 client removal leaves stale resources whose deleted-client IDs cause an NPE in AvailableRoleMappingResource.getRoleIdsWithPermissions."
+   },
+   {
+    "id": "F4",
+    "description": "getClientsWithPermission does not return the real client IDs covered by an all-clients grant, leaving that grant unrepresented."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_924e2d8b",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_accc352b",
+    "covers": [
+     "F1",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

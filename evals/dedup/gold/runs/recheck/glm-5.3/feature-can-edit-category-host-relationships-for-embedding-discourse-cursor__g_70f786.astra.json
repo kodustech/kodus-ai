@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_21df2e7a",
+     "s_c050f347"
+    ],
+    "defect": "O teste sobre ausência de host mantém uma expectativa removida do contrato de expandable_first_post? e passa sem isolar a condição que pretende verificar."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c050f347"
+  ],
+  "reasoningPt": "S8 e S13 têm como defeito principal o mesmo teste desatualizado, que passa sem verificar a influência da ausência de host. S13 também aponta o erro de digitação em 'emeddable', sendo um bundle; pela regra do primeiro defeito, permanece no grupo de S8."
+ }
+}

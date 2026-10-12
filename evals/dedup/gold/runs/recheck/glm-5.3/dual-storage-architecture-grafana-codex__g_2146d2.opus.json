@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_01f5b937",
+     "s_85cdb7f9",
+     "s_bb72d331",
+     "s_093e0431"
+    ],
+    "defect": "The async legacy-write goroutines in Create, Delete, Update and DeleteCollection derive their context from the request context, which is canceled when the handler returns, so the legacy writes are silently aborted."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_01f5b937"
+  ],
+  "reasoningPt": "S1, S11, S15 e S19 têm o mesmo defeito principal: as goroutines de escrita legada usam o contexto da requisição, que é cancelado quando o handler retorna. A correção é a mesma nos quatro pontos (context.WithoutCancel). O S1 também sugere registrar o erro legado dentro da goroutine, que é um defeito secundário, por isso entra em bundles sem mudar o grupo."
+ }
+}

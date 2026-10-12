@@ -1,0 +1,73 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "8e530914d4a5f465c676d352a2389709b94977b0",
+  "attempt": 1,
+  "ms": 56042,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_3c79f482",
+          "s_9acef6ae",
+          "s_5ce67a29",
+          "s_7b202983",
+          "s_e877f786",
+          "s_67a98570",
+          "s_5c8e19ea",
+          "s_aa76ef5a"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Google updateEvent and deleteEvent lose the destination-calendar fallback by searching for an externalCalendarId that is already known to be falsy.",
+        "rationale": "All report the identical faulty fallback repeated in update and delete, each requiring an edit. Several members explicitly report both occurrences, linking the location-specific reports."
+      },
+      {
+        "members": [
+          "s_3a7bfe53",
+          "s_e6381e43",
+          "s_1933f6e3",
+          "s_039a6ecf",
+          "s_6e328550"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The Google Meet fallback dereferences an undefined first destination calendar when the array is empty or absent.",
+        "rationale": "Every member reports the same unguarded integration access in EventManager and proposes restoring null-safe behavior."
+      },
+      {
+        "members": [
+          "s_99ffaedb",
+          "s_08905d22",
+          "s_af4c6322",
+          "s_47e65bca",
+          "s_dc30b21a",
+          "s_7335ccdf",
+          "s_33ed9a24"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Office365, Lark, and Base calendar implementations are reported as missing the new credentialId parameter and credential-specific destination selection, with Lark also using the first destination in update and delete.",
+        "rationale": "The broad interface report explicitly includes both unchanged provider signatures and missing per-credential selection, connecting the narrower signature and routing reports. The merged comment must preserve both concerns and the distinct provider and method locations."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_c1b141d5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e729c9af",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d081d35b",
+        "confidence": "high"
+      }
+    ]
+  }
+}

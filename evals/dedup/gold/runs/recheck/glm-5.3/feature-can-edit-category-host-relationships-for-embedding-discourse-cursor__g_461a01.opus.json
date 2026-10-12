@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The migration dereferences execute(...)[0]['id'] on the embed_category query without checking for zero rows, so it raises NoMethodError and makes the `category_id == 0` fallback unreachable.",
+    "members": [
+     "s_14dcd034",
+     "s_7128b0ce",
+     "s_afaedccf",
+     "s_17201292",
+     "s_f33a3118"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_afaedccf"
+  ],
+  "reasoningPt": "S1, S6, S14, S16 e S21 relatam o mesmo defeito: o acesso a [0]['id'] na consulta de embed_category sem verificar se há linhas, o que gera NoMethodError e deixa o fallback `== 0` inalcançável. Todas se resolvem com a mesma proteção. S21 começa pelo fallback morto, mas isso é consequência direta do mesmo problema. S14 também sugere comparar pelo id em vez do nome da categoria, um segundo defeito secundário, por isso aparece em bundles."
+ }
+}

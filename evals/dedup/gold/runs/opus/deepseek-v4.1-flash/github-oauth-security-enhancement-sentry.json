@@ -1,0 +1,71 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "3bc20255b2d6f4bdcd360bcd9d19f9393636fb92",
+  "attempt": 1,
+  "ms": 9505,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 13065,
+    "cache_read_input_tokens": 6564,
+    "output_tokens": 469,
+    "output_tokens_details": {
+      "thinking_tokens": 91
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 13065,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 469,
+        "cache_read_input_tokens": 6564,
+        "cache_creation_input_tokens": 13065,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 13065
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1152208,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_4c48d4f6",
+          "s_412f55af",
+          "s_2c66d685",
+          "s_b6bcca54",
+          "s_faf6b973"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "integration.metadata[\"sender\"][\"login\"] is read without a guard, but build_integration only sets sender sometimes, so a missing sender raises KeyError/TypeError and returns a 500 instead of the error page. Separately, the login comparison is case-sensitive even though GitHub logins are case-insensitive.",
+        "rationale": "All five report the same missing guard on the conditionally set sender metadata at lines 500-505. s_faf6b973 also raises the case-sensitive comparison, so the merged comment has to carry both defects."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_8ab7e647",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e3273b46",
+        "confidence": "high"
+      }
+    ]
+  }
+}

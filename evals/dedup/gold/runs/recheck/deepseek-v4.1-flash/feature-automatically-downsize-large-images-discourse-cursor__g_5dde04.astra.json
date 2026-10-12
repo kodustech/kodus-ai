@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_78b42b19",
+     "s_ac29b93c",
+     "s_550877fa"
+    ],
+    "defect": "O limite fixo de 10 MB em utilities.js substitui os limites configuráveis por tipo na validação e no aviso de tamanho de upload."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S5 e S9 apontam a mesma substituição dos limites configuráveis pelo valor fixo de 10 MB. S9 detalha o impacto em anexos não relacionados a imagens, enquanto S2 e S5 também citam o aviso de erro 413; são manifestações do mesmo defeito, sem defeitos independentes adicionais."
+ }
+}

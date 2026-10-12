@@ -1,0 +1,90 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_3945cc4f",
+    "mainDefect": "External HTML is stored and rendered through raw_html without sanitization, allowing stored XSS.",
+    "secondary": [
+     {
+      "defect": "The imported-from footer interpolates an unescaped URL into HTML, allowing attribute or markup injection.",
+      "coveredBy": [
+       "s_ddd39050",
+       "s_7466b913"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_686ed317",
+    "mainDefect": "The missing-embed_url test fails at the host filter before reaching the parameter guard it claims to test.",
+    "secondary": [
+     {
+      "defect": "The test asserts only a non-success response rather than the claimed 404 status.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_6a2d7081",
+    "mainDefect": "Fetching thread URLs without per-item error handling makes an unavailable page abort the Disqus import.",
+    "secondary": [
+     {
+      "defect": "Imported topics lose their original timestamps because created_at is no longer forwarded.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Imported topics lose the selected category because the category option is no longer forwarded.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_42e6661a",
+    "mainDefect": "Calling scrub on missing feed content raises an exception and aborts the remaining imports.",
+    "secondary": [
+     {
+      "defect": "String#scrub is unavailable on the supported Ruby versions, so processing can fail even when content exists.",
+      "coveredBy": []
+     },
+     {
+      "defect": "A missing feed title reaches PostCreator with validations skipped and causes a null-title insert failure.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_5743ce29",
+    "mainDefect": "Relative links and image URLs without a leading slash remain unresolved and point into the forum instead of the source site.",
+    "secondary": [
+     {
+      "defect": "The URL rewrite incorrectly drops explicit ports for HTTP on port 443 and HTTPS on port 80.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_03b0d38a",
+    "mainDefect": "Concatenating discourseUrl without ensuring a trailing slash produces a malformed iframe URL.",
+    "secondary": [
+     {
+      "defect": "The postMessage origin check rejects valid resize messages when discourseUrl is protocol-relative.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7466b913",
+    "mainDefect": "The imported-from footer interpolates an unescaped URL into HTML, allowing attribute or markup injection.",
+    "secondary": [
+     {
+      "defect": "Imported feed HTML is entity-decoded and stored as raw HTML without sanitization, allowing injected content to execute.",
+      "coveredBy": [
+       "s_3945cc4f"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

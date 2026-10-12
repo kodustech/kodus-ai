@@ -1,0 +1,38 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "component": [
+    "s_3adf9f4b",
+    "s_52c21f9e",
+    "s_8924c5ce",
+    "s_8c2349e8",
+    "s_c7cf0d7d"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_3adf9f4b",
+          "s_52c21f9e",
+          "s_8c2349e8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "defect": "PollFeed calls i.content.scrub without a nil check, so an RSS item with no content raises NoMethodError and stops the job. s_52c21f9e also reports that the open/parse network call has no rescue."
+      },
+      {
+        "members": [
+          "s_8924c5ce",
+          "s_c7cf0d7d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "defect": "TopicEmbed.import runs `contents << ...` on nil contents and raises NoMethodError. s_c7cf0d7d traces the nil to Readability's doc.content in import_remote and adds that open() has no rescue there. s_8924c5ce adds that << mutates the caller's string and fails on frozen input."
+      }
+    ],
+    "unique": [],
+    "decisive": false,
+    "reasoning": "All three PollFeed suggestions report the same crash on nil i.content.scrub at poll_feed.rb line 35. They form a clear same_location group. s_52c21f9e also reports the missing rescue around open/parse, so the merged comment has to carry more than one defect.\n\ns_8924c5ce and s_c7cf0d7d both name the same problem: `contents << ...` at topic_embed.rb line 13 raises NoMethodError when contents is nil. s_c7cf0d7d says the nil comes from doc.content in import_remote. Each one also adds its own defect (mutation/frozen string vs. no rescue on fetch), so the combined comment needs both. Grouping these two is a judgment call, because s_c7cf0d7d could instead be fixed with a guard in import_remote.\n\nThese two pairs should not be merged. The PollFeed crash happens at scrub, before import is ever called, and CGI.unescapeHTML never returns nil. So the nil-content crashes come from different sources and need fixes in different places. s_c7cf0d7d's missing rescue sits on a separate open() call in a different code path from s_52c21f9e's. That similarity is too loose to call a systemic pattern that links the groups, so Judge 1's single five-member group goes too far."
+  }
+}

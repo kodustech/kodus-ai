@@ -1,0 +1,44 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c2f1d70e",
+    "mainDefect": "The `queued` default `timezone.now()` runs once at module import, so every AssignmentSource created without an explicit value gets the same stale timestamp.",
+    "secondary": [
+     {
+      "defect": "test_to_dict only checks that `queued` is not None, which hides the wrong timestamp.",
+      "coveredBy": [
+       "s_03c0a1d9"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_03c0a1d9",
+    "mainDefect": "The test only checks that `queued` is not None, so it passes no matter what value the field holds and cannot catch a wrong timestamp.",
+    "secondary": [
+     {
+      "defect": "The `queued` default `timezone.now()` runs once at class definition, so all instances share the process start time; it should use `field(default_factory=timezone.now)`.",
+      "coveredBy": [
+       "s_c2f1d70e",
+       "s_b183150d",
+       "s_9eae5caf",
+       "s_0ee85020"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_400b91f4",
+    "mainDefect": "test_from_dict_empty_array passes `{}` instead of an array, so the name is wrong and non-dict input such as a list is never tested.",
+    "secondary": [
+     {
+      "defect": "The test name test_from_dict_inalid_data has a typo, so a test run filtered on 'invalid' will not pick it up.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

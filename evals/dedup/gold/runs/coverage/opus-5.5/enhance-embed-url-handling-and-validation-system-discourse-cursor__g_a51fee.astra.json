@@ -1,0 +1,44 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "TopicEmbed.import line 13 interpolates the URL into the imported-from link without escaping its attribute or text."
+   },
+   {
+    "id": "F2",
+    "description": "Imported HTML is stored and rendered without sanitization because Post.cook line 133 returns raw_html content unchanged."
+   },
+   {
+    "id": "F3",
+    "description": "Later PostRevisor edits retain raw_html mode and also bypass sanitization, allowing editor-supplied HTML to become stored XSS."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_8ac429ca",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8882a392",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bfc86ebc",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

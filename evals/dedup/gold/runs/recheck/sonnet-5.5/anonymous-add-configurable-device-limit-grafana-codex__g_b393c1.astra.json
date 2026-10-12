@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f3ed8c70",
+     "s_52be6958",
+     "s_df37064d"
+    ],
+    "defect": "A chave do dispositivo é inserida no cache antes da gravação no banco e permanece após uma falha, permitindo que requisições seguintes contornem o limite de dispositivos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S6 descrevem o mesmo defeito: a entrada no cache permanece após a falha na gravação, dispensando a validação nas próximas requisições. As diferenças de linhas e de abrangência da descrição não alteram a causa; inserir no cache apenas após sucesso ou remover a entrada em caso de erro resolve os três relatos."
+ }
+}

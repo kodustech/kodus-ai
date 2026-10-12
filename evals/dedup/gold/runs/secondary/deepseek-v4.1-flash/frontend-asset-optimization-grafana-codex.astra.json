@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_12bc3466",
+    "mainDefect": "The cache is not re-checked after acquiring the write lock, causing concurrent cold-cache callers to redundantly recompute and overwrite it.",
+    "secondary": [
+     {
+      "defect": "The write lock is held across file/CDN I/O, blocking concurrent callers during loading.",
+      "coveredBy": [
+       "s_efe46b6a"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

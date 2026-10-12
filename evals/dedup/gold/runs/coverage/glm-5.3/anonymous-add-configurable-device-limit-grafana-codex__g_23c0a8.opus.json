@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "database.go updateDevice: on MySQL, RowsAffected counts changed rows rather than matched rows, so an identical UPDATE on an existing device returns 0 and is wrongly rejected with ErrDeviceLimitReached"
+   },
+   {
+    "id": "F2",
+    "description": "database.go updateDevice: clock skew pushes the stored updated_at outside the [UpdatedAt-30d, UpdatedAt+1min] window, so an existing device matches 0 rows and is wrongly rejected with ErrDeviceLimitReached"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_94ef8b50",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_9e5e643b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

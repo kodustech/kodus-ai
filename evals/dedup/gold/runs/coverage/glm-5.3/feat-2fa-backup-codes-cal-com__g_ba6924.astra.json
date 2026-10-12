@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "login.2fa.e2e.ts: Copy test checks only an unconditional success toast, not clipboard contents."
+   },
+   {
+    "id": "F2",
+    "description": "login.2fa.e2e.ts: Download test checks only the filename, not downloaded backup-code contents."
+   },
+   {
+    "id": "F3",
+    "description": "login.2fa.e2e.ts: Backup-code grid entries are never asserted."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_ac3a5ed0",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_be1b7939",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

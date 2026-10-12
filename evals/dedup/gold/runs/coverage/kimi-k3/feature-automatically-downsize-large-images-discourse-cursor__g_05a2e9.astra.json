@@ -1,0 +1,50 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "utilities.js:182: Flat 10MB validation ignores max_attachment_size_kb, causing client/server disagreement for attachments."
+   },
+   {
+    "id": "F2",
+    "description": "utilities.js:180-186: Images accepted by the client can still exceed max_image_size_kb after five server downsizing attempts and be rejected."
+   },
+   {
+    "id": "F3",
+    "description": "utilities.js:183-184: The client advertises a 10240KB maximum that disagrees with the configured limits and server rejection messages."
+   },
+   {
+    "id": "F4",
+    "description": "utilities.js:243-249: The 413 error handler reports 10240KB regardless of the configured limit."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_ee27a71c",
+    "covers": [
+     "F1",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_99672758",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7b3553a9",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

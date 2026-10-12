@@ -1,0 +1,83 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "e1f212d78fbf89ea677c3fc4ee768212568ae81a",
+  "attempt": 1,
+  "ms": 10056,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 29183,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 758,
+    "output_tokens_details": {
+      "thinking_tokens": 240
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 29183,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 758,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 29183,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 29183
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.2504056,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_79880069",
+          "s_f5c72b60",
+          "s_d1fe5072",
+          "s_1af271fe"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "In the AccessTokenContext constructor, the null check meant for rawTokenId checks grantType again, so a null rawTokenId is never rejected.",
+        "rationale": "All four point at the same line of the same constructor and describe the same wrong-argument mistake, with the same one-line fix."
+      },
+      {
+        "members": [
+          "s_f2171902",
+          "s_5ae95ca9",
+          "s_a148cd25",
+          "s_dccfaa16",
+          "s_88dcd5ff",
+          "s_756b95c2",
+          "s_be2a870e",
+          "s_511ab22a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "isAccessTokenId reads the grant shortcut at the wrong offset (substring(3,5) instead of (4,6)) and inverts the equality check, so it never checks the grant type; it also needs a length guard before calling substring.",
+        "rationale": "All of them target the same matcher in AssertEvents and report the wrong substring offset. Most also report the inverted comparison, and s_511ab22a adds a length guard, so the merged comment has to cover all three points."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_bf39cccb",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,55 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_fae04201",
+    "mainDefect": "The admin UI English validation message uses MessageFormat syntax that i18next cannot interpolate.",
+    "secondary": [
+     {
+      "defect": "The account UI English validation message also uses MessageFormat syntax that i18next cannot interpolate.",
+      "coveredBy": [
+       "s_42582bb1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_8507049f",
+    "mainDefect": "The admin UI English validation message uses MessageFormat syntax that i18next cannot interpolate.",
+    "secondary": [
+     {
+      "defect": "The account UI English validation message also uses MessageFormat syntax that i18next cannot interpolate.",
+      "coveredBy": [
+       "s_42582bb1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_bb5adb31",
+    "mainDefect": "The Lithuanian login bundle's loginTotpStep1 contains Italian text.",
+    "secondary": [
+     {
+      "defect": "The Lithuanian account bundle's totpStep1 also contains Italian text.",
+      "coveredBy": [
+       "s_3dc681cc"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_5dddabc9",
+    "mainDefect": "The admin UI English validation message uses MessageFormat syntax that i18next cannot interpolate.",
+    "secondary": [
+     {
+      "defect": "The account UI English validation message also uses MessageFormat syntax that i18next cannot interpolate.",
+      "coveredBy": [
+       "s_42582bb1"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

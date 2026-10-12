@@ -1,0 +1,33 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6a01472a",
+    "mainDefect": "The patched I18n.translate lazy-loads only config.locale, and only ApplicationController loads the fallback chain, so jobs, mailers and rake tasks return 'translation missing' instead of the fallback text.",
+    "secondary": [
+     {
+      "defect": "The 'translation missing' result is frozen into the LRU cache under the same key a correct lookup would use, so it keeps being served even after the fallback locales load.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The translation cache key doesn't include the site default locale or the fallback chain, so stale fallback text is served after default_locale changes.",
+      "coveredBy": [
+       "s_e15dc8b6"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a0b43d2d",
+    "mainDefect": "The lazy-loading translate loads only config.locale, and only ApplicationController#set_locale loads the fallback chain, so I18n.t calls outside controller requests return 'translation missing' instead of falling back.",
+    "secondary": [
+     {
+      "defect": "The 'translation missing' result is frozen into the LRU cache under key+locale+backend_id and stays wrong even after the fallback locales load.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

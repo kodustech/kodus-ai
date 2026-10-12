@@ -1,0 +1,43 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "defect": "In the Create and Update error paths, a Storage failure is recorded with recordLegacyDuration instead of recordStorageDuration.",
+    "members": [
+     "s_db51092c",
+     "s_0f8576a3",
+     "s_e95c784c",
+     "s_705859db",
+     "s_6451b2bb",
+     "s_4c68a502"
+    ]
+   },
+   {
+    "defect": "The DeleteCollection legacy goroutine records the Legacy operation with recordStorageDuration instead of recordLegacyDuration.",
+    "members": [
+     "s_28699aa5",
+     "s_bc787d91",
+     "s_d464c133"
+    ]
+   },
+   {
+    "defect": "On the Delete success path, recordStorageDuration gets `name` as the kind label instead of options.Kind.",
+    "members": [
+     "s_0d3070ec",
+     "s_02ad3834",
+     "s_0256cf0e"
+    ]
+   }
+  ],
+  "unique": [
+   "s_d8591060"
+  ],
+  "bundles": [
+   "s_0d3070ec",
+   "s_4c68a502"
+  ],
+  "reasoningPt": "O grupo mistura defeitos diferentes. S1, S2, S10, S12, S13 e S22 tratam do erro de storage registrado como legado em Create/Update; S4, S8 e S14 tratam do caso inverso no goroutine de DeleteCollection, com correção oposta; S3, S9 e S15 tratam do `name` usado como label de kind no Delete. S11 trata do contexto criado com d.Log, defeito que S3 só menciona como segundo ponto, por isso S11 fica sozinha; S3 e S22 são bundles."
+ }
+}

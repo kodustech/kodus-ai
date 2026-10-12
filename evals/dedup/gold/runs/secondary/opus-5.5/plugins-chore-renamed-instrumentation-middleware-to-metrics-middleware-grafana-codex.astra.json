@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_e1aa277e",
+    "mainDefect": "Appending contextual attributes to a shared backing array causes concurrent calls to race and overwrite each other's logging attributes.",
+    "secondary": [
+     {
+      "defect": "Nested plugin calls log duplicate endpoint and pluginId keys.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e124c85a",
+     "s_7a7a84f5",
+     "s_ba7c99d1",
+     "s_f9a7eab4"
+    ],
+    "defect": "O teste não aguarda o término da thread leitora antes da asserção, permitindo que exceções sejam registradas depois da verificação."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S3, S7 e S8 descrevem o mesmo defeito: a asserção ocorre sem aguardar o término da thread leitora. A possibilidade de a thread sobreviver ao teste, mencionada em S2 e S7, é outra consequência dessa mesma falha, corrigida pela mesma sincronização."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e2d834e6",
+     "s_5b48f22e"
+    ],
+    "defect": "TestLogger.FromContext retorna uma nova instância desconectada, impedindo que os testes observem os logs na instância original."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 apontam o mesmo defeito em TestLogger.FromContext e propõem a mesma correção: retornar f. A referência ao LoggerMiddleware descreve a consequência desse defeito, sem acrescentar outro problema."
+ }
+}

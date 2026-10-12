@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "OptimizedImage.downsize is defined twice. Ruby keeps the later dimensions-string version, which silently shadows the width/height signature and breaks callers that still use the old positional arguments (e.g. resize_emoji).",
+    "members": [
+     "s_b461ae4f",
+     "s_ef1eb159",
+     "s_8980c0e3",
+     "s_8b2d465f",
+     "s_171153b8",
+     "s_203824b0",
+     "s_cbd3b669"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S5, S6, S9, S12, S15, S17) apontam o mesmo defeito: a definição duplicada de downsize em optimized_image.rb. Pela regra do Ruby, a última definição vence e a assinatura antiga com largura/altura deixa de funcionar. As diferenças estão só nas consequências citadas (ArgumentError no resize_emoji, TypeError em opts, geometria inválida) e todas se resolvem com a mesma correção: manter uma única definição e ajustar os chamadores."
+ }
+}

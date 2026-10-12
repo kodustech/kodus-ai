@@ -1,0 +1,34 @@
+{
+ "s_12e66445": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: os emails da blacklist são convertidos para minúsculas, mas o valor de `guest` é comparado sem normalização. A verificação de duplicidade contra os attendees existentes também diferencia maiúsculas de minúsculas. POR QUÊ: um chamador pode adicionar um endereço da blacklist como `Blocked@Domain.com` e fazer o sistema enviar email para ele, contornando BLACKLISTED_GUEST_EMAILS. Alterar a caixa também permite que a mesma pessoa seja adicionada como attendee duas vezes. CORREÇÃO: compare `guest.toLowerCase()` com a blacklist e com `attendee.email.toLowerCase()`, e remova duplicatas da entrada sem diferenciar maiúsculas de minúsculas."
+ },
+ "s_b459ede8": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `isInvalidEmail` nunca é resetado no onSuccess, quando os emails são editados, nem quando o dialog é fechado via `onOpenChange` (overlay ou Esc). Fechar via onOpenChange também não limpa `multiEmailValue`. Além disso, `message` no onError é uma template string que é sempre truthy, então o fallback `unable_to_add_guests` nunca é executado. POR QUÊ: após uma tentativa inválida, o banner de erro continua visível em envios válidos posteriores e ao reabrir, e emails antigos de um dialog descartado persistem. CORREÇÃO: resete `isInvalidEmail` no onSuccess e no handler de onOpenChange. Monte a mensagem de forma condicional, por exemplo `err.message ? t(err.message) : t(\"unable_to_add_guests\")`."
+ },
+ "s_69410500": {
+  "summaryPt": "O fallback `||` para `unable_to_add_guests` nunca é executado porque a mensagem em template literal é sempre truthy.",
+  "contentPt": "`message` é construída como `${err.data?.code}: ${t(err.message)}`, que sempre contém pelo menos \": \", então nunca é falsy. O fallback `message || t(\"unable_to_add_guests\")` nunca pode ser usado. Quando `err.data` é undefined (por exemplo, em um erro de rede ou de transporte), o toast mostra \"undefined: <mensagem original>\". Monte a mensagem de forma condicional."
+ },
+ "s_647627fa": {
+  "summaryPt": "Emails com caixa mista contornam a blacklist de guests porque apenas o lado da blacklist é convertido para minúsculas.",
+  "contentPt": "As entradas da blacklist são convertidas para minúsculas, mas os emails dos guests verificados contra elas não são. Um endereço bloqueado escrito com caixa diferente (ex.: `Blocked@Domain.com`) passa pela blacklist, é adicionado como attendee e recebe emails da reserva. A mesma verificação de correspondência exata contra os attendees existentes também deixa passar duplicatas por diferenças de caixa. Correção: converta para minúsculas (e faça trim) em ambos os lados antes de comparar."
+ },
+ "s_37e96fa9": {
+  "summaryPt": "",
+  "contentPt": "`message` é uma template string, então nunca é vazia. O fallback `|| t(\"unable_to_add_guests\")` (uma nova chave de locale adicionada neste PR) nunca pode ser exibido. Quando err.data é undefined, o toast também mostra o texto literal \"undefined: ...\". Monte a mensagem de forma condicional e use a chave traduzida como fallback."
+ },
+ "s_ef00ffaa": {
+  "summaryPt": "A blacklist está em minúsculas, mas os emails dos guests são comparados como digitados, então emails da blacklist com caixa mista passam.",
+  "contentPt": "As entradas de BLACKLISTED_GUEST_EMAILS são convertidas para minúsculas, mas `guest` é comparado sem conversão. 'Bad@x.com' não corresponde ao 'bad@x.com' da blacklist. O mesmo vale para a verificação de attendee existente. Converta `guest` para minúsculas antes de ambas as comparações."
+ },
+ "s_aed18a73": {
+  "summaryPt": "O servidor permite adicionar o mesmo guest a uma reserva mais de uma vez: duplicatas na entrada, emails que diferem apenas na caixa e duas requisições simultâneas passam.",
+  "contentPt": "A unicidade só é garantida no client. Normalize e remova duplicatas no servidor: `const normalized = [...new Set(guests.map(g => g.trim().toLowerCase()))]`. Compare com `attendee.email.toLowerCase()`. Adicione também um `.refine` de unicidade ao ZAddGuestsInputSchema. Para bloquear inserções duplicadas concorrentes, execute a leitura e a inserção em um `prisma.$transaction` ou adicione uma unique constraint em (bookingId, email) e use `skipDuplicates: true`. Por fim, passe o `uniqueGuests` sem duplicatas para sendAddGuestsEmails, e não o `guests` bruto."
+ },
+ "s_e7d73ab7": {
+  "summaryPt": "A verificação da blacklist diferencia maiúsculas de minúsculas porque os emails dos guests não são convertidos para minúsculas.",
+  "contentPt": "A verificação da blacklist compara os emails dos guests sem convertê-los para minúsculas, então um endereço da blacklist com caixa diferente pode passar pela verificação. O revisor observou que isso está fora do escopo que lhe foi atribuído."
+ }
+}

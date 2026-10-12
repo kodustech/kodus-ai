@@ -1,0 +1,26 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_f5076626",
+     "s_ce012dec",
+     "s_abda811f",
+     "s_1f0c2877"
+    ],
+    "defect": "Os caminhos de erro de Storage em Create e Update usam recordLegacyDuration em vez de recordStorageDuration."
+   }
+  ],
+  "unique": [
+   "s_a19a1898",
+   "s_8649b5e3"
+  ],
+  "bundles": [
+   "s_f5076626",
+   "s_1f0c2877"
+  ],
+  "reasoningPt": "S2, S9, S10 e S17 compartilham o defeito principal: falhas de Storage registradas como Legacy em Create/Update. S8 relata a atribuição inversa em DeleteCollection, enquanto S7 trata do nome do objeto usado como kind; ambos exigem correções distintas. S2 e S17 incluem esses problemas adicionais, mas pertencem ao grupo do primeiro defeito relatado."
+ }
+}

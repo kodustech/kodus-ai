@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "In _hydrateEmbedded, the new plural branch always deletes the original *_ids key and stores lookup misses as invalid entries when the referenced records were not side-loaded, so the raw ids are lost (the singular branch keeps the key when lookup fails).",
+    "members": [
+     "s_c4c17811",
+     "s_a74fdd01"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c4c17811",
+   "s_a74fdd01"
+  ],
+  "reasoningPt": "S15 e S17 apontam o mesmo defeito central: o ramo plural de _hydrateEmbedded apaga a chave *_ids mesmo quando o lookup falha. Assim, os ids originais se perdem e o array fica com entradas inválidas. A observação de S17 sobre o `|| []` ser código morto é só outra forma de ver esse tratamento ausente de lookups que falham. Ambas são bundles porque também tratam do caso em que obj[k] é null ou não é array antes do .map (S15 só na correção, S17 como observação extra)."
+ }
+}

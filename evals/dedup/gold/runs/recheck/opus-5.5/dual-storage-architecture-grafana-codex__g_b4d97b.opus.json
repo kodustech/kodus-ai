@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_74e86eb7",
+     "s_9977cb66",
+     "s_ef1efee6"
+    ],
+    "defect": "Unified-storage failures in Create (line 45) and Update (line 129) are recorded with recordLegacyDuration instead of recordStorageDuration."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_74e86eb7",
+   "s_ef1efee6"
+  ],
+  "reasoningPt": "O defeito principal de S3, S8 e S9 é o mesmo: falhas do storage unificado são registradas com recordLegacyDuration. Esse erro se repete em Create e Update e se corrige com uma única troca de helper. S3 e S9 trazem defeitos secundários (label `name` no Delete, recordStorageDuration na goroutine do DeleteCollection, ctx com d.Log), então entram como bundles, mas isso não muda o grupo deles."
+ }
+}

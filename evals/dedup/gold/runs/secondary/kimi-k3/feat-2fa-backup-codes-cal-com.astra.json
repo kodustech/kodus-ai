@@ -1,0 +1,57 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_eaeba116",
+    "mainDefect": "The disable endpoint calls replaceAll on an unvalidated backupCode value, allowing malformed input to cause a TypeError.",
+    "secondary": [
+     {
+      "defect": "The login authorization path also calls replaceAll on an unvalidated backupCode value.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_99dc85bb",
+    "mainDefect": "The clipboard test checks only a toast, so it cannot detect failed writes or incorrect clipboard contents.",
+    "secondary": [
+     {
+      "defect": "The copy handler shows a success toast without awaiting or checking whether the clipboard write succeeds.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a817746e",
+    "mainDefect": "The missing-backup-codes login message directs locked-out users to settings they cannot access.",
+    "secondary": [
+     {
+      "defect": "Settings provides no way to generate backup codes without repeating the full 2FA setup.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_95424aa1",
+    "mainDefect": "Dismissing the backup-codes dialog without its Close button fails to notify the parent that 2FA is enabled.",
+    "secondary": [
+     {
+      "defect": "Dismissing the dialog also leaves its step, password, and backup codes unreset, causing stale state on reopening.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_30515fd3",
+    "mainDefect": "The disable endpoint does not validate the backupCode type before calling replaceAll.",
+    "secondary": [
+     {
+      "defect": "The login authorization path likewise lacks type validation before calling replaceAll on credentials.backupCode.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

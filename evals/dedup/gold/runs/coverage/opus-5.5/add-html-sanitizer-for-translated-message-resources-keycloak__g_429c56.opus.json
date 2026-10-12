@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "login/messages/messages_lt.properties line 71: loginTotpStep1 was replaced with Italian text"
+   },
+   {
+    "id": "F2",
+    "description": "account/messages/messages_lt.properties line 101: totpStep1 was replaced with Italian text"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_bb5adb31",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7b9850c3",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3dc681cc",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

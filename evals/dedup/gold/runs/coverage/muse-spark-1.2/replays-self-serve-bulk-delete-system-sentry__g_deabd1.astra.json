@@ -1,0 +1,53 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "fetch_error_details, lines 104–121: zipping error_ids with nodestore values mispairs IDs and event data when entries are missing or returned in a different order."
+   },
+   {
+    "id": "F2",
+    "description": "test_get_with_error, lines 141–215: the single-error test does not exercise multi-error ID/data misalignment with a missing nodestore entry."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_2a158b71",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_46b42f89",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e8d1320e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cb573436",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0ef0a25a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

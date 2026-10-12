@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e93f5eb3",
+     "s_17a7fb74"
+    ],
+    "defect": "O novo skip incondicional para postgres desativa o teste de integração e elimina a cobertura do comportamento que ele verifica."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S3 apontam o mesmo defeito: o skip adicionado impede a execução do teste em postgres. As diferenças de foco entre inicialização, endpoint de métricas e execução local descrevem consequências do mesmo skip, cuja correção atende às duas sugestões."
+ }
+}

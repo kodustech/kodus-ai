@@ -4,7 +4,7 @@
  * reconciled groups, what each judge said, and which decisions need review.
  *
  *   node evals/dedup/gold/review-data.js --scope=pilot --models=a,b --prs=a,b   (review everything)
- *   node evals/dedup/gold/review-data.js --scope=audit [--seed=1]               (all low + sampled mid/high)
+ *   node evals/dedup/gold/review-data.js --scope=audit [--seed=1]               (all low + 20% of mid)
  */
 const fs = require('fs');
 const path = require('path');
@@ -29,6 +29,7 @@ for (const f of fs.readdirSync(__dirname).filter((x) => x.endsWith('.json'))) {
     for (const [caseId, pr] of Object.entries(gold.prs)) {
         if (prs.length && !prs.includes(caseId)) continue;
         if (!pr.groups.length && !Object.keys(pr.uniqueConfidence).length) continue;
+        if (SCOPE !== 'pilot' && (pr.groups.some((g) => g.humanReview) || Object.keys(pr.humanReviewUnique || {}).length)) continue;
         const judge = (j) => readJson(path.join(__dirname, 'runs', j, gold.model, `${caseId}.json`))?.answer || null;
         const pt = readJson(path.join(__dirname, 'review', 'translations', `${gold.model}__${caseId}.json`)) || {};
         const checks = readJson(path.join(__dirname, 'review', 'second-check', `${gold.model}__${caseId}.json`))?.checks || null;
@@ -37,7 +38,7 @@ for (const f of fs.readdirSync(__dirname).filter((x) => x.endsWith('.json'))) {
             model: gold.model,
             caseId,
             repo: repoOf(caseId),
-            suggestions: pr.suggestions.map((s) => ({ id: s.id, by: s.producedBy, file: s.relevantFile, start: s.relevantLinesStart, end: s.relevantLinesEnd, summary: s.oneSentenceSummary || '', content: s.suggestionContent || '', ...(pt[s.id] || {}) })),
+            suggestions: pr.suggestions.map((s) => ({ id: s.id, by: s.producedBy, file: s.relevantFile, start: s.relevantLinesStart, end: s.relevantLinesEnd, summary: s.oneSentenceSummary || '', content: s.suggestionContent || '', unusable: !!s.unusable, bundlesDefects: !!s.bundlesDefects, ...(pt[s.id] || {}) })),
             groups: pr.groups.map((g) => ({ groupId: g.groupId, members: g.members, kind: g.kind, needsUnifiedComment: g.needsUnifiedComment, confidence: g.confidence, defect: g.defect, votes: g.votes, resolvedBy: g.resolvedBy, arbiterReasoning: g.arbiterReasoning || '' })),
             unique: Object.entries(pr.uniqueConfidence).map(([id, confidence]) => ({ id, confidence, ...(checks ? { secondCheck: checks[id] || [] } : {}) })),
             partialOverlap: pr.partialOverlap || [],
@@ -49,22 +50,21 @@ for (const f of fs.readdirSync(__dirname).filter((x) => x.endsWith('.json'))) {
 
 // Targets: a group (by groupId) or a unique suggestion (by id).
 const targets = units.flatMap((u) => [
-    ...u.groups.map((g) => ({ u, t: g.groupId, conf: g.confidence, kind: 'group' })),
-    ...u.unique.map((x) => ({ u, t: x.id, conf: x.confidence, kind: 'unique' })),
+    ...u.groups.map((g) => ({ u, t: g.groupId, conf: g.confidence, kind: 'group', human: g.resolvedBy === 'human' })),
+    ...u.unique.map((x) => ({ u, t: x.id, conf: x.confidence, kind: 'unique', unusable: !!u.suggestions.find((s) => s.id === x.id)?.unusable, human: !!u.suggestions.find((s) => s.id === x.id)?.bundlesDefects })),
 ]);
 let picked;
 if (SCOPE === 'pilot') picked = targets;
 else {
-    const low = targets.filter((x) => x.conf === 'low');
-    const mid = targets.filter((x) => x.conf === 'mid');
+    const low = targets.filter((x) => x.conf === 'low' && !x.unusable);
+    const mid = targets.filter((x) => x.conf === 'mid' && !x.unusable);
     const midPick = [];
     for (const m of [...new Set(mid.map((x) => x.u.model))]) {
         const own = mid.filter((x) => x.u.model === m).sort((a, b) => rank(a.u.key + a.t).localeCompare(rank(b.u.key + b.t)));
         midPick.push(...own.slice(0, Math.ceil(own.length * 0.2)));
     }
-    const highG = targets.filter((x) => x.conf === 'high' && x.kind === 'group').sort((a, b) => rank(a.u.key + a.t).localeCompare(rank(b.u.key + b.t))).slice(0, 30);
-    const highU = targets.filter((x) => x.conf === 'high' && x.kind === 'unique').sort((a, b) => rank(a.u.key + a.t).localeCompare(rank(b.u.key + b.t))).slice(0, 30);
-    picked = [...low.map((x) => ({ ...x, why: 'low' })), ...midPick.map((x) => ({ ...x, why: 'audit-mid' })), ...highG.map((x) => ({ ...x, why: 'audit-high' })), ...highU.map((x) => ({ ...x, why: 'audit-high' }))];
+    // high stays out of the review by the reviewer's call.
+    picked = [...low.filter((x) => !x.unusable).map((x) => ({ ...x, why: 'low' })), ...midPick.filter((x) => !x.unusable).map((x) => ({ ...x, why: 'audit-mid' })), ...targets.filter((x) => x.unusable).map((x) => ({ ...x, why: 'unusable' })), ...targets.filter((x) => x.human && !x.unusable && x.conf !== 'low' && !midPick.includes(x)).map((x) => ({ ...x, why: 'human' }))];
 }
 for (const p of picked) p.u.review.push({ target: p.t, kind: p.kind, why: p.why || 'pilot' });
 

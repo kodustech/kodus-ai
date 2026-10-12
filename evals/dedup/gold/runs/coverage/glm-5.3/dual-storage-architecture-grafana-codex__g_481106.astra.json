@@ -1,0 +1,74 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create, line 45: storage failures are recorded via recordLegacyDuration instead of recordStorageDuration."
+   },
+   {
+    "id": "F2",
+    "description": "Update, line 129: storage failures are recorded via recordLegacyDuration instead of recordStorageDuration."
+   },
+   {
+    "id": "F3",
+    "description": "DeleteCollection, line 166: the legacy goroutine records legacy duration and errors via recordStorageDuration."
+   },
+   {
+    "id": "F4",
+    "description": "Delete, line 106: the success metric uses the object name as the kind label, breaking aggregation and causing unbounded cardinality."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_1f0c2877",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_f5076626",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a19a1898",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8649b5e3",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ce012dec",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_abda811f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

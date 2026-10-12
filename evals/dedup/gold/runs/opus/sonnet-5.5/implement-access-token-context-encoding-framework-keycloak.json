@@ -1,0 +1,86 @@
+{
+  "judge": "opus",
+  "model": "sonnet-5.5",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "ba2fe6b535830946609c29904ffb0c1f90710a8b",
+  "attempt": 1,
+  "ms": 14837,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 27475,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 1026,
+    "output_tokens_details": {
+      "thinking_tokens": 447
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 27475,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1026,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 27475,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 27475
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.2404864,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_3fc72bd5",
+          "s_edcf5e7e",
+          "s_f9a913f1",
+          "s_3fcf3843"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "In the AccessTokenContext constructor, the null check meant for rawTokenId calls Objects.requireNonNull(grantType, ...) instead, so a null rawTokenId is never rejected.",
+        "rationale": "All four point at the same line (AccessTokenContext lines 72-73) and describe the same copy-paste mistake. They all give the same one-line fix."
+      },
+      {
+        "members": [
+          "s_9fe47bb1",
+          "s_843e5d06",
+          "s_dedf90ac",
+          "s_16105147",
+          "s_48023927",
+          "s_c4e9c10a",
+          "s_0f11c762"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The isAccessTokenId matcher in AssertEvents reads the grant shortcut at substring(3,5) instead of substring(4,6), and its comparison is inverted: it returns false when the shortcut matches. It can also throw an exception on IDs that are too short.",
+        "rationale": "All seven describe the same wrong-offset and inverted-comparison bug in the same matcher, at lines 480-484. One edit to that line fixes every report."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_febeb791",
+        "confidence": "high"
+      },
+      {
+        "id": "s_09ef53db",
+        "confidence": "high"
+      }
+    ]
+  }
+}

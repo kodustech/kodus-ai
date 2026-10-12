@@ -1,0 +1,34 @@
+{
+ "s_88dcd5ff": {
+  "summaryPt": "O matcher de access-token-id tem comparação invertida e offset errado, então nunca valida o atalho do grant.",
+  "contentPt": "O QUÊ: `isAccessTokenId` retorna `false` quando a substring do atalho do grant É IGUAL ao atalho esperado (comparação invertida) e lê o offset errado — `substring(3, 5)` lê os caracteres 3-4, mas o atalho do grant de 2 caracteres está nos índices 4-5 (`substring(4, 6)`). Como a substring com off-by-one nunca é igual ao atalho esperado, o early-return nunca dispara e o matcher degenera para validar apenas o sufixo UUID. POR QUÊ: o accessor usado por expectCodeToToken / expectDeviceCodeToToken / expectRefresh / expectAuthReqIdToToken nunca afirma de fato o tipo de grant codificado no token id, então uma regressão que codificasse o atalho de grant errado ainda passaria em todos esses testes. COMO: use `substring(4, 6)` e inverta a verificação, por exemplo `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+ },
+ "s_511ab22a": {
+  "summaryPt": "isAccessTokenId lê o atalho do grant no intervalo de índices errado e inverte a condição de correspondência.",
+  "contentPt": "O matcher extrai o atalho do grant com `items[0].substring(3, 5)` (índices 3-4), mas o atalho do grant é escrito nos índices 4-5 (substring(4,6)) pelo formato do encoder `sessionType(2)+tokenType(2)+grantShortcut(2)`; para \"trltcc\" isso lê \"tc\" e não \"cc\". Além disso, a comparação está invertida: retorna false quando o atalho É IGUAL ao valor esperado, então rejeita tokens corretos e aceita tokens de grant errado. Corrija o intervalo para substring(4,6) e negue a condição; também proteja com items[0].length()==6 antes da substring para evitar StringIndexOutOfBounds em ids malformados."
+ },
+ "s_be2a870e": {
+  "summaryPt": "Divergência entre comentário e localização: o extrator usa substring(3,5) enquanto o formato coloca o atalho do grant em 4-5.",
+  "contentPt": "O comentário afirma que o atalho do grant é o 4º caractere, com 2 caracteres, mas o código usa `items[0].substring(3, 5)`. No formato codificado (2 caracteres de sessionType + 2 de tokenType + 2 de grantType, ex.: \"trltcc\"), o atalho do grant ocupa os índices 4-5, então `substring(3, 5)` pega a fronteira entre token-type/grant, e não o atalho do grant. Ou o comentário ou o índice está errado; use `substring(4, 6)` para corresponder ao formato documentado e ao encoder."
+ },
+ "s_5ae95ca9": {
+  "summaryPt": "isAccessTokenId lê o atalho do grant no offset errado e com lógica invertida, então nunca valida o tipo de grant.",
+  "contentPt": "O matcher é um no-op para o atalho do grant que diz verificar. O token id é session(2)+token(2)+grant(2)+':'+uuid (veja DefaultTokenContextEncoderProvider.encodeTokenId e o decoder lendo o grant em substring(4,6)), então o atalho do grant está nos índices 4-5. Este código lê substring(3, 5) — o offset errado, que nunca contém o atalho do grant — então o guard nunca é acionado; além disso, a condição está invertida (retornaria false quando CORRESPONDE). Corrija ambos: use substring(4, 6) e rejeite quando NÃO for igual ao atalho esperado. Do jeito que está, expectCodeToToken/expectDeviceCodeToToken/expectRefresh/expectAuthReqIdToToken passam mesmo que o tipo de grant errado seja codificado."
+ },
+ "s_a148cd25": {
+  "summaryPt": "O matcher de access-token-id usa uma igualdade invertida e um offset de substring com off-by-one para o atalho do grant.",
+  "contentPt": "Corrija a igualdade invertida e o offset com off-by-one: o atalho do grant está nos índices 4..6 e a verificação deve retornar false quando NÃO corresponder."
+ },
+ "s_f2171902": {
+  "summaryPt": "",
+  "contentPt": "isAccessTokenId() lê o atalho do grant no offset errado e inverte a comparação, então não valida o que DefaultTokenContextEncoderProvider.encodeTokenId() emite. encodeTokenId (DefaultTokenContextEncoderProvider.java:114-117) coloca o atalho do grant nos índices [4,6) (sessionType de 2 caracteres + tokenType de 2 caracteres o precedem), conforme confirmado pelo próprio decoder do provider (linhas 79-81) e por DefaultTokenContextEncoderProviderTest. Este matcher usa substring(3,5) (off by one) e retorna false quando o trecho é igual ao atalho esperado, então rejeita exatamente os tokens que deveria aceitar. Use substring(4,6) e retorne false quando NÃO for igual a expectedGrantShortcut."
+ },
+ "s_756b95c2": {
+  "summaryPt": "O novo matcher isAccessTokenId lê o segmento errado do token id codificado e inverte a correspondência, então nunca verifica o atalho do grant.",
+  "contentPt": "O helper que valida o NOVO contrato de access-token-id está errado de duas formas, então nunca verifica o que afirma. (a) O atalho do grant fica nos índices de caractere 4..6 do prefixo de 6 caracteres (`<ss><tt><gg>:<uuid>`), mas o código lê `items[0].substring(3, 5)`, ou seja, o segundo caractere do atalho do token-type mais o primeiro caractere do atalho do grant — para `trltcc:1234` isso é \"lc\", nunca igual a um atalho de grant de 2 caracteres. (b) A comparação está invertida: um `matchesSafely` do Hamcrest deve retornar `true` em caso de correspondência, mas retorna `false` quando a substring extraída é igual ao atalho esperado. Juntos, isso faz a asserção degenerar silenciosamente para `isUUID().matches(items[1])`, então um token emitido com o atalho de grant errado (ou codificação errada) ainda passaria. Depois deste PR o token id é `ssttgg:uuid`, então este consumidor deve ser corrigido para indexar o segmento do grant (4..6) e retornar `true` na igualdade."
+ },
+ "s_dccfaa16": {
+  "summaryPt": "isAccessTokenId usa uma verificação invertida e com off-by-one que não verifica mais o atalho do grant.",
+  "contentPt": "O contexto codificado tem 6 caracteres: 2 de session + 2 de token + 2 de grant, então o atalho do grant está nos índices 4-5, não 3-4; e a condição está invertida (retorna false quando é igual em vez de quando difere). Substitua por `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;` para realmente afirmar o grant."
+ }
+}

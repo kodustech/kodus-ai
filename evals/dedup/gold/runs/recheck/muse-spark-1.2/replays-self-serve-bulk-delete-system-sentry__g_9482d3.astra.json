@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_222ac473",
+     "s_0b48b37f"
+    ],
+    "defect": "A validação de exclusividade entre age e timestamp usa truthiness em vez de presença, permitindo que valores zero burlem a verificação."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S9 relatam o mesmo defeito nos mesmos validadores: valores zero são tratados como ausência na checagem de exclusividade entre age e timestamp. Ambas propõem a mesma correção e nenhuma inclui outro defeito, portanto o grupo deve ser mantido."
+ }
+}

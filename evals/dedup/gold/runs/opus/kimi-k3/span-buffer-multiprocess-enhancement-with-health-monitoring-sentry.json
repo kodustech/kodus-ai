@@ -1,0 +1,101 @@
+{
+  "judge": "opus",
+  "model": "kimi-k3",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "f912bdb405fe6d1250a953af61177515b2838aa1",
+  "attempt": 1,
+  "ms": 12029,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 14347,
+    "cache_read_input_tokens": 6564,
+    "output_tokens": 762,
+    "output_tokens_details": {
+      "thinking_tokens": 251
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 14347,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 762,
+        "cache_read_input_tokens": 6564,
+        "cache_creation_input_tokens": 14347,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 14347
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1313368,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_f2332220",
+          "s_e70c33f4",
+          "s_4b2add7b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The added time.sleep(0.1) in test_basic does nothing because the same test monkeypatches time.sleep to a no-op.",
+        "rationale": "All three point at the same lines and report the same no-op sleep caused by the monkeypatch."
+      },
+      {
+        "members": [
+          "s_41c01c77",
+          "s_9787549d",
+          "s_f44896cd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The wait_produce timer uses the tag key 'shards', while the sibling produce and segment_size_bytes metrics use 'shard'.",
+        "rationale": "All three report the same inconsistent tag key on the same metrics, and one rename fixes it."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_6f5b850f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2a5528aa",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7529b678",
+        "confidence": "high"
+      },
+      {
+        "id": "s_10a23b48",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_3d96a699",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_d926f869",
+        "confidence": "high"
+      },
+      {
+        "id": "s_18212a8b",
+        "confidence": "high"
+      }
+    ]
+  }
+}

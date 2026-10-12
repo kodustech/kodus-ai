@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_eaeba116",
+     "s_30515fd3"
+    ],
+    "defect": "O endpoint chama replaceAll em backupCode após verificar apenas sua veracidade, permitindo que valores JSON não textuais causem TypeError e resposta 500."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S12 relatam o mesmo defeito no mesmo trecho: falta de validação do tipo de backupCode antes de chamar replaceAll. Ambas mencionam a repetição desse padrão no login, sem acrescentar um defeito distinto."
+ }
+}

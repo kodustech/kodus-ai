@@ -1,0 +1,86 @@
+{
+ "s_8c2349e8": {
+  "summaryPt": "PollFeed quebra com conteúdo nil do feed devido a chamada scrub sem proteção",
+  "contentPt": "O QUÊ: `CGI.unescapeHTML(i.content.scrub)` quebra quando `i.content` é nil. POR QUÊ: itens do SimpleRSS podem omitir content/description (rss.items de open/parse em um feed influenciado por atacante) -> nil.scrub lança NoMethodError e aborta o job horário PollFeed, impedindo a importação de todos os itens seguintes. CORREÇÃO: proteja contra nil: `CGI.unescapeHTML((i.content || \"\").to_s.scrub)` ou `i.content.to_s.scrub` e trate i.title nil de forma semelhante."
+ },
+ "s_6acddab4": {
+  "summaryPt": "Desreferência nula em embed.js quando a div de destino não existe",
+  "contentPt": "O QUÊ: `document.getElementById('discourse-comments')` pode retornar null e então `comments.appendChild(iframe)` lança TypeError. POR QUÊ: se o site que incorpora omitir a div obrigatória ou o script carregar antes do DOM, a desreferência nula aborta o embed e quebra o handler de postMessage de redimensionamento. CORREÇÃO: proteja: `if (!comments) return;` antes de appendChild."
+ },
+ "s_5d94e2a4": {
+  "summaryPt": "Sintaxe ERB inválida `end if` quebra a renderização do embed",
+  "contentPt": "O QUÊ: `<%- end if %>` é uma sintaxe ERB/Ruby inválida. POR QUÊ: causa SyntaxError ao renderizar embed/best quando topic_view existe (o branch `if/else`), quebrando o recurso de embed para todos os usuários. CORREÇÃO: troque para `<% end %>`."
+ },
+ "s_8924c5ce": {
+  "summaryPt": "Mutação com << em contents quebra com entrada frozen/nil",
+  "contentPt": "O QUÊ: `contents << \"\\n<hr>...\"` muta a string do chamador e falha com contents frozen/nil. POR QUÊ: poll_feed passa uma string derivada de i.content que pode ser frozen ou nil -> FrozenError/NoMethodError; também polui a variável do chamador e o SHA é calculado sobre o valor mutado de forma inconsistente se o chamador reutilizá-la. CORREÇÃO: `contents = contents.to_s.dup + \"\\n<hr>...\"` ou `contents = \"#{contents}\\n<hr>...\"`."
+ },
+ "s_56e8eec5": {
+  "summaryPt": "Referer sem escape no targetOrigin do postMessage permite injeção de JS e quebra a verificação de origem",
+  "contentPt": "O QUÊ: `request.referer` é interpolado em um literal string JS sem escape de JS e usado como targetOrigin do postMessage. POR QUÊ: um Referer contendo `'` ou `</script>` escapa da string (XSS) e a URL completa com path não é um targetOrigin válido (deveria ser scheme://host:port), então a mensagem de resize é descartada pelo navegador; além disso, referer nil vira string vazia. CORREÇÃO: use `j`/`escape_javascript` e extraia a origem: `URI(request.referer).host` ou `Discourse.base_url` ou `'*'` com verificação de origem adequada."
+ },
+ "s_5908271a": {
+  "summaryPt": "Verificação de origem por substring é incorreta e contornável",
+  "contentPt": "O QUÊ: a verificação de origem `discourseUrl.indexOf(e.origin) === -1` é um teste de substring, não de igualdade. POR QUÊ: permite que `e.origin = 'discourse'` passe se discourseUrl o contiver, e falha para origens legítimas que são substrings de um discourseUrl mais longo; um atacante com host `discourse.example.com.evil.com` ainda pode ser bloqueado, mas a substring `example.com` casa com `https://example.com/`, levando à aceitação de uma origem forjada com path extra/porta divergente. CORREÇÃO: faça o parse de discourseUrl para obter a origem e compare estritamente: `new URL(discourseUrl).origin === e.origin` ou `e.origin === discourseUrl.replace(/\\/.*$/,'')`."
+ },
+ "s_98e23b20": {
+  "summaryPt": "URL sem escape interpolada em HTML traduzido e renderizada via raw_html ignora o escaping, permitindo XSS",
+  "contentPt": "Faça o escape de url antes de interpolá-la no link traduzido e não contorne a sanitização com raw_html + renderização raw. O código atual injeta a url externa literalmente no HTML e permite que ' ou javascript: escapem do contexto."
+ },
+ "s_45b4838c": {
+  "summaryPt": "Formato de data fixo no código ignora a localização do I18n",
+  "contentPt": "Substitua o strftime fixo no código por I18n.l e um formato sensível ao locale definido em server.en.yml."
+ },
+ "s_14f044ed": {
+  "summaryPt": "Check-then-create em embed_url único gera race: importações concorrentes lançam RecordNotUnique.",
+  "contentPt": "Race / violação de invariante: TopicEmbed.import verifica where(embed_url:url).first e então cria dentro de Topic.transaction com create!. Duas importações concorrentes (por exemplo, dois jobs RetrieveTopic para o mesmo embed_url, ou PollFeed concorrendo com fetch_http) veem embed.blank? true e ambas tentam criar. A segunda atinge o índice único em topic_embeds.embed_url => ActiveRecord::RecordNotUnique não tratado (500 / crash do job) ou, se o timing se sobrepuser a exists? em TopicRetriever, criação duplicada de Topic/Post. Corrija usando SELECT FOR UPDATE / advisory lock ou fazendo rescue de RecordNotUnique e reload."
+ },
+ "s_52c21f9e": {
+  "summaryPt": "PollFeed quebra em falha de rede ou conteúdo nil de item RSS.",
+  "contentPt": "Quebra de execução: open(SiteSetting.feed_polling_url) e o parsing do SimpleRSS não têm rescue. Qualquer erro de rede (OpenURI::HTTPError, SocketError, Timeout, InvalidURI) ou RSS malformado lança exceção e quebra o job agendado (retry: false). Além disso, rss.items pode ser nil/vazio e i.content pode ser nil -> CGI.unescapeHTML(i.content.scrub) lança NoMethodError. Valide e faça rescue em torno de open/parse e proteja i.content/i.title nil antes de importar."
+ },
+ "s_c7cf0d7d": {
+  "summaryPt": "import_remote quebra em falha de fetch ou conteúdo nil do Readability.",
+  "contentPt": "Quebra de execução: import_remote faz open(url).read sem rescue e assume que o Readability retorna title/content não nil. Erros de rede lançam exceção; doc.content pode ser nil (falha de parse, paywall). Então import faz contents << \"<hr>...\" em nil => NoMethodError. Envolva open/Readability em rescue, proteja content/title nil e retorne nil / registre log em vez de quebrar o job RetrieveTopic."
+ },
+ "s_e5d9dd90": {
+  "summaryPt": "Verificação de origem por substring invertida permite que qualquer prefixo/origem vazia passe",
+  "contentPt": "A validação de origem está invertida: `discourseUrl.indexOf(e.origin) === -1` verifica se discourseUrl contém e.origin, então qualquer substring de discourseUrl (por exemplo, \"https\", \"\", \"example\") passa. Troque por uma checagem de igualdade exata de origem. Normalize discourseUrl para sua origem (remova barra final/path) e compare: `e.origin !== expectedOrigin`."
+ },
+ "s_3ed07a3a": {
+  "summaryPt": "O targetOrigin do postMessage usa a URL completa de request.referer em vez da origem, então a mensagem é descartada",
+  "contentPt": "Quem escreve e quem lê discordam sobre o formato da origem. layout/embed.html.erb:11 envia parent.postMessage(..., request.referer), onde request.referer é uma URL completa com path/query. O segundo argumento de postMessage é targetOrigin, que deve ser uma origem (scheme://host[:port]) ou '*'. Os navegadores descartam a mensagem se targetOrigin != origem da janela de destino exatamente, então com o path incluído a mensagem nunca é entregue e o handler de resize em embed.js nunca executa. Extraia a origem do referer ou use '*'."
+ },
+ "s_2b2b1546": {
+  "summaryPt": "Verificação de origem usa contenção de substring em vez de correspondência exata de origem, permitindo bypass",
+  "contentPt": "Leitor e escritor precisam concordar na origem exata. Checar discourseUrl.indexOf(e.origin) !== -1 aceita qualquer e.origin que seja substring de discourseUrl (por exemplo, 'https://' é aceito). Deveria ser uma comparação exata de origem com normalização da barra final, para que apenas a origem esperada do Discourse seja aceita."
+ },
+ "s_7b49c6aa": {
+  "summaryPt": "feed_key é calculado mas nunca usado — computação morta / cache incompleto",
+  "contentPt": "Computação morta: feed_key derivado de SiteSetting.feed_polling_url em 20-22 mas nunca lido, gravado no redis, nem usado para If-Modified-Since/ETag. Ou integre em poll_feed (armazenar/buscar last-modified) ou remova; do jeito que está, o feed é buscado novamente de forma incondicional a cada hora."
+ },
+ "s_3adf9f4b": {
+  "summaryPt": "PollFeed agora exige i.content e quebra em feeds nil que só têm description",
+  "contentPt": "poll_feed na linha 35 chama i.content.scrub assumindo que content sempre está presente. Muitos itens do SimpleRSS têm content nil (apenas description). Isso lança NoMethodError e aborta toda a importação do feed, mudando o comportamento de melhor esforço para falha. Adicione fallback: raw_content = i.content || i.description || \"\"; content = CGI.unescapeHTML(raw_content.to_s.scrub); next if content.blank?"
+ },
+ "s_f8bb1b1d": {
+  "summaryPt": "EmbedController.best virou assíncrono fire-and-forget, mas o spec/chamador ainda espera TopicRetriever síncrono",
+  "contentPt": "best mudou de retrieve síncrono para Jobs.enqueue(:retrieve_topic) assíncrono renderizando 'loading'. O consumidor existente spec/spec/controllers/embed_controller_spec.rb:40-45 ainda espera a chamada síncrona TopicRetriever.new(...).retrieve e um TopicView imediato. Atualize os consumidores para tratar loading/retry assíncrono ou mantenha um fallback síncrono para o caminho crítico."
+ },
+ "s_dcaf48bf": {
+  "summaryPt": "Os testes de guard do PollFeed não isolam a condição que nomeiam e passariam mesmo se esse guard fosse removido",
+  "contentPt": "Cada exemplo 'requires' deve definir as outras duas pré-condições com valores que passam, para que o exemplo realmente alcance o branch que nomeia. Faça stub de feed_polling_enabled?=true, feed_polling_url=url, embed_by_username=username e use nil/false apenas na condição sob teste; caso contrário o teste é vazio e não detectará a remoção desse guard."
+ },
+ "s_020c1288": {
+  "summaryPt": "O spec do EmbedController espera TopicRetriever, mas o controller enfileira um job",
+  "contentPt": "Substitua o mock de TopicRetriever por uma expectativa em Jobs.enqueue(:retrieve_topic, ...) e verifique o tratamento de referer/host. O exemplo atual exercita o alvo errado e ainda passaria (ou falharia de forma espúria) se o enqueue estivesse quebrado."
+ },
+ "s_f78c8d65": {
+  "summaryPt": "",
+  "contentPt": "Nenhuma sugestão fornecida"
+ },
+ "s_7ba9ce4b": {
+  "summaryPt": "Os testes de host inválido do TopicRetriever não fazem stub do throttling, então a supressão pode vir do Redis e não da verificação de host",
+  "contentPt": "Faça stub de retrieved_recently? para false nos exemplos de host inválido (e para true/false explicitamente no contexto de host válido, como já feito) para que o teste verifique o branch de host, não o branch de throttle. Limpe ou faça mock de $redis setnx/expire para evitar poluição entre testes."
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "spec/fabricators/category_fabricator.rb defines :embeddable_host instead of the category fabricators."
+   },
+   {
+    "id": "F2",
+    "description": "spec/fabricators/embeddable_host_fabricator.rb defines the category fabricators instead of :embeddable_host."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_ec4800aa",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b1025ecf",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_167fdedb",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

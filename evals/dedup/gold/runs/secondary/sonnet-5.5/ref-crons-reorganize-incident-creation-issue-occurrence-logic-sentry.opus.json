@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_9d4092f2",
+    "mainDefect": "The refactor moves code to new modules (try_incident_threshold, incident_occurrence.py, SimpleCheckIn to types.py) but adds or updates no tests to cover the moved code.",
+    "secondary": [
+     {
+      "defect": "Existing tests outside the diff may still patch the old module paths, which would make them stale or broken after the move.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

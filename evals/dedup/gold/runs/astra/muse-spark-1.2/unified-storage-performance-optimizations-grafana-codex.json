@@ -1,0 +1,49 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "promptSha": "def8ffbcc259eb55c5fd66f7e628568b4b624111",
+  "attempt": 1,
+  "ms": 43035,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_6f655174",
+          "s_53aa8e91",
+          "s_4cfadd1d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Narrowing BuildIndex locking permits concurrent same-key builds to collide, duplicate work, and overwrite cached indexes; unlocked TotalDocs cache iteration also races with cache writes.",
+        "rationale": "All three report the same concurrent same-key build defect caused by narrowing the critical section. s_4cfadd1d additionally reports the TotalDocs map-read race, which the unified comment must preserve."
+      },
+      {
+        "members": [
+          "s_a0690d05",
+          "s_ca606e8f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Starting the watcher after search initialization creates a window in which writes during index construction are missed.",
+        "rationale": "Both identify the same initialization-order defect and missed-event window. They emphasize different consequences for watch delivery and search consistency, but restoring watcher-first ordering or replaying the gap addresses both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_66f35f2a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3acdeb3d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d7409834",
+        "confidence": "high"
+      }
+    ]
+  }
+}

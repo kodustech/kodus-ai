@@ -1,0 +1,25 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "c5079d9c445667de1922e8c2545f9a6bef49ef7e",
+  "attempt": 1,
+  "ms": 25712,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_4e685465",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2a28a379",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6ff88df6",
+        "confidence": "high"
+      }
+    ]
+  }
+}

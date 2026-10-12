@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8d71c3eb",
+    "mainDefect": "Closing the backup-codes step with Escape or an outside click skips onEnable, so the UI shows 2FA as disabled even though it is enabled on the server.",
+    "secondary": [
+     {
+      "defect": "The modal state (step, password, codes) is not reset when it is dismissed, so reopening it shows the old backup-code screen.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e15ea189",
+    "mainDefect": "Backup codes are compared with an early-exit indexOf instead of a constant-time comparison, so the timing can leak information about the stored codes.",
+    "secondary": [
+     {
+      "defect": "The backup-code input is not lowercased before matching, so codes typed in uppercase do not match the stored lowercase hex codes.",
+      "coveredBy": [
+       "s_44364016"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_cf5caa96",
+    "mainDefect": "The copy-backup-codes e2e test only waits for the success toast and never checks what was copied, so it passes even if the copied text is wrong or empty.",
+    "secondary": [
+     {
+      "defect": "The download e2e test only checks the filename and never checks that the file contains the correct backup codes.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

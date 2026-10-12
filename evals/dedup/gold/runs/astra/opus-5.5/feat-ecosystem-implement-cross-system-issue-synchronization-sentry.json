@@ -1,0 +1,40 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "d7c16bc4e7778985663f8d698dda73c3f2a7aa59",
+  "attempt": 1,
+  "ms": 30945,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_c2f1d70e",
+          "s_03c0a1d9",
+          "s_0ee85020",
+          "s_9eae5caf",
+          "s_b183150d"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "AssignmentSource.queued defaults to a timestamp evaluated at import time rather than instance creation, and test_to_dict only checks non-nullness, leaving the incorrect timestamp undetected.",
+        "rationale": "All five explicitly report the same import-time timestamp defect. The test-focused suggestion additionally reports inadequate value assertions, so the merged comment must preserve both the default correction and the test improvement."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_400b91f4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_eaa03b1c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_36f4eb1a",
+        "confidence": "high"
+      }
+    ]
+  }
+}

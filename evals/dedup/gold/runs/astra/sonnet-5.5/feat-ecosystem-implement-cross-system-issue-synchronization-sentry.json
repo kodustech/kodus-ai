@@ -1,0 +1,25 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "3de714659578f1cf6880035247e423ea3fcf1806",
+  "attempt": 1,
+  "ms": 32328,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_1de4d23b",
+          "s_428c1b8f",
+          "s_d328cce0"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The queued timestamp is evaluated at import time rather than per instance; s_428c1b8f additionally flags potential JSON serialization incompatibility of the datetime returned by to_dict().",
+        "rationale": "All three report the identical timestamp default defect on line 18. The overlapping group also includes s_428c1b8f's additional serialization concern, which must survive consolidation."
+      }
+    ],
+    "unique": []
+  }
+}

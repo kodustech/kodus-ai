@@ -1,0 +1,34 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_4cfadd1d",
+    "mainDefect": "TotalDocs iterates b.cache without locking while BuildIndex writes to it, creating a data race.",
+    "secondary": [
+     {
+      "defect": "Concurrent builds for the same key duplicate index creation and collide on the index directory.",
+      "coveredBy": [
+       "s_53aa8e91",
+       "s_6f655174"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_66f35f2a",
+    "mainDefect": "Concurrent initialization builds share totalBatchesIndexed without synchronization, creating a counter data race.",
+    "secondary": [
+     {
+      "defect": "Concurrent builds share the outer err variable without synchronization, creating a race that can return the wrong error.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Build goroutines capture the loop variable info and can build using the wrong iteration's value.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

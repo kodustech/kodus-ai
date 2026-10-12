@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_faf6b973",
+    "mainDefect": "Unconditional access to integration.metadata[\"sender\"][\"login\"] raises KeyError (500) when the Integration metadata has no sender.",
+    "secondary": [
+     {
+      "defect": "The login comparison is case-sensitive although GitHub logins are case-insensitive, which could falsely reject a legitimate installer.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,61 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "638a015824bc744b2c3a692befea07ef6b1f6fe0",
+  "attempt": 1,
+  "ms": 50041,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_1c4aa820",
+          "s_3f87de1a",
+          "s_27b220c4",
+          "s_840a91a7"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "fetch_error_details pairs error IDs with nodestore mapping values positionally, misattributing event data when results are reordered or missing.",
+        "rationale": "All four identify the same zip(error_ids, events.values()) defect. Their differing examples describe consequences of the same positional-pairing assumption, resolved by looking up results by node ID."
+      },
+      {
+        "members": [
+          "s_890c4551",
+          "s_9ea9f5fd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The feature-gated dashboard table branch passes hardcoded empty columns and data instead of query results, rendering blank widgets.",
+        "rationale": "Both report the identical placeholder props in the same TableWidgetVisualization branch and require wiring in the actual table results."
+      },
+      {
+        "members": [
+          "s_c5ab9f8f",
+          "s_9b433b01"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The age/timestamp mutual-exclusion validators use truthiness instead of field presence, treating zero values as absent.",
+        "rationale": "Both identify the same checks in validate_timestamp and validate_age and propose the same presence-based validation."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_8dfdf54b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9758e0bf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_883b9e86",
+        "confidence": "high"
+      }
+    ]
+  }
+}

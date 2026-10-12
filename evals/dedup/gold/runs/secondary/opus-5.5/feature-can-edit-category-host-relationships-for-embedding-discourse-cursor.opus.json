@@ -1,0 +1,107 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_dbcf98a4",
+    "mainDefect": "The migration inserts the old embeddable_hosts values without normalizing them (scheme, path and whitespace are kept), so the migrated rows never match uri.host in record_for_host.",
+    "secondary": [
+     {
+      "defect": "Host values are put into the raw SQL INSERT by string interpolation without quoting, so a value containing a quote breaks the INSERT and aborts the migration.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_93eb20ca",
+    "mainDefect": "record_for_host lowercases only the stored column and not uri.host, so hosts containing uppercase letters are rejected.",
+    "secondary": [
+     {
+      "defect": "The lookup compares only the bare host, so hosts saved with a :port suffix (which the validator allows) never match.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_777115f9",
+    "mainDefect": "The store's new _ids branch always deletes the original *_ids key and replaces it with looked-up objects, so ids that can't be resolved become undefined entries and the raw id data is lost.",
+    "secondary": [
+     {
+      "defect": "A null *_ids value throws a TypeError when .map is called on it.",
+      "coveredBy": [
+       "s_36199324",
+       "s_083999f0"
+      ]
+     },
+     {
+      "defect": "The `hydrated || []` fallback is dead code because map always returns an array.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_36199324",
+    "mainDefect": "The _ids branch calls obj[k].map without checking that the value is an array, so a null *_ids value throws and breaks hydration; the || [] guard is applied to map's result and never takes effect.",
+    "secondary": [
+     {
+      "defect": "Ids that _lookupSubType can't resolve stay in the hydrated array as undefined.",
+      "coveredBy": [
+       "s_777115f9",
+       "s_d5eddfe5"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_d5eddfe5",
+    "mainDefect": "Every key ending in _ids is now deleted unconditionally and replaced with an array of looked-up objects, which are undefined when the type isn't sideloaded, so models lose their raw *_ids arrays.",
+    "secondary": [
+     {
+      "defect": "The new pluralized property can overwrite an existing real field with the same name.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_0621eb9a",
+    "mainDefect": "The migration inserts the old setting's values (which may be full URLs with a scheme or path) as-is, skipping normalization, so the migrated hosts never match in record_for_host and embedding breaks.",
+    "secondary": [
+     {
+      "defect": "Values are interpolated into raw SQL without escaping or quoting.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c76cedb8",
+    "mainDefect": "The migration crashes with NoMethodError when the embed_category (or uncategorized_category_id) row is missing, because it indexes an empty execute result.",
+    "secondary": [
+     {
+      "defect": "Hosts are inserted without normalization, so values that still have an http(s):// prefix or a path never match uri.host and embedding breaks after the upgrade.",
+      "coveredBy": [
+       "s_dbcf98a4",
+       "s_0621eb9a"
+      ]
+     },
+     {
+      "defect": "Host values are not quoted in the raw SQL INSERT, so a single quote in a value breaks the migration.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_083999f0",
+    "mainDefect": "The plural _ids branch calls obj[k].map without a null check, so a null *_ids value throws.",
+    "secondary": [
+     {
+      "defect": "The original id array is always deleted even when no matching sideloaded collection exists, so plain id arrays are replaced with arrays of undefined.",
+      "coveredBy": [
+       "s_777115f9",
+       "s_d5eddfe5"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "In the AccessTokenContext constructor, line 73 null-checks grantType a second time instead of rawTokenId, so rawTokenId is never validated.",
+    "members": [
+     "s_2684011e",
+     "s_aca65677",
+     "s_38c9a377",
+     "s_b0aa7885",
+     "s_76bcb0fc",
+     "s_e6f8c322"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S4, S7, S11, S17, S19) apontam o mesmo erro de copiar e colar na linha 73 do construtor de AccessTokenContext: o código checa grantType de novo em vez de rawTokenId. A correção é a mesma em todas, trocar para requireNonNull(rawTokenId, ...). As faixas de linhas e a ênfase mudam, por exemplo a mensagem enganosa em S4, mas o defeito é um só."
+ }
+}

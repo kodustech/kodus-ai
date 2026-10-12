@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The new unconditional postgres skip in TestIntegrationWillRunInstrumentationServerWhenTargetHasNoHttpServer removes integration coverage of resource-server startup on postgres.",
+    "members": [
+     "s_e93f5eb3",
+     "s_17a7fb74"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S3 apontam o mesmo defeito: o novo t.Skip para postgres (linhas 35-38) faz o teste de integração deixar de rodar e retira a cobertura dessa inicialização no CI. A observação de S3 de que o skip vale também para execuções locais é só um detalhe do mesmo skip e se resolve com a mesma correção, então não é um segundo defeito. O grupo deve ser mantido."
+ }
+}

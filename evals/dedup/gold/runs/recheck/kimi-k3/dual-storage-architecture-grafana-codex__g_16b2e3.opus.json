@@ -1,0 +1,30 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_442861c7",
+     "s_d0f19bee",
+     "s_7922ab52",
+     "s_20756cac",
+     "s_6b11a209"
+    ],
+    "defect": "On Delete's success path, recordStorageDuration gets the object `name` as the kind label instead of `options.Kind`."
+   },
+   {
+    "members": [
+     "s_ccf38f53",
+     "s_39ce7ed0"
+    ],
+    "defect": "Delete puts the un-enriched `d.Log` into the context instead of the enriched `log`, so the name/kind/method fields are lost."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_6b11a209"
+  ],
+  "reasoningPt": "O grupo mistura dois defeitos distintos com correções diferentes: S4, S8, S10 e S27 tratam do `name` passado como label kind na métrica (linha 106), enquanto S7 e S12 tratam do `d.Log` não enriquecido injetado no contexto (linha 97). S16 reporta os dois, mas seu defeito principal (o primeiro) é o da métrica, então fica nesse grupo e é marcado como bundle."
+ }
+}

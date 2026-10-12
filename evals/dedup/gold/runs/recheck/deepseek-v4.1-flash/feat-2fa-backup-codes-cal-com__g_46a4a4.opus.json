@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3e96920f",
+     "s_7b1466dd"
+    ],
+    "defect": "The component in BackupCode.tsx is declared as `function TwoFactor` (copy-paste leftover) and should be renamed to `BackupCode`."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S12 apontam o mesmo defeito na mesma linha: o componente de BackupCode.tsx está declarado como `TwoFactor` em vez de `BackupCode`. As duas propõem a mesma correção, que é renomear a função, e nenhuma traz outro defeito. Por isso o grupo fica como está."
+ }
+}

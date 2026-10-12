@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_08cbca4d",
+    "mainDefect": "FallbackLocaleList#[] calls .to_sym on a potentially nil default locale before filtering, causing translation calls to raise NoMethodError.",
+    "secondary": [
+     {
+      "defect": "Mixed String and Symbol locale identities prevent deduplication, causing the same locale file to be loaded twice.",
+      "coveredBy": [
+       "s_831e218a"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,54 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "update (lines 10-11): EmbeddableHost lookup can return nil, and save_host(nil) raises NoMethodError, giving a 500 instead of a 404"
+   },
+   {
+    "id": "F2",
+    "description": "destroy (lines 15-16): EmbeddableHost lookup can return nil, and host.destroy raises NoMethodError, giving a 500 instead of a 404"
+   },
+   {
+    "id": "F3",
+    "description": "save_host (lines 23-24): params[:embeddable_host] is used without checking it exists, so a missing param raises an error on nil"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0eba4ccb",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_1f9c507d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_39848fe6",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b171a9e5",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

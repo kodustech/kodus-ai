@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "ClientPermissionEvaluator.java:95-98: requireView() Javadoc incorrectly describes returning true instead of throwing ForbiddenException when canView() is false."
+   },
+   {
+    "id": "F2",
+    "description": "ClientPermissionEvaluator.java:100-103: requireViewClientScopes() Javadoc incorrectly describes returning true instead of throwing ForbiddenException when canViewClientScopes() is false."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_8c884e4a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8797ead7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

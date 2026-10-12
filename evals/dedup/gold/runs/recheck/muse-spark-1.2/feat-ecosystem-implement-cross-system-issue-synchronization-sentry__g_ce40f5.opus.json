@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "defect": "The default for AssignmentSource.queued is timezone.now(), which runs once when the module is imported, so every instance gets the same stale timestamp; it should use field(default_factory=timezone.now).",
+    "members": [
+     "s_0a96d57b",
+     "s_84bd5bf4",
+     "s_e0de5ccd",
+     "s_b2100c10"
+    ]
+   },
+   {
+    "defect": "AssignmentSource.to_dict() returns a raw datetime in the apply_async kwargs, which Celery's JSON serialization cannot encode; the fix is to serialize it to ISO 8601 and parse it back in from_dict, or leave it out.",
+    "members": [
+     "s_34589453",
+     "s_597377f6",
+     "s_4500db00"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_597377f6",
+   "s_4500db00",
+   "s_e0de5ccd"
+  ],
+  "reasoningPt": "O grupo mistura dois defeitos diferentes, com correções diferentes: o default de queued calculado no import (S1, S4, S5, S7) e o datetime cru em to_dict, que quebra a serialização JSON do Celery (S2, S3, S6). S3 e S6 começam pelo problema de serialização e só depois mencionam o default_factory, então ficam no grupo da serialização e entram em bundles. S5 começa pelo default e cita o parsing no from_dict apenas na correção, por isso fica no primeiro grupo e também entra em bundles."
+ }
+}

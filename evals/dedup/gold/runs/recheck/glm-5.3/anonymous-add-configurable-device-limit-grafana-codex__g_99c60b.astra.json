@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_95fab8b2",
+     "s_ee1a1b68"
+    ],
+    "defect": "tagDeviceUI armazena a chave no cache antes da gravação no banco e a mantém após a rejeição por limite, permitindo acesso anônimo nas tentativas seguintes por 29 minutos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 descrevem o mesmo defeito: a rejeição por limite deixa uma entrada no cache que permite acesso nas tentativas seguintes. Ambas são resolvidas armazenando a chave somente após sucesso ou removendo-a quando a gravação falha; nenhuma relata um segundo defeito independente."
+ }
+}

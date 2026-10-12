@@ -1,0 +1,26 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_aa8b5b10",
+     "s_b7a8f74b",
+     "s_65bc8258"
+    ],
+    "defect": "Google createEvent ignora o destino configurado quando credentialId é nulo e cria o evento no calendário primary."
+   }
+  ],
+  "unique": [
+   "s_8ebfd962"
+  ],
+  "bundles": [
+   "s_aa8b5b10",
+   "s_b7a8f74b",
+   "s_65bc8258",
+   "s_8ebfd962"
+  ],
+  "reasoningPt": "S5, S11 e S22 começam pelo mesmo defeito: a seleção do calendário ignora destinos sem credentialId. S27 começa pela omissão de externalId na chamada, que deixa a referência salva sem externalCalendarId e exige uma correção distinta. Todas relatam os dois defeitos, mas, pela regra do defeito principal, S27 fica separada."
+ }
+}

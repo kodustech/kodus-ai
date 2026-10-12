@@ -1,0 +1,51 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_006ed08a",
+    "mainDefect": "Calling to_sym on SiteSetting.default_locale in the fallback list raises NoMethodError when default_locale is nil, before compact can remove it.",
+    "secondary": [
+     {
+      "defect": "The incoming locale is not normalized, so the fallback list can mix String and Symbol locales. That breaks uniq and makes the @loaded_locales.include? checks miss.",
+      "coveredBy": [
+       "s_c8aed49e"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a6008d55",
+    "mainDefect": "The translate cache key leaves out the fallback chain and default_locale, so cached fallback results go stale when SiteSetting.default_locale changes.",
+    "secondary": [
+     {
+      "defect": "translate calls @loaded_locales.include? without a nil guard, so it raises NoMethodError if it runs before ensure_loaded! has set @loaded_locales.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e63608d7",
+    "mainDefect": "Calling to_sym on default_locale before compact defeats the nil guard and raises when the SiteSetting is missing.",
+    "secondary": [
+     {
+      "defect": "The fallback list mixes String and Symbol locales when I18n.locale is a String, which breaks the fallback chain.",
+      "coveredBy": [
+       "s_c8aed49e"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_fbe2d845",
+    "mainDefect": "The method in Combat.java is public but should be private for proper encapsulation.",
+    "secondary": [
+     {
+      "defect": "The method has no early-return guard for when CBM.isAbleToAccessHealingItems(opponent, player) is false, so it does unnecessary processing.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

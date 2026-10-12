@@ -1,0 +1,58 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "8c60bc29f88d432e6bff9386133036ca012f9f16",
+  "attempt": 1,
+  "ms": 44381,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_6881012d",
+          "s_3383b620",
+          "s_fc6a067d",
+          "s_56da48b0",
+          "s_8752109f",
+          "s_cbaba39f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The Google Meet fallback dereferences an undefined mainHostDestinationCalendar when destinationCalendar is null or empty.",
+        "rationale": "All six suggestions identify the same unguarded integration access; adding optional chaining at that access addresses them all."
+      },
+      {
+        "members": [
+          "s_a6c93c38",
+          "s_b364bc36"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "A null evt.destinationCalendar silently drops collective team calendars, and collecting teamDestinationCalendars through mutation inside async map callbacks is also reported as fragile.",
+        "rationale": "Both report the same optional-push no-op when the organizer has no destination calendar. The first additionally reports fragile collection inside async callbacks, which must survive in the merged comment."
+      },
+      {
+        "members": [
+          "s_e8f11cef",
+          "s_0e8ac11d",
+          "s_6996fe8e",
+          "s_c779c607",
+          "s_0d466bb9"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Google Calendar updateEvent and deleteEvent both search destination calendars using the falsy externalCalendarId that triggered the fallback, preventing the intended destination fallback.",
+        "rationale": "All five report the same faulty fallback repeated in updateEvent and deleteEvent. Both locations require the same correction."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_0cb37a15",
+        "confidence": "high"
+      }
+    ]
+  }
+}

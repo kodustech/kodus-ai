@@ -1,0 +1,102 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "00a4177e4a9a7e4b18c33a5c5f67d20d1bbfea09",
+  "attempt": 1,
+  "ms": 85779,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_fdf78d6e",
+          "s_7dc5b2ce"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Create and Update pass a literal true instead of the actual success/error result to the duration recorder on storage failure paths.",
+        "rationale": "Both report the same boolean-argument problem at separate call sites. Their complaint differs from the suggestions about selecting the wrong backend's metric helper."
+      },
+      {
+        "members": [
+          "s_d040909a",
+          "s_e9ab5dc2",
+          "s_36a5b400",
+          "s_289657e8",
+          "s_b95471bc",
+          "s_3f5cbb96",
+          "s_0bd77fe1",
+          "s_47464eda",
+          "s_30992443",
+          "s_5866e509",
+          "s_2719ce4a",
+          "s_0202df1b"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Create and Update attribute storage failures to legacy metrics, while DeleteCollection attributes the legacy operation to storage metrics.",
+        "rationale": "These report repeated selection of the wrong backend's duration helper. The merged comment must retain all three call sites and use the helper matching the backend actually measured."
+      },
+      {
+        "members": [
+          "s_c3b88c49",
+          "s_07b0de25",
+          "s_fcc2ff07",
+          "s_6c1d1dab",
+          "s_4ba6d893"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Delete's success metric uses the object name as its kind label instead of options.Kind.",
+        "rationale": "Every suggestion identifies the same argument at line 106; one substitution resolves them all."
+      },
+      {
+        "members": [
+          "s_a52a2300",
+          "s_bdded596"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Delete installs the base logger into the context instead of the enriched logger, losing name, kind, and method fields.",
+        "rationale": "Both identify the same incorrect logger argument at line 97."
+      },
+      {
+        "members": [
+          "s_0fa90f2c",
+          "s_b0ebef03",
+          "s_7e8b6adf"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The asynchronous legacy writes inherit request cancellation, lose completion-before-return and ordering guarantees, and no longer log legacy errors.",
+        "rationale": "All three report request-bound contexts cancelling background legacy writes across the four mutation methods. The overlapping reports additionally identify lost synchronous completion, unsequenced writes, and missing error logs, which must survive consolidation."
+      },
+      {
+        "members": [
+          "s_3d27a0be",
+          "s_c5f2bfd6"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Mutation tests do not synchronize with or assert the asynchronous legacy writes; the Delete, Update, and DeleteCollection report also identifies missing legacy expectations and possible unexpected-call races.",
+        "rationale": "Both report the repeated failure to verify legacy writes, allowing tests to pass when those writes are removed. They cover distinct test cases, and the additional expectation and synchronization concerns must be retained."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_0a6154e7",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e51a6cc7",
+        "confidence": "high"
+      }
+    ]
+  }
+}

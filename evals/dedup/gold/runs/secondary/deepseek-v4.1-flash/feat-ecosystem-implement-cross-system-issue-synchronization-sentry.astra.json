@@ -1,0 +1,40 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_2673b2c5",
+    "mainDefect": "to_dict() preserves queued as a raw datetime, which can make Celery JSON serialization fail when enqueuing assignee sync.",
+    "secondary": [
+     {
+      "defect": "The queued default is evaluated at class definition, causing all default instances to share one timestamp.",
+      "coveredBy": [
+       "s_2431eed5",
+       "s_b531a8e1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_3df28f24",
+    "mainDefect": "test_from_dict_empty_array passes an empty dictionary, so its name does not match the input it tests.",
+    "secondary": [
+     {
+      "defect": "The neighboring test_from_dict_inalid_data has a typo in its name.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_2438c807",
+    "mainDefect": "to_dict() includes a raw datetime that the suggestion says causes Celery JSON serialization to fail and prevents outbound assignee sync.",
+    "secondary": [
+     {
+      "defect": "from_dict() performs no datetime coercion when reconstructing the assignment source from serialized data.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

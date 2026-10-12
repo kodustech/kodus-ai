@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1c75cdaf",
+     "s_f7bfc988",
+     "s_80c1c466"
+    ],
+    "defect": "O cálculo de totalPages com floor + 1 cria uma página vazia extra quando user_count é múltiplo exato de limit."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S6 relatam o mesmo erro em totalPages e a mesma consequência: navegar para uma página extra vazia. As referências aos limites de offset explicam esse comportamento e complementam a correção, sem caracterizar outro defeito."
+ }
+}

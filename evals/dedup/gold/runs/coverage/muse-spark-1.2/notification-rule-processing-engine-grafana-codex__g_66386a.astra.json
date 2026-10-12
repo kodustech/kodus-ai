@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GrafanaGroupLoader.tsx expectedRulesCount prop JSDoc still refers to a Ruler response."
+   },
+   {
+    "id": "F2",
+    "description": "GrafanaGroupLoader.tsx component JSDoc still claims it loads from both Prometheus and Ruler endpoints."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_60b424b5",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3c4b4f6b",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

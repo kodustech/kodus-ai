@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_9c86f0c6",
+    "mainDefect": "Direct indexing dcg_to_slow_conditions[dcg.id] raises KeyError when a buffered DCG was deleted and is missing from the dict, crashing the delayed_workflow task.",
+    "secondary": [
+     {
+      "defect": "Direct indexing workflows_to_envs[workflow_id] in get_groups_to_fire raises KeyError when the workflow id is missing from the dict.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_283838a3",
+     "s_80b5cf4b",
+     "s_e312d0f3"
+    ],
+    "defect": "O uso de && em isTeamAdminOrOwner impede que administradores que não são proprietários passem pela autorização de equipe para adicionar convidados."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S7 e S9 apontam o mesmo operador incorreto na mesma verificação de autorização, nas linhas 46–48. A troca de && por || resolve o defeito descrito pelas três sugestões, e nenhuma relata um segundo defeito."
+ }
+}

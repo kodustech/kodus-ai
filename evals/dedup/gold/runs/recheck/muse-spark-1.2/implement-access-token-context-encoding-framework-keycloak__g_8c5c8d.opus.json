@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "AccessTokenContext constructor checks grantType for null twice (copy-paste) and never checks rawTokenId.",
+    "members": [
+     "s_b3979b1b",
+     "s_db9a5070",
+     "s_50672d90",
+     "s_66268c55"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S8 e S10 apontam o mesmo erro de copiar e colar no construtor de AccessTokenContext: o segundo requireNonNull verifica grantType de novo em vez de rawTokenId. Todas propõem a mesma correção e nenhuma traz um segundo defeito."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_01b9b5a4",
+     "s_de2238dd"
+    ],
+    "defect": "The time.sleep(0.1) added to test_basic does nothing because the same test monkeypatches time.sleep to a no-op, so the intended wait for the flusher threads never happens."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S9 apontam o mesmo defeito, no mesmo trecho: o time.sleep(0.1) é anulado pelo monkeypatch de time.sleep no próprio teste, então a espera pelas threads do flusher não acontece. As duas propõem a mesma correção: guardar o sleep real ou esperar por uma condição. Nenhuma traz um segundo defeito."
+ }
+}

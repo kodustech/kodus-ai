@@ -1,0 +1,25 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_c4bfaaf2",
+     "s_29d4df72"
+    ],
+    "defect": "O middleware de métricas acessa campos de requisições nulas sem proteção, causando panic antes do encaminhamento."
+   },
+   {
+    "members": [
+     "s_87ece20e",
+     "s_ca7aeab6"
+    ],
+    "defect": "O middleware de logger contextual acessa req.PluginContext sem verificar se a requisição é nula, causando panic."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 descrevem o mesmo defeito no middleware de métricas; S6 e S7 descrevem o mesmo defeito no logger contextual. Embora tenham o mesmo sintoma, são falhas independentes: corrigir as verificações no middleware de métricas ainda deixa o logger contextual sujeito a panic."
+ }
+}

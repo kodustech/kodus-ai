@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bfda6ce2",
+     "s_af58ea2b"
+    ],
+    "defect": "A busca por booking.userId || 0 lança um erro Prisma não tratado quando o organizador é nulo, resultando em 500 em vez de um TRPCError controlado."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_bfda6ce2"
+  ],
+  "reasoningPt": "S8 e S22 relatam o mesmo defeito principal: a consulta por ID 0 quando booking.userId é nulo gera um erro 500 não tratado. S22 apenas detalha como um participante alcança esse caminho. S8 também aponta a consulta redundante ao organizador já carregado, por isso consta em bundles."
+ }
+}

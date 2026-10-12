@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_fa724245",
+     "s_0ed4a288"
+    ],
+    "defect": "getBaseConditions contém ramificações inalcançáveis porque authConditions sempre é um objeto Prisma.Sql e, portanto, truthy."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S7 apontam o mesmo defeito: código inalcançável em getBaseConditions porque authConditions nunca é falsy. S4 identifica uma ramificação adicional causada pela mesma condição, enquanto S7 se concentra no else final; a mesma simplificação resolve ambas."
+ }
+}

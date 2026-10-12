@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with && instead of ||, so the user must hold both roles and team admins who are not owners are denied.",
+    "members": [
+     "s_2a6ec553",
+     "s_be3938b1",
+     "s_889f1bcc",
+     "s_3d0f032a",
+     "s_dd4aed43"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S10, S14 e S17 apontam o mesmo defeito: o uso de && em vez de || no cálculo de isTeamAdminOrOwner, que exige os dois papéis ao mesmo tempo. A correção é a mesma (trocar && por ||), e as diferenças de faixa de linhas ou de ênfase não mudam o defeito. Nenhuma sugestão traz um segundo defeito."
+ }
+}

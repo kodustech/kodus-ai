@@ -1,0 +1,83 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "isAccessTokenId (AssertEvents line 483) reads the grant shortcut at substring(3,5) instead of substring(4,6)"
+   },
+   {
+    "id": "F2",
+    "description": "isAccessTokenId equality check is inverted: it returns false when the shortcut matches the expected one"
+   },
+   {
+    "id": "F3",
+    "description": "isAccessTokenId can throw StringIndexOutOfBounds when the ID prefix is too short (no length check)"
+   },
+   {
+    "id": "F4",
+    "description": "The '4th char' code comment at line 482 is misleading and should be corrected"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_843e5d06",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_48023927",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_16105147",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c4e9c10a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0f11c762",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dedf90ac",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9fe47bb1",
+    "covers": [
+     "F1",
+     "F2",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_fb963067",
+     "s_28120ad1"
+    ],
+    "defect": "The new isConditionalPasskeysEnabled guard fills per-user WebAuthn data (credential IDs) for a user identified only by a typed username. This lets unauthenticated visitors see that the account exists and has passkeys, and see its credential IDs."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 apontam o mesmo defeito: com o novo guard isConditionalPasskeysEnabled, os dados de passkey do usuário digitado (credentialIds via passkeys.ftl) passam a ser preenchidos em páginas não autenticadas, permitindo enumeração de contas. Os dois sugerem a mesma correção: liberar esses dados só quando USER_SET_BEFORE_USERNAME_PASSWORD_AUTH estiver definido (reautenticação). A diferença de arquivo (PasswordForm vs UsernamePasswordForm) é só o mesmo erro em outro local, então o grupo continua como está."
+ }
+}

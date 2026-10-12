@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b64d3118",
+     "s_181ae40a"
+    ],
+    "defect": "O valor de totpStep1 no arquivo messages_zh_CN.properties usa chinês tradicional em um pacote de chinês simplificado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 apontam o mesmo defeito na mesma chave e linha: texto em chinês tradicional no pacote zh_CN. Ambas propõem a mesma correção para chinês simplificado, portanto são redundantes e devem permanecer juntas."
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Non-atomic read-modify-write in authorize() (next-auth-options.ts lines 139-156) lets concurrent logins reuse the same single-use backup code"
+   },
+   {
+    "id": "F2",
+    "description": "backupCodes[index]=null leaves null entries that pile up, and when every code is used the user gets IncorrectBackupCode instead of MissingBackupCodes"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_bca7ea55",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cf0c790d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

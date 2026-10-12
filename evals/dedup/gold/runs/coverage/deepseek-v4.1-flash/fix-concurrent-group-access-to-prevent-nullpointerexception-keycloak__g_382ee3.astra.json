@@ -1,0 +1,52 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GroupTest.java:139–157: The reader is never joined before asserting, so late exceptions are missed and the thread can outlive the test."
+   },
+   {
+    "id": "F2",
+    "description": "GroupTest.java:139–157: No read overlapping deletion is guaranteed; the reader loop may never execute, allowing a vacuous pass."
+   },
+   {
+    "id": "F3",
+    "description": "GroupTest.java:152–155: deletedAll is not set in a finally block, so a throwing removal leaves the non-daemon reader looping forever and hangs the test."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_cfee9f21",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4687a409",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6f563687",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_907d17d3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

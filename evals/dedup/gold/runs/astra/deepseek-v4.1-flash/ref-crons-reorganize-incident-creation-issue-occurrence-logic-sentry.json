@@ -1,0 +1,45 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+  "promptSha": "0e7780a7321c5b464795abc9f785cb5fa5db401f",
+  "attempt": 1,
+  "ms": 28700,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_b9ad27f9",
+          "s_24ce89e8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "get_monitor_environment_context returns the raw monitor config instead of the transformed copy, discarding the schedule_type display substitution.",
+        "rationale": "Both suggestions identify the same incorrect return value at line 168. Returning the transformed config resolves both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_b578839a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_058942cb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_527763f1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_761c0591",
+        "confidence": "high"
+      },
+      {
+        "id": "s_74630bb0",
+        "confidence": "high"
+      }
+    ]
+  }
+}

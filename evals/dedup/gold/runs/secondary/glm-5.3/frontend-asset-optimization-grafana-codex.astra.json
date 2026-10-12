@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_25eea308",
+    "mainDefect": "The cache is not re-checked after acquiring the write lock, causing redundant serialized manifest reads and decoding during concurrent non-Dev cold starts.",
+    "secondary": [
+     {
+      "defect": "In Dev mode, every call holds the exclusive lock across disk I/O, unnecessarily serializing concurrent consumers.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7e94bcff",
+    "mainDefect": "The cache is not re-checked after acquiring the write lock, causing redundant serialized manifest reads and decoding during concurrent non-Dev cold starts.",
+    "secondary": [
+     {
+      "defect": "In Dev mode, every call holds the exclusive lock across disk I/O, unnecessarily serializing concurrent consumers.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

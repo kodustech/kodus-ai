@@ -1,0 +1,41 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_cf0c790d",
+    "mainDefect": "Backup code consumption is a non-atomic read-modify-write, so concurrent logins can reuse the same single-use backup code.",
+    "secondary": [
+     {
+      "defect": "Used backup codes are set to null and never filtered out, so once every code is used the array is all nulls and the MissingBackupCodes error is never returned.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_522c099e",
+    "mainDefect": "In the login path, backup codes are checked with indexOf/===, which is not constant-time and leaks timing information an attacker could use to enumerate codes.",
+    "secondary": [
+     {
+      "defect": "Backup code comparison does not normalize hex case, so codes typed in a different case fail to match.",
+      "coveredBy": [
+       "s_67024520"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_76e752b3",
+    "mainDefect": "In the disable endpoint, backup codes are checked with indexOf/===, which is not constant-time and creates a timing oracle.",
+    "secondary": [
+     {
+      "defect": "Backup codes are not converted to lower case before comparison, so uppercase input is rejected.",
+      "coveredBy": [
+       "s_67024520"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

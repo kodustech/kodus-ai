@@ -1,0 +1,10 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "unique": []
+  }
+}

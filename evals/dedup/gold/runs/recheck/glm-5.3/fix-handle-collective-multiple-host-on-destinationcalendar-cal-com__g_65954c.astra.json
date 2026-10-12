@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b9c30153",
+     "s_63b14dbf"
+    ],
+    "defect": "O fallback null de evt.destinationCalendar faz o push opcional ignorar os calendários dos demais hosts em agendamentos COLLECTIVE quando o organizador e o tipo de evento não têm calendário de destino."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S23 descrevem o mesmo defeito: o push opcional descarta os calendários dos demais hosts quando o destino inicial é null. A mesma correção resolve ambas; a observação de S23 sobre o formato esperado adiante não relata um defeito independente."
+ }
+}

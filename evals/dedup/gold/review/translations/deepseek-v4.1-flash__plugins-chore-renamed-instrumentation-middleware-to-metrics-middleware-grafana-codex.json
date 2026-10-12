@@ -1,0 +1,14 @@
+{
+ "s_cd94ae6e": {
+  "summaryPt": "O novo ContextualLoggerMiddleware desreferencia req.PluginContext sem o nil guard que o LoggerMiddleware irmão possui.",
+  "contentPt": "O QUÊ: O novo ContextualLoggerMiddleware desreferencia `req.PluginContext` em QueryData (linha 40), CallResource (linha 45), CheckHealth (linha 50) e CollectMetrics (linha 55) sem um guard de request nil, diferente do seu irmão LoggerMiddleware, que verifica `req == nil` antes do uso (logger_middleware.go:63/77/90/104).\nPOR QUÊ: Um `req` nil causa um nil-pointer panic neste middleware; a presença dos nil guards explícitos no middleware irmão mostra que requests nil são tratados como entrada alcançável, então este novo código é inconsistente e inseguro.\nCORREÇÃO: Adicione o mesmo guard antes de desreferenciar, por exemplo `if req == nil { return m.next.QueryData(ctx, req) }` (e da mesma forma para CallResource/CheckHealth/CollectMetrics), ou faça a verificação de nil uma única vez para toda a cadeia."
+ },
+ "s_305b9098": {
+  "summaryPt": "O novo ContextualLoggerMiddleware desreferencia req sem nil guard, causando panic nas requests nil contra as quais o logger middleware já se protege.",
+  "contentPt": "O ContextualLoggerMiddleware desreferencia `req.PluginContext` (e req em geral) sem nenhum nil check, enquanto o LoggerMiddleware irmão na mesma cadeia protege explicitamente com `if req == nil { return m.next.X(ctx, req) }` (logger_middleware.go:63/77/90/104) justamente porque requests nil chegam a esses métodos (por exemplo, no fluxo de teste do CheckHealth). Com este middleware agora na cadeia, uma request nil causa um panic de nil-pointer dereference em `instrumentContext(ctx, endpointCheckHealth, req.PluginContext)` em vez de ser repassada. Adicione o mesmo guard antecipado a cada método, por exemplo `if req == nil { return m.next.CheckHealth(ctx, req) }`."
+ },
+ "s_8d96da0a": {
+  "summaryPt": "O novo MetricsMiddleware desreferencia req.Queries/req.PluginContext sem nil guard, causando panic nas requests nil contra as quais o LoggerMiddleware se protege.",
+  "contentPt": "O novo MetricsMiddleware acessa a request sem um nil check: `for _, v := range req.Queries` (linha 146) em QueryData e `req.PluginContext` / `len(req.Body)` (linhas 149, 161) em CallResource. O LoggerMiddleware protege esses mesmos métodos contra uma request nil (logger_middleware.go:63/77), então requests nil de fato ocorrem; o MetricsMiddleware agora entra em panic nelas. Replique o guard usado pelo LoggerMiddleware antes de instrumentar."
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "RuleActionsButtons.V2.tsx: Silence is enabled for prom-only rules, but the drawer requires a ruler rule, so clicking Silence does nothing."
+   },
+   {
+    "id": "F2",
+    "description": "RuleActionsButtons.V2.tsx: Duplicate/clone may also require a ruler rule, so clicking Duplicate for prom-only rules may do nothing."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0f309c2e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_f8dcf583",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7340d73f",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1f9c507d",
+     "s_b171a9e5",
+     "s_39848fe6",
+     "s_0eba4ccb"
+    ],
+    "defect": "update and destroy in EmbeddableHostsController call methods on the result of where(id:).first without a nil check, so an unknown id raises NoMethodError (500) instead of returning 404."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_b171a9e5"
+  ],
+  "reasoningPt": "S2, S9, S15 e S19 apontam o mesmo defeito: update/destroy não verificam host nil após o lookup, gerando 500 em vez de 404. S9 acrescenta, de forma secundária, a validação de params[:embeddable_host] ausente, por isso entra em bundles, mas o defeito principal dele é o mesmo. O grupo deve ser mantido."
+ }
+}

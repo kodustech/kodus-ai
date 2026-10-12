@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6e8d049a",
+     "s_a1fd1880"
+    ],
+    "defect": "The Mode3 tests never wait for or check the background legacy writes, so the legacy half of the dual writer (including Delete/DeleteCollection) is never verified."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S20 e S21 apontam o mesmo defeito: os testes do Mode3 não sincronizam com a goroutine nem verificam o mock legacy, então a escrita no legacy fica sem verificação. S21 só cobre Delete/DeleteCollection, que é um subconjunto dos lugares que S20 aponta, e a correção é a mesma (aguardar a goroutine e verificar o mock legacy). Por isso o grupo fica como está."
+ }
+}

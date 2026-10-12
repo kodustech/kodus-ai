@@ -1,0 +1,57 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_f886b821",
+    "mainDefect": "The OAuth2GrantType constructor calls formParams.getFirst() with no null check, so a null formParams throws an NPE.",
+    "secondary": [
+     {
+      "defect": "setFormParams() updates formParams but not the cached grantType, so getGrantType() returns a stale value and the wrong grant shortcut is encoded into the token ID.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_9862ac83",
+    "mainDefect": "isAccessTokenId in AssertEvents reads the grant shortcut from the wrong substring (3,5 instead of 4,6) and its condition is inverted, so wrong-grant encodings are not caught.",
+    "secondary": [
+     {
+      "defect": "The matcher does not check that the context prefix is exactly 6 characters long and does not use a split limit, so malformed IDs can cause errors.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f28d822f",
+    "mainDefect": "The AssertEvents matcher disagrees with the encoder: it reads the grant shortcut at the wrong offset and its match condition is inverted.",
+    "secondary": [
+     {
+      "defect": "There is no length guard before calling substring, so a short prefix can throw StringIndexOutOfBoundsException.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f12ae264",
+    "mainDefect": "TokenManager does not guard against a null token context encoder provider when building the token ID.",
+    "secondary": [
+     {
+      "defect": "IllegalStateException and IllegalArgumentException thrown during encoding are not handled, so token creation crashes for unknown custom grants or unexpected session types instead of falling back to a raw UUID.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ce1639a8",
+    "mainDefect": "The OAuth2GrantType copy-constructor was removed or no longer copies grantType.",
+    "secondary": [
+     {
+      "defect": "setFormParams() does not update the cached grantType, so callers that change formParams generate tokens with the wrong grant shortcut.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

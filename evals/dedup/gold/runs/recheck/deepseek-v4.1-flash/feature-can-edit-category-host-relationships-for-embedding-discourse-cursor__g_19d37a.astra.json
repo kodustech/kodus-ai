@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bcd54d22",
+     "s_37e50b4d"
+    ],
+    "defect": "update e destroy não verificam se a busca retornou nil, causando NoMethodError e resposta 500 para IDs inexistentes ou já excluídos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S11 relatam o mesmo defeito nos mesmos pontos: a ausência de tratamento para um registro não encontrado em update e destroy. Ambas pedem a mesma correção, portanto o grupo deve ser mantido; a repetição nos dois métodos não constitui defeitos distintos."
+ }
+}

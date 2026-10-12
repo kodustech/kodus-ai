@@ -1,0 +1,62 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c715ef0c",
+    "mainDefect": "The migration indexes [0]['id'] on query results that may be empty, so it raises NoMethodError when the embed_category or uncategorized_category_id row is missing.",
+    "secondary": [
+     {
+      "defect": "The INSERT interpolates raw host values into the SQL without escaping them, so a quote or a blank line breaks it.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8d184fdd",
+    "mainDefect": "Admin update and destroy use where(id:).first without a nil check, so an unknown id raises NoMethodError and returns a 500 instead of a 404.",
+    "secondary": [
+     {
+      "defect": "The model's before_validation calls host.sub! on a host that may be nil, so a request without embeddable_host[host] raises NoMethodError.",
+      "coveredBy": [
+       "s_2a55c64a"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_dca123ba",
+    "mainDefect": "The migration indexes execute(...)[0]['id'] with no nil check, so it raises NoMethodError when the embed_category or uncategorized_category_id row is missing.",
+    "secondary": [
+     {
+      "defect": "The INSERT interpolates raw setting values as '#{h}' without stripping or escaping them, so a host containing a quote breaks the insert.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_2a55c64a",
+    "mainDefect": "before_validation calls self.host.sub! without a nil check, so creating a record without a host raises NoMethodError and returns a 500 instead of a validation error.",
+    "secondary": [
+     {
+      "defect": "record_for_host compares lower(host) against uri.host without downcasing it, so referers with mixed-case hosts are rejected.",
+      "coveredBy": [
+       "s_5fd8900b",
+       "s_5d6ec13d"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_7958039f",
+    "mainDefect": "Admin update and destroy use where(id:).first, which returns nil for an unknown id, so save_host(nil) or host.destroy raises NoMethodError.",
+    "secondary": [
+     {
+      "defect": "save_host raises an error when params[:embeddable_host] is nil.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

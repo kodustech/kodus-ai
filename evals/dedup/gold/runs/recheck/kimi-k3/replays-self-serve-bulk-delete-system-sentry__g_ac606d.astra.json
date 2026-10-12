@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b803431c",
+     "s_5ebba24e"
+    ],
+    "defect": "fetch_error_details associa IDs aos dados incorretamente ao usar zip(error_ids, events.values()) em vez de consultar os resultados pela chave do nodestore."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 apontam o mesmo defeito de associação posicional, corrigido pelo acesso aos resultados por chave. S1 descreve mais cenários que S5; a observação de S5 sobre a ordem cronológica é apresentada como consequência desse defeito, sem constituir um segundo problema independente."
+ }
+}

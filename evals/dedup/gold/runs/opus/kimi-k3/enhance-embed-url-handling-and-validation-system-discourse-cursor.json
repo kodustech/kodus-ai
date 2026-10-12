@@ -1,0 +1,139 @@
+{
+  "judge": "opus",
+  "model": "kimi-k3",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "073dd530502948f47fdeb8fa7dcdd7e657f27f8d",
+  "attempt": 1,
+  "ms": 15852,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 22187,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 1243,
+    "output_tokens_details": {
+      "thinking_tokens": 231
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 22187,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1243,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 22187,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 22187
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.2025224,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0382c995",
+          "s_21875822"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "i.content may be nil for feed items lacking a content element, so i.content.scrub raises NoMethodError and aborts the poll loop.",
+        "rationale": "Both report the same nil-content crash at the same line in poll_feed.rb with the same fallback-to-description fix."
+      },
+      {
+        "members": [
+          "s_f0a16222",
+          "s_7eeb14d4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "absolutize_urls treats protocol-relative URLs (//host/path) as root-relative and rewrites them into broken origin/host/path URLs.",
+        "rationale": "Same defect in the same function and lines, with the same fix of skipping '//'-prefixed values."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_b7abd5b3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2a3a58c7",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4eb5310c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_08eb6f3f",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_d03b1f18",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_3208d052",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0ead3858",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ff0c02e5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2dac6f1a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_def3d238",
+        "confidence": "high"
+      },
+      {
+        "id": "s_229d7279",
+        "confidence": "high"
+      },
+      {
+        "id": "s_25e02b46",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a2ef2111",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a9573377",
+        "confidence": "high"
+      },
+      {
+        "id": "s_381503b6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ff524526",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8bc68705",
+        "confidence": "high"
+      }
+    ]
+  }
+}

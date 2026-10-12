@@ -1,0 +1,77 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_17a01178",
+    "mainDefect": "Existing attendees are authorized to add arbitrary third parties to a booking and disclose meeting details.",
+    "secondary": [
+     {
+      "defect": "The server schema places no upper bound on the number of guest emails per request.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The mutation lacks rate limiting, allowing repeated notification abuse.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c8acf696",
+    "mainDefect": "The server accepts duplicate emails within a single request and inserts duplicate attendee rows.",
+    "secondary": [
+     {
+      "defect": "Concurrent requests can both pass the attendee existence check and insert the same guest.",
+      "coveredBy": [
+       "s_6180295c"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_b8b58cda",
+    "mainDefect": "Unnormalized guest emails can bypass the lowercased blacklist through different casing.",
+    "secondary": [
+     {
+      "defect": "Case-sensitive comparison against existing attendees allows duplicate attendees for the same mailbox.",
+      "coveredBy": [
+       "s_0005a575"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_bfda6ce2",
+    "mainDefect": "The handler unnecessarily fetches the organizer again despite already loading booking.user.",
+    "secondary": [
+     {
+      "defect": "A null booking.userId causes the lookup for user ID zero to throw an unhandled error instead of a clean TRPCError.",
+      "coveredBy": [
+       "s_af58ea2b"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_0005a575",
+    "mainDefect": "Case-sensitive comparison against existing attendees allows duplicate attendees for the same mailbox.",
+    "secondary": [
+     {
+      "defect": "The client dialog's case-sensitive Set check accepts differently cased versions of the same email within the submitted array.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_87249f18",
+    "mainDefect": "The always-truthy message template makes the generic translated error fallback unreachable.",
+    "secondary": [
+     {
+      "defect": "The user-facing error toast exposes an internal TRPC error-code prefix.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

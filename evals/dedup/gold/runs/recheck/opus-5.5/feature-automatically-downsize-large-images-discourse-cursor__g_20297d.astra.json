@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_16e7d729",
+     "s_4e7770ed",
+     "s_6f42512f",
+     "s_60d70a41"
+    ],
+    "defect": "O limite fixo de 10 MB na validação do cliente também é aplicado a anexos, ignorando max_attachment_size_kb."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_16e7d729"
+  ],
+  "reasoningPt": "S5, S6, S10 e S12 têm o mesmo defeito principal: o limite de imagens aplicado indevidamente aos anexos; as diferenças descrevem consequências dessa mesma falha. S5 também aponta a mensagem incorreta no handler de erro 413, que exige uma correção independente, sendo um bundle sem alterar seu agrupamento."
+ }
+}

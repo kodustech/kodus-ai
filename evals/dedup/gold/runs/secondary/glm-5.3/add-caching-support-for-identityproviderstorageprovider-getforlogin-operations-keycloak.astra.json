@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_5cbd8a60",
+    "mainDefect": "The test never exercises the warm-cache read branch of getForLogin.",
+    "secondary": [
+     {
+      "defect": "The test never exercises a second organization search key or verifies that merging preserves the first organization's cached entry.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The test never exercises the fallback triggered when getById returns null for a cached ID.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The test never asserts the returned provider stream, so incorrect results can pass despite correct raw-cache sizes.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a0b15b83",
+    "mainDefect": "The login bean rechecks only isEnabled, allowing stale cached brokers with hideOnLogin or linkOnly enabled to remain visible.",
+    "secondary": [
+     {
+      "defect": "The cache invalidation gate skips changes to non-public organization-linked brokers, leaving organization-scoped login lists stale.",
+      "coveredBy": [
+       "s_aaaf78af"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

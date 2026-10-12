@@ -1,0 +1,25 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "promptSha": "53c7f855eeb00f222a03de999663bbf85f2b6f64",
+  "attempt": 1,
+  "ms": 25540,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_25eea308",
+          "s_a043dacd",
+          "s_7e94bcff"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The missing cache re-check after acquiring the write lock causes redundant serialized cold-start manifest loads, and holding the exclusive lock across file I/O serializes every Dev-mode request.",
+        "rationale": "All three report the same missing second cache check at the write-lock acquisition. s_25eea308 and s_7e94bcff also report Dev-mode serialization across disk I/O, so the merged comment must preserve both defects."
+      }
+    ],
+    "unique": []
+  }
+}

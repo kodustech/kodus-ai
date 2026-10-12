@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9ea9f5fd",
+     "s_890c4551"
+    ],
+    "defect": "A branch habilitada pela flag passa dados e colunas vazios ao TableWidgetVisualization, fazendo os widgets de tabela ignorarem os resultados reais."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 relatam o mesmo defeito no mesmo trecho: a nova tabela recebe valores vazios fixos e descarta os resultados da consulta. S6 detalha por que o fallback de colunas não funciona, mas isso apenas explica o mesmo problema; conectar os dados reais resolve ambas."
+ }
+}

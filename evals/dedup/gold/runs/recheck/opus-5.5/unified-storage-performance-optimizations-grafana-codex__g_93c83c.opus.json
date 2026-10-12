@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_484e33fe",
+     "s_c8164ed2"
+    ],
+    "defect": "Narrowing cacheMu in BuildIndex to cover only the final map write allows concurrent duplicate builds for the same key, where the last writer overwrites the cache, writes are lost and file-backed bleve.New calls on the same directory collide."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 relatam o mesmo defeito: a remoção do lock que cobria todo o BuildIndex permite builds concorrentes do mesmo índice, e o último a terminar sobrescreve o cache. As duas propõem a mesma correção (singleflight ou rechecar o cache sob o lock). Leak, perda de escritas e conflito no bleve.New são consequências do mesmo defeito, não defeitos separados."
+ }
+}

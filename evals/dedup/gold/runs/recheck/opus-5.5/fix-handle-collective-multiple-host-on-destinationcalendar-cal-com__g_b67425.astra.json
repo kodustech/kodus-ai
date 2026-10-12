@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cd578af7",
+     "s_94084073"
+    ],
+    "defect": "Os serviços de calendário selecionam o primeiro destino em vez daquele associado à credencial usada, direcionando eventos coletivos ao calendário errado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S19 relatam o mesmo defeito no Office365: usar o primeiro calendário de destino mesmo ao executar com a credencial de outro participante. As menções ao Lark e, em S6, ao CalDAV descrevem repetições da mesma falha com a mesma correção, sem caracterizar defeitos adicionais."
+ }
+}

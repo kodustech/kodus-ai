@@ -1,0 +1,58 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "MetricsMiddleware.QueryData dereferences a nil req without a guard (lines 146–153)."
+   },
+   {
+    "id": "F2",
+    "description": "MetricsMiddleware.CallResource dereferences a nil req without a guard (line 161)."
+   },
+   {
+    "id": "F3",
+    "description": "ContextualLoggerMiddleware.QueryData dereferences a nil req without a guard (line 40)."
+   },
+   {
+    "id": "F4",
+    "description": "ContextualLoggerMiddleware.CallResource dereferences a nil req without a guard (line 45)."
+   },
+   {
+    "id": "F5",
+    "description": "ContextualLoggerMiddleware.CheckHealth dereferences a nil req without a guard (line 50)."
+   },
+   {
+    "id": "F6",
+    "description": "ContextualLoggerMiddleware.CollectMetrics dereferences a nil req without a guard (line 55)."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_8d96da0a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cd94ae6e",
+    "covers": [
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_305b9098",
+    "covers": [
+     "F5"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_db67742f",
+     "s_053e275d"
+    ],
+    "defect": "O cleanup usa o literal \"alias\" em vez do alias real dos provedores criados, deixando de removê-los."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 apontam o mesmo erro no cleanup de testCacheIDPForLogin: o uso do literal \"alias\". A diferença na avaliação do impacto não altera o defeito, e S1 apenas explicita outra ocorrência do mesmo erro."
+ }
+}

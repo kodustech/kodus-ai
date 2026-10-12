@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9bd0df8c",
+     "s_8c64225e"
+    ],
+    "defect": "updateDevice treats rowsAffected==0 as 'device not found', but on MySQL a matched row whose values don't change also returns 0, so an existing device gets ErrDeviceLimitReached."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S12 e S13 apontam o mesmo defeito nas mesmas linhas: no MySQL, rowsAffected==0 também acontece quando a linha existe mas nenhum valor muda. Por isso um dispositivo já registrado recebe ErrDeviceLimitReached. As duas propõem a mesma correção (verificar se o dispositivo existe com uma consulta separada), então o grupo fica como está."
+ }
+}

@@ -1,0 +1,63 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d336f7a7",
+    "mainDefect": "Supplying both a nonempty totpCode and a valid backupCode bypasses password verification.",
+    "secondary": [
+     {
+      "defect": "The same credential combination also bypasses the SSO checks.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8d71c3eb",
+    "mainDefect": "Dismissing the backup-code screen with Escape or an outside click skips onEnable, leaving the parent UI showing 2FA as disabled.",
+    "secondary": [
+     {
+      "defect": "Dismissal also leaves the modal step, password, and backup codes in state, so reopening displays the stale backup-code screen.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e15ea189",
+    "mainDefect": "Backup codes are compared with an early-exiting comparison that can leak information through timing.",
+    "secondary": [
+     {
+      "defect": "Backup-code input is not lowercased, causing uppercase input to fail against the stored lowercase hex codes.",
+      "coveredBy": [
+       "s_44364016"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_19d2551e",
+    "mainDefect": "The assertion checks the truthiness of the Promise returned by isChecked(), so it cannot fail.",
+    "secondary": [
+     {
+      "defect": "The test never closes the backup-code screen before checking the switch, so onEnable has not run to update its state.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_cf5caa96",
+    "mainDefect": "The copy test only checks a success toast and does not verify the clipboard contents.",
+    "secondary": [
+     {
+      "defect": "The modal shows a success toast without awaiting clipboard.writeText, so the toast does not establish that copying succeeded.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The download test checks only the filename and does not validate the downloaded backup codes.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "ClientPermissionsV2.getClientsWithPermission uses a resource type inconsistent with per-client storage/lookups, producing wrong or empty permission results."
+   },
+   {
+    "id": "F2",
+    "description": "ClientPermissionsV2.getClientsWithPermission adds the all-clients resource name 'Clients' as a bogus client ID."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_1f6fc379",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_2383a0c6",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

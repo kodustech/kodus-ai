@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "OAuth2GrantTypeFactory.getShortcut javadoc says '3-letters' shortcut, but the decoder in DefaultTokenContextEncoderProvider hard-codes 2-char shortcuts and a 6-char prefix; the javadoc must say exactly 2 characters"
+   },
+   {
+    "id": "F2",
+    "description": "Shortcut length is never validated (not in encodeTokenId or factory postInit/registration), so a shortcut that isn't 2 characters only fails when the token ID is decoded"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_efbf1629",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_071b2150",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_442861c7",
+     "s_d0f19bee",
+     "s_7922ab52",
+     "s_6b11a209",
+     "s_20756cac"
+    ],
+    "defect": "O caminho de sucesso de Delete passa o nome do objeto como label de kind na métrica, causando rotulagem incorreta e alta cardinalidade."
+   },
+   {
+    "members": [
+     "s_ccf38f53",
+     "s_39ce7ed0"
+    ],
+    "defect": "Delete injeta d.Log no contexto em vez do logger enriquecido, perdendo os campos name, kind e method nos logs downstream."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_6b11a209"
+  ],
+  "reasoningPt": "S4, S8, S10, S16 e S27 têm como defeito principal o uso de name no label de kind da métrica. S7 e S12 tratam da perda de campos do logger no contexto, que exige uma correção independente. S16 reúne ambos os defeitos, mas pertence ao grupo da métrica porque relata esse problema primeiro."
+ }
+}

@@ -1,0 +1,43 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6f563687",
+    "mainDefect": "The reader thread is never joined, so the assertion on caughtExceptions can run before an in-flight request adds its exception, which can make the test pass when it should fail.",
+    "secondary": [
+     {
+      "defect": "The non-daemon reader thread can keep running after the test method ends.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_cfee9f21",
+    "mainDefect": "The test never makes sure the reader actually overlaps the deletes; if the thread isn't scheduled before the flag is set, its loop never runs and caughtExceptions is trivially empty.",
+    "secondary": [
+     {
+      "defect": "The reader thread is not joined, so an exception thrown by an in-flight read after deletedAll is set gets added after the assertion has already run.",
+      "coveredBy": [
+       "s_6f563687",
+       "s_907d17d3"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_4687a409",
+    "mainDefect": "deletedAll is only set after the delete loop finishes, so if any removal throws, the flag is never set and the non-daemon reader thread loops forever, hanging the test; the flag should be set in a finally block.",
+    "secondary": [
+     {
+      "defect": "The reader thread is not joined before the assertion, so an exception it hits after the delete loop finishes can be added after the assertion runs, giving a false pass.",
+      "coveredBy": [
+       "s_6f563687",
+       "s_907d17d3"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

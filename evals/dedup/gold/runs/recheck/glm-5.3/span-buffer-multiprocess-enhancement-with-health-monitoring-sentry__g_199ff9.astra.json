@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_01b9b5a4",
+     "s_de2238dd"
+    ],
+    "defect": "O monkeypatch de time.sleep neutraliza a espera adicionada em test_basic, deixando o processamento da thread sem sincronização antes de step.join()."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S9 relatam o mesmo defeito nas mesmas linhas: time.sleep(0.1) não espera porque foi substituído pelo monkeypatch. As diferenças na explicação da corrida e nas correções propostas não justificam separar o grupo."
+ }
+}

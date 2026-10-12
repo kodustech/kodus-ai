@@ -1,0 +1,114 @@
+{
+ "s_7e8b6adf": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: A goroutine assíncrona de escrita no legacy deriva seu contexto do `ctx` com escopo de requisição (`context.WithTimeoutCause(ctx, ...)`, onde ctx é o contexto da requisição recebida, apenas reembrulhado por klog.NewContext). POR QUÊ: Quando o handler HTTP retorna, o contexto da requisição é cancelado, o que cancela o contexto da goroutine; a chamada legacy Create/Update/Delete/DeleteCollection então falha com context.Canceled e a escrita dupla silenciosamente nunca acontece — anulando todo o propósito do modo 3. CORREÇÃO: desacople o contexto da goroutine do ciclo de vida da requisição, por exemplo `ctx := context.WithoutCancel(ctx)` (ou context.Background()) antes de `context.WithTimeoutCause`. O mesmo defeito existe nas linhas 110 (Delete), 135 (Update) e 163 (DeleteCollection)."
+ },
+ "s_0bd77fe1": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: Em caso de erro em Storage.Create, o código registra `d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage)` em vez de `recordStorageDuration`. POR QUÊ: a latência/erro da chamada de storage que falhou é atribuída à métrica legacy (e com o horário de início do storage), corrompendo as métricas de erro/duração do legacy usadas para monitorar a sincronização. CORREÇÃO: use `d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)`. O mesmo erro idêntico está presente em Update na linha 129."
+ },
+ "s_47464eda": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: A chamada legacy DeleteCollection na goroutine em background registra seu resultado com `d.recordStorageDuration(err != nil, ...)` em vez de `recordLegacyDuration`. POR QUÊ: a duração/erro do delete-collection legacy é escrita na série de métricas do storage, então falhas do legacy ficam invisíveis e as métricas de storage ficam infladas. CORREÇÃO: chame `d.recordLegacyDuration(err != nil, mode3Str, options.Kind, method, startLegacy)`."
+ },
+ "s_07b0de25": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `d.recordStorageDuration(false, mode3Str, name, method, startStorage)` passa `name` na posição que todas as outras chamadas usam para `options.Kind`. POR QUÊ: o label da métrica para um Delete bem-sucedido conterá o nome do objeto em vez do kind, deixando as métricas de delete do storage inconsistentes com todas as outras operações e quebrando a agregação por kind. CORREÇÃO: passe `options.Kind` como é feito no branch de erro da linha 103."
+ },
+ "s_e51a6cc7": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: A goroutine de Update passa o `objInfo` original (o UpdatedObjectInfo do chamador) para `d.Legacy.Update`, enquanto o código anterior o embrulhava para que o legacy recebesse exatamente o objeto `updated` já calculado em relação ao storage. POR QUÊ: o legacy agora reavalia UpdatedObject contra seu próprio objeto `old`, então o objeto escrito no legacy pode diferir do objeto commitado no unified storage (ou falhar na validação do legacy), produzindo divergência entre os dois stores. CORREÇÃO: passe o objeto retornado pelo update do storage, por exemplo embrulhando `objInfo` com o resultado `res` do storage como objeto atualizado pré-calculado antes de chamar Legacy.Update."
+ },
+ "s_bdded596": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: Delete constrói o `log` enriquecido com name/kind/method, mas depois define `ctx = klog.NewContext(ctx, d.Log)` usando o logger base em vez de `log`. POR QUÊ: o contexto entregue a `Legacy.Delete` (e usado para logar) perde os campos name/kind/method, então o contexto de logs/métricas do caminho legacy fica degradado em comparação aos outros handlers que usam o logger enriquecido. CORREÇÃO: use `ctx = klog.NewContext(ctx, log)`."
+ },
+ "s_36a5b400": {
+  "summaryPt": "",
+  "contentPt": "O caminho de falha de Storage.Create registra uma métrica de duração legacy: `d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage)`. startStorage mede a chamada de storage, então um erro de storage está sendo cobrado na métrica legacy. O caminho de sucesso na linha 48 usa corretamente recordStorageDuration; este branch também deveria."
+ },
+ "s_30992443": {
+  "summaryPt": "",
+  "contentPt": "Mesmo erro do Create: o branch de falha de Storage.Update loga \"unable to update in storage\" mas chama `d.recordLegacyDuration(true, ..., startStorage)`. startStorage mede a operação de storage, então deveria ser recordStorageDuration, igual ao caminho de sucesso na linha 132."
+ },
+ "s_3f5cbb96": {
+  "summaryPt": "",
+  "contentPt": "A goroutine legacy de DeleteCollection registra seu resultado com `d.recordStorageDuration(err != nil, mode3Str, options.Kind, method, startLegacy)`. startLegacy mede a chamada a d.Legacy.DeleteCollection, e todas as outras goroutines legacy neste arquivo (Create linha 56, Delete linha 113, Update linha 140) usam recordLegacyDuration. Essa operação legacy está sendo reportada na série do storage."
+ },
+ "s_4ba6d893": {
+  "summaryPt": "",
+  "contentPt": "No caminho de sucesso de Delete, `d.recordStorageDuration(false, mode3Str, name, method, startStorage)` passa `name` onde todos os outros pontos de chamada passam `options.Kind` como tag de kind (linhas 48, 73, 89, 103, 132, 156, 159). A métrica recebe um nome de recurso no label de kind, então essa série nunca vai corresponder à série de storage/latência emitida pelos outros pontos de chamada."
+ },
+ "s_fcc2ff07": {
+  "summaryPt": "O caminho de sucesso de Delete passa o nome do objeto onde a métrica espera o label de kind.",
+  "contentPt": "No caminho de sucesso, o terceiro argumento posicional (o label \"kind\") recebe `name`, o nome do recurso, enquanto o caminho de falha na linha 103 e todos os outros pontos de chamada passam `options.Kind`. A mesma métrica de duração do storage é portanto emitida com dois valores de label diferentes dependendo de o delete ter tido sucesso, corrompendo a agregação por kind. Passe `options.Kind` aqui."
+ },
+ "s_5866e509": {
+  "summaryPt": "A goroutine legacy de DeleteCollection registra a chamada legacy na métrica de duração do storage.",
+  "contentPt": "Dentro da goroutine legacy, o código chama `d.recordStorageDuration(...)` (linha 166); as goroutines legacy de Create, Delete e Update chamam todas `d.recordLegacyDuration(...)` (linhas 56, 113, 140). Do jeito que está, o DeleteCollection legacy assíncrono é creditado ao histograma do unified-store e o histograma legacy nunca é incrementado, então o lag do legacy fica invisível para delete-collection enquanto os números do storage ficam inflados. Use `d.recordLegacyDuration` aqui."
+ },
+ "s_2719ce4a": {
+  "summaryPt": "Create (e Update) contabilizam uma falha do unified-store como falha do legacy.",
+  "contentPt": "Quando `d.Storage.Create` falha, o branch de erro chama `d.recordLegacyDuration(true, ...)` com `startStorage`, mas a escrita legacy nem sequer foi tentada (a goroutine abaixo só é executada em caso de sucesso). Uma falha de storage é assim contada como falha do legacy e a métrica de falha do storage nunca é incrementada, invertendo a atribuição em relação ao caminho de sucesso na linha 48. A mesma troca idêntica existe em Update na linha 129. Use `recordStorageDuration` nesses branches de erro."
+ },
+ "s_a52a2300": {
+  "summaryPt": "Delete reconstrói o contexto a partir de d.Log, descartando os campos name/kind/method que acabou de construir.",
+  "contentPt": "`log` é construído com os valores name/kind/method na linha 96, mas a linha 97 instala `d.Log` no contexto em vez de `log`. As chamadas legacy subsequentes perdem, portanto, os campos por requisição e logam com o logger básico, diferentemente de todos os outros métodos (linhas 39, 66, 82, 123, 150) que instalam o `log` enriquecido com valores. Passe `log` aqui."
+ },
+ "s_289657e8": {
+  "summaryPt": "Falhas de storage são registradas com o helper de duração legacy, cujo nome indica o store oposto.",
+  "contentPt": "Quando a chamada Storage.Create falha, o código registra `recordLegacyDuration(true, ...)` — o helper nomeado para o store *legacy* — enquanto o caminho de sucesso do Storage uma linha depois usa corretamente `recordStorageDuration`. A mesma inversão aparece em Update na linha 129 (falha de Storage.Update registrada via recordLegacyDuration). O nome do helper não corresponde mais ao store cuja latência/erro ele registra, então as métricas legacy absorvem falhas do storage. Use recordStorageDuration nos caminhos de Storage (e recordLegacyDuration apenas dentro das goroutines Legacy)."
+ },
+ "s_e9ab5dc2": {
+  "summaryPt": "Resultado do DeleteCollection legacy registrado com o helper de duração do storage.",
+  "contentPt": "Dentro da goroutine assíncrona que chama `d.Legacy.DeleteCollection`, o resultado é registrado com `recordStorageDuration`, enquanto toda outra chamada legacy neste arquivo (Create:56, Delete:113, Update:140) registra com `recordLegacyDuration`. O nome do helper contradiz o que está sendo medido aqui, então o tempo/erros do DeleteCollection legacy caem na métrica do storage."
+ },
+ "s_c5f2bfd6": {
+  "summaryPt": "O teste de Create nunca verifica que a escrita legacy ocorreu, então passa mesmo com o dual-write removido.",
+  "contentPt": "O teste de Create nunca verifica que a escrita dupla no legacy aconteceu. `m.On(\"Create\", ...)` na linha 31 é apenas um setup de mock; não há `m.AssertExpectations(t)` (nem AssertCalled/AssertNumberOfCalls) em lugar nenhum do teste, e a chamada legacy roda em uma goroutine não observada (dualwriter_mode3.go:50-57). Se você apagar a chamada `d.Legacy.Create` dessa goroutine, TestMode3_Create continua passando sem alterações, mesmo que todo o propósito do teste no Mode3 seja provar que o objeto é escrito em ambos os stores. Faça o assert da chamada legacy explicitamente, por exemplo após a chamada: `m.AssertCalled(t, \"Create\", mock.Anything, tt.input, mock.Anything, mock.Anything)` (apenas no caso sem erro, pois o erro de storage retorna antes da goroutine)."
+ },
+ "s_7dc5b2ce": {
+  "summaryPt": "recordLegacyDuration é chamado com true no caminho de erro do storage em Update.",
+  "contentPt": "Em vez de passar um literal true para recordLegacyDuration no caminho de erro do storage em Update, passe o resultado real de sucesso/erro para evitar registrar incorretamente uma duração legacy bem-sucedida quando o storage falha."
+ },
+ "s_6c1d1dab": {
+  "summaryPt": "recordStorageDuration é chamado com name em vez de options.Kind.",
+  "contentPt": "Use options.Kind em vez de name como argumento de kind do recurso para recordStorageDuration."
+ },
+ "s_0202df1b": {
+  "summaryPt": "DeleteCollection registra a duração legacy via recordStorageDuration.",
+  "contentPt": "Registre a duração legacy em DeleteCollection usando recordLegacyDuration em vez de recordStorageDuration."
+ },
+ "s_0fa90f2c": {
+  "summaryPt": "As escritas legacy do Mode-3 viraram goroutines fire-and-forget atreladas ao contexto da requisição, quebrando o contrato síncrono de dual-write em que os chamadores e os testes de integração de dual-write se baseavam.",
+  "contentPt": "Anteriormente Create/Delete/Update/DeleteCollection chamavam d.Legacy.* inline e retornavam apenas depois que a escrita legacy havia sido tentada (e qualquer erro logado). Este PR move cada chamada legacy para `go func(){...}()` (linhas 50-57, 108-114, 134-141, 161-167) e retorna imediatamente. A goroutine deriva seu timeout do ctx com escopo de requisição, que é cancelado assim que o handler retorna, então a escrita legacy provavelmente é cancelada/nunca executada, e seu erro é registrado apenas em uma métrica, sem log. Chamadores que ainda dependem de o legacy storage estar atualizado quando a API retorna (e os testes de integração de playlist do Mode-3) perdem essa garantia. Mantenha a escrita legacy síncrona, ou desacople-a do contexto da requisição (base no estilo context.WithoutCancel ou um contexto background) e logue seus erros."
+ },
+ "s_c3b88c49": {
+  "summaryPt": "A métrica de sucesso de Delete passa o nome do objeto onde o label de kind é esperado, corrompendo a série de métricas.",
+  "contentPt": "`recordStorageDuration(false, mode3Str, name, method, startStorage)` passa o `name` do objeto na posição de `kind` — compare com a linha 48 e a linha 156, que passam `options.Kind`. O histograma de duração então recebe um label `kind` cujo valor é o nome do recurso, produzindo séries erradas e cardinalidade de labels ilimitada por delete. Passe `options.Kind` aqui, igual aos outros pontos de chamada."
+ },
+ "s_d040909a": {
+  "summaryPt": "A falha de storage em Update é registrada com recordLegacyDuration, então erros de storage são atribuídos ao store legacy.",
+  "contentPt": "O branch de erro de `d.Storage.Update` registra `d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage)`. Deveria ser `recordStorageDuration`, como usado no caminho de sucesso (linha 132) e nos branches de erro de storage dos outros métodos (linhas 45/103/156). Do jeito que está, uma falha de update no unified-store incrementa a métrica de falha do legacy e nunca é contada contra o storage."
+ },
+ "s_b95471bc": {
+  "summaryPt": "A goroutine legacy de DeleteCollection registra seu resultado com a métrica de storage em vez da métrica legacy.",
+  "contentPt": "Dentro da goroutine que chama `d.Legacy.DeleteCollection`, o resultado é registrado com `d.recordStorageDuration(err != nil, ...)`. As goroutines legacy equivalentes em Create (linha 56) e Delete (linha 113) usam ambas `recordLegacyDuration`. Isso atribui incorretamente as falhas do delete-collection legacy à métrica do storage."
+ },
+ "s_b0ebef03": {
+  "summaryPt": "As escritas legacy desacopladas reutilizam o contexto da requisição do chamador (e não são sequenciadas), então a promessa do modo 3 de escrever em ambos os stores pode falhar silenciosamente ou ser commitada fora de ordem.",
+  "contentPt": "Todas as escritas legacy agora são disparadas de uma goroutine desacoplada cujo timeout é derivado do contexto do chamador: `ctx, cancel := context.WithTimeoutCause(ctx, time.Second*10, ...)`. Create retorna assim que a escrita no storage termina, e o apiserver cancela o contexto da requisição quando a resposta é escrita, então a escrita legacy posterior pode ser abortada antes de chegar ao LegacyStorage — o objeto então existe apenas no Storage, quebrando o contrato do modo 3 de \"escrever no LegacyStorage e no Storage\", com o erro visível apenas em métricas (não é mais logado). O mesmo vale nas linhas 110, 135 e 163. Use um contexto desacoplado da requisição (por exemplo `context.WithoutCancel(ctx)` como pai do timeout) e logue o erro do legacy, para que uma escrita legacy que falhou ou foi perdida seja observável em vez de descartada silenciosamente."
+ },
+ "s_0a6154e7": {
+  "summaryPt": "O nome do caso de teste afirma que List não está implementado, mas List agora está implementado.",
+  "contentPt": "O caso de teste se chama \"error when listing an object in the unified store is not implemented\", mas este PR implementa List (dualwriter_mode3.go:79-92); o mock apenas retorna um erro. A descrição declara uma condição que o código não tem mais, então o nome deveria descrever a falha exercitada (por exemplo \"error when listing objects in the unified store fails\")."
+ },
+ "s_3d27a0be": {
+  "summaryPt": "Os casos de Delete/Update/DeleteCollection nunca observam a escrita legacy da goroutine, então passam com ela removida e sofrem race caso contrário.",
+  "contentPt": "Delete (e os casos idênticos de Update/DeleteCollection) não registram nenhuma expectativa legacy e nunca sincronizam com a goroutine que realiza a escrita legacy, então o comportamento de dual-write não é verificado e o teste sofre de race: se a goroutine legacy em dualwriter_mode3.go:108-114 rodar antes do fim do teste, o testify entra em panic na chamada inesperada a `Legacy.Delete`; se não rodar, o teste passa — ou seja, ele também passa se o delete legacy for removido por completo. Adicione uma expectativa de Delete legacy e espere o efeito da goroutine antes de fazer os asserts (por exemplo via um sync.WaitGroup ou um channel que a goroutine fecha) para que a chamada legacy seja exercitada e verificada de forma determinística."
+ },
+ "s_fdf78d6e": {
+  "summaryPt": "recordLegacyDuration é chamado com true no caminho de erro do storage em Create.",
+  "contentPt": "Em vez de passar um literal true para recordLegacyDuration no caminho de erro do storage em Create, passe o resultado real de sucesso/erro para evitar registrar incorretamente uma duração legacy bem-sucedida quando o storage falha."
+ }
+}

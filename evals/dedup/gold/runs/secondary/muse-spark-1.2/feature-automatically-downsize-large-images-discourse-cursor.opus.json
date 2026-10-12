@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_b9468b8e",
+    "mainDefect": "The remote URL download in uploads_controller is capped at a hardcoded 10.megabytes and ignores SiteSetting.max_image_size_kb.",
+    "secondary": [
+     {
+      "defect": "The downsize loop never checks the boolean result of OptimizedImage.downsize, so it keeps retrying on a file that failed to convert and then saves a corrupt or oversized tempfile.",
+      "coveredBy": []
+     },
+     {
+      "defect": "content_type is never set in the URL download branch, so Upload.create_for receives nil for content_type.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f0d5db8a",
+    "mainDefect": "A second self.downsize definition overwrites the width/height version, which breaks existing callers that pass numeric width and height.",
+    "secondary": [
+     {
+      "defect": "OptimizedImage.optimize changed from separate width/height parameters to a single dimensions parameter, so any code calling optimize directly may now be broken.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

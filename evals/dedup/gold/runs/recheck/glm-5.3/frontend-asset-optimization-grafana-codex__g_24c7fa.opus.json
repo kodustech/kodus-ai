@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "After the write lock is taken in GetWebAssets, the cache is not checked again, so the double-checked locking is incomplete and concurrent callers rebuild the asset manifest one after another.",
+    "members": [
+     "s_25eea308",
+     "s_a043dacd",
+     "s_7e94bcff"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_7e94bcff"
+  ],
+  "reasoningPt": "S1, S2 e S3 têm o mesmo defeito principal: falta verificar o cache de novo depois de `entryPointAssetsCacheMu.Lock()`, e a correção é a mesma. S3 conta como bundle porque, além disso, sugere calcular `result` fora do lock para não segurar o lock exclusivo durante a I/O em modo Dev. Isso é uma segunda correção, mas não muda o defeito principal de S3."
+ }
+}

@@ -1,0 +1,146 @@
+{
+  "judge": "opus",
+  "model": "glm-5.3",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "25c8580bea82a6e3b6efd994c2f34f76e108bf2c",
+  "attempt": 1,
+  "ms": 16113,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 25811,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 1485,
+    "output_tokens_details": {
+      "thinking_tokens": 457
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 25811,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1485,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 25811,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 25811
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.2379696,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_7466b913",
+          "s_3945cc4f",
+          "s_ddd39050"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The 'Imported from' footer interpolates an unescaped URL into HTML stored as raw_html and rendered with raw (XSS). Imported feed/page content is also stored without sanitization, and CGI.unescapeHTML in poll_feed decodes escaped HTML into live tags.",
+        "rationale": "All three report the unescaped URL interpolation at topic_embed.rb:13, which leads to XSS. Two of them also report that imported content is stored unsanitized, so the merged comment has to carry both points."
+      },
+      {
+        "members": [
+          "s_157d31c5",
+          "s_3e20fdea"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "request.referer is echoed without escaping into a JavaScript string literal in the embed layout, which allows script injection.",
+        "rationale": "Both point at the same line in layouts/embed.html.erb and describe the same JS-string injection through the referer."
+      },
+      {
+        "members": [
+          "s_6903bc10",
+          "s_5f3bd478"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "`<%- end if %>` in best.html.erb is a Ruby syntax error, so the template fails to compile and returns a 500.",
+        "rationale": "Both report the same dangling `if` on line 6 and propose the same fix."
+      },
+      {
+        "members": [
+          "s_090409bf",
+          "s_42e6661a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "poll_feed calls i.content.scrub without a guard, so a feed item with no content crashes the whole import loop (retry is disabled). One member also flags that String#scrub may be missing on older Ruby versions and that a nil title can break the insert.",
+        "rationale": "Both report the same nil-content crash at poll_feed.rb:35. s_42e6661a adds extra issues that the merged comment must keep."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_5743ce29",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3de263b8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_13910268",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5f0fb285",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6a2d7081",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a3731852",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b00bdf27",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c021935b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_acdf66da",
+        "confidence": "high"
+      },
+      {
+        "id": "s_03b0d38a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f7ab90fa",
+        "confidence": "high"
+      },
+      {
+        "id": "s_686ed317",
+        "confidence": "high"
+      },
+      {
+        "id": "s_55170756",
+        "confidence": "high"
+      }
+    ]
+  }
+}

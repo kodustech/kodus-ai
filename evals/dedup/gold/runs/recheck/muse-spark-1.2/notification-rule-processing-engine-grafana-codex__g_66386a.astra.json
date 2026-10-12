@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3c4b4f6b",
+     "s_60b424b5"
+    ],
+    "defect": "A documentação de GrafanaGroupLoader ainda descreve o uso de respostas do Ruler, embora essa consulta tenha sido removida."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S5 apontam o mesmo erro de documentação desatualizada: referências ao Ruler após a remoção dessa consulta. As referências aparecem em comentários diferentes do componente, mas repetem a mesma premissa incorreta e devem permanecer no mesmo grupo."
+ }
+}

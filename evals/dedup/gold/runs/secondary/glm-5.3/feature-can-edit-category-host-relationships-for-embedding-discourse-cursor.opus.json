@@ -1,0 +1,99 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_3284f51d",
+    "mainDefect": "The migration inserts legacy embeddable_hosts values verbatim without stripping scheme/path, so migrated hosts never match record_for_host lookups.",
+    "secondary": [
+     {
+      "defect": "Host values are interpolated into the raw INSERT without SQL quoting, so a value containing an apostrophe breaks the statement.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_73823258",
+    "mainDefect": "update and destroy dereference EmbeddableHost.where(id:).first without a nil check, raising NoMethodError (500) instead of returning 404 for a missing id.",
+    "secondary": [
+     {
+      "defect": "save_host reads params[:embeddable_host][:host] without checking that the embeddable_host param exists, so it crashes when the payload is missing it.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7128b0ce",
+    "mainDefect": "The migration dereferences execute(...)[0]['id'] for embed_category without checking for zero rows, so db:migrate crashes on sites where the setting was never set.",
+    "secondary": [
+     {
+      "defect": "The `if category_id == 0` fallback to uncategorized_category_id is unreachable dead code.",
+      "coveredBy": [
+       "s_f33a3118"
+      ]
+     },
+     {
+      "defect": "The uncategorized_category_id query also dereferences [0]['value'] without checking that a row was returned.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c050f347",
+    "mainDefect": "The spec test name 'is false if embeddable_host is blank' describes behavior that was removed from expandable_first_post?, so the test is stale.",
+    "secondary": [
+     {
+      "defect": "The nested describe misspells 'embeddable' as 'emeddable'.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_afaedccf",
+    "mainDefect": "The migration dereferences [0]['id'] on the embed_category query without guarding for zero rows, so db:migrate aborts with NoMethodError.",
+    "secondary": [
+     {
+      "defect": "The query joins the setting value on the category name, but the old embed_category setting stored a category id, so it never matches.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a74fdd01",
+    "mainDefect": "In the plural _hydrateEmbedded branch, `hydrated || []` is dead code because .map always returns a truthy array.",
+    "secondary": [
+     {
+      "defect": "The plural branch keeps failed lookups as falsy entries and always deletes the original *_ids key, so the raw ids are lost when side-loaded records are missing.",
+      "coveredBy": [
+       "s_c4c17811"
+      ]
+     },
+     {
+      "defect": "obj[k].map throws a TypeError when a *_ids key holds null, which aborts hydration of the whole payload.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7c87fa7b",
+    "mainDefect": "update and destroy use EmbeddableHost.where(id:).first without a presence check, raising NoMethodError (500) instead of returning 404 when no record matches.",
+    "secondary": [
+     {
+      "defect": "save_host assumes params[:embeddable_host] exists before reading [:host] and [:category_id].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f33a3118",
+    "mainDefect": "The `if category_id == 0` fallback can never run because a zero-row embed_category query crashes on the nil [0] dereference first, and a matched id is never 0.",
+    "secondary": [
+     {
+      "defect": "The uncategorized_category_id lookup also dereferences the query result without checking that a row was returned.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

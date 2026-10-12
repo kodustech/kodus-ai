@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_56e8eec5",
+   "s_3ed07a3a"
+  ],
+  "bundles": [
+   "s_56e8eec5"
+  ],
+  "reasoningPt": "S5 relata primeiro a interpolação do referer sem escape JavaScript, com risco de injeção, enquanto S13 trata do uso da URL completa como targetOrigin. S5 também menciona esse segundo defeito e, por isso, entra em bundles, mas a regra do defeito principal exige manter as sugestões separadas."
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_25eea308",
+     "s_a043dacd",
+     "s_7e94bcff"
+    ],
+    "defect": "Falta verificar novamente o cache após adquirir o write lock, causando leituras e reconstruções redundantes e serializadas em chamadas concorrentes no início da execução fora do modo Dev."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_25eea308",
+   "s_7e94bcff"
+  ],
+  "reasoningPt": "S1, S2 e S3 relatam primeiro o mesmo defeito: a ausência de uma segunda verificação do cache após adquirir o write lock. S1 e S3 também apontam a serialização das chamadas em modo Dev durante I/O, que exige uma correção distinta; por isso são bundles, mas permanecem no grupo do defeito principal."
+ }
+}

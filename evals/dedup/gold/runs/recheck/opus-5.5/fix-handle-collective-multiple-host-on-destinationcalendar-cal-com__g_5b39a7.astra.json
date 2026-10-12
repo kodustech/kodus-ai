@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9d791452",
+     "s_37a0f1ff",
+     "s_9e599887",
+     "s_95ab9d87",
+     "s_bf39d0e8",
+     "s_36261396"
+    ],
+    "defect": "O acesso a mainHostDestinationCalendar.integration sem proteção contra undefined causa TypeError em reservas Google Meet quando destinationCalendar é null ou vazio, impedindo o fallback para Cal Video."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S10, S12, S15, S18 e S22 relatam o mesmo acesso sem proteção no mesmo trecho de EventManager.ts. Todas são resolvidas pela mesma correção com optional chaining, e nenhuma relata um segundo defeito."
+ }
+}

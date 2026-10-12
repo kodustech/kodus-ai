@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7d464dc6",
+     "s_282510ec"
+    ],
+    "defect": "A chamada a sendAddGuestsEmails recebe guests em vez de uniqueGuests, classificando participantes existentes incluídos na solicitação como recém-adicionados e enviando notificações incorretas."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 descrevem o mesmo defeito na mesma chamada: o envio da lista solicitada em vez da lista efetivamente adicionada. A troca de guests por uniqueGuests resolve ambas; nenhuma sugestão relata um defeito independente adicional."
+ }
+}

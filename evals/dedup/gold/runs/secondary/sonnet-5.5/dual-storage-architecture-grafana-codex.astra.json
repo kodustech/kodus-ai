@@ -1,0 +1,99 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6c9586da",
+    "mainDefect": "DeleteCollection records the asynchronous legacy call with recordStorageDuration instead of recordLegacyDuration.",
+    "secondary": [
+     {
+      "defect": "Create records unified-storage failures with recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_44d5c92b"
+      ]
+     },
+     {
+      "defect": "Update records unified-storage failures with recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_74c42d79",
+       "s_f5f42939"
+      ]
+     },
+     {
+      "defect": "Delete's success metric uses the object name instead of options.Kind as the kind label.",
+      "coveredBy": [
+       "s_7f4a71cc"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_56f46701",
+    "mainDefect": "Delete attaches d.Log instead of the enriched logger to the context, dropping name, kind and method values.",
+    "secondary": [
+     {
+      "defect": "Delete's success metric uses the object name instead of options.Kind as the kind label.",
+      "coveredBy": [
+       "s_7f4a71cc"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a6abf2b7",
+    "mainDefect": "Mode3 tests neither wait for nor assert the asynchronous legacy writes, so removing those writes would still pass.",
+    "secondary": [
+     {
+      "defect": "The Create error test configures failure through setupLegacyFn on the shared mock instead of isolating a unified-storage failure and asserting that legacy is not called.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_52fd068c",
+    "mainDefect": "Asynchronous legacy writes inherit request cancellation and can be aborted when the handler returns.",
+    "secondary": [
+     {
+      "defect": "Passing obj to the goroutine without a deep copy can race with the response path.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f5f42939",
+    "mainDefect": "Update records unified-storage failures with recordLegacyDuration instead of recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "Create records unified-storage failures with recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_44d5c92b"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_7f4a71cc",
+    "mainDefect": "Delete's success metric uses the object name instead of options.Kind as the kind label.",
+    "secondary": [
+     {
+      "defect": "Delete attaches d.Log instead of the enriched logger to the context, dropping name, kind and method values.",
+      "coveredBy": [
+       "s_62248494",
+       "s_56f46701"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_1b33ac3d",
+    "mainDefect": "Legacy.Update receives raw objInfo and recomputes the update against potentially different legacy state instead of receiving the object already updated by unified storage.",
+    "secondary": [
+     {
+      "defect": "Legacy update errors are recorded only in a metric and are never logged or returned.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

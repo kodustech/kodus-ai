@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b3979b1b",
+     "s_db9a5070",
+     "s_50672d90",
+     "s_66268c55"
+    ],
+    "defect": "O construtor de AccessTokenContext valida grantType duas vezes e deixa rawTokenId sem validação de nulidade."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S8 e S10 apontam o mesmo erro na segunda chamada a requireNonNull e propõem a mesma correção: validar rawTokenId. As diferenças descrevem consequências desse único defeito; nenhuma sugestão reúne defeitos adicionais."
+ }
+}

@@ -1,0 +1,46 @@
+{
+ "s_e0e24b04": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O teste faz patch de `monkeypatch.setattr(\"time.sleep\", lambda _: None)` na linha 15, o que substitui `sleep` no módulo global `time` durante todo o teste, então o `time.sleep(0.1)` recém-adicionado na linha 62 (comentário: 'Give flusher threads time to process after drift change') é um no-op. POR QUÊ: A sincronização pretendida entre a atualização do drift e `step.join()` nunca acontece, então o teste ainda sofre race com a thread de flusher em background e pode falhar de forma intermitente em `(msg,) = messages` quando nenhum segment foi produzido ainda. CORREÇÃO: Use uma primitiva de sincronização que não tenha sido alvo de patch (por exemplo, aguardar um event/condition, ou chamar o sleep original via `import time; time.sleep.__wrapped__`/um alias separado capturado antes do patch) em vez de `time.sleep`."
+ },
+ "s_9b82cde3": {
+  "summaryPt": "O timer wait_produce usa a tag key \"shards\" enquanto as métricas irmãs produce/segment_size usam \"shard\".",
+  "contentPt": "O timer `spans.buffer.flusher.wait_produce` está com a tag key `\"shards\"`, mas todas as outras métricas adicionadas neste PR (`spans.buffer.flusher.produce` na linha 185, `spans.buffer.segment_size_bytes` na linha 195 e `spans.buffer.flusher_unhealthy` na linha 244) usam `\"shard\"`. Queries/dashboards que agrupam ou filtram por `shard` vão silenciosamente ignorar esse timer, então os dados de latência parecerão ausentes nesses painéis. Use a mesma tag key (`\"shard\"`) por consistência."
+ },
+ "s_a5c1072a": {
+  "summaryPt": "O time.sleep adicionado em test_basic é um no-op porque time.sleep recebe monkeypatch antes, no mesmo teste.",
+  "contentPt": "Este `time.sleep(0.1)` adicionado pretende \"dar tempo às threads de flusher para processar após a mudança de drift\", mas a linha 15 deste mesmo teste faz `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, o que substitui o atributo no módulo `time` compartilhado. A chamada, portanto, retorna imediatamente e nunca gera o atraso de wall-clock em que o comentário se baseia, então a instrução é código morto e a race que ela pretendia contornar não é de fato resolvida."
+ },
+ "s_bba2b5d2": {
+  "summaryPt": "_create_process_for_shard é código morto — apenas o plural _create_process_for_shards é chamado.",
+  "contentPt": "`_create_process_for_shard` (singular) nunca é referenciado em nenhum lugar do codebase; o caminho de restart em uso chama `_create_process_for_shards` (plural) com um `process_index`. Este método singular é código morto deixado pelo refactor e deve ser removido para evitar a falsa impressão de que restarts por shard são suportados."
+ },
+ "s_dd07cc81": {
+  "summaryPt": "`max_processes or len(...)` trata um 0 explícito como ausente, voltando silenciosamente para a contagem total de shards.",
+  "contentPt": "`max_processes or len(buffer.assigned_shards)` usa um teste de truthiness em um parâmetro inteiro. Se alguém passar `flusher_processes=0` (por exemplo, via a nova opção `--flusher-processes 0`), 0 é falsy e é substituído pela contagem total de shards em vez de ser respeitado. Use um None check explícito: `self.max_processes = len(buffer.assigned_shards) if max_processes is None else max_processes`."
+ },
+ "s_aeb710a3": {
+  "summaryPt": "",
+  "contentPt": "O `time.sleep(0.1)` adicionado (linha 62) pretende \"Give flusher threads time to process after drift change\", mas o teste fez patch de `time.sleep` para um no-op na linha 15 (`monkeypatch.setattr(\"time.sleep\", lambda _: None)`). O mesmo módulo `time` é usado, então a chamada retorna imediatamente e não espera nada — a linha é inerte e o comentário descreve incorretamente o que acontece. Se a intenção é aguardar o término do flusher em background, sincronize em uma condição (por exemplo, aguardar `messages`/o estado do flusher) em vez de um `time.sleep` que esta fixture neutraliza."
+ },
+ "s_15effdab": {
+  "summaryPt": "",
+  "contentPt": "O comentário afirma \"Verify shards are distributed across processes\", mas a assertion apenas verifica `sum(len(shards) for shards in process_to_shards_map.values()) == 4`. Essa soma é `len(assigned_shards)` por construção (cada shard é adicionado exatamente uma vez quando o map é construído), então ela vale mesmo que todos os 4 shards fossem atribuídos a um único processo — um bug de distribuição round-robin não seria detectado. Faça assert do conteúdo por processo, por exemplo `assert all(len(shards) > 0 for shards in flusher.process_to_shards_map.values())` e/ou `assert sorted(len(shards) for shards in flusher.process_to_shards_map.values()) == [2, 2]`."
+ },
+ "s_88cab4e0": {
+  "summaryPt": "O sleep adicionado é neutralizado pelo `monkeypatch.setattr(\"time.sleep\", ...)` anterior, então o teste ainda sofre race com a thread de flusher.",
+  "contentPt": "O `time.sleep(0.1)` adicionado é um no-op: `test_basic` define `monkeypatch.setattr(\"time.sleep\", lambda _: None)` na linha 15, o que substitui `time.sleep` em todo o módulo durante todo o corpo do teste, então o sleep que pretendia \"dar tempo às threads de flusher para processar após a mudança de drift\" nunca dorme de fato. O flusher roda em threads em background (o caminho produce_to_pipe usa `threading.Thread` em flusher.py:108), então sem uma espera real o flush disparado pela mutação de `current_drift` pode não completar antes de `step.join()`, deixando o teste racy/flaky. Use uma primitiva de sincronização que não tenha sido alvo de patch (por exemplo, fazer spin nas `messages` produzidas/um threading.Event, ou usar o `time.sleep` de `time` obtido antes do patch) em vez de depender de um sleep com monkeypatch."
+ },
+ "s_aeb21e17": {
+  "summaryPt": "join() não termina mais os processos de flusher restantes quando o timeout é excedido, enquanto o join antigo de processo único sempre terminava o processo.",
+  "contentPt": "O novo loop de join() sai do loop por processo assim que o deadline expira (`if remaining_time <= 0: break`), o que também pula a chamada `process.terminate()` para esse processo e para todos os seguintes. Anteriormente, o terminate era incondicional após a espera (o único processo era sempre terminado, mesmo quando o deadline havia passado). Um caller que chama join(timeout) durante o shutdown do consumer agora deixa processos filhos de flusher vivos (eles só morrem com o pai), então a garantia de que join(timeout) para os processos de flusher no timeout se perde. Termine os processos mesmo quando o deadline passou, por exemplo, faça break/espere primeiro mas ainda execute o terminate para cada processo (ou termine o processo atual antes do break)."
+ },
+ "s_9f83c1a1": {
+  "summaryPt": "A docstring da classe afirma um processo por shard, mas o código limita os processos e compartilha shards entre eles.",
+  "contentPt": "A docstring diz \"Creates one process per shard for parallel processing\", mas o código que este PR adiciona limita a contagem de processos a `max_processes` e distribui shards em round-robin pelos processos resultantes (`num_processes = min(self.max_processes, len(buffer.assigned_shards))`, `process_index = i % self.num_processes` nas linhas 60-66). Com `--flusher-processes=2` e 4 shards, apenas 2 processos são criados e cada um cuida de 2 shards, como o novo teste afirma. A linha da doc, portanto, é falsa; um caller que a leia esperaria um processo por shard. Atualize a docstring para descrever o comportamento de processos limitados/compartilhados."
+ },
+ "s_a6ca4743": {
+  "summaryPt": "O novo guard isinstance verifica multiprocessing.Process, que a classe de spawn-process declarada não herda, então processos de flusher travados nunca são mortos.",
+  "contentPt": "O novo guard do health-check testa `isinstance(process, multiprocessing.Process)`, mas `process` é declarado como `multiprocessing.context.SpawnProcess | threading.Thread` (flusher.py:68) e os processos criados aqui vêm de `multiprocessing.get_context(\"spawn\").Process` (ou seja, `SpawnProcess`). `SpawnProcess` e `multiprocessing.Process` são subclasses irmãs de `multiprocessing.process.BaseProcess`, então o check é sempre False para processos de flusher reais e `process.kill()` nunca executa. Antes deste PR, `_ensure_process_alive` chamava `self.process.kill()` incondicionalmente, então um processo de flusher crashado/travado agora nunca é reaped e um novo é spawnado a cada passada unhealthy (o guard idêntico também pula `process.terminate()` em join). Teste pela classe de spawn concreta (ou, quando `produce_to_pipe is None`, por `multiprocessing.context.SpawnProcess`) em vez de `multiprocessing.Process`."
+ }
+}

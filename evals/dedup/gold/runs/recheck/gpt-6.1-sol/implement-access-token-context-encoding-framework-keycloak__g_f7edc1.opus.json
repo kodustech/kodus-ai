@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_5f605bbb",
+     "s_f5e7d9a5",
+     "s_5bd24a7d",
+     "s_0767cf64",
+     "s_b26743e8"
+    ],
+    "defect": "isAccessTokenId inverts the grant-shortcut comparison: it returns false when the shortcut equals the expected one, so valid token IDs are rejected."
+   },
+   {
+    "members": [
+     "s_cd0716d2",
+     "s_5454e119"
+    ],
+    "defect": "isAccessTokenId reads the grant shortcut with substring(3, 5) when the encoded layout puts it at substring(4, 6)."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_cd0716d2",
+   "s_5454e119",
+   "s_b26743e8"
+  ],
+  "reasoningPt": "S2, S3, S4, S7 e S9 têm como defeito principal a comparação invertida do atalho de grant no matcher isAccessTokenId. S5 e S6 relatam primeiro o índice errado do substring (3,5 em vez de 4,6) e só depois a inversão, então o defeito principal deles é outro e eles formam um grupo separado. S9 corrige o índice apenas dentro da correção proposta, por isso fica marcado como bundle, assim como S5 e S6."
+ }
+}

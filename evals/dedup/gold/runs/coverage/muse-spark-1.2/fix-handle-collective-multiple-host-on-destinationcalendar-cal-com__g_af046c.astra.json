@@ -1,0 +1,76 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GoogleCalendarService.updateEvent, lines 254–256: fallback searches by falsy externalCalendarId, losing the destination calendar and yielding undefined."
+   },
+   {
+    "id": "F2",
+    "description": "GoogleCalendarService.deleteEvent, lines 315–317: fallback searches by falsy externalCalendarId, losing the destination calendar and yielding undefined or falling back to primary."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_e877f786",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3c79f482",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5c8e19ea",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_5ce67a29",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7b202983",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_67a98570",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_aa76ef5a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_9acef6ae",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

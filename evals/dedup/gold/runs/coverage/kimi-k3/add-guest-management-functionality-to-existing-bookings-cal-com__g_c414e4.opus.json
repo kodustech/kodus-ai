@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Server schema (addGuests.schema.ts) and handler's uniqueGuests filter never dedupe guests within a single request (the uniqueness refine exists only on the client), so duplicate emails in one call create duplicate Attendee rows"
+   },
+   {
+    "id": "F2",
+    "description": "The handler reads attendees, filters them, then runs createMany (handler lines 74-106). This check-then-insert sequence is a TOCTOU race, so concurrent requests can both insert the same new guest"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c8acf696",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_6180295c",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9e2d0fde",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

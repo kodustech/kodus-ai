@@ -1,0 +1,54 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Reader thread is never joined, so the assertion at line 157 can run before an exception from the final in-flight groups() read is recorded (false pass)"
+   },
+   {
+    "id": "F2",
+    "description": "Nothing guarantees the reader runs even once during the deletions (no start barrier or read counter), so the test can pass vacuously"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_624823a3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_609a1176",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4875e870",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_77082367",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_af3017dc",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

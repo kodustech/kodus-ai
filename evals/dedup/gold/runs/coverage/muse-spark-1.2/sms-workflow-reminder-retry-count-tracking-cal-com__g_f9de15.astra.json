@@ -1,0 +1,45 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "scheduleSMSReminders.ts:184: stale-read retryCount increment in the else branch loses concurrent increments."
+   },
+   {
+    "id": "F2",
+    "description": "scheduleSMSReminders.ts:195: stale-read retryCount increment in the catch block loses concurrent increments."
+   },
+   {
+    "id": "F3",
+    "description": "scheduleSMSReminders.ts:190–197: unguarded catch-block update can throw and abort the remaining batch and response handling."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_973148f4",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dc093c16",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_4e2a8deb",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

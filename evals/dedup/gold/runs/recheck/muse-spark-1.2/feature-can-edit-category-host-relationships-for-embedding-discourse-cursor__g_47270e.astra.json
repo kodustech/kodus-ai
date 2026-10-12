@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_74124a9e",
+     "s_7cfecf36",
+     "s_9d76f63a"
+    ],
+    "defect": "A migração acessa a primeira linha de consultas sem verificar se há resultados, causando falha antes de aplicar o fallback."
+   }
+  ],
+  "unique": [
+   "s_5ffb9255"
+  ],
+  "bundles": [
+   "s_74124a9e"
+  ],
+  "reasoningPt": "S3, S11 e S14 descrevem o mesmo defeito de acesso a resultados vazios, que é o primeiro relatado por S3. S12 trata da interpolação de hosts sem escape, cuja correção é independente. S3 também relata esse segundo defeito e, por isso, consta em bundles, mas não une os grupos."
+ }
+}

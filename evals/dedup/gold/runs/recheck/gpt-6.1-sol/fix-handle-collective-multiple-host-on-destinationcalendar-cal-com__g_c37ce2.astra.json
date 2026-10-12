@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0bb6afb4",
+     "s_97dfdc72"
+    ],
+    "defect": "O fallback de atualização e exclusão busca um destino pelo externalCalendarId ausente, impedindo a seleção do calendário configurado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S12 descrevem o mesmo fallback incorreto quando externalCalendarId está ausente, tanto na atualização quanto na exclusão. Ambas pedem a mesma correção repetida nesses pontos, portanto permanecem juntas e não são bundles."
+ }
+}

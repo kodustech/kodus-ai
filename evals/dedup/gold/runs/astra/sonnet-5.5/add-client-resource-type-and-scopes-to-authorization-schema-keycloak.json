@@ -1,0 +1,39 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "7b8c18e8ea1e2b1bb0f2ee2b0c1417867152ea15",
+  "attempt": 1,
+  "ms": 36349,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_8758638b",
+          "s_583e834c",
+          "s_1aab7b37",
+          "s_a2452e35"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Existing callers invoke unsupported V2 client-permission methods, causing unhandled exceptions in management-permission endpoints, client deletion when both features are enabled, and token exchange.",
+        "rationale": "s_8758638b reports both the endpoint failure and the deletion-listener failure, connecting the two listener suggestions with s_a2452e35's endpoint report. The merged comment must preserve these affected paths and the additional token-exchange concern."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_568085fd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c82368a3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2edb1678",
+        "confidence": "high"
+      }
+    ]
+  }
+}

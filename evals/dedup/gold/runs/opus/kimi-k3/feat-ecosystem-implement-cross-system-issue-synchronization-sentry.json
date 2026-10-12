@@ -1,0 +1,89 @@
+{
+  "judge": "opus",
+  "model": "kimi-k3",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "a41c8266ee472b90ba4aa1ed5a96ac2a7e894148",
+  "attempt": 1,
+  "ms": 10210,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 11689,
+    "cache_read_input_tokens": 6564,
+    "output_tokens": 610,
+    "output_tokens_details": {
+      "thinking_tokens": 111
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 11689,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 610,
+        "cache_read_input_tokens": 6564,
+        "cache_creation_input_tokens": 11689,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 11689
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1070328,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_ba3a1487",
+          "s_c99c812a",
+          "s_83f857de",
+          "s_70d8be1c",
+          "s_15152af3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The dataclass default `queued = timezone.now()` is evaluated once at import time, so every instance shares one stale timestamp; it should use field(default_factory=timezone.now).",
+        "rationale": "All five report the same import-time default evaluation on line 18 and propose the same default_factory fix."
+      },
+      {
+        "members": [
+          "s_4394a939",
+          "s_ade14568"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The test name 'test_from_dict_inalid_data' has a typo and should be 'test_from_dict_invalid_data'.",
+        "rationale": "Both report the same misspelling in the same test name."
+      },
+      {
+        "members": [
+          "s_86941632",
+          "s_93638ca0"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "test_from_dict_empty_array actually passes an empty dict, so the test name does not match what it tests.",
+        "rationale": "Both report the same mismatch between the test's name and its body."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_8ea333b1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

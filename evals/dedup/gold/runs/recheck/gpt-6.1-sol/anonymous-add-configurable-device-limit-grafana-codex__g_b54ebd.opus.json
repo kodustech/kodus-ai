@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_26a094d0",
+     "s_445423dd"
+    ],
+    "defect": "The device ID is written to localCache before CreateOrUpdateDevice runs and is not removed when the write fails, so a retry after ErrDeviceLimitReached hits the cache and gets past the device limit."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S4 apontam o mesmo defeito: a chave do dispositivo entra no localCache antes de CreateOrUpdateDevice e não é removida quando a gravação falha. Com isso, a próxima tentativa passa pelo cache e escapa do limite de dispositivos. As duas propõem a mesma correção (gravar no cache só depois do sucesso ou remover a chave no erro) e a diferença de linhas não muda isso."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler without implementing its abstract methods, so it can't be instantiated and any metric_alert_fire detector crashes with a TypeError.",
+    "members": [
+     "s_534126e2",
+     "s_96af5979",
+     "s_18d4e01d",
+     "s_1aa747bf"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S2, S3 e S4 apontam o mesmo defeito: MetricAlertDetectorHandler passou a herdar de StatefulDetectorHandler, mas tem só `pass`, o que torna a classe abstrata e impossível de instanciar. O que muda entre elas é o número de métodos abstratos citados (S1 também conta counter_names) e a correção sugerida, mas o defeito é um só. Nenhuma delas traz um segundo defeito."
+ }
+}

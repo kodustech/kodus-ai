@@ -1,0 +1,93 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_dbcf98a4",
+    "mainDefect": "Migrated hosts bypass normalization, leaving schemes, paths, or whitespace that prevent host matching.",
+    "secondary": [
+     {
+      "defect": "An unescaped quote in a host value breaks the SQL INSERT and aborts the migration.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_93eb20ca",
+    "mainDefect": "Host matching lowercases only the stored value, so incoming hosts containing uppercase letters are rejected.",
+    "secondary": [
+     {
+      "defect": "Stored hosts with port suffixes never match because the lookup compares only the bare URI hostname.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_777115f9",
+    "mainDefect": "Unconditional conversion and deletion of raw *_ids fields loses their data when sideloaded records cannot be resolved.",
+    "secondary": [
+     {
+      "defect": "A null *_ids value throws when the hydration code calls .map on it.",
+      "coveredBy": [
+       "s_36199324",
+       "s_083999f0"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_36199324",
+    "mainDefect": "Calling .map without checking the *_ids input causes null values to crash response hydration.",
+    "secondary": [
+     {
+      "defect": "Unresolved ids remain in the hydrated array as undefined entries.",
+      "coveredBy": [
+       "s_777115f9",
+       "s_d5eddfe5"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_d5eddfe5",
+    "mainDefect": "Unconditionally replacing and deleting *_ids fields loses raw ids when the corresponding records are not sideloaded.",
+    "secondary": [
+     {
+      "defect": "Assigning the hydrated array to the pluralized property can overwrite an existing field of the same name.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c76cedb8",
+    "mainDefect": "Indexing empty category query results crashes the migration when the relevant settings or matching categories are missing.",
+    "secondary": [
+     {
+      "defect": "Migrated hosts retain schemes and paths that prevent them from matching URI hostnames.",
+      "coveredBy": [
+       "s_dbcf98a4",
+       "s_0621eb9a"
+      ]
+     },
+     {
+      "defect": "An unescaped single quote in a host value breaks the SQL INSERT.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_083999f0",
+    "mainDefect": "Calling .map on a null *_ids value crashes hydration.",
+    "secondary": [
+     {
+      "defect": "Unconditionally deleting the original id array loses its ids when no matching sideloaded collection exists.",
+      "coveredBy": [
+       "s_777115f9",
+       "s_d5eddfe5"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

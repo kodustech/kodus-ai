@@ -1,0 +1,58 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "_ensure_processes_alive (lines 253-259): isinstance(process, multiprocessing.Process) is always False for SpawnProcess, so a hung process is never killed before restart, which leads to duplicate flushing"
+   },
+   {
+    "id": "F2",
+    "description": "join() (lines 346-347): the same isinstance check is always False for SpawnProcess, so terminate() never runs"
+   },
+   {
+    "id": "F3",
+    "description": "join() (lines 338-341): the loop breaks once the deadline expires, so the remaining processes are never terminated"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_555f4a4d",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4ee392ad",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b2cc6608",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7f309577",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7a1b8c6d",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

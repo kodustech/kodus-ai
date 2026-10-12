@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1a66b466",
+     "s_8fa1fa63"
+    ],
+    "defect": "Os Javadocs de dois métodos void requireView* prometem retorno true em vez de documentar ForbiddenException quando a verificação correspondente retorna false."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S7 apontam o mesmo erro de documentação repetido em dois métodos da mesma interface. A mesma correção de redação resolve ambos, mantendo o grupo pela regra de erro repetido em vários locais."
+ }
+}

@@ -1,0 +1,35 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c4bb13a0",
+    "mainDefect": "The admin console’s English error-invalid-multivalued-size message uses Java MessageFormat syntax that i18next renders literally.",
+    "secondary": [
+     {
+      "defect": "The account console’s English error-invalid-multivalued-size message also uses Java MessageFormat syntax that i18next renders literally.",
+      "coveredBy": [
+       "s_0e7da5d3",
+       "s_ecc11bba",
+       "s_4b64c7d5"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_4b64c7d5",
+    "mainDefect": "The account console’s English error-invalid-multivalued-size message uses Java MessageFormat syntax that i18next renders literally.",
+    "secondary": [
+     {
+      "defect": "The admin console’s English error-invalid-multivalued-size message also uses Java MessageFormat syntax that i18next renders literally.",
+      "coveredBy": [
+       "s_c4bb13a0",
+       "s_d93655e7",
+       "s_c090859a"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

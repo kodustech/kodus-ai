@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c8231ce6",
+     "s_29c9524c"
+    ],
+    "defect": "The Lithuanian message bundles (account totpStep1 and login loginTotpStep1) were given the Italian sentence instead of a Lithuanian translation."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S3 apontam o mesmo erro repetido em dois arquivos lituanos: o texto em italiano colocado no lugar da tradução para o lituano. Uma única correção (traduzir as duas chaves) resolve os dois casos, então o grupo deve ser mantido. A menção às tags de âncora em S2 aparece só dentro da correção sugerida e não constitui um segundo defeito."
+ }
+}

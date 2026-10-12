@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The async legacy-write goroutines in Create/Delete/Update/DeleteCollection get their timeout context from the request context, which is cancelled when the handler returns, so the legacy write can be silently dropped.",
+    "members": [
+     "s_7e8b6adf",
+     "s_0fa90f2c",
+     "s_b0ebef03"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_0fa90f2c",
+   "s_b0ebef03"
+  ],
+  "reasoningPt": "S1, S21 e S25 têm como defeito principal a goroutine de escrita legacy que deriva o contexto do request, que é cancelado quando o handler retorna e faz a escrita dual se perder. Os três propõem a mesma correção (context.WithoutCancel ou Background) nos mesmos quatro métodos. S21 e S25 acrescentam pontos secundários, como a falta de log do erro legacy e a falta de ordenação, então entram em bundles sem mudar o grupo."
+ }
+}

@@ -1,0 +1,55 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_a1b0441f",
+    "mainDefect": "Parallel initialization workers race on the captured err variable.",
+    "secondary": [
+     {
+      "defect": "Parallel initialization workers increment totalBatchesIndexed without synchronization, creating a data race and potentially an incorrect count.",
+      "coveredBy": [
+       "s_38444aa4"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_b79acdcb",
+    "mainDefect": "Skipping the PostgreSQL test prevents it from catching module or storage server initialization regressions.",
+    "secondary": [
+     {
+      "defect": "The PostgreSQL test configuration hardcodes localhost instead of using the configured database connection settings, likely causing the Drone failure.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_11ae6686",
+    "mainDefect": "Calling Init during construction makes initialization failures abort construction and block startup without adapting existing callers.",
+    "secondary": [
+     {
+      "defect": "Every constructor call now blocks synchronously on the full search index build.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Initialization uses the internal watcher admin context instead of the caller's context, and sync.Once prevents a later Init call from correcting this.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_38444aa4",
+    "mainDefect": "Parallel initialization workers race on the unsynchronized totalBatchesIndexed counter.",
+    "secondary": [
+     {
+      "defect": "Parallel initialization workers race on the captured err variable, allowing one worker to overwrite another worker's error.",
+      "coveredBy": [
+       "s_a1b0441f"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

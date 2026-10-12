@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3c4b4f6b",
+     "s_60b424b5"
+    ],
+    "defect": "GrafanaGroupLoader's JSDoc comments still mention the Ruler, even though the component no longer queries the ruler API."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S5 apontam o mesmo defeito: comentários JSDoc desatualizados em GrafanaGroupLoader.tsx que ainda citam o Ruler depois que a consulta ao ruler foi removida. É o mesmo erro repetido em dois pontos do mesmo componente (doc do componente e doc da prop expectedRulesCount), e uma única limpeza das referências resolve os dois. Nenhuma das duas traz um segundo defeito."
+ }
+}

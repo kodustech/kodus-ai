@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_85e64d31",
+     "s_3fd440dd",
+     "s_35d9e782",
+     "s_0c735ff0",
+     "s_75996780"
+    ],
+    "defect": "The order() mixin passes the 0-indexed $val straight to the 1-indexed -webkit-box-ordinal-group/-moz-box-ordinal-group, so ordering is off by one in legacy browsers."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S4, S5, S6, S8) apontam o mesmo defeito no mixin order(): o box-ordinal-group legado começa em 1 e recebe o mesmo $val do order, que começa em 0, o que gera uma ordem deslocada em uma posição. A correção é a mesma em todas ($val + 1), e nenhuma delas traz um segundo defeito."
+ }
+}

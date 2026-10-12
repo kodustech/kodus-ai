@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_07f54fcf",
+     "s_f0bbf95c",
+     "s_d50d9f26"
+    ],
+    "defect": "O contrato de getShortcut() permite atalhos de grant com três caracteres, mas o decoder exige exatamente dois, fazendo o encoder produzir IDs que não consegue decodificar."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_07f54fcf"
+  ],
+  "reasoningPt": "S8, S12 e S16 têm o mesmo defeito principal: a incompatibilidade entre o comprimento permitido pelo contrato e o exigido pelo decoder. S8 também relata a ausência de fallback para IDs com dois-pontos e prefixo de tamanho diferente de seis; por isso entra em bundles, sem alterar seu agrupamento pelo defeito principal."
+ }
+}

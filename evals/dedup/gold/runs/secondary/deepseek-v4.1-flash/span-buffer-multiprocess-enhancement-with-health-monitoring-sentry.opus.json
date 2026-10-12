@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_a6ca4743",
+    "mainDefect": "The health-check guard `isinstance(process, multiprocessing.Process)` is always False for SpawnProcess instances, so `process.kill()` never runs and unhealthy flusher processes are never reaped before a new one is spawned.",
+    "secondary": [
+     {
+      "defect": "The same `isinstance(process, multiprocessing.Process)` guard in join() is always False for SpawnProcess, so `process.terminate()` is never called there.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

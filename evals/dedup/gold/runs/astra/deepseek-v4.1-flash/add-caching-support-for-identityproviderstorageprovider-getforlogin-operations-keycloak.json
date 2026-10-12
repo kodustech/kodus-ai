@@ -1,0 +1,52 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "promptSha": "a7caa79b4fe05a2e863a9e56234ebafb1ac93103",
+  "attempt": 1,
+  "ms": 52009,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_ce3f677e",
+          "s_fa609e7a"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Both cleanup registrations use the literal alias \"alias\" instead of the created IDP's alias, leaving the created providers uncleaned and potentially causing cleanup failures.",
+        "rationale": "Both suggestions report the identical wrong-alias mistake at lines 381 and 425. The repeated registrations each need correction; the different descriptions of the resulting exception do not change the defect."
+      },
+      {
+        "members": [
+          "s_1a15af6b",
+          "s_25a59b36"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The cached getForLogin result path omits the organization-aware wrapping applied on the delegate fallback paths.",
+        "rationale": "Both identify the same missing mapping when materializing and returning cached IDs at lines 244–254, and propose the same correction."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_bca8f065",
+        "confidence": "high"
+      },
+      {
+        "id": "s_522435da",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a3df6e2b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_95237b2c",
+        "confidence": "high"
+      }
+    ]
+  }
+}

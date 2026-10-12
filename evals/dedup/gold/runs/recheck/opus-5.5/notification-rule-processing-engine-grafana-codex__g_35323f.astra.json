@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0909b944",
+     "s_b297e3a1"
+    ],
+    "defect": "A delegação de useAllAlertRuleAbilities para useAllRulerRuleAbilities remove a proteção de imutabilidade dos grupos federados Mimir, permitindo habilidades de edição e exclusão antes bloqueadas."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 descrevem o mesmo defeito: a perda da verificação de grupo federado ao delegar para um hook que fixa isFederated como false. Uma única correção para preservar essa verificação resolve ambos os relatos; nenhum deles reúne defeitos adicionais."
+ }
+}

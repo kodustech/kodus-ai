@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f51c2a1e",
+     "s_6a2f511a",
+     "s_61e1edca"
+    ],
+    "defect": "The remove_member spec sends the request with xhr :put, but the route maps remove_member to DELETE, so the spec should use xhr :delete."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S3 e S6 apontam o mesmo defeito: o teste de remove_member usa xhr :put, mas a rota de remove_member é DELETE. A correção é a mesma nas três: trocar para xhr :delete. As diferenças são só de detalhe: S2 explica que o PUT cairia em add_members, S3 diz que a spec de controller ignora o roteador e S6 cita outro caminho de arquivo. Isso não muda o defeito."
+ }
+}

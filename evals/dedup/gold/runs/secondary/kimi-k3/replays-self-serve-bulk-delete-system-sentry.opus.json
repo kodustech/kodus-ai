@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_06a69ac5",
+    "mainDefect": "The age/timestamp mutual-exclusion validators check truthiness with .get(), so a value of 0 is treated as absent and reports containing both fields pass validation.",
+    "secondary": [
+     {
+      "defect": "Because both age and timestamp are optional, a report containing neither field passes validation, which contradicts the docstrings saying one of them must be present.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

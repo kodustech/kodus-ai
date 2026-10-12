@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "In update and destroy, `EmbeddableHost.where(id:).first` can return nil and the result is used without a check, so an unknown id raises NoMethodError (a 500) instead of returning a 404.",
+    "members": [
+     "s_8d184fdd",
+     "s_7958039f"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_8d184fdd",
+   "s_7958039f"
+  ],
+  "reasoningPt": "S2 e S12 têm o mesmo defeito principal: `where(id:).first` pode retornar nil em update/destroy e causar NoMethodError em vez de 404. Os dois trazem um segundo defeito no final (S2: `host.sub!` com host nil no before_validation; S12: `params[:embeddable_host]` nil em save_host). Pela regra do defeito principal, esses extras não mudam o grupo, mas fazem os dois entrarem em bundles."
+ }
+}

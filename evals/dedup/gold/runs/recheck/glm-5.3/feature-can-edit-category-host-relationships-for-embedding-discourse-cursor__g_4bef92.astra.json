@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3284f51d",
+     "s_82cdee2b",
+     "s_e1df980e",
+     "s_bccd111a"
+    ],
+    "defect": "A migração insere hosts legados com esquema e caminho sem normalização, impedindo que a busca por hostname encontre esses registros após a atualização."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_3284f51d"
+  ],
+  "reasoningPt": "S2, S7, S18 e S20 relatam como defeito principal a ausência de normalização dos hosts na migração, corrigida pela mesma mudança. S2 também aponta a interpolação SQL sem escape, um defeito independente que a torna um bundle, mas não altera seu agrupamento pelo defeito principal."
+ }
+}

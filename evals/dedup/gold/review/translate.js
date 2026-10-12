@@ -17,7 +17,7 @@ const arg = (n, d) => {
 };
 const SCOPE = arg('scope', 'pilot');
 const PAR = Number(arg('par', '4'));
-const dataFile = path.join(__dirname, `${SCOPE}.json`);
+const dataFile = arg('file') ? path.resolve(arg('file')) : path.join(__dirname, `${SCOPE}.json`);
 const cacheDir = path.join(__dirname, 'translations');
 
 const SCHEMA = {

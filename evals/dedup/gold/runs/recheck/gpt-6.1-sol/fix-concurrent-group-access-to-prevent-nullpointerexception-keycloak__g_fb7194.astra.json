@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_dc7f347e",
+     "s_3e52a596"
+    ],
+    "defect": "O teste verifica caughtExceptions sem aguardar o término da thread leitora, podendo passar antes que uma exceção seja registrada."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 relatam a mesma corrida entre a thread leitora e a verificação de caughtExceptions. Ambas propõem aguardar o término da thread com join antes da asserção; a observação de S1 sobre a thread continuar ativa é uma consequência do mesmo defeito."
+ }
+}

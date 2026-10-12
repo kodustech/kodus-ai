@@ -1,0 +1,53 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "promptSha": "110ae235940afa9b2ea7174103588314e7f5de5d",
+  "attempt": 1,
+  "ms": 47378,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_910f4601",
+          "s_4a1383d7"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The unguarded retry-count update inside the catch block can throw and abort processing of the remaining reminders.",
+        "rationale": "Both describe the same escaping database exception at the same update, with the same batch-aborting consequence."
+      },
+      {
+        "members": [
+          "s_4680bb7e",
+          "s_51ce1fbc",
+          "s_6fbe394f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The retry-count cleanup branch lacks an SMS method filter and an unscheduled-state filter, allowing deletion of other methods' reminders and already-scheduled reminders.",
+        "rationale": "All three report the missing SMS filter in the same OR branch. The merged comment must also preserve the missing scheduled-state restriction explicitly reported by s_51ce1fbc."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_b943f255",
+        "confidence": "high"
+      },
+      {
+        "id": "s_26a8bc77",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8701b717",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1ee234e7",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8cace1ff",
+     "s_53c0e8ba",
+     "s_e3323d09"
+    ],
+    "defect": "TotalDocs percorre b.cache sem proteção enquanto a goroutine de eventos pode escrever no mapa via BuildIndex, causando acesso concorrente e possível encerramento do processo."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S7 e S8 descrevem a mesma concorrência entre a leitura de b.cache por TotalDocs e a escrita por BuildIndex. S8 aponta outro trecho do código, mas proteger a leitura com cacheMu resolve o defeito relatado pelas três sugestões."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d63726ea",
+     "s_34a7ef4b"
+    ],
+    "defect": "The local cache is set before the DB write succeeds, so when ErrDeviceLimitReached is returned the device stays cached and later requests skip the limit check."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S7 apontam o mesmo defeito: o cache local é preenchido antes do sucesso do CreateOrUpdateDevice. Assim, quando ocorre ErrDeviceLimitReached, o limite de dispositivos é contornado na requisição seguinte. Ambas propõem a mesma correção (só gravar no cache após sucesso ou remover a chave em caso de erro), então o grupo deve ser mantido."
+ }
+}

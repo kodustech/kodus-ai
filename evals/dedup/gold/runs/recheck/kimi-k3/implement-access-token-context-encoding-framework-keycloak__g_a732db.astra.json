@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_2684011e",
+     "s_aca65677",
+     "s_38c9a377",
+     "s_b0aa7885",
+     "s_76bcb0fc",
+     "s_e6f8c322"
+    ],
+    "defect": "O construtor de AccessTokenContext verifica grantType duas vezes e deixa rawTokenId sem validação de nulidade."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4, S7, S11, S17 e S19 apontam o mesmo erro na quarta chamada a requireNonNull, corrigido pela troca de grantType por rawTokenId. A mensagem inconsistente destacada por S4 e a serialização de null mencionada nas demais são aspectos do mesmo defeito, sem exigir correções independentes."
+ }
+}

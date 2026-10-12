@@ -1,0 +1,45 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "topic_embed.rb:13 interpolates an unescaped external URL into the footer HTML, enabling stored XSS."
+   },
+   {
+    "id": "F2",
+    "description": "TopicEmbed.import stores imported feed/page HTML without sanitization using raw_html, allowing unsafe content to reach viewers."
+   },
+   {
+    "id": "F3",
+    "description": "poll_feed.rb:35 uses CGI.unescapeHTML to turn escaped feed content into live HTML tags."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3945cc4f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ddd39050",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7466b913",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

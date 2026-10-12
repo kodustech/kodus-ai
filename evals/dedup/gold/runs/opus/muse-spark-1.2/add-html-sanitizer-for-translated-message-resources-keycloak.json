@@ -1,0 +1,91 @@
+{
+  "judge": "opus",
+  "model": "muse-spark-1.2",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "promptSha": "517a127f864701f41eda088c6295cdb6bd7467eb",
+  "attempt": 1,
+  "ms": 11411,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 38987,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 788,
+    "output_tokens_details": {
+      "thinking_tokens": 251
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 38987,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 788,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 38987,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 38987
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.3294376,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_f0a244fc",
+          "s_0b948a1d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "In verifySafeHtml, a missing or unreadable English counterpart file throws an unchecked RuntimeException. verify() does not catch it, so the mojo aborts instead of reporting a diagnostic.",
+        "rationale": "Both point at the English bundle loading in verifySafeHtml. Both report the same unchecked RuntimeException that bypasses verify()'s IOException handling, and both propose the same fix."
+      },
+      {
+        "members": [
+          "s_ab141308",
+          "s_8a4cfc73"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The Lithuanian account (totpStep1) and login (loginTotpStep1) bundles were given an Italian string instead of a Lithuanian translation.",
+        "rationale": "The same wrong Italian string was copied into two Lithuanian bundle files. Each file needs its own edit, but it is one mistake."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_9025a411",
+        "confidence": "high"
+      },
+      {
+        "id": "s_cefabe84",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3b064297",
+        "confidence": "high"
+      },
+      {
+        "id": "s_39c1f35e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7fa2fb7a",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e1409577",
+     "s_6580f8e0"
+    ],
+    "defect": "`update` and `destroy` in EmbeddableHostsController dereference `EmbeddableHost.where(id:).first` without a nil check, so an unknown id returns a 500 instead of a 404."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S17 apontam o mesmo defeito nas mesmas linhas: `update` e `destroy` usam `where(id:).first` sem verificar nil, o que gera um 500 em vez de um 404. Os dois propõem a mesma correção (`find` ou uma verificação explícita de nil). Nenhum deles traz um segundo defeito, então o grupo fica como está."
+ }
+}

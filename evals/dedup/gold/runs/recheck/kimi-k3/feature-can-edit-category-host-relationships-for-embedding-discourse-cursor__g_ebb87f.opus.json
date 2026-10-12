@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a96ba504",
+     "s_ff692566"
+    ],
+    "defect": "update and destroy in EmbeddableHostsController dereference a possibly-nil record from where(...).first, raising NoMethodError (500) instead of returning 404 for unknown ids."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S12 apontam o mesmo defeito: em update e destroy, `where(id:).first` pode devolver nil, e isso gera NoMethodError e um erro 500. As duas propõem a mesma correção, usar `find` ou retornar 404. Nenhuma delas reporta um segundo defeito, então o grupo se mantém."
+ }
+}

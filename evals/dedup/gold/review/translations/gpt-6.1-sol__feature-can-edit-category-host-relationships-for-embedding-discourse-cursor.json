@@ -1,0 +1,34 @@
+{
+ "s_ee0c2eb0": {
+  "summaryPt": "IDs de embeddable-host ausentes causam crash em update e destroy em vez de produzir uma resposta controlada.",
+  "contentPt": "O QUÊ: update e destroy desreferenciam o resultado de uma busca que pode ser nil. POR QUÊ: requisições para um id de embeddable-host removido, obsoleto ou inexistente chamam save_host(nil) ou host.destroy e lançam NoMethodError em vez de retornar uma resposta normal de not-found/erro. COMO: exigir o registro e renderizar um 404/erro apropriado antes de chamar save_host ou destroy."
+ },
+ "s_d6a91e5d": {
+  "summaryPt": "Valores de host ausentes causam crash durante a validação porque a normalização chama sub! em nil.",
+  "contentPt": "O callback before_validation assume que host é uma string não nula e chama sub! incondicionalmente. Criar ou atualizar um registro sem host chega a esse callback e lança NoMethodError antes que validates_format_of possa reportar o valor inválido. Proteja a normalização (por exemplo, chame sub! somente quando host.present?) ou use uma normalização segura contra nil, para que entradas ausentes/falsy sigam o caminho normal de erro de validação."
+ },
+ "s_79ef5edc": {
+  "summaryPt": "A verificação de hostname case-insensitive normaliza apenas o lado armazenado, fazendo com que hostnames válidos com maiúsculas e minúsculas sejam rejeitados.",
+  "contentPt": "Normalize o hostname parseado antes de compará-lo com o valor normalizado do banco de dados. A query atualmente usa `lower(host) = ?`, mas passa `uri.host` sem alteração, então um referer em maiúsculas como `https://EVILTROUT.COM/...` pode não corresponder a um registro permitido `eviltrout.com` e retornar incorretamente um resultado de host inválido."
+ },
+ "s_7b556db8": {
+  "summaryPt": "O novo formato de color_ids da fixture não corresponde aos registros relacionados esperados pelo consumidor.",
+  "contentPt": "A fixture alterou a fruta de id 2 para retornar color_ids [3], enquanto o consumidor find-embedded afirma que a fruta de id 2 tem duas cores com IDs 1 e 2. Atualize a asserção do consumidor para corresponder à nova resposta (uma cor, ID 3), ou use o registro de fruta cujos color_ids são [1,2]."
+ },
+ "s_ad0aab9e": {
+  "summaryPt": "IDs de host inválidos ou removidos concorrentemente causam crash nos endpoints admin de update/destroy.",
+  "contentPt": "Trate a ausência do host antes de desreferenciá-lo. `where(...).first` pode retornar nil para um id inválido ou removido concorrentemente, fazendo update chamar `save_host(nil)` e destroy chamar `nil.destroy`, ambos lançando uma exceção não tratada. Retorne uma resposta de not-found/erro (ou use uma busca que seja consistentemente tratada com rescue)."
+ },
+ "s_05f2f501": {
+  "summaryPt": "O teste de store de registro único recebe uma resposta fixa da fruta 1 ao solicitar a fruta 2, então não testa a busca por ID específico.",
+  "contentPt": "Este teste chama `store.find('fruit', 2)`, mas o handler `/fruits/:id` do Pretender alterado sempre retorna `fruits[0]`, independentemente do ID solicitado. As asserções, portanto, validam o payload fixo da maçã em vez da busca da fruta 2, e continuariam passando mesmo se o store ignorasse o ID solicitado ou retornasse o registro errado. Faça o handler selecionar a fixture solicitada (ou verifique o ID/nome da fruta retornada) para que o teste falhe em uma busca de registro único incorreta."
+ },
+ "s_72f624a1": {
+  "summaryPt": "O teste de host em branco nunca alcança a condição do host porque o tópico não tem embed.",
+  "contentPt": "O teste chamado `is false if embeddable_host is blank` não estabelece um embed no tópico: `has_topic_embed?` permanece false por padrão. Consequentemente, `expandable_first_post?` é false por causa do segundo predicado, independentemente de existir algum embeddable host, e este teste continuaria passando mesmo se a verificação de host fosse removida ou falhasse. Faça stub de `has_topic_embed?` para true e defina `embed_truncate` como true antes de verificar o caso de host em branco."
+ },
+ "s_9ba3dcbe": {
+  "summaryPt": "A descrição do spec usa o nome antigo do método em vez do recém-introduzido `host_allowed?`.",
+  "contentPt": "A descrição do exemplo cita `allows_embeddable_host`, mas o método testado é `EmbeddableHost.host_allowed?`. Atualize a descrição para corresponder à nova API, para que a documentação do teste não anuncie um nome de método inexistente/antigo."
+ }
+}

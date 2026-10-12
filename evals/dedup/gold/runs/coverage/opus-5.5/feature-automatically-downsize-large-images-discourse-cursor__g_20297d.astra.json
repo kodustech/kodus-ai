@@ -1,0 +1,52 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "utilities.js:182–183 hardcodes the client size check to 10MB for non-images, ignoring max_attachment_size_kb and incorrectly accepting or rejecting attachments."
+   },
+   {
+    "id": "F2",
+    "description": "utilities.js:184 reports 10MB in the file_too_large message instead of the configured attachment limit."
+   },
+   {
+    "id": "F3",
+    "description": "utilities.js:246–247 reports 10MB in the 413 handler's file_too_large message instead of the actual limit."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_60d70a41",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_16e7d729",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_4e7770ed",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6f42512f",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

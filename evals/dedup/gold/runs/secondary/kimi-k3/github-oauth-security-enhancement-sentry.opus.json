@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_25ae84d7",
+    "mainDefect": "The safe_urlopen call to GitHub's OAuth token endpoint runs outside the try/except, so a connection error or timeout raises an unhandled exception and returns a 500 instead of the graceful failure page.",
+    "secondary": [
+     {
+      "defect": "get_user_info(payload[\"access_token\"]) is not wrapped in try/except, so an API error from GitHub escapes and returns a 500 instead of the error page.",
+      "coveredBy": [
+       "s_2e15df29"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

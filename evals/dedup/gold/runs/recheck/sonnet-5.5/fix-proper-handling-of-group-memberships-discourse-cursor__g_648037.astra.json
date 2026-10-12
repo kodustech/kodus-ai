@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_86f24f93",
+     "s_258d0746",
+     "s_976a034f",
+     "s_ead68308"
+    ],
+    "defect": "O cálculo de totalPages adiciona uma página indevida quando user_count é múltiplo exato de limit, permitindo navegar para uma página vazia."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4, S5 e S6 relatam o mesmo erro no cálculo de totalPages, no mesmo trecho, com a mesma correção. O botão habilitado e a página vazia são consequências desse erro, sem defeitos adicionais."
+ }
+}

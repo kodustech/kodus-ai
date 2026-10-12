@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The SPA-served bundles (admin-ui keycloak.v2 and account-ui keycloak.v3) switched error-invalid-multivalued-size from i18next {{n}} placeholders to Java MessageFormat {n}/{2,choice,...} syntax, which the i18next consoles cannot interpolate.",
+    "members": [
+     "s_c4bb13a0",
+     "s_d93655e7",
+     "s_0e7da5d3",
+     "s_c090859a",
+     "s_ecc11bba",
+     "s_4b64c7d5"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S4, S6, S7, S10, S11, S18) apontam o mesmo defeito: a chave error-invalid-multivalued-size nos bundles servidos às SPAs foi trocada para a sintaxe MessageFormat/choice do Java, que o i18next não interpola. É o mesmo erro repetido nos bundles do admin-ui e do account-ui, e uma única correção resolve os dois. A inconsistência com as traduções, citada em S4 e S18, faz parte do mesmo problema e não é um defeito separado."
+ }
+}

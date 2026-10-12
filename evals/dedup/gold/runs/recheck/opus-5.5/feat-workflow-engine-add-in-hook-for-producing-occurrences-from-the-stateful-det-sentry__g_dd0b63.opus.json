@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f6a234b4",
+     "s_171c4881",
+     "s_6e65311a",
+     "s_4badb5ae"
+    ],
+    "defect": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler with only `pass` and leaves its abstract methods unimplemented, so creating it raises TypeError."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3, S4 e S6 apontam o mesmo defeito, no mesmo trecho: MetricAlertDetectorHandler herda de StatefulDetectorHandler só com `pass` e não implementa os métodos abstratos, então a instanciação gera TypeError. A correção sugerida é a mesma em todas: implementar stubs ou manter o stub anterior. Nenhuma delas traz um segundo defeito."
+ }
+}

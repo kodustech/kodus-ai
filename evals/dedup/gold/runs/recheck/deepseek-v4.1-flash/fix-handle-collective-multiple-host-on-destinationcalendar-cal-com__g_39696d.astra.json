@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6e5785bb",
+     "s_ad515981",
+     "s_fd5d22ad"
+    ],
+    "defect": "Quando destinationCalendar é null, o push com optional chaining descarta os calendários dos demais hosts do evento coletivo."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4, S6 e S10 descrevem o mesmo defeito: o push não ocorre quando não há calendário de destino do organizador ou do tipo de evento. Inicializar o array ou atribuir o array combinado resolve as três sugestões; nenhuma relata um segundo defeito."
+ }
+}

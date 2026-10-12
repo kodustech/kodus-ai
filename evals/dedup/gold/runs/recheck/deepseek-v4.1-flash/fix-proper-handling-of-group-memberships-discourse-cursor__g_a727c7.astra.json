@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5c133571",
+     "s_62fe45ea"
+    ],
+    "defect": "Desalinhamento entre a URL de associação de membros, as rotas e o parâmetro de identificação do grupo exigido pelos handlers."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S11 relatam o mesmo defeito de integração entre cliente, rotas e handlers, embora interpretem de forma diferente as rotas geradas. Uma correção que alinhe a URL e o parâmetro do grupo resolve ambos os relatos; nenhum deles reúne defeitos independentes."
+ }
+}

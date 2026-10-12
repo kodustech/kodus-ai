@@ -1,0 +1,47 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_732d5528",
+    "mainDefect": "The Lithuanian loginTotpStep1 in login/messages/messages_lt.properties was replaced with Italian text.",
+    "secondary": [
+     {
+      "defect": "The Lithuanian totpStep1 in account/messages/messages_lt.properties (line 101) also contains the same Italian text.",
+      "coveredBy": [
+       "s_ee4e0e15",
+       "s_f60fe56a",
+       "s_a8060ba7"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ee4e0e15",
+    "mainDefect": "The Lithuanian totpStep1 in account/messages/messages_lt.properties was replaced with Italian text.",
+    "secondary": [
+     {
+      "defect": "The Lithuanian loginTotpStep1 in login/messages/messages_lt.properties (line 71) also contains the same Italian text.",
+      "coveredBy": [
+       "s_732d5528",
+       "s_0b9e8b6a"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f60fe56a",
+    "mainDefect": "The Lithuanian totpStep1 in account/messages/messages_lt.properties was replaced with Italian text.",
+    "secondary": [
+     {
+      "defect": "The Lithuanian loginTotpStep1 in login/messages/messages_lt.properties (line 71) also contains the same Italian text.",
+      "coveredBy": [
+       "s_732d5528",
+       "s_0b9e8b6a"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

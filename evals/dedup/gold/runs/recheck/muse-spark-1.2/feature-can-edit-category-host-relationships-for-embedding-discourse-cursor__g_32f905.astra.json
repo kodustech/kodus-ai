@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3480efde",
+     "s_2ea70c55",
+     "s_059ba6b1"
+    ],
+    "defect": "A migração insere hosts sem remover protocolo e caminho, impedindo que os registros migrados correspondam à busca de host_allowed?."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_3480efde",
+   "s_2ea70c55",
+   "s_059ba6b1"
+  ],
+  "reasoningPt": "S16, S17 e S18 relatam o mesmo defeito principal: falta de normalização dos hosts inseridos pela migração, corrigida pela mesma alteração. As três também incluem sanitização ou parametrização do SQL na proposta de correção, sendo bundles sem mudar seu agrupamento pelo defeito principal."
+ }
+}

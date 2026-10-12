@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The decoder requires a context prefix of exactly 6 characters (so grant shortcuts must be 2 characters), but the getShortcut() javadoc suggests 3-letter shortcuts and nothing checks the length, so token IDs from a custom grant that follows the javadoc can never be decoded.",
+    "members": [
+     "s_07f54fcf",
+     "s_f0bbf95c",
+     "s_d50d9f26"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_07f54fcf"
+  ],
+  "reasoningPt": "S8, S12 e S16 apontam o mesmo defeito: o decoder exige um prefixo de exatamente 6 caracteres, mas o javadoc de getShortcut() sugere atalhos de 3 letras e não há validação de tamanho. A correção é a mesma: validar o tamanho em postInit ou ajustar o contrato/parsing. S8 também traz, como segundo ponto (\"Additionally\"), o tratamento inconsistente de IDs com dois-pontos e prefixo diferente de 6 caracteres; por isso entra em bundles, mas continua no grupo do seu defeito principal."
+ }
+}

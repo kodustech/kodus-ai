@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The test helper build_mock_occurrence_and_event ignores its `value` parameter, and the expected results are built with value 6 instead of the real values (10, 100, 8). Because of this, the tests never check the value passed to build_occurrence_and_event_data.",
+    "members": [
+     "s_a19aa2e8",
+     "s_0822f042"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S8 apontam o mesmo defeito no mesmo trecho: o parâmetro `value` não é usado em build_mock_occurrence_and_event, então os testes não verificam o valor repassado ao hook. Ambas citam os mesmos três testes com valores divergentes e propõem a mesma correção: incluir `value` na saída e usar os valores reais. Nenhuma das duas reporta um segundo defeito."
+ }
+}

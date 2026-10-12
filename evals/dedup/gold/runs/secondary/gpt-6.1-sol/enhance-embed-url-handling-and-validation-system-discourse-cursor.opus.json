@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d66938c6",
+    "mainDefect": "Protocol-relative URLs like //cdn.example.com/image.png are wrongly treated as paths on the article host when URLs are made absolute.",
+    "secondary": [
+     {
+      "defect": "Directory-relative URLs such as images/image.png are left unchanged, so they resolve against the Discourse page instead of the imported article.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

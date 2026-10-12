@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ef28ad3a",
+     "s_298069c3",
+     "s_e74b5d11"
+    ],
+    "defect": "The AddCookMethodToPosts migration sets the cook_method default to 1, which is raw_html in the Post.cook_methods enum, so ordinary posts skip the cooking pipeline and should default to 0 (regular) instead."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S9 e S10 apontam o mesmo defeito na mesma linha da migration: o default 1 corresponde a raw_html, e por isso os posts normais não passam pelo cook. S9 descreve o problema pela contradição com o comentário \"Default is to cook posts\", mas o defeito principal e a correção (default 0) são os mesmos. Por isso o grupo fica como está."
+ }
+}

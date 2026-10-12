@@ -1,0 +1,60 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "84e5d301c272a0627fa76c3cda8ecdf45d6f8fdd",
+  "attempt": 1,
+  "ms": 46369,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_1bfd1481",
+          "s_a4288eef"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The feature-flagged table visualization receives hardcoded empty columns and data instead of the widget's query results.",
+        "rationale": "Both describe the exact same branch and missing data wiring. The extra 'widgets' segment in one reported path is a path discrepancy, not a distinct code location."
+      },
+      {
+        "members": [
+          "s_cd15646d",
+          "s_72000ea2",
+          "s_05a21148"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Pairing error_ids with nodestore mapping values positionally can associate error details with the wrong IDs.",
+        "rationale": "All three identify the same positional zip defect. Deduplication, omitted keys, and ordering differences are different triggers for the same broken association, resolved by matching on node IDs."
+      },
+      {
+        "members": [
+          "s_ade02fb9",
+          "s_c319fa19"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The rewritten attribute-key hook can return undefined instead of an initialized TagCollection.",
+        "rationale": "Both report the lost object fallback in the same return expression. Initial fetching, disabled queries, and errors are cases of the same missing fallback."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_d9881b31",
+        "confidence": "high"
+      },
+      {
+        "id": "s_838ef60e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1afd346f",
+        "confidence": "high"
+      }
+    ]
+  }
+}

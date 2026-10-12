@@ -1,0 +1,60 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "addGuests.handler.ts lines 74-78: the guest email is not lowercased but the blacklist entries are, so a mixed-case address gets past the blacklist"
+   },
+   {
+    "id": "F2",
+    "description": "addGuests.handler.ts line 76: the existing-attendee dedupe compares raw strings, so the same email in different case is added as a duplicate attendee"
+   },
+   {
+    "id": "F3",
+    "description": "addGuests.handler.ts: duplicate emails in the submitted guests list are not removed on the server (only the client checks), so createMany inserts duplicate attendees"
+   },
+   {
+    "id": "F4",
+    "description": "addGuests.handler.ts line 52: the isAttendee permission comparison (attendee.email === user.email) is case-sensitive"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_dc76b747",
+    "covers": [
+     "F1",
+     "F2",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bdaa90a8",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_66ed9605",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7a5dc6fd",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": false,
+  "reasoning": "The group summary lists the case-sensitive isAttendee comparison as a point to keep. It is at a different location (line 52) and needs its own edit, so I count it as facet F4. Only s_dc76b747 raises it, by asking to also lowercase the isAttendee comparison at line 52. That wording reads like a fix step, which is why this call is not decisive. Still, it names the location and implies the defect, and the group summary treats it as reported, so I count it. s_66ed9605 states the blacklist bypass, the case-sensitive attendee dedupe and the missing server-side dedupe of the submitted list, but not isAttendee. s_7a5dc6fd states the in-list duplicates and the case-sensitive blacklist. It mentions lowercasing only as part of the fix, so it does not count for F2. s_bdaa90a8 covers only the blacklist bypass. No member covers all four facets. Labeler 1 left out F4; Labeler 2's labels match mine."
+ }
+}

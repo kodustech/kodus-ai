@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_856eb85a",
+     "s_509ab8e8"
+    ],
+    "defect": "A validação de exclusividade entre age e timestamp usa truthiness em vez de verificar a presença das chaves, permitindo contornar a restrição com valores zero."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 apontam o mesmo defeito nas mesmas validações: usar truthiness para verificar a presença de age e timestamp. Ambas propõem verificar explicitamente as chaves e não relatam defeitos adicionais, portanto o grupo deve ser mantido."
+ }
+}

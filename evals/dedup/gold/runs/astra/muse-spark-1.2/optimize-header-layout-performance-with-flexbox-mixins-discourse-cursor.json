@@ -1,0 +1,43 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "promptSha": "9dcb4364d4b9de0aa0abac4928a08ee535e1a7d6",
+  "attempt": 1,
+  "ms": 30393,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_1480fde3",
+          "s_0303e051"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The align-items mixin emits the invalid -ms-align-items property and lacks -moz-box-align for legacy Firefox.",
+        "rationale": "Both report the same invalid declaration in the same mixin. s_1480fde3 additionally reports the missing Firefox declaration, which the unified comment must preserve."
+      },
+      {
+        "members": [
+          "s_35d9e782",
+          "s_3fd440dd",
+          "s_75996780",
+          "s_85e64d31",
+          "s_0c735ff0"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The order mixin passes the modern order value directly to legacy box-ordinal-group properties without the required +1 adjustment.",
+        "rationale": "All five report the same indexing mismatch in the same mixin. Differences in browser examples and consumer references do not identify separate defects."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_53bdc423",
+        "confidence": "high"
+      }
+    ]
+  }
+}

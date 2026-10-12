@@ -1,0 +1,58 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GroupTest.java:155-157: Without joining the reader, the assertion can pass before an in-flight read records its exception."
+   },
+   {
+    "id": "F2",
+    "description": "GroupTest.java:139-154: The reader may execute zero reads during deletion, making the test pass without exercising concurrency."
+   },
+   {
+    "id": "F3",
+    "description": "GroupTest.java:139-158: The reader can continue past the assertion and leak into subsequent test teardown."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_624823a3",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_609a1176",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4875e870",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_77082367",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_af3017dc",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

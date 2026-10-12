@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_afdcd067",
+     "s_162332ff"
+    ],
+    "defect": "A contagem e a inserção de dispositivos não são atômicas, permitindo que requisições concorrentes ultrapassem o limite configurado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 descrevem a mesma condição de corrida entre CountDevices e o INSERT/UPSERT, no mesmo trecho. S6 detalha a persistência do excesso, mas isso é consequência do mesmo defeito; tornar a operação atômica resolve ambas."
+ }
+}

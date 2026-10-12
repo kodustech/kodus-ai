@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_7529b678",
+    "mainDefect": "The newly added `_create_process_for_shard` method is never called and is dead code.",
+    "secondary": [
+     {
+      "defect": "If called, `_create_process_for_shard` would replace the owning process without killing the incumbent, orphaning it and allowing duplicate flushing.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_d926f869",
+    "mainDefect": "The docstring incorrectly claims one process is created per shard, although multiple shards can share a process.",
+    "secondary": [
+     {
+      "defect": "The docstring describes the manager as multiprocessing even though the `produce_to_pipe` path creates threads.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

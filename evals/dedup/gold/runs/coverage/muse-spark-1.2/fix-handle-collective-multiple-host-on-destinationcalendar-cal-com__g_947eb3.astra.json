@@ -1,0 +1,98 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Lark createEvent lacks the credentialId parameter."
+   },
+   {
+    "id": "F2",
+    "description": "Office365 createEvent lacks the credentialId parameter."
+   },
+   {
+    "id": "F3",
+    "description": "BaseCalendarService createEvent lacks the credentialId parameter."
+   },
+   {
+    "id": "F4",
+    "description": "Lark createEvent does not select the destination calendar by credentialId."
+   },
+   {
+    "id": "F5",
+    "description": "Office365 createEvent does not select the destination calendar by credentialId."
+   },
+   {
+    "id": "F6",
+    "description": "BaseCalendarService createEvent does not implement per-credential destination calendar selection."
+   },
+   {
+    "id": "F7",
+    "description": "Lark updateEvent uses the first destination calendar without credentialId matching."
+   },
+   {
+    "id": "F8",
+    "description": "Lark deleteEvent uses the first destination calendar without credentialId matching."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_33ed9a24",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_af4c6322",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dc30b21a",
+    "covers": [
+     "F2",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_99ffaedb",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_08905d22",
+    "covers": [
+     "F4",
+     "F7",
+     "F8"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_47e65bca",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7335ccdf",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

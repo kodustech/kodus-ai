@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "poll_feed.rb line 35: i.content.scrub called without nil check; nil content raises NoMethodError and aborts the PollFeed job"
+   },
+   {
+    "id": "F2",
+    "description": "poll_feed.rb line 29: open/SimpleRSS.parse network call has no rescue, so network errors or malformed feeds crash the job"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_8c2349e8",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3adf9f4b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_52c21f9e",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c5a23624",
+    "mainDefect": "The token-exchange safe_urlopen call is outside the try/except, so network failures produce an unhandled 500.",
+    "secondary": [
+     {
+      "defect": "get_user_info raises on non-2xx GitHub user API responses without handling, producing a 500 instead of the error page.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b8cedde1",
+    "mainDefect": "The test supplies an invalid OAuth state, so it exits before reaching the installation-not-found handling it intends to test.",
+    "secondary": [
+     {
+      "defect": "The assertion now accepts the generic error instead of requiring the installation-not-found message, weakening verification of the intended failure.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

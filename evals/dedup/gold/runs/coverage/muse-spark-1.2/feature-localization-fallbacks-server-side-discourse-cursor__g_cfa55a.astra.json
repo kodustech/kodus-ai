@@ -1,0 +1,52 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "FallbackLocaleList#[] calls to_sym on nil SiteSetting.default_locale, raising before compact runs."
+   },
+   {
+    "id": "F2",
+    "description": "FallbackLocaleList#[] mixes String and Symbol locales, so uniq fails to remove equivalent locales."
+   },
+   {
+    "id": "F3",
+    "description": "Mixed String/Symbol fallback locales mismatch @loaded_locales.include? in I18n.ensure_loaded!, causing cache misses and repeated loads."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_e63608d7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c8aed49e",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9009c9ce",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_006ed08a",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

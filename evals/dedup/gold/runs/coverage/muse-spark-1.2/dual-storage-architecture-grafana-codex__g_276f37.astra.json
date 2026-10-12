@@ -1,0 +1,125 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create, line 45: storage failures are recorded with recordLegacyDuration."
+   },
+   {
+    "id": "F2",
+    "description": "Update, line 129: storage failures are recorded with recordLegacyDuration."
+   },
+   {
+    "id": "F3",
+    "description": "DeleteCollection, line 166: the legacy goroutine records timing with recordStorageDuration."
+   },
+   {
+    "id": "F4",
+    "description": "Delete, line 106: the success metric uses name instead of options.Kind."
+   },
+   {
+    "id": "F5",
+    "description": "Delete, line 97: context uses d.Log instead of the enriched log."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_4c68a502",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e95c784c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0d3070ec",
+    "covers": [
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d464c133",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_02ad3834",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_705859db",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6451b2bb",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d8591060",
+    "covers": [
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bc787d91",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_28699aa5",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0256cf0e",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0f8576a3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_db51092c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

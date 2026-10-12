@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_88dcd5ff",
+     "s_a148cd25",
+     "s_dccfaa16"
+    ],
+    "defect": "A comparação está invertida e retorna false quando o trecho extraído corresponde ao grant esperado."
+   },
+   {
+    "members": [
+     "s_511ab22a",
+     "s_be2a870e",
+     "s_5ae95ca9",
+     "s_f2171902",
+     "s_756b95c2"
+    ],
+    "defect": "A extração do grant usa substring(3, 5), embora o formato exija substring(4, 6)."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_88dcd5ff",
+   "s_511ab22a",
+   "s_5ae95ca9",
+   "s_a148cd25",
+   "s_f2171902",
+   "s_756b95c2",
+   "s_dccfaa16"
+  ],
+  "reasoningPt": "Considerando a primeira falha apresentada, inclusive no resumo, S2, S7 e S12 priorizam a comparação invertida; S3, S5, S6, S9 e S10 priorizam o offset incorreto. São defeitos com correções independentes, embora estejam na mesma expressão. Todas exceto S5 relatam ambos; S3 também aponta a falta de validação do comprimento antes do substring."
+ }
+}

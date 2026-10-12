@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_86d26218",
+     "s_3e9d106e",
+     "s_49ba849a"
+    ],
+    "defect": "O break ao expirar o prazo de join interrompe a limpeza e deixa os workers restantes sem tentativa de término."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_86d26218",
+   "s_3e9d106e",
+   "s_49ba849a"
+  ],
+  "reasoningPt": "S2, S6 e S8 relatam primeiro o mesmo defeito: o prazo de join expira e o break impede a limpeza dos workers restantes. As três também incluem a correção independente da checagem de tipo para reconhecer SpawnProcess, sendo bundles sem alterar o agrupamento pelo defeito principal."
+ }
+}

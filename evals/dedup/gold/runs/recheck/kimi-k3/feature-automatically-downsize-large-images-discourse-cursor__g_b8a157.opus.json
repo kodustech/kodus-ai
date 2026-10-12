@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_82fe504b",
+     "s_d6e025e2"
+    ],
+    "defect": "The 10MB upload limit is hardcoded as a magic number instead of using a named constant or a configurable setting."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S17 e S18 apontam o mesmo erro: o limite de 10MB está fixo no código, como número mágico. Ele se repete em dois arquivos (utilities.js e uploads_controller.rb), e a correção é a mesma: usar uma constante ou uma configuração. Pelas regras, um mesmo erro repetido em vários lugares conta como um único defeito, então o grupo fica como está."
+ }
+}

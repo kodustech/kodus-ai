@@ -1,0 +1,84 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0d3070ec",
+    "mainDefect": "The Delete success path passes the object `name` instead of options.Kind as the kind label to recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "Delete sets the context with klog.NewContext(ctx, d.Log) instead of the enriched `log`, so the name/kind/method values added by WithValues are lost.",
+      "coveredBy": [
+       "s_d8591060"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_e95c784c",
+    "mainDefect": "The Create error path records a Storage failure with recordLegacyDuration instead of recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "The Update error path also records a Storage failure with recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_0f8576a3",
+       "s_6451b2bb"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_49bc7a3a",
+    "mainDefect": "TestMode3_DeleteCollection never waits for or asserts the async Legacy.DeleteCollection call, so breaking the legacy path goes unnoticed.",
+    "secondary": [
+     {
+      "defect": "The DeleteCollection legacy goroutine records its result with recordStorageDuration instead of recordLegacyDuration.",
+      "coveredBy": [
+       "s_28699aa5",
+       "s_bc787d91",
+       "s_d464c133"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a6079adb",
+    "mainDefect": "The async legacy goroutines derive their context from the request ctx, so the legacy operation is cancelled when the handler returns.",
+    "secondary": [
+     {
+      "defect": "The goroutine captures the same runtime.Object pointer that is used or returned elsewhere, which causes a data race; the object and options should be deep-copied first.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4c68a502",
+    "mainDefect": "The Create error path records a Storage failure with recordLegacyDuration instead of recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "The Update error path records a Storage failure with recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_0f8576a3",
+       "s_6451b2bb"
+      ]
+     },
+     {
+      "defect": "The DeleteCollection legacy goroutine records its result with recordStorageDuration instead of recordLegacyDuration.",
+      "coveredBy": [
+       "s_28699aa5",
+       "s_bc787d91",
+       "s_d464c133"
+      ]
+     },
+     {
+      "defect": "The Delete success path passes `name` instead of options.Kind as the kind label to recordStorageDuration.",
+      "coveredBy": [
+       "s_02ad3834",
+       "s_0256cf0e"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "spec/models/topic_spec.rb:1407 misspells 'embeddable' as 'emeddable' in the describe name."
+   },
+   {
+    "id": "F2",
+    "description": "spec/models/topic_spec.rb:1407-1412 fabricates an unused embeddable host and misleadingly describes the examples as depending on it."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c864cfd5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_5462a854",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

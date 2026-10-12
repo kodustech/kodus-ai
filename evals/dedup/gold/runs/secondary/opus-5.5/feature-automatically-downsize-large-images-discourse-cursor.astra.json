@@ -1,0 +1,41 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_16e7d729",
+    "mainDefect": "The hard-coded 10MB client limit lets attachments exceeding the configured attachment limit upload before server rejection.",
+    "secondary": [
+     {
+      "defect": "The client validation and 413 error messages display 10MB instead of the configured limit.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4e7770ed",
+    "mainDefect": "Attachments exceeding the configured attachment limit pass the hard-coded 10MB client check.",
+    "secondary": [
+     {
+      "defect": "The translated file-too-large message displays 10240KB instead of the enforced attachment limit.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_60d70a41",
+    "mainDefect": "The hard-coded 10MB client cap rejects valid attachments when the configured attachment limit exceeds 10MB.",
+    "secondary": [
+     {
+      "defect": "When the configured attachment limit is below 10MB, oversized attachments pass client validation and upload fully before server rejection.",
+      "coveredBy": [
+       "s_16e7d729",
+       "s_4e7770ed",
+       "s_6f42512f"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_95fab8b2",
+     "s_ee1a1b68"
+    ],
+    "defect": "tagDeviceUI caches the device key before the store write and does not evict it when ErrDeviceLimitReached is returned, so a device over the limit is denied once and then admitted from the cache for 29 minutes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 descrevem o mesmo defeito: o tagDeviceUI grava a chave no localCache antes da escrita no banco. Quando o banco recusa com ErrDeviceLimitReached, essa entrada fica no cache e o limite pode ser burlado repetindo a requisição. A correção proposta é a mesma nas duas (gravar no cache só depois do sucesso ou remover a entrada na falha), então o grupo fica como está."
+ }
+}

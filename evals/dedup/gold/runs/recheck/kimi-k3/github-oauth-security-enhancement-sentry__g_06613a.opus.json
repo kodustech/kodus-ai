@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_2e15df29",
+     "s_25ae84d7"
+    ],
+    "defect": "External GitHub calls in OAuthLoginView.dispatch (token exchange / get_user_info) are not wrapped in try/except, so network or API failures cause unhandled 500s instead of the error page."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 apontam o mesmo erro: chamadas externas ao GitHub no OAuthLoginView.dispatch ficam fora de try/except, e uma falha de rede ou de API vira erro 500 em vez da página de erro. S6 cita também o safe_urlopen, mas é o mesmo erro repetido em outro ponto e se resolve com a mesma correção (envolver as chamadas em try/except e retornar error()). Por isso o grupo fica como está."
+ }
+}

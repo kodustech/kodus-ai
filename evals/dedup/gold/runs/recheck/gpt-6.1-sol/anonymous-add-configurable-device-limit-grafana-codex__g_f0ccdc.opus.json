@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c22edcd3",
+     "s_c4aad7e2"
+    ],
+    "defect": "The device limit check in CreateOrUpdateDevice counts devices and then inserts in a separate step, so concurrent requests can push the total past deviceLimit."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S3 apontam o mesmo defeito: a contagem de dispositivos e a inserção em CreateOrUpdateDevice são feitas em passos separados, então requisições concorrentes podem ultrapassar o deviceLimit. As duas propõem a mesma correção (transação, lock ou mecanismo atômico no banco), e só o intervalo de linhas muda um pouco. Nenhuma delas traz um segundo defeito."
+ }
+}

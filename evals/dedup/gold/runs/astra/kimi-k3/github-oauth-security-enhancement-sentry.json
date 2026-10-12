@@ -1,0 +1,57 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "bd8f215f4daf1af50ecdcd76b4e8447b238ad9c2",
+  "attempt": 1,
+  "ms": 41215,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_25ae84d7",
+          "s_2e15df29"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Unhandled failures in both the OAuth token exchange and the user-info lookup produce HTTP 500 responses instead of the intended error page.",
+        "rationale": "Both report unhandled exceptions from get_user_info. s_25ae84d7 additionally reports the unprotected safe_urlopen token-exchange call, which the merged comment must preserve."
+      },
+      {
+        "members": [
+          "s_00480f16",
+          "s_5b1de316",
+          "s_4ddd4520"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Direct indexing of integration.metadata[\"sender\"][\"login\"] raises KeyError when sender metadata is missing.",
+        "rationale": "All three identify the same unchecked metadata access in the installer comparison. Their different examples and supporting evidence describe the same failure, resolved by guarding that lookup."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_33c9ffe9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6d3dd323",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f6c5071f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8aab87db",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a811b018",
+        "confidence": "high"
+      }
+    ]
+  }
+}

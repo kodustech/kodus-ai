@@ -1,0 +1,25 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5a7ce5b2",
+     "s_ca5a3ea5",
+     "s_dc2edf67",
+     "s_46bbb3d3",
+     "s_9cc99ae8",
+     "s_8d9e86d7",
+     "s_843a4529",
+     "s_f069ee71",
+     "s_a649b4be"
+    ],
+    "defect": "A segunda definição de self.downsize sobrescreve a assinatura anterior, quebrando chamadas que passam largura e altura separadamente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S6, S7, S8, S10, S12, S14, S16 e S21 descrevem o mesmo defeito: a redefinição de downsize substitui o contrato anterior. As diferenças entre código morto, ArgumentError e altura vinculada a opts são consequências dessa mesma alteração; a imprecisão de S1 sobre a exceção não constitui outro defeito."
+ }
+}

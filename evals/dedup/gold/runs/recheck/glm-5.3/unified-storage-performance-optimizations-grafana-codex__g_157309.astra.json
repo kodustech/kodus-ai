@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_b1fa092d",
+   "s_b3fa293f"
+  ],
+  "bundles": [
+   "s_b3fa293f"
+  ],
+  "reasoningPt": "S1 aponta a colisão com um diretório Bleve existente, que passa a impedir a inicialização do servidor. S4 começa pelo bloqueio do construtor durante a construção completa dos índices e também relata falhas de indexação tornando a construção fatal, por isso é um bundle. Os defeitos principais exigem correções diferentes: tratar o diretório existente não elimina o bloqueio descrito em S4."
+ }
+}

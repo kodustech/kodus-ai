@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Single-request duplicates: addGuests.schema.ts:3-6 accepts repeated emails, and addGuests.handler.ts:74-78 does not dedupe the incoming array before createMany."
+   },
+   {
+    "id": "F2",
+    "description": "Concurrent-request duplicates: addGuests.handler.ts:26-106 reads attendees, filters, and inserts non-atomically, allowing both requests to insert the same new guest."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c8acf696",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_6180295c",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9e2d0fde",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

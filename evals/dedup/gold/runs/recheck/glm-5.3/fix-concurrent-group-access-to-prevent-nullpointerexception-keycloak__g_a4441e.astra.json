@@ -1,0 +1,26 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_4875e870",
+     "s_77082367",
+     "s_624823a3",
+     "s_af3017dc"
+    ],
+    "defect": "A ausência de join permite que a asserção passe antes de o leitor registrar uma exceção da última leitura em andamento."
+   }
+  ],
+  "unique": [
+   "s_609a1176"
+  ],
+  "bundles": [
+   "s_4875e870",
+   "s_624823a3",
+   "s_af3017dc"
+  ],
+  "reasoningPt": "S2, S4, S6 e S7 têm como defeito principal a asserção executada antes do término do leitor. S8 trata de outro defeito: o teste pode passar sem nenhuma leitura durante as exclusões, o que exige sincronização de início e verificação de execução. S2, S6 e S7 também mencionam problemas adicionais, mas esses acréscimos não alteram seu agrupamento pelo defeito principal."
+ }
+}

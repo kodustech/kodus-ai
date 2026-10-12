@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_07999ed0",
+     "s_87249f18",
+     "s_1412483d"
+    ],
+    "defect": "O fallback traduzido no toast é inalcançável porque a template literal atribuída a message sempre produz uma string não vazia."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S14, S17 e S26 apontam o mesmo fallback inalcançável no mesmo trecho, apenas com diferenças de ênfase e correção proposta. S17 menciona o prefixo do erro como consequência dessa construção, sem apresentar um defeito independente."
+ }
+}

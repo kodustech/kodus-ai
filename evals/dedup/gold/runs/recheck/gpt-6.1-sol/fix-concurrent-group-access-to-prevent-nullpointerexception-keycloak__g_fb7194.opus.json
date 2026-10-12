@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_dc7f347e",
+     "s_3e52a596"
+    ],
+    "defect": "The concurrency test asserts caughtExceptions without joining the reader thread, so exceptions thrown late can be missed and the test can pass."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 apontam o mesmo defeito: o teste verifica caughtExceptions sem fazer join na thread leitora, então exceções tardias podem passar despercebidas. As duas propõem a mesma correção (guardar a Thread, sinalizar o fim e fazer join antes do assert). A menção de S1 à thread que continua rodando em segundo plano faz parte do mesmo problema e é resolvida pela mesma correção."
+ }
+}

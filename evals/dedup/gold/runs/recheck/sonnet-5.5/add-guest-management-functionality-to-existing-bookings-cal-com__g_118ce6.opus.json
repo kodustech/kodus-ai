@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_c03cd3b4",
+     "s_d430022b"
+    ],
+    "defect": "sendAddGuestsEmails receives the raw input guests instead of the filtered uniqueGuests, so filtered-out or existing attendees get the wrong 'scheduled' email."
+   }
+  ],
+  "unique": [
+   "s_72a13bc3"
+  ],
+  "bundles": [
+   "s_c03cd3b4"
+  ],
+  "reasoningPt": "O defeito principal de S3 é o mesmo de S5: o handler passa `guests` em vez de `uniqueGuests` para sendAddGuestsEmails. S3 também cita, com \"Also\", a falta de tratamento de erro em updateCalendarAttendees depois da escrita no banco, mas esse é um defeito secundário e não liga S3 a S10. Por isso S10, que trata só desse problema de atomicidade/tratamento de erro, fica sozinho."
+ }
+}

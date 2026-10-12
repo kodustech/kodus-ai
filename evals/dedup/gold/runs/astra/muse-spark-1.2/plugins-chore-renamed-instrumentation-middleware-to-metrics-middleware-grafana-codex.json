@@ -1,0 +1,73 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "promptSha": "21650e1254e165c21be4373df68230868b36b6e2",
+  "attempt": 1,
+  "ms": 52692,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_95540f88",
+          "s_6e8d004e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "NewMetricsMiddleware reuses a single middleware instance and overwrites its next pointer, causing races and incorrect delegation chains.",
+        "rationale": "Both identify the same captured instance and mutable next assignment. Allocating a separate wrapper for each middleware application resolves both reports."
+      },
+      {
+        "members": [
+          "s_885d47eb",
+          "s_b49c2fba",
+          "s_eecc4a95"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "SubscribeStream, PublishStream and RunStream bypass instrumentContext, leaving streaming requests without the promised contextual logging attributes.",
+        "rationale": "All three report the same omission in the same three streaming methods. The documentation emphasis describes the same coverage gap, and each member already covers the full affected set."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_81101291",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c5051587",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f6f02910",
+        "confidence": "high"
+      },
+      {
+        "id": "s_24d32bf9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bdd6fc85",
+        "confidence": "high"
+      },
+      {
+        "id": "s_84e8afb6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_908dadcd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9e5df605",
+        "confidence": "high"
+      },
+      {
+        "id": "s_05f57306",
+        "confidence": "high"
+      }
+    ]
+  }
+}

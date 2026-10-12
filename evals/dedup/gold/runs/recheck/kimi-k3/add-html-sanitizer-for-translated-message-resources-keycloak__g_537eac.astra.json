@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e3f52c5e",
+     "s_b3a12b46",
+     "s_6a250a7b"
+    ],
+    "defect": "A mesma instrução de configuração de TOTP em italiano foi inserida indevidamente nos bundles lituanos de account e login."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 relatam o mesmo erro repetido em dois arquivos, corrigível substituindo a frase italiana pela tradução lituana em ambos. S5 cobre essas duas ocorrências do mesmo defeito, portanto não é um bundle de defeitos distintos e o grupo deve ser mantido."
+ }
+}

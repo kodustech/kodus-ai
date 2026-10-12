@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7eeb14d4",
+     "s_f0a16222"
+    ],
+    "defect": "absolutize_urls treats protocol-relative URLs (//host/path) as root-relative and rewrites them into broken origin/host/path URLs."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S12 apontam o mesmo defeito: em absolutize_urls, URLs protocol-relative (//host/path) são tratadas como relativas à raiz e viram links quebrados. A correção é a mesma nos dois (ignorar valores que começam com '//'). Os intervalos de linhas são um pouco diferentes, mas isso não muda o defeito, e nenhuma das duas traz um segundo defeito."
+ }
+}

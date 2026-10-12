@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_0a96d57b",
+     "s_84bd5bf4",
+     "s_e0de5ccd",
+     "s_b2100c10"
+    ],
+    "defect": "O valor padrão de queued é calculado na importação, fazendo todas as instâncias compartilharem o mesmo timestamp."
+   },
+   {
+    "members": [
+     "s_34589453",
+     "s_597377f6",
+     "s_4500db00"
+    ],
+    "defect": "to_dict() inclui um datetime bruto nos argumentos enviados ao Celery, causando o problema de serialização JSON relatado."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_597377f6",
+   "s_e0de5ccd",
+   "s_4500db00"
+  ],
+  "reasoningPt": "S1, S4, S5 e S7 têm como defeito principal o timestamp calculado na importação; S2, S3 e S6 começam pelo problema de serialização. São defeitos com correções independentes, portanto o grupo deve ser dividido. S3 e S6 também incluem o timestamp estático, enquanto S5 acrescenta o parsing no retorno do JSON; por isso, S3, S5 e S6 são bundles."
+ }
+}

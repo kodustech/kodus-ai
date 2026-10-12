@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The Google Meet fallback in EventManager reads mainHostDestinationCalendar.integration without optional chaining, so it throws when destinationCalendar is null or empty instead of falling back to Cal Video.",
+    "members": [
+     "s_d4b02182",
+     "s_cf65a107",
+     "s_a77731dd",
+     "s_7d89e4f9",
+     "s_8cb55fd3"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S8, S11, S14 e S15 apontam o mesmo defeito: a falta de optional chaining em mainHostDestinationCalendar.integration no fallback do Google Meet, que lança erro quando destinationCalendar é nulo ou vazio. As diferenças estão só no intervalo de linhas e no detalhamento (S8 e S14 citam o handleNewBooking como origem do null), e a correção é a mesma."
+ }
+}

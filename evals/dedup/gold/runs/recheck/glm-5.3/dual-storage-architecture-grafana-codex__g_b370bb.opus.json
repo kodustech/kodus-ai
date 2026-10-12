@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "Delete returns early on any storage error, including NotFound, so the legacy delete never runs and objects that exist only in legacy storage are left orphaned.",
+    "members": [
+     "s_33a63d8e",
+     "s_912f86cd"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S21 apontam o mesmo defeito nas mesmas linhas (100-105): o Delete retorna cedo em qualquer erro do storage, inclusive NotFound, e por isso não chega a apagar no legacy. As duas propõem a mesma correção, que é deixar o caso NotFound seguir para o delete no legacy. Nenhuma delas traz um segundo defeito."
+ }
+}

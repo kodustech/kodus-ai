@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d788d88a",
+     "s_b93643f2"
+    ],
+    "defect": "The write-lock path does not recheck the cache, causing concurrent non-Dev callers to redundantly rebuild assets after another caller has populated it."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 apontam o mesmo defeito: falta verificar novamente o cache após adquirir o lock de escrita. A mesma correção elimina o trabalho de inicialização redundante descrito pelas duas sugestões, portanto o grupo deve ser mantido."
+ }
+}

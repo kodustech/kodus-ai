@@ -1,0 +1,104 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_cc6b5fef",
+    "mainDefect": "Using && between the team admin and owner checks wrongly denies admins who are not owners.",
+    "secondary": [
+     {
+      "defect": "Any attendee matched by email can add guests, exceeding the organizer/admin permission model.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_66ed9605",
+    "mainDefect": "Case-sensitive existing-attendee deduplication allows differently cased versions of an existing email to be added.",
+    "secondary": [
+     {
+      "defect": "The blacklist comparison allows mixed-case guest emails to bypass blocked addresses.",
+      "coveredBy": [
+       "s_dc76b747",
+       "s_bdaa90a8"
+      ]
+     },
+     {
+      "defect": "Duplicate emails within the submitted guest list are not removed server-side.",
+      "coveredBy": [
+       "s_7a5dc6fd"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c03cd3b4",
+    "mainDefect": "Passing raw guests instead of uniqueGuests to sendAddGuestsEmails incorrectly treats filtered addresses as new guests.",
+    "secondary": [
+     {
+      "defect": "An unhandled calendar update failure after the database write leaves guests persisted while the request returns an error.",
+      "coveredBy": [
+       "s_72a13bc3"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_dc76b747",
+    "mainDefect": "The blacklist comparison allows mixed-case guest emails to bypass blocked addresses.",
+    "secondary": [
+     {
+      "defect": "Case-sensitive existing-attendee deduplication allows differently cased versions of an existing email to be added.",
+      "coveredBy": [
+       "s_66ed9605"
+      ]
+     },
+     {
+      "defect": "The case-sensitive isAttendee comparison fails to recognize attendees whose email casing differs from the user's email.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7a5dc6fd",
+    "mainDefect": "Duplicate emails within the submitted guest list pass filtering and create duplicate attendees.",
+    "secondary": [
+     {
+      "defect": "The blacklist comparison allows mixed-case guest emails to bypass blocked addresses.",
+      "coveredBy": [
+       "s_dc76b747",
+       "s_bdaa90a8"
+      ]
+     },
+     {
+      "defect": "Passing raw guests instead of uniqueGuests to sendAddGuestsEmails incorrectly treats filtered addresses as new guests.",
+      "coveredBy": [
+       "s_c03cd3b4",
+       "s_d430022b"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ddc0673e",
+    "mainDefect": "The always-truthy formatted error string prevents the unable_to_add_guests fallback from running.",
+    "secondary": [
+     {
+      "defect": "The error toast exposes raw tRPC codes to users.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_bd0c0912",
+    "mainDefect": "Using && between the team admin and owner checks requires both roles instead of either role.",
+    "secondary": [
+     {
+      "defect": "The missing you_do_not_have_permission translation can cause the dialog toast to display the raw key.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

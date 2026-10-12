@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_2168dca2",
+    "mainDefect": "MetricAlertDetectorHandler lacks required abstract method implementations, making it abstract and impossible to instantiate.",
+    "secondary": [
+     {
+      "defect": "MetricAlertDetectorHandler does not provide the counter_names attribute required by get_state_data.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

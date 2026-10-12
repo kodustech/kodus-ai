@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The add-guests filter compares the submitted guest email without normalizing its case, so casing variants get past the lowercased blacklist and the existing-attendee check.",
+    "members": [
+     "s_2eda8d39",
+     "s_0f78e9fc",
+     "s_969329e8"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S4 e S8 apontam o mesmo defeito: o e-mail do convidado não é normalizado antes das comparações no filtro de uniqueGuests (linhas 74-78). Normalizar `guest` (trim/lowercase) uma vez resolve tanto o desvio da blacklist quanto a duplicação de participantes. S4 e S8 citam as duas comparações, mas é o mesmo erro repetido no mesmo filtro, então o grupo se mantém."
+ }
+}

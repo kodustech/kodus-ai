@@ -1,0 +1,50 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "getShortcut() documents 3-letter shortcuts, but getTokenContextFromTokenId() requires 2-character grant shortcuts, breaking custom-grant token round-trips."
+   },
+   {
+    "id": "F2",
+    "description": "DefaultTokenContextEncoderProviderFactory.postInit() does not validate grant shortcut lengths."
+   },
+   {
+    "id": "F3",
+    "description": "encodeTokenId() concatenates grant shortcuts without validating their length."
+   },
+   {
+    "id": "F4",
+    "description": "getTokenContextFromTokenId() throws for colon-containing IDs with non-6-character prefixes instead of falling back to UNKNOWN/legacy handling."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_07f54fcf",
+    "covers": [
+     "F1",
+     "F2",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d50d9f26",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_f0bbf95c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

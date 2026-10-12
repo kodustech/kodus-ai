@@ -253,6 +253,8 @@ ${JSON.stringify(judgeView(j2, comp), null, 1)}
         const agg = { model: gold.model, prs: 0, missing: 0, pairs: { n11: 0, n10: 0, n01: 0, n00: 0 }, agreedGroups: 0, components: 0, disputedIds: 0, ids: 0 };
         for (const [caseId, pr] of Object.entries(gold.prs)) {
             if (prs.length && !prs.includes(caseId)) continue;
+            // Human-reviewed PRs keep their reviewed labels.
+            if (!flag('include-reviewed') && (pr.groups.some((g) => g.humanReview) || Object.keys(pr.humanReviewUnique || {}).length)) continue;
             const A = readJson(path.join(RUNS, 'opus', gold.model, `${caseId}.json`))?.answer;
             const B = readJson(path.join(RUNS, 'astra', gold.model, `${caseId}.json`))?.answer;
             if (!A || !B) {
@@ -315,13 +317,14 @@ ${JSON.stringify(judgeView(j2, comp), null, 1)}
             partial.push(...(ans.partialOverlap || []));
         }
         // Human overrides (human-overrides.json) win over judges and arbiter.
-        for (const ov of OVERRIDES.filter((o) => o.model === r.model && o.caseId === r.caseId)) {
+        for (const ov of OVERRIDES.filter((o) => o.model === r.model && o.caseId === r.caseId && o.replaceGroup)) {
             const i = groups.findIndex((g) => key(g.members) === key(ov.replaceGroup));
             if (i < 0) {
                 console.log(`override not applied (group not found): ${r.model} ${r.caseId}`);
                 continue;
             }
             groups.splice(i, 1, ...ov.with.map((w) => ({ members: w.members.slice().sort(), kind: w.kind, needsUnifiedComment: w.needsUnifiedComment, confidence: 'high', defect: w.defect, votes: { opus: pa.groups[key(w.members)] ? 'same' : 'different', astra: pb.groups[key(w.members)] ? 'same' : 'different' }, resolvedBy: 'human', humanNote: ov.note })));
+            for (const id of ov.unique || []) uniqueConfidence[id] = 'high';
         }
         groups.forEach((g) => (g.groupId = `g_${sha(g.members.join('|')).slice(0, 6)}`));
         const gOf = {};
@@ -333,6 +336,9 @@ ${JSON.stringify(judgeView(j2, comp), null, 1)}
             s.groupId = g ? g.groupId : null;
             s.needsUnifiedComment = g ? g.needsUnifiedComment : false;
             s.partialOverlapWith = partial.filter((p) => p.container === s.id || p.contained === s.id).map((p) => (p.container === s.id ? p.contained : p.container));
+            const bundles = OVERRIDES.some((o) => o.model === r.model && o.caseId === r.caseId && (o.bundles || []).includes(s.id));
+            if (bundles) s.bundlesDefects = true;
+            else delete s.bundlesDefects;
         }
         pr.groups = groups;
         pr.uniqueConfidence = uniqueConfidence;

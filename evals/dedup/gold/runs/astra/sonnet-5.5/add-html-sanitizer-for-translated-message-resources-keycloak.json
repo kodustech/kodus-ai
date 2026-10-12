@@ -1,0 +1,56 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "promptSha": "2963a409ab46af736461d177ecd2562468cccd8e",
+  "attempt": 1,
+  "ms": 44006,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0b9e8b6a",
+          "s_a8060ba7",
+          "s_ee4e0e15",
+          "s_f60fe56a",
+          "s_732d5528"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Italian text replaces Lithuanian TOTP instructions in both the account totpStep1 and login loginTotpStep1 entries.",
+        "rationale": "All report the same wrong-language replacement, repeated in two bundles that each need correction. Several members explicitly report both locations, linking the account-only and login-only reports."
+      },
+      {
+        "members": [
+          "s_72e92533",
+          "s_0015f314",
+          "s_6df080eb",
+          "s_3a0628fc"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The zh_CN account totpStep1 entry uses Traditional Chinese instead of Simplified Chinese.",
+        "rationale": "All describe the same Chinese translation regression. The abbreviated report uses an imprecise filename, but its key and described problem identify the same changed entry."
+      },
+      {
+        "members": [
+          "s_c92095be",
+          "s_a5279db6"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Independent prefix and suffix scans can overlap, causing substring extraction to throw StringIndexOutOfBoundsException.",
+        "rationale": "Both identify the same missing suffix bound in the diagnostic code, with the same example and equivalent fixes."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_6de14c0c",
+        "confidence": "high"
+      }
+    ]
+  }
+}

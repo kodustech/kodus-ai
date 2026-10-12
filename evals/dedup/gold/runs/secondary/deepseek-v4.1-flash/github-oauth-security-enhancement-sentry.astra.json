@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_faf6b973",
+    "mainDefect": "The sender metadata lookup can raise KeyError when sender is absent, causing a 500 instead of a graceful verification failure.",
+    "secondary": [
+     {
+      "defect": "The case-sensitive login comparison can reject a legitimate installer whose GitHub login differs only in case.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8ab7e647",
+    "mainDefect": "The test omits OAuth mocks, so it exits through an OAuth error before exercising the missing-installation handling.",
+    "secondary": [
+     {
+      "defect": "The assertion checks an error message shared by multiple failure branches, so it cannot establish that the missing-installation branch ran.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,97 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "ba5ed0ec5b6d3f5d896f0f34a5e29987f34585ef",
+  "attempt": 1,
+  "ms": 63678,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0c7af5ab",
+          "s_d12e4569",
+          "s_e88e59a8",
+          "s_9e022e40"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "A null destinationCalendar makes the optional push discard collective hosts' calendars when the organizer and event type have no destination calendar.",
+        "rationale": "All four describe the same initialization and short-circuited append; initializing the array fixes every report."
+      },
+      {
+        "members": [
+          "s_95ab9d87",
+          "s_36261396",
+          "s_9d791452",
+          "s_37a0f1ff",
+          "s_9e599887",
+          "s_bf39d0e8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Reading mainHostDestinationCalendar.integration without a null check crashes Google Meet bookings with no destination calendar.",
+        "rationale": "Each report identifies the same unchecked property access and the same missing Cal Video fallback."
+      },
+      {
+        "members": [
+          "s_f9e00249",
+          "s_e5148fc6"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The organization slug assignment inverts the billing condition, omitting slugs without billing and assigning them prematurely with billing.",
+        "rationale": "Both identify the same removed negation and require the same correction."
+      },
+      {
+        "members": [
+          "s_4aa5d124",
+          "s_3c85c91e",
+          "s_e4393123",
+          "s_93595c3f"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Google updateEvent and deleteEvent search destination calendars using an already-falsy externalCalendarId, losing the destination fallback in both methods.",
+        "rationale": "All four report the same invalid fallback lookup repeated in update and delete. Both locations require correction."
+      },
+      {
+        "members": [
+          "s_cd578af7",
+          "s_94084073"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Office365, Lark, and CalDAV creation select the first host's destination calendar instead of the destination belonging to the active credential.",
+        "rationale": "Both report incorrect credential-to-destination selection in Office365 and Lark; s_cd578af7 additionally reports the same mistake in CalDAV. The merged comment must preserve all affected implementations."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_49fe4e42",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e4fc8c56",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d3b8ca91",
+        "confidence": "high"
+      },
+      {
+        "id": "s_97a87a12",
+        "confidence": "high"
+      },
+      {
+        "id": "s_fc410596",
+        "confidence": "high"
+      }
+    ]
+  }
+}

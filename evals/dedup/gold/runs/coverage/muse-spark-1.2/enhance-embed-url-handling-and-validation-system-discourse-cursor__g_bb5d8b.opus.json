@@ -1,0 +1,42 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "TopicEmbed.import line 13: `contents << ...` on nil contents raises NoMethodError"
+   },
+   {
+    "id": "F2",
+    "description": "import_remote (line 52): Readability doc.content/title can be nil and is passed to import unguarded"
+   },
+   {
+    "id": "F3",
+    "description": "import_remote (line 48): open(url).read has no rescue, so network errors crash the RetrieveTopic job"
+   },
+   {
+    "id": "F4",
+    "description": "Line 13: `<<` changes the caller's string in place and raises on frozen input (FrozenError)"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c7cf0d7d",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8924c5ce",
+    "covers": [
+     "F1",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

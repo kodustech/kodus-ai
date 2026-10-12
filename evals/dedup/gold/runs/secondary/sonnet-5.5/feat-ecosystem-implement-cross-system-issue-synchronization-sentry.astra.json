@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_1de4d23b",
+    "mainDefect": "The queued default is evaluated at import time, giving every AssignmentSource instance the same stale timestamp.",
+    "secondary": [
+     {
+      "defect": "The test only asserts that queued is not None, so it cannot detect the stale timestamp defect.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_428c1b8f",
+    "mainDefect": "The queued default is evaluated at import time, giving every AssignmentSource instance the same stale timestamp.",
+    "secondary": [
+     {
+      "defect": "A datetime in to_dict() would break serialization if Celery were switched from pickle to JSON.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,62 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "account-ui messages_en.properties:188 changes error-invalid-multivalued-size to single-brace/choice syntax incompatible with frontend interpolation."
+   },
+   {
+    "id": "F2",
+    "description": "admin-ui messages_en.properties:3138 changes error-invalid-multivalued-size to single-brace/choice syntax incompatible with frontend interpolation."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_b29c946a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d0c68d28",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_3a1c7eb0",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a4b43d5c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_e7dee35f",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_83a004e9",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

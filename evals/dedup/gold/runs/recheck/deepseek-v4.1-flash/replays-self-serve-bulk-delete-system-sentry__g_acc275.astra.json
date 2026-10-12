@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1bfd1481",
+     "s_a4288eef"
+    ],
+    "defect": "A nova ramificação habilitada pela feature flag passa colunas e dados vazios ao TableWidgetVisualization, ocultando os resultados reais do widget."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S6 relatam o mesmo defeito na mesma ramificação: o uso de valores vazios fixos no lugar dos resultados da consulta. A mesma correção resolve ambas; a diferença no caminho informado por S6 não caracteriza outro defeito."
+ }
+}

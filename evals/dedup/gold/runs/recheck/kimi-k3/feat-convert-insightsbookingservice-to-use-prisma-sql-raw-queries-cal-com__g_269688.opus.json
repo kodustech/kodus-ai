@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1ed631f1",
+     "s_1bd86873"
+    ],
+    "defect": "InsightsBookingServicePublicOptions makes teamId optional for scope 'team', so invalid input now type-checks, fails safeParse at runtime and silently degrades to a 1=0 empty result."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 apontam o mesmo defeito nas mesmas linhas (29-34): o novo tipo público deixa teamId opcional para scope \"team\". Com isso, uma entrada inválida passa na checagem de tipos e falha no safeParse, e as consultas passam a retornar vazio (1=0) sem nenhum aviso. As duas propõem a mesma correção (união discriminada ou mostrar o erro de validação), então o grupo fica como está."
+ }
+}

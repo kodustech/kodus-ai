@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a221d835",
+     "s_a34eab52"
+    ],
+    "defect": "A mesma frase em italiano foi inserida nas instruções de configuração de TOTP dos bundles lituanos de account e login."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S3 apontam a mesma tradução incorreta repetida em dois arquivos. Substituir a frase italiana pela tradução lituana nos dois locais resolve o defeito com uma única substituição repetida."
+ }
+}

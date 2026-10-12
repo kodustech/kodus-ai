@@ -1,0 +1,50 @@
+{
+ "s_1e0e2076": {
+  "summaryPt": "totpCode fictício permite que login com backupCode ignore a verificação de senha",
+  "contentPt": "O QUÊ: A verificação de senha é ignorada quando qualquer totpCode é informado (`if (user.password && !credentials.totpCode)`), então enviar um backupCode válido + um totpCode fictício contorna a checagem de senha. POR QUÊ: Um atacante pode chamar authorize com senha errada, backupCode correto e `totpCode:\"000000\"` - o guard `!credentials.totpCode` é falso, então verifyPassword não é executado, e então o branch `if (user.twoFactorEnabled && credentials.backupCode)` é bem-sucedido e realiza o login. COMO: Sempre verifique a senha quando `user.password` existir, independentemente da presença de totpCode/backupCode, ou exija senha e segundo fator de forma independente (ex.: `if (user.password) await verifyPassword(...)`)."
+ },
+ "s_67024520": {
+  "summaryPt": "Backup codes em maiúsculas são rejeitados incorretamente devido à comparação case-sensitive",
+  "contentPt": "O QUÊ: A verificação do backup code é case-sensitive (apenas `replaceAll(\"-\",\"\")`), enquanto os códigos gerados são hex em minúsculas (`crypto.randomBytes(5).toString(\"hex\")` em setup.ts:61). POR QUÊ: Um usuário que digita `ABCDE-FGHIJ` ou cola em maiúsculas a partir de um e-mail falha no indexOf mesmo que o código seja válido, causando o erro incorrect_backup_code e bloqueando o disable/login. COMO: Normalize ambos os lados: `req.body.backupCode.replaceAll(\"-\",\"\").toLowerCase()` e o mesmo em next-auth-options.ts:144."
+ },
+ "s_cf0c790d": {
+  "summaryPt": "Uso concorrente do mesmo backup code pode ter sucesso duas vezes; buracos de null se acumulam",
+  "contentPt": "O QUÊ: O consumo do backup code faz read-modify-write não atômico e define a entrada como null (`backupCodes[index]=null`) sem filtrar, permitindo reutilização por race. POR QUÊ: Dois logins concorrentes com o mesmo backupCode leem o array antes de qualquer um escrever, ambos passam no `indexOf` e ambos têm sucesso; o array então se enche de nulls e `indexOf` posteriores sempre falham, mas nunca retornam MissingBackupCodes. COMO: Use update atômico ou transaction/optimistic lock, e filtre os nulls: `backupCodes.splice(index,1)` ou `backupCodes.filter(Boolean)` antes de re-criptografar, e trate o caso de todos nulls como ausente."
+ },
+ "s_522c099e": {
+  "summaryPt": "A checagem de backup code usa indexOf/=== (timing leak) — use comparação em tempo constante.",
+  "contentPt": "A comparação direta de strings dos backup codes vaza informação de timing via indexOf/===. Use comparação em tempo constante sobre todos os códigos armazenados e normalize o case do hex. Sem isso, um atacante com medição de timing na rede pode enumerar os backup codes hex de 10 caracteres."
+ },
+ "s_76e752b3": {
+  "summaryPt": "A checagem de backup code no disable-2FA usa indexOf com variação de timing — use comparação em tempo constante.",
+  "contentPt": "Mesmo timing leak do fluxo de login: indexOf com === nos backup codes permite um timing oracle. Itere sobre todos os códigos com crypto.timingSafeEqual e normalize para minúsculas antes de comparar."
+ },
+ "s_cff9c2f8": {
+  "summaryPt": "O teste de download do backup code só verifica o nome do arquivo, passaria com arquivo vazio/quebrado.",
+  "contentPt": "A asserção do download é frouxa demais para falhar: ela só verifica suggestedFilename. Se backupCodes estivesse vazio, malformado, ou se a criação do Blob em EnableTwoFactorModal.tsx:95-99 falhasse, o download ainda teria o mesmo nome de arquivo e o teste passaria. Adicione verificação de conteúdo: leia o download, valide que o arquivo contém 10 códigos que casam com o formato /^\\w{5}-\\w{5}$/ e que correspondem aos códigos exibidos."
+ },
+ "s_dcb2c8bc": {
+  "summaryPt": "O teste de cópia do backup code só verifica o toast, não o conteúdo do clipboard.",
+  "contentPt": "A asserção de cópia apenas espera pelo toast, nunca verifica o clipboard. Se navigator.clipboard.writeText em EnableTwoFactorModal.tsx:278 falhasse ou escrevesse dados errados, o toast-success ainda apareceria e o teste passaria. Valide que o conteúdo do clipboard corresponde aos backup codes exibidos."
+ },
+ "s_59a5b68c": {
+  "summaryPt": "DisplayBackupCodes reutiliza a instrução do campo de entrada em vez de uma instrução de salvamento",
+  "contentPt": "A descrição de DisplayBackupCodes reutiliza t(\"backup_code_instructions\") ('Each backup code can be used exactly once...'), que documenta o campo de entrada de um único código. A etapa DisplayBackupCodes mostra uma grade de 10 códigos gerados para salvar/copiar/baixar — precisa de uma key dedicada (ex.: backup_codes_save_instructions / 2fa_save_backup_codes). Reutilizar a instrução de entrada descreve mal a etapa e mostra conteúdo errado para o usuário."
+ },
+ "s_32e6b195": {
+  "summaryPt": "Keys de locale adicionadas apenas ao arquivo em inglês, ausentes nos outros locales",
+  "contentPt": "7 novas keys visíveis ao usuário foram adicionadas apenas em en/common.json (backup_code, backup_codes, backup_code_instructions, backup_codes_copied, incorrect_backup_code, lost_access, missing_backup_codes). O código ao redor usa t() em todo lugar, então os outros locales em apps/web/public/static/locales/*/common.json não terão essas keys e farão fallback para inglês ou mostrarão as keys cruas. Sincronize as keys em todos os arquivos de locale ou garanta que o pipeline de extração as crie."
+ },
+ "s_bca7ea55": {
+  "summaryPt": "O login com backup code faz read-modify-write não atômico, permitindo reutilização concorrente de um código de uso único",
+  "contentPt": "A verificação do backup code é um read-modify-write sem atomicidade. Duas chamadas concorrentes de authorize() com o mesmo backupCode leem o mesmo array descriptografado antes de qualquer uma escrever, ambas encontram o mesmo index e ambas têm sucesso, reutilizando um código de uso único. Envolva o read-check-update em uma transaction (ou use uma condição WHERE atômica / optimistic lock / SELECT FOR UPDATE) para que a segunda requisição concorrente releia após o commit da primeira e veja o index -1."
+ },
+ "s_7ae83abd": {
+  "summaryPt": "disable() adicionou o parâmetro obrigatório backupCode, quebrando chamadores de 2 argumentos; deveria ser opcional",
+  "contentPt": "Torne o novo parâmetro backupCode opcional (`backupCode?: string`) em vez de obrigatório. Isso preserva o contrato pré-PR `disable(password, code)` para chamadores existentes, ao mesmo tempo que permite que o chamador atualizado em DisableTwoFactorModal passe o backup code no modo lost-access. Um parâmetro obrigatório força todo chamador a atualizar mesmo quando só usa TOTP."
+ },
+ "s_ee83b27a": {
+  "summaryPt": "Componente declarado como TwoFactor em BackupCode.tsx não corresponde ao arquivo e à finalidade",
+  "contentPt": "O identificador exportado discorda do arquivo e da UI: `export default function TwoFactor` está em BackupCode.tsx e renderiza um campo de backup code (t(\"backup_code\")). Renomeie para `BackupCode` para corresponder ao nome do arquivo, ao alias de import (`import BackupCode from \"@components/auth/BackupCode\"`) e ao conteúdo exibido. A divergência confunde chamadores e documentação."
+ }
+}

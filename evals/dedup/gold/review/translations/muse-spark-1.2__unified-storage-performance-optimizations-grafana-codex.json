@@ -1,0 +1,14 @@
+{
+ "s_4cfadd1d": {
+  "summaryPt": "Lock de granularidade mais fina remove a serialização e expõe race de cache via TotalDocs e builds duplicados da mesma chave",
+  "contentPt": "O QUÊ: Remover o lock externo cacheMu em BuildIndex enquanto TotalDocs itera b.cache sem lock cria uma data race, e builds concorrentes da mesma chave podem duplicar trabalho e colidir no diretório de arquivos. POR QUÊ: TotalDocs lê o map sem RLock enquanto BuildIndex escreve sob Lock apenas no final, causando crash sob o race detector e vazamento de índices; thundering-herd em getOrCreateIndex para uma chave fria constrói o mesmo índice N vezes. CORREÇÃO: Mantenha o paralelismo de granularidade fina, mas adicione RLock em TotalDocs e em qualquer iteração do cache, e adicione singleflight por chave ou check-then-build sob lock para a mesma chave."
+ },
+ "s_53aa8e91": {
+  "summaryPt": "Lock reduzido permite builds concorrentes do mesmo índice em race na criação de arquivo e no builder",
+  "contentPt": "Race causada pela redução do escopo de cacheMu: BuildIndex não mantém mais o lock durante bleve.New + execução do builder, apenas na escrita final do cache. BuildIndex(key) concorrentes para a mesma chave podem ambos criar o mesmo diretório de índice de arquivo e ambos popular, levando a erros 'index already exists'/de lock, trabalho duplicado e cache com last-writer-wins. Mantenha o lock amplo ou use singleflight/mutex por chave para que a mesma chave seja construída uma só vez enquanto chaves diferentes podem ser construídas em paralelo."
+ },
+ "s_6f655174": {
+  "summaryPt": "BuildIndex perdeu a garantia de serialização; chamadores concorrentes agora entram em race na criação do diretório",
+  "contentPt": "BuildIndex não mantém mais cacheMu durante todo o build. Antes, `b.cacheMu.Lock()` na entrada serializava todos os builds. Agora há apenas `b.cacheMu.Lock()` em volta do `b.cache[key]=idx` final — BuildIndex concorrentes para o mesmo NamespacedResource entram em race em bleve.New(dir) (ramificação file vs mem), duplicam trabalho, vazam índices e duplicam métricas. O chamador searchSupport.init dispara builds concorrentes via errgroup (initWorkers) e getOrCreateIndex pode disparar builds em paralelo — eles dependiam da serialização. Restaure a seção crítica completa ou adicione double-checked locking / singleflight por chave."
+ }
+}

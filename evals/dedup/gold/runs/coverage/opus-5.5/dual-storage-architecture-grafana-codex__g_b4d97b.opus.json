@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create, line 45: a Storage.Create failure is recorded with recordLegacyDuration instead of recordStorageDuration"
+   },
+   {
+    "id": "F2",
+    "description": "Update, line 129: a Storage.Update failure is recorded with recordLegacyDuration instead of recordStorageDuration"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_9977cb66",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ef1efee6",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_74e86eb7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

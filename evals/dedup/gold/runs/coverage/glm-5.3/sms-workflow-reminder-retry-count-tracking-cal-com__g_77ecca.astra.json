@@ -1,0 +1,47 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Catch block at lines 189–197 counts transient or unrelated errors toward retryCount, causing premature reminder deletion."
+   },
+   {
+    "id": "F2",
+    "description": "Catch block counts DB update failures after successful Twilio scheduling, causing duplicate scheduling and orphaned, uncancellable SMS messages."
+   },
+   {
+    "id": "F3",
+    "description": "Else branch at lines 178–187 counts falsy scheduleSMS results from temporarily locked or quota-limited accounts, permanently deleting pending reminders."
+   },
+   {
+    "id": "F4",
+    "description": "deleteMany retryCount branch at lines 38–42 lacks method: SMS scope."
+   },
+   {
+    "id": "F5",
+    "description": "deleteMany retryCount branch at lines 38–42 lacks a scheduled: false filter, allowing deletion of scheduled reminders."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_4d254d59",
+    "covers": [
+     "F1",
+     "F2",
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ad72bd96",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

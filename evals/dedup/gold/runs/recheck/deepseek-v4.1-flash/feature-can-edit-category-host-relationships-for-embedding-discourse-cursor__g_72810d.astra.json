@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_dfb530f5",
+     "s_0b85e8b9",
+     "s_b3a7894c"
+    ],
+    "defect": "O callback before_validation chama sub! em host sem proteger contra nil, causando NoMethodError antes da validação de formato."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S6 e S10 descrevem o mesmo defeito no mesmo callback: um host nil provoca erro antes da validação. As referências ao controller explicam como o problema ocorre, e as correções propostas resolvem a mesma falha; nenhuma sugestão inclui outro defeito."
+ }
+}

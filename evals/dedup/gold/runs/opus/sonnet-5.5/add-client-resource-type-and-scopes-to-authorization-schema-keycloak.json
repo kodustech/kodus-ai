@@ -1,0 +1,74 @@
+{
+  "judge": "opus",
+  "model": "sonnet-5.5",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "5e2a7be066f860747e519965fefea5f2ed2e0197",
+  "attempt": 1,
+  "ms": 13974,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 36839,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 693,
+    "output_tokens_details": {
+      "thinking_tokens": 243
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 36839,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 693,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 36839,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 36839
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.30873839999999997,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_8758638b",
+          "s_a2452e35",
+          "s_583e834c",
+          "s_1aab7b37"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "ClientPermissionsV2 throws UnsupportedOperationException from isPermissionsEnabled/setPermissionsEnabled (and related methods). Existing callers still invoke these methods unconditionally: the ClientResource management-permissions endpoints and token exchange fail with HTTP 500, and the ClientRemovedEvent listener in AdminPermissions throws on client deletion when V2 is active.",
+        "rationale": "All four report the same V2 methods throwing to callers that invoke them unconditionally. s_8758638b covers both the ClientResource endpoint and the removal-listener paths, which links the endpoint-focused s_a2452e35 to the listener-focused s_583e834c and s_1aab7b37."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_c82368a3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_568085fd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2edb1678",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GetWebAssets doesn't check the cache again after entryPointAssetsCacheMu.Lock() (line 48), so every waiting caller repeats the load and overwrites the cache"
+   },
+   {
+    "id": "F2",
+    "description": "A transient read error from a losing waiter writes nil over a valid cached entry, so callers get an error even though the cache was populated"
+   },
+   {
+    "id": "F3",
+    "description": "The exclusive lock stays held during readWebAssetsFromFile/CDN I/O, so all cache misses run one after another"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0d3625df",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_505b8655",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

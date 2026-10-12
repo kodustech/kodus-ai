@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e5148fc6",
+     "s_f9e00249"
+    ],
+    "defect": "In create.handler.ts, the slug condition was inverted when the code dropped the `!` from `IS_TEAM_BILLING_ENABLED`, so the slug is now set when billing is enabled instead of when it is disabled."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S20 apontam o mesmo defeito na mesma linha 151 de create.handler.ts: a negação de IS_TEAM_BILLING_ENABLED foi removida e a condição do slug ficou invertida. As duas propõem a mesma correção, `!IS_TEAM_BILLING_ENABLED ? { slug } : {}`. A menção ao requestedSlug é só consequência do mesmo erro, não um segundo defeito, então o grupo fica como está."
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_99672758",
+     "s_ee27a71c",
+     "s_7b3553a9"
+    ],
+    "defect": "The client-side size check now applies a fixed 10MB limit to every upload type instead of the per-type site setting, so attachment limits no longer match what the server enforces."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_ee27a71c"
+  ],
+  "reasoningPt": "S3, S11 e S20 apontam o mesmo defeito principal: o limite fixo de 10MB no cliente ignora max_attachment_size_kb e fica diferente do limite que o servidor aplica. Os três propõem a mesma correção: manter os 10MB só para imagens e usar a configuração do site para os outros tipos. S11 acrescenta no fim que a mensagem de erro mostra o limite errado, então é um bundle, mas continua no grupo pelo defeito principal."
+ }
+}

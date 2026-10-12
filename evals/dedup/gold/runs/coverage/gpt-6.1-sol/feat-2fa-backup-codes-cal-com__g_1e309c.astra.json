@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "disable.ts:61: Backup-code verification uses non-constant-time indexOf, leaking comparison timing."
+   },
+   {
+    "id": "F2",
+    "description": "next-auth-options.ts:144: Backup-code login uses non-constant-time indexOf with early exit, leaking comparison timing."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_9602943b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ed0e31d7",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

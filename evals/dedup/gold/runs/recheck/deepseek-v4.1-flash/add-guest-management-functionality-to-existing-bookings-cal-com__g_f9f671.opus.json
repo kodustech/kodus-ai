@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The addGuests handler passes the unfiltered guests input to sendAddGuestsEmails instead of uniqueGuests, so guests that were filtered out (existing attendees or blacklisted emails) are treated as new guests when the emails are chosen.",
+    "members": [
+     "s_134d295f",
+     "s_9df70657"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S10 e S11 apontam o mesmo defeito no mesmo trecho (linhas 167-171): o handler chama sendAddGuestsEmails com a lista bruta guests em vez de uniqueGuests. Por isso, quem já era participante pode receber o e-mail errado. As duas propõem a mesma correção, passar uniqueGuests, e nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

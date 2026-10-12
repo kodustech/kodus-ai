@@ -1,0 +1,85 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "addGuests.handler.ts:76 compares existing attendee emails case-sensitively, allowing case-variant duplicates."
+   },
+   {
+    "id": "F2",
+    "description": "addGuests.schema.ts:5 and addGuests.handler.ts:74-78 lack server-side uniqueness enforcement within the submitted guest array."
+   },
+   {
+    "id": "F3",
+    "description": "AddGuestsDialog.tsx:26-29 checks uniqueness case-sensitively, accepting case-variant duplicates."
+   },
+   {
+    "id": "F4",
+    "description": "addGuests.handler.ts:77 compares raw guest emails against the lowercased blacklist, allowing case-variation bypasses."
+   },
+   {
+    "id": "F5",
+    "description": "addGuests.handler.ts:92-106 leaves potential Prisma unique-constraint errors unhandled."
+   },
+   {
+    "id": "F6",
+    "description": "addGuests.handler.ts:26-106 has a check-then-write race allowing concurrent requests to insert the same guest."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_17395beb",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7d8e5cc8",
+    "covers": [
+     "F1",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0b97f8ef",
+    "covers": [
+     "F2",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bcca7cc3",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_400ea655",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c4f90580",
+    "covers": [
+     "F2",
+     "F5",
+     "F6"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

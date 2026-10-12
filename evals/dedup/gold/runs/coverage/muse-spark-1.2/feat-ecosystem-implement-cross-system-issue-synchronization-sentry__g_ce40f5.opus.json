@@ -1,0 +1,67 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "AssignmentSource.queued default timezone.now() runs once at import time, so all instances share the same stale timestamp (assignment_source.py line 18)"
+   },
+   {
+    "id": "F2",
+    "description": "to_dict() returns a raw datetime (queued) that Celery's JSON serialization of the apply_async kwargs in sync_group_assignee_outbound cannot handle"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_34589453",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_84bd5bf4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b2100c10",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0a96d57b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4500db00",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_e0de5ccd",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_597377f6",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,242 @@
+<title>Rechecagem de grupos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: queue of PRs on the left; on the right, each questioned group with the two split proposals side by side. */
+:root {
+  --bg: #f6f7f8; --panel: #ffffff; --fg: #1d2329; --muted: #5f6b76; --line: #dde2e7;
+  --accent: #0f6e74; --accent-soft: #e2f0f0;
+  --good: #2f7d32; --good-soft: #e5f2e5; --warn: #9a6a00; --warn-soft: #fbf1d9; --bad: #b3261e; --bad-soft: #f9e3e1;
+  --code-bg: #f0f2f4;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #13171b; --panel: #1b2126; --fg: #e3e7eb; --muted: #95a1ac; --line: #2c343b;
+  --accent: #5cc2c8; --accent-soft: #1d3436;
+  --good: #7cc47f; --good-soft: #1e2f1f; --warn: #e0b54f; --warn-soft: #33291a; --bad: #f08b83; --bad-soft: #3a2220;
+  --code-bg: #232a30; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #13171b; --panel: #1b2126; --fg: #e3e7eb; --muted: #95a1ac; --line: #2c343b;
+  --accent: #5cc2c8; --accent-soft: #1d3436;
+  --good: #7cc47f; --good-soft: #1e2f1f; --warn: #e0b54f; --warn-soft: #33291a; --bad: #f08b83; --bad-soft: #3a2220;
+  --code-bg: #232a30; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
+.wrap { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; padding-inline: 16px; padding-block: 16px; max-width: 1400px; margin: 0 auto }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr) } aside { position: static !important; max-height: none !important } }
+aside { position: sticky; top: env(safe-area-inset-top, 0px); align-self: start; max-height: calc(100vh - 32px); overflow: auto; display: flex; flex-direction: column; gap: 12px }
+h1 { font-size: 18px; font-weight: 600; margin: 0; text-wrap: balance }
+.sub { color: var(--muted); font-size: 12.5px }
+.progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden }
+.progress > i { display: block; height: 100%; background: var(--accent) }
+.filters { display: flex; flex-wrap: wrap; gap: 6px }
+select, textarea, button { font: inherit; color: var(--fg) }
+select { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px }
+.queue { display: flex; flex-direction: column; gap: 2px }
+.qi { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; text-align: left; background: none; border: 1px solid transparent; border-radius: 6px; padding: 6px 8px; cursor: pointer }
+.qi:hover { background: var(--panel) }
+.qi[aria-current="true"] { background: var(--panel); border-color: var(--line) }
+.qi .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px }
+.qi .m { font-size: 11px; color: var(--muted) }
+.qi .c { font: 500 11.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; align-self: center }
+.qi .c.done { color: var(--good) }
+main { min-width: 0; display: flex; flex-direction: column; gap: 14px }
+.head h2 { font-size: 16px; margin: 0; font-weight: 600; overflow-wrap: anywhere }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
+.chip { font: 500 11px var(--mono); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap }
+.chip.bad { color: var(--bad); background: var(--bad-soft); border-color: transparent }
+.chip.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent }
+.chip.good { color: var(--good); background: var(--good-soft); border-color: transparent }
+.chip.acc { color: var(--accent); background: var(--accent-soft); border-color: transparent }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; border-left: 3px solid var(--accent) }
+.card.done { border-left-color: var(--good) }
+.card h3 { margin: 0; font-size: 14px; font-weight: 600; text-wrap: balance }
+.sec { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600 }
+.sugs { display: flex; flex-direction: column; gap: 8px }
+.sug { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+.sug .loc { font: 12px var(--mono); color: var(--muted); overflow-wrap: anywhere }
+.lab { font: 600 12px var(--mono); color: var(--accent) }
+.sug .sum { font-weight: 500 }
+.sug details summary { cursor: pointer; color: var(--muted); font-size: 12.5px }
+.sug details[open] summary { color: var(--accent) }
+.sug pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 var(--mono); background: var(--code-bg); padding: 8px; border-radius: 6px; margin: 6px 0 0; max-height: 420px; overflow: auto }
+.props { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px }
+.prop { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 13px }
+.prop.split { background: var(--warn-soft); border-color: var(--warn) }
+.prop ul { margin: 0; padding-left: 18px }
+.decide { display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed var(--line); padding-top: 10px }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 5px 12px; cursor: pointer }
+.btn:hover { border-color: var(--muted) }
+.btn.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent) }
+.btn.primary { background: var(--accent); color: var(--panel); border-color: var(--accent) }
+.btn:disabled { opacity: .45; cursor: default }
+.btn:focus-visible, select:focus-visible, textarea:focus-visible, .qi:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+textarea { width: 100%; min-height: 54px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; resize: vertical }
+.status { font-size: 12px; color: var(--muted) }
+.empty { color: var(--muted); padding: 40px 0; text-align: center }
+.banner { background: var(--warn-soft); color: var(--warn); padding: 8px 12px; border-radius: 8px; font-size: 13px }
+.rule { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13px; color: var(--muted) }
+.rule strong { color: var(--fg) }
+</style>
+
+<div class="wrap">
+  <aside>
+    <div>
+      <h1>Rechecagem de grupos</h1>
+      <div class="sub">Grupos em que o Opus ou o Astra propõem separar alguma sugestão pela regra do defeito principal.</div>
+    </div>
+    <div class="progress" aria-hidden="true"><i id="bar" style="width:0%"></i></div>
+    <div class="sub" id="count">Carregando…</div>
+    <div class="filters">
+      <select id="fModel" aria-label="Modelo"><option value="">Todos os modelos</option></select>
+      <select id="fWho" aria-label="Quem propõe"><option value="">Qualquer proposta</option><option value="both">Os dois propõem</option><option value="one">Só um propõe</option></select>
+      <select id="fState" aria-label="Situação"><option value="">Tudo</option><option value="pending">Pendentes</option><option value="done">Decididos</option></select>
+    </div>
+    <nav class="queue" id="queue" aria-label="PRs"></nav>
+  </aside>
+  <main id="main"><div class="empty">Carregando as propostas…</div></main>
+</div>
+
+<script>
+const state = { data: null, unit: null, decisions: {}, db: null, me: null, drafts: {} };
+const $ = (s) => document.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else if (v !== false && v != null) n.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return n;
+};
+const docId = (u, it) => `${u.model}__${u.caseId}__${it.groupId}`;
+const WHO = { both: 'os dois propõem separar', opus: 'só o Opus propõe separar', astra: 'só o Astra propõe separar' };
+const CHOICE = { keep: 'manter o grupo', opus: 'proposta do Opus', astra: 'proposta do Astra', other: 'outra divisão' };
+
+function renderQueue() {
+  const d = state.data; if (!d) return;
+  const fm = $('#fModel').value, fw = $('#fWho').value, fs = $('#fState').value;
+  const q = $('#queue'); q.replaceChildren();
+  let total = 0, done = 0;
+  for (const u of d.units) {
+    const n = u.items.length, r = u.items.filter((it) => state.decisions[docId(u, it)]?.choice).length;
+    total += n; done += r;
+    if (fm && u.model !== fm) continue;
+    if (fw === 'both' && !u.items.some((i) => i.who === 'both')) continue;
+    if (fw === 'one' && !u.items.some((i) => i.who !== 'both')) continue;
+    if (fs === 'pending' && r === n) continue;
+    if (fs === 'done' && r < n) continue;
+    q.append(el('button', { class: 'qi', 'aria-current': state.unit === u.key ? 'true' : 'false', onclick: () => { state.unit = u.key; renderQueue(); renderUnit(); } },
+      el('span', {}, el('div', { class: 'm' }, `${u.model} · ${u.repo}`), el('div', { class: 't', title: u.caseId }, u.caseId)),
+      el('span', { class: `c${r === n ? ' done' : ''}` }, `${r}/${n}`)));
+  }
+  $('#bar').style.width = total ? `${(100 * done / total).toFixed(1)}%` : '0%';
+  $('#count').textContent = `${done} de ${total} grupos decididos`;
+}
+
+function sugCard(s, lab) {
+  const summary = s.summaryPt || s.summary;
+  return el('div', { class: 'sug' },
+    el('div', { class: 'row' }, el('span', { class: 'lab' }, lab), el('span', { class: 'loc' }, `${s.file}:${s.start}-${s.end}`), el('span', { class: 'chip' }, s.by)),
+    summary ? el('div', { class: 'sum' }, summary) : null,
+    s.contentPt ? el('details', {}, el('summary', {}, 'Texto completo (pt-BR)'), el('pre', {}, s.contentPt)) : null,
+    s.content ? el('details', {}, el('summary', {}, s.contentPt ? 'Texto original (inglês)' : 'Texto completo da sugestão'), el('pre', {}, s.content)) : null);
+}
+
+function proposal(name, ans, L) {
+  const split = ans.verdict === 'split';
+  return el('div', { class: `prop${split ? ' split' : ''}` },
+    el('div', { class: 'row' }, el('strong', {}, name), el('span', { class: `chip ${split ? 'warn' : 'good'}` }, split ? 'separar' : 'manter')),
+    el('div', {}, ans.reasoningPt),
+    split ? el('ul', {},
+      ...ans.groups.map((g) => el('li', {}, `Grupo: ${g.members.map((m) => L[m] || m).join(' + ')} — ${g.defect}`)),
+      ...ans.unique.map((m) => el('li', {}, `${L[m] || m} sozinha`))) : null,
+    ans.bundles.length ? el('div', { class: 'status' }, `Junta defeitos diferentes: ${ans.bundles.map((m) => L[m] || m).join(', ')}`) : null);
+}
+
+function decisionBlock(u, it) {
+  const id = docId(u, it);
+  const saved = state.decisions[id] || {};
+  const draft = state.drafts[id] || (state.drafts[id] = { choice: saved.choice || '', note: saved.note || '' });
+  const box = el('div', { class: 'decide' });
+  const paint = () => {
+    box.replaceChildren();
+    const opt = (key, label, disabled) => el('button', { class: `btn${draft.choice === key ? ' on' : ''}`, disabled, onclick: () => { draft.choice = key; paint(); } }, label);
+    box.append(el('div', { class: 'row' }, el('span', { class: 'sec' }, 'Decisão'),
+      opt('keep', 'Manter o grupo'),
+      opt('opus', 'Aplicar proposta do Opus', it.opus.verdict !== 'split'),
+      opt('astra', 'Aplicar proposta do Astra', it.astra.verdict !== 'split'),
+      opt('other', 'Outra divisão')));
+    const ta = el('textarea', { id: `${id}-note`, placeholder: draft.choice === 'other' ? 'Descreva a divisão (ex.: S1+S5 juntas, S9 sozinha)' : 'Nota (opcional)', oninput: (e) => (draft.note = e.target.value) });
+    ta.value = draft.note;
+    box.append(ta);
+    const st = el('span', { class: 'status' }, saved.choice ? `Salvo: ${CHOICE[saved.choice]}` : 'Ainda não decidido');
+    box.append(el('div', { class: 'row' },
+      el('button', { class: 'btn primary', disabled: !draft.choice || !state.db || (draft.choice === 'other' && !draft.note.trim()), onclick: async (e) => {
+        e.target.disabled = true; st.textContent = 'Salvando…';
+        try {
+          await state.db.doc(`recheck/${id}`).set({ model: u.model, caseId: u.caseId, groupId: it.groupId, choice: draft.choice, note: draft.note, by: state.me || '', at: new Date().toISOString() });
+          st.textContent = 'Salvo';
+        } catch (err) { st.textContent = `Não salvou (${err?.code || 'erro'}). Tente de novo.`; e.target.disabled = false; }
+      } }, 'Salvar decisão'), st));
+    if (!state.db) box.append(el('div', { class: 'banner' }, 'Esta visualização não consegue salvar decisões. Abra a página pelo claude.ai com a sua conta.'));
+  };
+  paint();
+  return box;
+}
+
+function renderUnit() {
+  const m = $('#main');
+  const u = state.data?.units.find((x) => x.key === state.unit);
+  if (!u) { m.replaceChildren(el('div', { class: 'empty' }, 'Escolha um PR na lista.')); return; }
+  const L = u.labels;
+  const byId = Object.fromEntries(u.suggestions.map((s) => [s.id, s]));
+  const out = [el('div', { class: 'head' },
+    el('div', { class: 'chips' }, el('span', { class: 'chip acc' }, u.model), el('span', { class: 'chip' }, u.repo)),
+    el('h2', {}, u.caseId))];
+  for (const it of u.items) {
+    const dec = state.decisions[docId(u, it)];
+    out.push(el('section', { class: `card${dec?.choice ? ' done' : ''}` },
+      el('div', { class: 'chips' },
+        el('span', { class: `chip ${it.who === 'both' ? 'bad' : 'warn'}` }, WHO[it.who]),
+        it.sameProposal ? el('span', { class: 'chip' }, 'propostas iguais') : null,
+        it.approvedBefore ? el('span', { class: 'chip good' }, 'você já tinha aprovado este grupo') : null,
+        it.resolvedBy === 'human' ? el('span', { class: 'chip good' }, 'ajustado por você antes') : null),
+      el('div', { class: 'sec' }, 'Grupo atual'),
+      el('h3', {}, it.defect),
+      el('div', { class: 'sugs' }, ...[...it.members].sort((a, b) => Number(L[a].slice(1)) - Number(L[b].slice(1))).map((id) => sugCard(byId[id], L[id]))),
+      el('div', { class: 'sec' }, 'Propostas'),
+      el('div', { class: 'props' }, proposal('Opus 5.5', it.opus, L), proposal('GPT-6 Astra', it.astra, L)),
+      decisionBlock(u, it)));
+  }
+  m.replaceChildren(...out);
+}
+
+async function boot() {
+  try {
+    state.data = await (await fetch('recheck.json')).json();
+  } catch {
+    $('#main').replaceChildren(el('div', { class: 'empty' }, 'Não consegui carregar as propostas.'));
+    return;
+  }
+  const d = state.data;
+  for (const v of [...new Set(d.units.map((u) => u.model))]) $('#fModel').append(el('option', { value: v }, v));
+  for (const s of ['#fModel', '#fWho', '#fState']) $(s).addEventListener('change', renderQueue);
+  state.unit = d.units[0]?.key;
+  renderQueue(); renderUnit();
+  const db = await window.claude?.use?.('db').catch(() => null);
+  const user = await window.claude?.use?.('user').catch(() => null);
+  if (user) { try { state.me = await user.id(); } catch {} }
+  if (!db) { renderUnit(); return; }
+  state.db = db;
+  db.collection('recheck').onSnapshot((snap) => {
+    state.decisions = Object.fromEntries(snap.docs.map((x) => [x.id, x.data()]));
+    renderQueue();
+    const a = document.activeElement;
+    if (!a || !['TEXTAREA', 'SELECT', 'INPUT'].includes(a.tagName)) renderUnit();
+  }, () => {});
+  renderUnit();
+}
+boot();
+</script>

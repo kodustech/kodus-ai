@@ -1,0 +1,78 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GoogleCalendarService.updateEvent (lines ~254-256): the else-branch looks for externalId === externalCalendarId while externalCalendarId is falsy, so selectedCalendar is always undefined and the old destinationCalendar fallback is lost"
+   },
+   {
+    "id": "F2",
+    "description": "GoogleCalendarService.deleteEvent (lines ~315-317): the same dead find-by-falsy-externalCalendarId fallback, so calendarId never comes from destinationCalendar"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_e877f786",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3c79f482",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5c8e19ea",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_5ce67a29",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7b202983",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_67a98570",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_aa76ef5a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_9acef6ae",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": true,
+  "reasoning": "The only disagreement was s_aa76ef5a. Its text says \"Same dead computation as updateEvent: searches for falsy externalCalendarId...\". That directly states that updateEvent has the same defect, like the rule's example \"this also happens in Update\". So it covers both F1 and F2 and is complete. By contrast, s_9acef6ae mentions updateEvent only in its fix (\"Apply same fix as updateEvent\"), which doesn't count. s_67a98570 says \"identical ternary\" but never names updateEvent as having the problem. s_5c8e19ea and s_5ce67a29 both name update and delete explicitly in their summaries."
+ }
+}

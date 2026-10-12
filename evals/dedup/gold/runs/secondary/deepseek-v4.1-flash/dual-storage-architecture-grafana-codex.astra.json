@@ -1,0 +1,44 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0fa90f2c",
+    "mainDefect": "Moving legacy writes into goroutines removes the guarantee that legacy storage has been updated before the API returns.",
+    "secondary": [
+     {
+      "defect": "Legacy goroutines inherit the request context, so returning from the handler can cancel the pending legacy writes.",
+      "coveredBy": [
+       "s_7e8b6adf",
+       "s_b0ebef03"
+      ]
+     },
+     {
+      "defect": "Legacy write errors are recorded only in metrics and are no longer logged.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b0ebef03",
+    "mainDefect": "Legacy goroutines inherit the request context, allowing request completion to cancel the pending legacy writes.",
+    "secondary": [
+     {
+      "defect": "Legacy write errors are no longer logged, leaving failures visible only in metrics.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_3d27a0be",
+    "mainDefect": "The Delete, Update, and DeleteCollection tests lack legacy expectations and therefore do not verify the dual writes.",
+    "secondary": [
+     {
+      "defect": "The tests do not synchronize with legacy goroutines, making unexpected mock-call panics depend on scheduling.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

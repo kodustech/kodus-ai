@@ -1,0 +1,24 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_006ed08a",
+     "s_9009c9ce",
+     "s_e63608d7"
+    ],
+    "defect": "FallbackLocaleList#[] calls to_sym on SiteSetting.default_locale before compact, so a nil default_locale raises NoMethodError."
+   }
+  ],
+  "unique": [
+   "s_c8aed49e"
+  ],
+  "bundles": [
+   "s_006ed08a",
+   "s_e63608d7"
+  ],
+  "reasoningPt": "S1, S4 e S5 têm como defeito principal o NoMethodError ao chamar to_sym em SiteSetting.default_locale nulo, então ficam juntas. S1 e S5 também falam da mistura String/Symbol, mas como segundo defeito, por isso entram em bundles. Já o defeito principal de S7 é a mistura String/Symbol que causa falha no cache de @loaded_locales, outro defeito com outra correção, então S7 fica sozinha."
+ }
+}

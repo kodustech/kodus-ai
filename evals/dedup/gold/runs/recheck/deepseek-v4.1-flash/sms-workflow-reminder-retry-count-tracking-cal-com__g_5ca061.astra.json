@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_2e6a48cf",
+     "s_d2d5f53e"
+    ],
+    "defect": "O ramo de retryCount no OR não restringe method a SMS, permitindo excluir lembretes de outros métodos."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_2e6a48cf"
+  ],
+  "reasoningPt": "S6 e S8 têm como defeito principal a ausência do filtro de SMS no ramo de retryCount, portanto permanecem juntas. S6 também aponta a ausência de limite de data nesse ramo e, por isso, é marcada como bundle, sem alterar seu agrupamento."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "Os arquivos de mensagens em lituano (login e account) receberam a frase italiana 'Installa una delle seguenti applicazioni sul tuo cellulare:' no lugar de uma tradução lituana de totpStep1/loginTotpStep1.",
+    "members": [
+     "s_38fe9a59",
+     "s_2c2a6b10",
+     "s_79b9dc96",
+     "s_ca4bf0da"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S2, S15 e S16 apontam o mesmo erro de copiar e colar: a frase em italiano foi parar nos arquivos lituanos. S1 e S16 tratam do tema de login, e S2 e S15 do tema de account. É o mesmo erro repetido em dois lugares e se resolve da mesma forma, colocando uma tradução em lituano, então o grupo fica como está."
+ }
+}

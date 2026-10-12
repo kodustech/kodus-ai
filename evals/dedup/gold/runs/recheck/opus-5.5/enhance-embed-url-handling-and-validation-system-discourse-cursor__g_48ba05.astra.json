@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b407f10e",
+     "s_f68a49c4"
+    ],
+    "defect": "A atualização de um embed cujo post foi excluído passa nil ao PostRevisor, causando uma exceção que interrompe o processamento do feed."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S16 relatam o mesmo defeito: usar embed.post sem verificar se o post ainda existe antes de chamar PostRevisor. A interrupção dos demais itens é uma consequência desse defeito, e ambas as sugestões propõem tratar o post ausente."
+ }
+}

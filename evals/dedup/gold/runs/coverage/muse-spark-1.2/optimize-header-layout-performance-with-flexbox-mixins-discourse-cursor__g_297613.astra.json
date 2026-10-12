@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "align-items mixin emits invalid -ms-align-items at mixins.scss:121."
+   },
+   {
+    "id": "F2",
+    "description": "align-items mixin lacks -moz-box-align for legacy Firefox at mixins.scss:117-123."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_1480fde3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_0303e051",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,21 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "5d34e93c19310cb4e912acceaf567f70365064e3",
+  "attempt": 1,
+  "ms": 22615,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_18960249",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c58572a1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

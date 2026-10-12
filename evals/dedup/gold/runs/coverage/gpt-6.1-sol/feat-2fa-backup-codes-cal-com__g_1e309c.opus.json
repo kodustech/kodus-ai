@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "disable.ts (lines 58-63): the disable-2FA endpoint checks backup codes with a non-constant-time indexOf"
+   },
+   {
+    "id": "F2",
+    "description": "next-auth-options.ts (lines 139-145): the login authorize path checks backup codes with a non-constant-time indexOf"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_9602943b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ed0e31d7",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7900c369",
+     "s_13c616c7",
+     "s_c76cedb8"
+    ],
+    "defect": "A migração acessa resultados vazios sem verificar a existência de linhas nas consultas de categoria, causando falha antes de concluir o fallback."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c76cedb8"
+  ],
+  "reasoningPt": "S1, S7 e S14 têm como defeito principal o acesso sem verificação a resultados vazios nas consultas de categoria, portanto permanecem juntas. S14 também relata problemas independentes de normalização dos hosts e de escape no INSERT, sendo marcada como bundle."
+ }
+}

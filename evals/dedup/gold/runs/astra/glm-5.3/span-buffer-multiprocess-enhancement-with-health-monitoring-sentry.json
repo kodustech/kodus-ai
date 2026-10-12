@@ -1,0 +1,71 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "7801a4f17115b5c867ebfed0525a0c9dd60ef60a",
+  "attempt": 1,
+  "ms": 62523,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0686ed03",
+          "s_ed5056d1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Nonpositive process limits are mishandled: negative values can leave flushing disabled, and explicit zero selects maximum fan-out instead of being distinguished from None.",
+        "rationale": "Both report the same negative-limit validation defect in the constructor. s_ed5056d1 additionally reports the zero-versus-None conflation, which must survive consolidation."
+      },
+      {
+        "members": [
+          "s_f393808c",
+          "s_d8e8bf32"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Flusher metrics inconsistently use shard versus shards tag keys, and use individual shard IDs versus comma-joined shard groups as values.",
+        "rationale": "Both identify the same incorrect tag key on wait_produce. s_d8e8bf32 additionally flags inconsistent tag value formats between the main-loop and unhealthy metrics."
+      },
+      {
+        "members": [
+          "s_de2238dd",
+          "s_01b9b5a4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The added test sleep is neutralized by the existing monkeypatch, so it provides no synchronization before shutdown.",
+        "rationale": "Both report the identical no-op sleep and resulting lack of synchronization at the same test lines."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_1bfcadca",
+        "confidence": "high"
+      },
+      {
+        "id": "s_956e4955",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7c7ec2d9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3cdaf6c2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_44a8e73b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_45039749",
+        "confidence": "high"
+      }
+    ]
+  }
+}

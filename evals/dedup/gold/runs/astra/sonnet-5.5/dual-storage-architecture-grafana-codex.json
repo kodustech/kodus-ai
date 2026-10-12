@@ -1,0 +1,52 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "b8aa0473c7ce146437358c486a67a3428ecf6c6d",
+  "attempt": 1,
+  "ms": 52425,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_982700c2",
+          "s_56f46701",
+          "s_7f4a71cc",
+          "s_74c42d79",
+          "s_6c9586da",
+          "s_62248494",
+          "s_f5f42939",
+          "s_44d5c92b",
+          "s_082644e5"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Create and Update attribute storage failures to legacy metrics, DeleteCollection attributes legacy metrics to storage, and Delete uses the object name as the kind metric label and drops enriched logger fields from its context.",
+        "rationale": "s_6c9586da connects all the metric defects, including Delete's incorrect kind label. s_56f46701 and s_7f4a71cc report both that label defect and the lost logger fields, connecting s_62248494 through overlap; the merged comment must preserve every affected location and defect."
+      },
+      {
+        "members": [
+          "s_52fd068c",
+          "s_d8b196b6",
+          "s_66a23edf"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The asynchronous legacy writes in Create, Delete, Update and DeleteCollection inherit request cancellation and can be aborted when the handler returns.",
+        "rationale": "All three report the same request-context lifetime mistake repeated in four goroutines. Each location needs its context detached before applying the timeout."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_1b33ac3d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a6abf2b7",
+        "confidence": "high"
+      }
+    ]
+  }
+}

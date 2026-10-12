@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "utilities.js line 182 (validateUploadedFile): the client-side size check is hardcoded to 10MB for every upload type and ignores max_attachment_size_kb (and other per-type settings) for non-images, so the file_too_large message there shows 10MB"
+   },
+   {
+    "id": "F2",
+    "description": "utilities.js line 246 (413 handler): the file_too_large message shows a hardcoded 10MB instead of the limit that is actually enforced"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_60d70a41",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_16e7d729",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_4e7770ed",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6f42512f",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

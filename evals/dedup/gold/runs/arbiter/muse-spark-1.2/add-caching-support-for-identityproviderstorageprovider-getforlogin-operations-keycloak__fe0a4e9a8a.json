@@ -1,0 +1,25 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "component": [
+    "s_996b3792",
+    "s_dd4bb6a5"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_996b3792",
+          "s_dd4bb6a5"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "defect": "Both say the same thing: getLoginPredicate (orgId==null || BROKER_PUBLIC) and the login-cache invalidation in registerIDPLoginInvalidation and registerIDPLoginInvalidationOnUpdate agree. Invalidation correctly skips when an IDP is non-login both before and after an update, and it handles orgId changes correctly."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "Neither suggestion reports a defect. Both report the same check and reach the same conclusion: the BROKER_PUBLIC/org-linkage logic in getLoginPredicate (server-spi lines 252-255) matches how the Infinispan provider uses it for login-cache invalidation (lines 382-418). Their key sentence is nearly word for word the same: \"invalidation correctly skips when both original and updated are non-login and correctly handles orgId transitions.\" One points at where the predicate is defined and the other at the code that uses it, so they come from different files. That makes the group cross_location. The duplicate rules don't depend on whether a suggestion is correct or important, and posting both would be redundant. So they belong in one group. needsUnifiedComment is false because neither adds anything the other lacks."
+  }
+}

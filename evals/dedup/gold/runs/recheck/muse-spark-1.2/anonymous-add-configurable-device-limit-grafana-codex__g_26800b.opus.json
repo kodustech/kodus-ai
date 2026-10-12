@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f91fbc78",
+     "s_3a7464c4"
+    ],
+    "defect": "Authenticate now calls TagDevice synchronously on the request context instead of in a best-effort background goroutine, so every anonymous authentication waits on the database and can fail."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_3a7464c4"
+  ],
+  "reasoningPt": "S4 e S9 apontam o mesmo defeito principal: o TagDevice deixou de ser assíncrono e best-effort e passou a ser síncrono no contexto da requisição, bloqueando a autenticação anônima. Os dois propõem a mesma correção, que é manter a marcação assíncrona. S9 acrescenta que os chamadores não tratam o ErrDeviceLimitReached, por isso entra em bundles."
+ }
+}

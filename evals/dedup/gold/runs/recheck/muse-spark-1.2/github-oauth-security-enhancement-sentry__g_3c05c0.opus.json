@@ -1,0 +1,26 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_dba5cf11",
+   "s_e8005d12",
+   "s_c04307da",
+   "s_ed2f4754",
+   "s_be8c18fb",
+   "s_fec7e43b",
+   "s_e345fbc9"
+  ],
+  "bundles": [
+   "s_dba5cf11",
+   "s_e8005d12",
+   "s_c04307da",
+   "s_ed2f4754",
+   "s_be8c18fb",
+   "s_fec7e43b",
+   "s_e345fbc9"
+  ],
+  "reasoningPt": "Todas as sugestões repetem o mesmo corpo genérico com seis correções sem relação entre si, e nenhuma delas tem a ver com o diff do PR. Por isso todas entram em bundles. Cada uma aponta para um arquivo diferente, com um resumo próprio: S9 trata do limite de requisições, S10 da renomeação do helper, S11 do wrapper da busca, S12 do timer, S13 do método HTTP e S14 do binding de campo. S8 nem descreve um defeito (\"logic correct\"). Como os defeitos principais são distintos e cada um tem uma correção diferente, o grupo deve ser dividido e todas as sugestões ficam isoladas."
+ }
+}

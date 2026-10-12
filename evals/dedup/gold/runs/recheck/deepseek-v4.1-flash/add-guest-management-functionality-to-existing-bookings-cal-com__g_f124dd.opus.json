@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "isTeamAdminOrOwner in addGuests.handler.ts uses && instead of ||, so only team owners pass and team admins get a FORBIDDEN error.",
+    "members": [
+     "s_283838a3",
+     "s_80b5cf4b",
+     "s_e312d0f3"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S7 e S9 apontam o mesmo defeito nas linhas 46-48: o uso de && em vez de || no cálculo de isTeamAdminOrOwner, que bloqueia admins do time. A correção é a mesma (trocar por ||), e nenhuma delas traz um segundo defeito."
+ }
+}

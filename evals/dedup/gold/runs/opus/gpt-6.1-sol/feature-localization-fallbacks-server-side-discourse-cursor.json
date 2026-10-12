@@ -1,0 +1,10 @@
+{
+  "judge": "opus",
+  "model": "gpt-6.1-sol",
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "unique": []
+  }
+}

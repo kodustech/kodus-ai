@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8b2ff490",
+    "mainDefect": "test_dedupe constructs the expected occurrence with group_key \"val1\" although the handler evaluates \"group_key\".",
+    "secondary": [
+     {
+      "defect": "The occurrence assertion compares only hardcoded IDs, leaving the generated fingerprint unverified and allowing incorrect group-key forwarding to go undetected.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a19aa2e8",
+    "mainDefect": "build_mock_occurrence_and_event ignores value, preventing tests from detecting incorrect per-group values forwarded to the occurrence builder.",
+    "secondary": [
+     {
+      "defect": "Expected occurrences use incorrect values: 6 instead of 10 for group_2, 6 instead of 100 in test_results_on_change, and 6 instead of 8 in TestEvaluate.test_dedupe.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_0822f042",
+    "mainDefect": "build_mock_occurrence_and_event ignores value, leaving correct per-group value forwarding to the new hook untested.",
+    "secondary": [
+     {
+      "defect": "Expected occurrences use incorrect values: 6 instead of 10 for group_2, 6 instead of 100 in test_results_on_change, and 6 instead of 8 in test_dedupe.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

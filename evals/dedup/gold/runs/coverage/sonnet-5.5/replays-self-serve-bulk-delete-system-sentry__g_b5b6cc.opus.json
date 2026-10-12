@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "validate_timestamp/validate_age use truthiness checks (initial_data.get('age')/get('timestamp')), so a value of 0 bypasses the age/timestamp mutual-exclusion check"
+   },
+   {
+    "id": "F2",
+    "description": "The checks run only when their own field is present, so a report with neither age nor timestamp passes validation; one of the two must be required (e.g. via a validate() method)"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_fecd973c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c2a5e9e7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

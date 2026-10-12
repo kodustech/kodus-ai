@@ -1,0 +1,25 @@
+{
+ "key": "6e96ac674c",
+ "checks": {
+  "s_0d169170": [],
+  "s_2a55c64a": []
+ },
+ "humanEdits": [
+  {
+   "id": "s_2a55c64a",
+   "removed": [
+    "s_5d6ec13d",
+    "s_5fd8900b"
+   ],
+   "note": "S4/S9 already grouped (downcase); removed by reviewer"
+  },
+  {
+   "id": "s_2a55c64a",
+   "removed": [
+    "s_7958039f",
+    "s_8d184fdd"
+   ],
+   "note": "S2/S12 already grouped (controller nil); removed by reviewer"
+  }
+ ]
+}

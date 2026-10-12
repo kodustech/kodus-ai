@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_08cbca4d",
+    "mainDefect": "FallbackLocaleList#[] calls SiteSetting.default_locale.to_sym before .compact, so a nil default locale raises NoMethodError in the translate path and in ensure_loaded!.",
+    "secondary": [
+     {
+      "defect": "I18n.locale is a String while the other fallback entries are Symbols, so uniq does not dedupe 'en'/:en and the same .en.yml is loaded twice.",
+      "coveredBy": [
+       "s_831e218a"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "scheduleSMSReminders.ts:190–197: Unguarded update inside catch can throw, aborting the reminder loop and skipping subsequent error logging."
+   },
+   {
+    "id": "F2",
+    "description": "scheduleSMSReminders.ts:195: retryCount uses a stale read-then-write instead of an atomic increment."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c8538465",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a5b002c4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

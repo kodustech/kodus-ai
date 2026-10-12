@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1a15af6b",
+     "s_25a59b36"
+    ],
+    "defect": "O caminho com cache de getForLogin retorna modelos sem aplicar createOrganizationAwareIdentityProviderModel, diferindo dos caminhos que aplicam esse wrapper."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S7 apontam a mesma ausência de wrapping no mesmo trecho de getForLogin e propõem a mesma correção. As referências ao bean consumidor explicam o impacto desse defeito, sem introduzir um segundo problema."
+ }
+}

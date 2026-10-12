@@ -1,0 +1,91 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "promptSha": "793fb860ffc4e6f46a34516eda9908c732ebac1d",
+  "attempt": 1,
+  "ms": 47323,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_5c00ae33",
+          "s_888da293",
+          "s_37416a55"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The migration dereferences an empty category lookup result, raising before the uncategorized fallback can run.",
+        "rationale": "All three report the same unchecked execute(...)[0]['id'] access and the same failure when the join returns no rows."
+      },
+      {
+        "members": [
+          "s_193a4147",
+          "s_7d922aa5",
+          "s_9c6d1a3d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The host lookup lowercases the database column but leaves the input hostname unchanged, causing mixed-case lookups to fail.",
+        "rationale": "All three identify the same asymmetric normalization in record_for_host and propose normalizing the lookup value."
+      },
+      {
+        "members": [
+          "s_b3a7894c",
+          "s_dfb530f5",
+          "s_0b85e8b9"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The host normalization callback calls sub! on nil before validation can reject the missing host.",
+        "rationale": "These describe the same unguarded callback, request trigger, and resulting exception."
+      },
+      {
+        "members": [
+          "s_c9027ce1",
+          "s_30fe56e0"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The category and embeddable-host fabricator definitions are placed in each other's files.",
+        "rationale": "Both report the same swapped contents, pointing at opposite files. The correction requires restoring the definitions in both files."
+      },
+      {
+        "members": [
+          "s_135e8b0e",
+          "s_da7b8917"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The blank-host test no longer exercises its named condition and instead passes because the topic has no embed.",
+        "rationale": "Both identify the same obsolete test case and its mismatch with the remaining implementation; the coverage and naming concerns describe the same test defect."
+      },
+      {
+        "members": [
+          "s_bcd54d22",
+          "s_37e50b4d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Both update and destroy dereference missing host records, returning exceptions for unknown or deleted IDs.",
+        "rationale": "Both suggestions report the identical pair of unchecked lookups. The merged comment must retain the need to handle missing records in both actions."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_ad453db1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8a6b086d",
+        "confidence": "high"
+      }
+    ]
+  }
+}

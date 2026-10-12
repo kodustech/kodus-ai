@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "Since the null-guard, GroupAdapter.getSubGroupsCount() can return null when a group is deleted concurrently, which breaks the non-null contract and can lead to NPEs or a null subGroupCount in callers; one fix covers it (return 0L or fall back to the cached state).",
+    "members": [
+     "s_03406bfd",
+     "s_6014debd",
+     "s_7793d543"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S8 apontam o mesmo defeito: getSubGroupsCount() agora retorna null quando o grupo é excluído concorrentemente, o que quebra o contrato não-nulo e causa NPE ou subGroupCount nulo nos chamadores. As três propõem a mesma correção, que é retornar 0L ou um valor do cache, e nenhuma traz outro defeito à parte."
+ }
+}

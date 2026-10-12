@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d63726ea",
+     "s_34a7ef4b"
+    ],
+    "defect": "O cache é preenchido antes do sucesso da gravação no banco, permitindo que uma nova tentativa após ErrDeviceLimitReached seja tratada como sucesso e contorne o limite."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S7 descrevem o mesmo defeito: a entrada no cache persiste mesmo quando a gravação falha por atingir o limite. S2 detalha o bypass na tentativa seguinte, e S7 aponta a mesma causa e correção; portanto, o grupo deve ser mantido."
+ }
+}

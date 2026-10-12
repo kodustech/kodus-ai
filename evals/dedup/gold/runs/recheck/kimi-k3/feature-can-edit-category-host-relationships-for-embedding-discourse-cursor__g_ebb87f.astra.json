@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a96ba504",
+     "s_ff692566"
+    ],
+    "defect": "update e destroy não tratam registros inexistentes, desreferenciando nil e gerando erro 500 em vez de 404."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S12 relatam o mesmo defeito nas mesmas ações: a consulta retorna nil para um ID inexistente, e seu uso causa NoMethodError. Ambas propõem tratar a ausência do registro; mencionar update e destroy representa a repetição do mesmo defeito, sem caracterizar um bundle."
+ }
+}

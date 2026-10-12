@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_8fb311b9",
+     "s_bdeb7dae",
+     "s_0dfb07e9"
+    ],
+    "defect": "A asserção ocorre sem aguardar o término da thread leitora, podendo ignorar exceções de uma requisição ainda em andamento."
+   }
+  ],
+  "unique": [
+   "s_3d7a717e"
+  ],
+  "bundles": [
+   "s_bdeb7dae"
+  ],
+  "reasoningPt": "S1, S3 e S4 têm como defeito principal a falta de espera pelo término da thread antes da asserção. S2 aponta outro defeito: o teste pode passar sem executar nenhuma leitura durante as exclusões, o que exige uma verificação ou sincronização adicional. S3 também relata esse segundo defeito e entra em bundles, mas permanece no grupo do primeiro."
+ }
+}

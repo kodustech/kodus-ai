@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8944a234",
+     "s_61b47067",
+     "s_24bc143e",
+     "s_6ee5a633",
+     "s_5e595406"
+    ],
+    "defect": "EventManager reads mainHostDestinationCalendar.integration without optional chaining, which throws a TypeError when destinationCalendar is empty or null."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S8, S11 e S15 apontam o mesmo defeito em EventManager.ts: acessar `mainHostDestinationCalendar.integration` sem optional chaining gera TypeError quando destinationCalendar está vazio ou é nulo. Todas propõem a mesma correção (`?.`); só mudam os intervalos de linha e o nível de detalhe. Nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

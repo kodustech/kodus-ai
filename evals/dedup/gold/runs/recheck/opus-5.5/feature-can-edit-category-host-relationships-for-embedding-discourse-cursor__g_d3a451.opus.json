@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The before_validation callback in EmbeddableHost calls self.host.sub! without checking for nil, so a missing host raises NoMethodError instead of returning a validation error.",
+    "members": [
+     "s_abc77493",
+     "s_1f259cc1"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S15 apontam o mesmo defeito no mesmo trecho: o callback before_validation chama self.host.sub! sem checar nil, o que gera NoMethodError (500) em vez de erro de validação. A sugestão de S15 de adicionar validates presence faz parte da mesma correção e não é um defeito separado. Por isso o grupo fica como está."
+ }
+}

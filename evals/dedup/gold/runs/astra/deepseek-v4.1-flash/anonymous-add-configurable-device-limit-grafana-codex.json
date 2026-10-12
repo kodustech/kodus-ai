@@ -1,0 +1,57 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "6ad1a2025258b0f79a27e5e550dce84c8f0caf94",
+  "attempt": 1,
+  "ms": 32264,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_f0772bc6",
+          "s_23136ec7",
+          "s_0631d17a",
+          "s_e1a4bcff"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "tagDeviceUI caches a device before the database write succeeds, allowing subsequent requests to bypass a device-limit rejection.",
+        "rationale": "All four report the same prematurely cached success marker and resulting authentication bypass. Caching only after a successful write resolves every report."
+      },
+      {
+        "members": [
+          "s_f7e19fe4",
+          "s_a72e0711"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The non-atomic count-then-insert sequence allows concurrent requests to exceed the configured device limit.",
+        "rationale": "Both describe different new devices concurrently observing available capacity and inserting beyond the limit at the same enforcement block."
+      },
+      {
+        "members": [
+          "s_3a4fa9ea",
+          "s_def15064"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Synchronous tagging adds database latency to authentication and removes the previous panic isolation and dedicated two-minute timeout.",
+        "rationale": "Both explicitly report the removed panic guard, making them overlapping duplicates. The merged comment must also preserve the first report's synchronous latency concern and the second report's missing bounded timeout concern."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_9e84e183",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1e9b5e18",
+        "confidence": "high"
+      }
+    ]
+  }
+}

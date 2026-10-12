@@ -1,0 +1,54 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "c37e29ffa5a444bfe9fe66138f52d583d77b7a1c",
+  "attempt": 1,
+  "ms": 33149,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_93638ca0",
+          "s_86941632"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The test named test_from_dict_empty_array passes an empty dictionary, so its name misrepresents the input tested.",
+        "rationale": "Both report the same mismatch between the test name and its body. Renaming the test resolves both reports."
+      },
+      {
+        "members": [
+          "s_4394a939",
+          "s_ade14568"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The test name test_from_dict_inalid_data misspells invalid, making it harder to discover through name filtering.",
+        "rationale": "Both identify the same typo in the same test identifier and propose the same correction."
+      },
+      {
+        "members": [
+          "s_70d8be1c",
+          "s_c99c812a",
+          "s_ba3a1487",
+          "s_15152af3",
+          "s_83f857de"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "AssignmentSource.queued evaluates timezone.now() at class definition time, causing instances using the default to share a stale timestamp.",
+        "rationale": "All five report the same dataclass default defect in assignment_source.py. Their different descriptions of construction paths and downstream effects are resolved by the same per-instance default factory."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_8ea333b1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

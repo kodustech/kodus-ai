@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4d1117b0",
+     "s_0eac7801"
+    ],
+    "defect": "O consumo de códigos de backup faz leitura, validação e atualização sem atomicidade, permitindo reutilização concorrente e perda de atualizações."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S11 descrevem o mesmo defeito de concorrência no consumo dos códigos de backup. S11 acrescenta o efeito de restaurar um código consumido quando códigos diferentes são usados simultaneamente, mas ambos os efeitos são resolvidos pela mesma correção de atomicidade."
+ }
+}

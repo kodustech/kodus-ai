@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_bdeb7dae",
+    "mainDefect": "The reader thread is never joined, so the test checks caughtExceptions before an in-flight read finishes and can miss its exception.",
+    "secondary": [
+     {
+      "defect": "Nothing checks that the reader thread made at least one read while the deletes were running, so the test can pass without exercising the concurrent path.",
+      "coveredBy": [
+       "s_3d7a717e"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

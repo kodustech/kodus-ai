@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6b3b1759",
+     "s_c99a8cda",
+     "s_382d8521"
+    ],
+    "defect": "In addGuests.handler, guest emails are compared case-sensitively with the lowercased blacklist and with existing attendee emails, so changing the letter case gets past the blacklist and the duplicate check."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S6 e S13 apontam o mesmo defeito nas mesmas linhas do addGuests.handler: a comparação de e-mails diferencia maiúsculas de minúsculas, tanto contra a blacklist em minúsculas quanto contra os participantes já existentes. A correção é a mesma, normalizar com toLowerCase() antes de comparar. A sugestão do S6 de também deduplicar a entrada é só um detalhe da mesma correção, não um defeito à parte."
+ }
+}

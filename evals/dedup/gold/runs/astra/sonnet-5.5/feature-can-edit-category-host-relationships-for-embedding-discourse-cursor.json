@@ -1,0 +1,56 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "promptSha": "784d2f792a4e0255c7f731bd568c80fcb90cf132",
+  "attempt": 1,
+  "ms": 41387,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_2a55c64a",
+          "s_5d6ec13d",
+          "s_5fd8900b",
+          "s_7958039f",
+          "s_8d184fdd"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Host handling dereferences missing records, missing embeddable_host parameters, and nil host values without guards, while host lookup fails to lowercase the incoming hostname.",
+        "rationale": "s_2a55c64a connects the nil-host validation defect to the case-normalization reports. s_8d184fdd shares that nil-host defect and connects it to s_7958039f's missing-record defect; the latter additionally reports missing outer parameters."
+      },
+      {
+        "members": [
+          "s_1b696765",
+          "s_dca123ba",
+          "s_0fd17a9d",
+          "s_c715ef0c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The migration dereferences empty category-query results and inserts raw host-setting values without escaping or handling whitespace and blank entries.",
+        "rationale": "All four report the same unchecked category lookups. s_dca123ba and s_c715ef0c additionally report unsafe host interpolation and input-cleanup problems that must survive consolidation."
+      },
+      {
+        "members": [
+          "s_7882dbd4",
+          "s_e721f2fc"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The category and embeddable-host fabricator files have their contents swapped.",
+        "rationale": "Both describe the entire same swap, pointing at opposite files, and propose the same correction."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_0d169170",
+        "confidence": "high"
+      }
+    ]
+  }
+}

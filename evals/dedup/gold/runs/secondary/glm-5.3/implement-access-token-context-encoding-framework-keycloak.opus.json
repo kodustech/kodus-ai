@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_271c9373",
+    "mainDefect": "The isAccessTokenId matcher reads the grant shortcut from the wrong position (substring(3,5) instead of substring(4,6)) and inverts the comparison, so the grant-type assertion never checks anything.",
+    "secondary": [
+     {
+      "defect": "The matcher has no length guard on items[0], so a prefix shorter than 5 chars makes substring(3,5) throw StringIndexOutOfBoundsException.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_5625161c",
+    "mainDefect": "postInit calls the new abstract getShortcut() on every grant-type factory, so a custom grant provider built against an older Keycloak version throws AbstractMethodError and stops the server from starting.",
+    "secondary": [
+     {
+      "defect": "A factory that returns null from getShortcut() causes a NullPointerException in ConcurrentHashMap.put instead of a clear validation error.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_07f54fcf",
+    "mainDefect": "getTokenContextFromTokenId requires the encoded context to be exactly 6 chars, but the SPI allows grant shortcuts of other lengths, so tokens from a custom grant with a 3-char shortcut can't be decoded.",
+    "secondary": [
+     {
+      "defect": "Token ids that contain a colon but have a prefix that isn't 6 chars long throw an exception instead of falling back to the UNKNOWN/legacy handling used for ids without a colon.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

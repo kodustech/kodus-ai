@@ -1,0 +1,53 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_9201a4d6",
+    "mainDefect": "ClientPermissionsV2.setPermissionsEnabled throws UnsupportedOperationException, but the AdminPermissions client-removed listener calls it. When both the V1 and V2 fine-grained authz features are enabled, client deletion aborts.",
+    "secondary": [
+     {
+      "defect": "In V2-only mode the listener guard skips cleanup, so per-client authorization resources and permissions for deleted clients are left orphaned.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_924e2d8b",
+    "mainDefect": "Per-client resources created by AdminPermissionsSchema.getOrCreateResource never get the Clients type set, so getClientsWithPermission's findByType query misses per-client grants and returns an empty set.",
+    "secondary": [
+     {
+      "defect": "getClientsWithPermission adds the literal name of the schema-level \"Clients\" type resource to the result instead of a client ID, which causes an NPE in AvailableRoleMappingResource.",
+      "coveredBy": [
+       "s_accc352b"
+      ]
+     },
+     {
+      "defect": "The V2 listener no longer cleans up resources when a client is removed, so orphaned entries for deleted clients can be returned and dereferenced.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c13dd2bf",
+    "mainDefect": "testManageOnlyOneClient only asserts the default-client-scopes list is non-empty, then reads index 1, so it can fail with IndexOutOfBoundsException.",
+    "secondary": [
+     {
+      "defect": "testConfigureOnlyOneClient reads defaultClientScopes.get(0) without checking that the list is non-empty, so an empty list surfaces as a confusing IndexOutOfBounds failure.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_85b8c9a1",
+    "mainDefect": "ClientPermissionsV2.setPermissionsEnabled throws UnsupportedOperationException, but the AdminPermissions listener calls it on every ClientRemovedEvent, so each client deletion fails or raises the exception.",
+    "secondary": [
+     {
+      "defect": "Because of the exception, the per-client Clients authorization resource is never cleaned up, leaving orphaned resources for every deleted client.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

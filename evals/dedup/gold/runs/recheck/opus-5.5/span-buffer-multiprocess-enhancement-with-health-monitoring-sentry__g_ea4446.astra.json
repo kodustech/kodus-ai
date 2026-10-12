@@ -1,0 +1,28 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_4ee392ad",
+     "s_555f4a4d",
+     "s_b2cc6608"
+    ],
+    "defect": "A verificação de tipo incorreta não reconhece SpawnProcess e impede o encerramento dos processos."
+   },
+   {
+    "members": [
+     "s_7a1b8c6d",
+     "s_7f309577"
+    ],
+    "defect": "O break em join() quando o prazo expira impede que os processos restantes sejam encerrados."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_7a1b8c6d"
+  ],
+  "reasoningPt": "S1, S7 e S8 descrevem a mesma verificação de tipo incorreta; S8 também aponta sua repetição em join(), mantendo o mesmo defeito. S2 começa pelo encerramento antecipado do loop, mesmo defeito de S10, e é bundle por acrescentar a verificação de tipo incorreta. Os dois defeitos exigem correções distintas."
+ }
+}

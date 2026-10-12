@@ -1,0 +1,86 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "promptSha": "4b897e1cadbf3aa31c7e87abe8bfe2aadcada78b",
+  "attempt": 1,
+  "ms": 55589,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_67d69ac5",
+          "s_6b5ea536",
+          "s_3e2f564b",
+          "s_bc207073"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The admin/owner authorization expression uses &&, incorrectly denying team admins who do not also satisfy the owner check.",
+        "rationale": "All four report the same authorization expression. Changing that expression resolves their shared defect; skipping queries for absent teams is only an additional fix recommendation."
+      },
+      {
+        "members": [
+          "s_ef00ffaa",
+          "s_647627fa",
+          "s_12e66445",
+          "s_aed18a73",
+          "s_e7d73ab7"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Case-sensitive email comparisons allow blacklist bypasses and duplicate attendees, while missing server-side input deduplication and concurrency protection also allow duplicate inserts.",
+        "rationale": "The blacklist reports overlap with reports of case-sensitive attendee matching, which connect to the broader duplicate-insertion report. s_aed18a73 mentions changing the email argument only within its proposed fix, so that does not connect this group to the email-notification group."
+      },
+      {
+        "members": [
+          "s_a421800b",
+          "s_2fa589ab",
+          "s_ff822a38",
+          "s_77ce515e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Passing raw guests instead of uniqueGuests misclassifies existing attendees as newly added email recipients, and the email catch discards the actual error details.",
+        "rationale": "All four identify the same incorrect argument to sendAddGuestsEmails. s_ff822a38 additionally reports lost error details, which the merged comment must preserve."
+      },
+      {
+        "members": [
+          "s_37e96fa9",
+          "s_b459ede8",
+          "s_69410500"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The always-truthy error message prevents the fallback and can display an undefined code; validation state and guest inputs also persist across edits, successful submissions, or dialog dismissal.",
+        "rationale": "All three report the unreachable error-message fallback. s_b459ede8 also reports stale validation and input state, requiring additional fixes in the merged comment."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_c0b79d35",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b756d2d0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bea3ffd6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c542f448",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1a2dc0cc",
+        "confidence": "high"
+      }
+    ]
+  }
+}

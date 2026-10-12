@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6f3a72b3",
+     "s_e03bda55",
+     "s_76d835b4"
+    ],
+    "defect": "totalPages uses floor(user_count/limit)+1, producing an extra empty page when user_count is an exact multiple of limit; should use Math.ceil."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3 e S4 apontam o mesmo defeito: totalPages usa floor+1, o que gera uma página fantasma vazia quando user_count é múltiplo exato de limit. As três propõem a mesma correção com Math.ceil. Nenhuma delas reporta um segundo defeito, então o grupo fica como está."
+ }
+}

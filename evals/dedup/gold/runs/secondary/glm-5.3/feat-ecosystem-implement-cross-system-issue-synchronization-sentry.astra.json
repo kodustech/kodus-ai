@@ -1,0 +1,74 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_221233e4",
+    "mainDefect": "The queued default is evaluated at module import, giving every instance a stale timestamp.",
+    "secondary": [
+     {
+      "defect": "The test only checks that queued is non-None and cannot detect an incorrect timestamp.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_30f59a75",
+    "mainDefect": "The queued default is evaluated at module import rather than when each instance is created.",
+    "secondary": [
+     {
+      "defect": "The test only checks that queued is non-None and cannot detect an incorrect timestamp.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The raw datetime in the task payload can fail JSON serialization and prevent outbound sync from being enqueued.",
+      "coveredBy": [
+       "s_7123f91d",
+       "s_87e5e747"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ad4d76d9",
+    "mainDefect": "The queued default is evaluated at module import, so it does not record each assignment's queue time.",
+    "secondary": [
+     {
+      "defect": "After a JSON round trip, from_dict leaves queued as an ISO string instead of restoring its declared datetime type.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7123f91d",
+    "mainDefect": "The task payload contains a raw datetime that can fail broker serialization and prevent outbound sync from being enqueued.",
+    "secondary": [
+     {
+      "defect": "The queued default is evaluated at module import, giving every instance the same stale timestamp.",
+      "coveredBy": [
+       "s_221233e4",
+       "s_30f59a75",
+       "s_81d5305c",
+       "s_7dcbf2c4",
+       "s_ad4d76d9"
+      ]
+     },
+     {
+      "defect": "When serialization converts queued to an ISO string, from_dict fails to restore its declared datetime type.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_adc64e50",
+    "mainDefect": "The test_from_dict_empty_array name incorrectly describes a test that supplies an empty dictionary.",
+    "secondary": [
+     {
+      "defect": "The sibling test name test_from_dict_inalid_data misspells invalid.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

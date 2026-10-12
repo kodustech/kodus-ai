@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_53aa8e91",
+     "s_6f655174"
+    ],
+    "defect": "BuildIndex permite builds concorrentes para a mesma chave, causando colisões na criação do índice e trabalho duplicado."
+   }
+  ],
+  "unique": [
+   "s_4cfadd1d"
+  ],
+  "bundles": [
+   "s_4cfadd1d"
+  ],
+  "reasoningPt": "S1 relata primeiro a leitura de b.cache por TotalDocs sem sincronização, cuja correção exige proteger essa leitura. S5 e S8 relatam builds concorrentes para a mesma chave, que exigem serialização por chave. S1 também menciona esse segundo defeito e é um bundle, mas pertence ao defeito principal pela regra."
+ }
+}

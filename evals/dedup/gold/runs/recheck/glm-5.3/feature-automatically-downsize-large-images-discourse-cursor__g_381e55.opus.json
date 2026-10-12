@@ -1,0 +1,29 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "defect": "Client-side utilities.js hardcodes a 10MB limit (size check at line 182 and 413 message at line 246) instead of reading the per-type site setting, so the client gate and error message no longer match the configured limits.",
+    "members": [
+     "s_c7c633cc",
+     "s_a3648b8e",
+     "s_278d3350",
+     "s_aaaa47e8"
+    ]
+   },
+   {
+    "defect": "uploads_controller.rb hardcodes the FileHelper.download cap at 10.megabytes instead of using SiteSetting.max_image_size_kb, so API URL uploads can disagree with the configured limit.",
+    "members": [
+     "s_7e515b13",
+     "s_73fe7ee9"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_aaaa47e8"
+  ],
+  "reasoningPt": "S4, S7, S14 e S19 apontam o limite fixo de 10MB no cliente (utilities.js, linhas 182 e 246), que ignora a configuração por tipo. Já S8 e S11 tratam do teto fixo do FileHelper.download no uploads_controller.rb, que fica em outro arquivo, tem outra consequência (download via API falha em silêncio) e exige outra correção. S19 cita o servidor só como observação final, então fica no grupo do cliente e entra em bundles."
+ }
+}

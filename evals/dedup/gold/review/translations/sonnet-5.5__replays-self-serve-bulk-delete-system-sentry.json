@@ -1,0 +1,10 @@
+{
+ "s_c2a5e9e7": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: as validações de exclusividade de age/timestamp ficam em validate_timestamp e validate_age, que o DRF executa apenas quando o campo está presente. POR QUÊ: um report sem age nem timestamp passa na validação, mesmo que um dos dois seja obrigatório em qualquer uma das specs. Além disso, a verificação falsy em initial_data.get('age') or get('timestamp') permite que o valor 0 contorne a verificação de exclusão mútua. CORREÇÃO: adicione um método validate() que exija exatamente um dos dois campos, usando verificações com `is not None`."
+ },
+ "s_fecd973c": {
+  "summaryPt": "",
+  "contentPt": "As validações entre campos usam truthiness (initial_data.get('age') / get('timestamp')). O valor 0 é válido para ambos os campos, então age=0 junto com timestamp passa na validação, mesmo que as duas specs não possam ser misturadas. Use `'age' in self.initial_data` / `'timestamp' in self.initial_data` no lugar."
+ }
+}

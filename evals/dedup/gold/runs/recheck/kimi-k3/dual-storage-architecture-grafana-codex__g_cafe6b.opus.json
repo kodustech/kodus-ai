@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The async legacy-write goroutines in Create/Delete/Update/DeleteCollection take their context from the request context, so the write is canceled when the handler returns and the stores silently drift apart; the fix is to detach it with context.WithoutCancel.",
+    "members": [
+     "s_e87a2835",
+     "s_a4f55b36",
+     "s_73967244"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S17 e S23 apontam o mesmo defeito: a goroutine da escrita legada usa o contexto da requisição e é cancelada quando o handler retorna. As três citam os mesmos locais (Create, Delete, Update, DeleteCollection) e propõem a mesma correção com context.WithoutCancel. A sugestão de logar o erro aparece em todas como parte da mesma correção, então o grupo continua como está."
+ }
+}

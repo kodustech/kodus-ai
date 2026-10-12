@@ -1,0 +1,25 @@
+{
+  "model": "kimi-k3",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "component": [
+    "s_6e8d049a",
+    "s_a1fd1880"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_6e8d049a",
+          "s_a1fd1880"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "defect": "The Mode3 tests never wait for or assert the async legacy writes, so the legacy half of dual writing is unverified. Removing it or letting it fail leaves the tests green. This affects Create, Update, Delete and DeleteCollection, and Delete and DeleteCollection don't even register legacy expectations."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "Both suggestions report the same defect: the Mode3 tests never wait for or check the legacy writes that run in background goroutines, so the legacy path could be removed and the tests would still pass. s_6e8d049a is anchored on the Create test but says the gap covers every Mode3 test, and it cites all four goroutines, including the Delete and DeleteCollection ones. s_a1fd1880 reports the same gap for the Delete and DeleteCollection tests only, and adds that those tests register no legacy expectations. So s_a1fd1880 is a subset of s_6e8d049a, which makes them duplicates. They point at different test functions (lines 47-77 vs 215-241), and each test needs its own sync-and-assert fix, so this is a systemic pattern that needs a unified comment. Both judges grouped them; I agree with Judge 1 that the kind is systemic_pattern, not same_location."
+  }
+}

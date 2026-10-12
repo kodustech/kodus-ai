@@ -1,0 +1,30 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_777115f9",
+     "s_d5eddfe5"
+    ],
+    "defect": "A hidratação remove incondicionalmente os campos *_ids, perdendo os IDs originais mesmo quando as referências não são resolvidas."
+   },
+   {
+    "members": [
+     "s_36199324",
+     "s_083999f0"
+    ],
+    "defect": "A chamada de .map sem validar o valor de *_ids lança uma exceção quando ele é null."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_777115f9",
+   "s_36199324",
+   "s_d5eddfe5",
+   "s_083999f0"
+  ],
+  "reasoningPt": "S6 e S12 começam pela perda dos IDs originais; S8 e S16 começam pela exceção ao chamar .map sobre null, exigindo outro grupo. Todas agregam defeitos secundários: S6, S8 e S16 mencionam também o problema do outro grupo, enquanto S12 acrescenta a sobrescrita de uma propriedade existente."
+ }
+}

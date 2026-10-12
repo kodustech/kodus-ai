@@ -1,0 +1,76 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create, line 51: the async legacy write inherits request cancellation."
+   },
+   {
+    "id": "F2",
+    "description": "Delete, line 110: the async legacy write inherits request cancellation."
+   },
+   {
+    "id": "F3",
+    "description": "Update, line 135: the async legacy write inherits request cancellation."
+   },
+   {
+    "id": "F4",
+    "description": "DeleteCollection, line 163: the async legacy write inherits request cancellation."
+   },
+   {
+    "id": "F5",
+    "description": "Async legacy write errors are recorded in metrics but never logged."
+   },
+   {
+    "id": "F6",
+    "description": "Mode-3 playlist integration tests immediately read legacy data without waiting for async writes, making assertions racy."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f50f8610",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F6"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ffe2609d",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_03fc7aa9",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_68ce1673",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

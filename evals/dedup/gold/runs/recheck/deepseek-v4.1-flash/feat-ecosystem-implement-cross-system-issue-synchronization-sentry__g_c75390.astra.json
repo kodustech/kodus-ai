@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_2431eed5",
+     "s_b531a8e1"
+    ],
+    "defect": "O valor padrão de queued é calculado na importação, fazendo as instâncias compartilharem o mesmo timestamp."
+   },
+   {
+    "members": [
+     "s_2673b2c5",
+     "s_2438c807"
+    ],
+    "defect": "to_dict() preserva queued como datetime no payload do Celery, causando a incompatibilidade de serialização JSON relatada."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_2673b2c5"
+  ],
+  "reasoningPt": "S1 e S3 relatam o timestamp fixado na importação; S4 e S6 têm como defeito principal a serialização do datetime, que exige uma correção diferente. S4 também menciona o timestamp fixo ao final, sendo um bundle, mas essa observação secundária não une os grupos."
+ }
+}

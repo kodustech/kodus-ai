@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_14cc2bfd",
+     "s_4d5582bd",
+     "s_3fe2d5bd"
+    ],
+    "defect": "The handler passes the raw `guests` input to sendAddGuestsEmails instead of `uniqueGuests`, so existing attendees get a full 'You're scheduled' email instead of the guests-added notification."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S12, S16 e S17 apontam o mesmo defeito: o handler passa `guests` bruto para sendAddGuestsEmails em vez de `uniqueGuests`. Por isso, participantes que já estavam na reserva recebem o e-mail de confirmação completo. As três propõem a mesma correção e só mudam um pouco o intervalo de linhas, então o grupo continua como está."
+ }
+}

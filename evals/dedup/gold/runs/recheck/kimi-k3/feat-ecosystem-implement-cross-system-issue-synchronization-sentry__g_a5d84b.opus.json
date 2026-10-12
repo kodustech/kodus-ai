@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ade14568",
+     "s_4394a939"
+    ],
+    "defect": "The test name 'test_from_dict_inalid_data' has a typo and should be 'test_from_dict_invalid_data'."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S9 apontam o mesmo erro de digitação ('inalid' em vez de 'invalid') no nome do mesmo teste. As duas sugerem a mesma correção, que é renomear o teste. Muda só a justificativa (grep vs. filtro do pytest) e o intervalo de linhas, então o grupo fica como está."
+ }
+}

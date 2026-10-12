@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_459f0102",
+    "mainDefect": "The limit parameter lacks lower and upper bounds, allowing excessive member loading or database errors.",
+    "secondary": [
+     {
+      "defect": "The offset parameter is not clamped to zero or greater.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

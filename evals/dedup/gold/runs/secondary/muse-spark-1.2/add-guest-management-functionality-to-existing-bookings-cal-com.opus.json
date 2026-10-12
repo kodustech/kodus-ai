@@ -1,0 +1,77 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6b3b1759",
+    "mainDefect": "The blacklist check compares guest emails that are not lowercased against a lowercased blacklist, so a different casing gets past the blocklist.",
+    "secondary": [
+     {
+      "defect": "The existing-attendee check (guest === attendee.email) is case-sensitive, so duplicate attendees that differ only by case can be created.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c99a8cda",
+    "mainDefect": "The blacklist comparison is case-sensitive because only the blacklist entries are lowercased, so case variations get past it.",
+    "secondary": [
+     {
+      "defect": "Input guests are not deduplicated within the request (case-insensitively), so the same email can be inserted more than once.",
+      "coveredBy": [
+       "s_d5ce31d3",
+       "s_663c3e53"
+      ]
+     },
+     {
+      "defect": "The existing-attendee check (guest === attendee.email) is case-sensitive.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_9d50fd99",
+    "mainDefect": "sendAddGuestsEmails is called with the raw guests array instead of the filtered uniqueGuests, so existing or blacklisted attendees are treated as new.",
+    "secondary": [
+     {
+      "defect": "The server schema does not enforce unique emails, so duplicate emails in a request reach createMany.",
+      "coveredBy": [
+       "s_d5ce31d3",
+       "s_663c3e53"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f4c52829",
+    "mainDefect": "The client-side uniqueness check in AddGuestsDialog is case-sensitive, so emails that differ only by case pass validation.",
+    "secondary": [
+     {
+      "defect": "The server-side ZAddGuestsInputSchema does not apply the same uniqueness check, so it only runs on the client.",
+      "coveredBy": [
+       "s_663c3e53",
+       "s_d5ce31d3"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_358a3c52",
+    "mainDefect": "Guest emails are not lowercased before being compared with existing attendees and the blacklist.",
+    "secondary": [
+     {
+      "defect": "Guests are not deduplicated within a single request, so duplicate attendees can be created.",
+      "coveredBy": [
+       "s_d5ce31d3",
+       "s_663c3e53"
+      ]
+     },
+     {
+      "defect": "The attendee check reads and then writes with no isolation or DB unique constraint, so concurrent requests can insert duplicate attendees.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

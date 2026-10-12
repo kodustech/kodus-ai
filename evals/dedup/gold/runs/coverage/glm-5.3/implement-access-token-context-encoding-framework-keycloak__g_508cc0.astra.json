@@ -1,0 +1,78 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "AssertEvents.isAccessTokenId, line 483: substring(3, 5) reads the wrong characters; the grant shortcut is at substring(4, 6)."
+   },
+   {
+    "id": "F2",
+    "description": "AssertEvents.isAccessTokenId, line 483: the equality check is inverted, returning false when the extracted shortcut matches the expected grant."
+   },
+   {
+    "id": "F3",
+    "description": "AssertEvents.isAccessTokenId, line 483: no prefix-length guard prevents StringIndexOutOfBoundsException for short prefixes."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7f53154c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cabf60f8",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0df1d418",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_40f5268c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_271c9373",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_47286227",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8d844482",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_f886b821",
+   "s_611afbf2",
+   "s_ce1639a8"
+  ],
+  "bundles": [
+   "s_f886b821",
+   "s_ce1639a8"
+  ],
+  "reasoningPt": "O defeito principal de S3 é o grantType desatualizado depois de setFormParams(). O NPE com formParams nulo só aparece como \"also\" e não liga S3 a S13. S13 trata apenas do NPE no construtor. Já o primeiro defeito de S15 é a remoção do construtor de cópia Context(Context), e o cache desatualizado vem depois como segundo ponto. Assim, os três têm defeitos principais diferentes e ficam separados."
+ }
+}

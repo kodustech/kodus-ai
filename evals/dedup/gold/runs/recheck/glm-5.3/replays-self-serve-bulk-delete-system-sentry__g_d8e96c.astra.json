@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c5ab9f8f",
+     "s_9b433b01"
+    ],
+    "defect": "Os validadores de exclusão mútua entre age e timestamp usam truthiness para detectar presença, tratando zero como campo ausente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S4 relatam o mesmo defeito nos mesmos validadores e propõem a mesma correção: verificar a presença das chaves. Os exemplos e impactos adicionais de S4 apenas detalham esse relato, sem introduzir outro defeito."
+ }
+}

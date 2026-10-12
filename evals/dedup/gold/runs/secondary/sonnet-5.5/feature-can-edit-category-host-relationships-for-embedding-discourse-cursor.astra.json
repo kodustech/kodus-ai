@@ -1,0 +1,62 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c715ef0c",
+    "mainDefect": "The migration crashes when category-setting queries return no rows because it indexes their results without nil checks.",
+    "secondary": [
+     {
+      "defect": "Raw host values interpolated into the INSERT can break it when they contain quotes or blank lines.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8d184fdd",
+    "mainDefect": "Update and destroy dereference a nil lookup result for unknown host IDs, returning a 500 instead of a 404.",
+    "secondary": [
+     {
+      "defect": "The model's before_validation callback calls sub! on a nil host when the host parameter is missing.",
+      "coveredBy": [
+       "s_2a55c64a"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_dca123ba",
+    "mainDefect": "The migration crashes when category-setting queries return no rows because it indexes their results without nil checks.",
+    "secondary": [
+     {
+      "defect": "The INSERT interpolates unescaped host setting values, so a quote in a host breaks the insert.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_2a55c64a",
+    "mainDefect": "The model's before_validation callback calls sub! on a nil host when the host parameter is missing.",
+    "secondary": [
+     {
+      "defect": "The host lookup compares lower(host) against uri.host without downcasing it, rejecting mixed-case referers.",
+      "coveredBy": [
+       "s_5fd8900b",
+       "s_5d6ec13d"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_7958039f",
+    "mainDefect": "Update and destroy dereference a nil lookup result for unknown host IDs, returning a 500 instead of a 404.",
+    "secondary": [
+     {
+      "defect": "save_host raises when params[:embeddable_host] is nil.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

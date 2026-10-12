@@ -1,0 +1,29 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "promptSha": "8063cb4dc8f081b66491886b00e9a978568ec885",
+  "attempt": 1,
+  "ms": 27645,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_a221d835",
+          "s_a34eab52"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The same Italian TOTP setup instruction was copied into both Lithuanian account and login message bundles.",
+        "rationale": "Both suggestions report the identical localization mistake repeated in two bundles. Each entry needs to be replaced with a Lithuanian translation."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_70350e56",
+        "confidence": "high"
+      }
+    ]
+  }
+}

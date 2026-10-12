@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Authenticate in client.go lost the tagging panic guard, allowing TagDevice panics to propagate into authentication."
+   },
+   {
+    "id": "F2",
+    "description": "Authenticate in client.go lost TagDevice’s independent 2-minute timeout, relying on the caller’s deadline."
+   },
+   {
+    "id": "F3",
+    "description": "Authenticate in client.go now blocks on synchronous tagging DB writes, adding request latency."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_def15064",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3a4fa9ea",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

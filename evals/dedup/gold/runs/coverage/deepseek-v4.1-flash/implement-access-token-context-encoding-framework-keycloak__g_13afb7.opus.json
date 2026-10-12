@@ -1,0 +1,85 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "isAccessTokenId (AssertEvents.java line 483) reads the grant shortcut with substring(3,5); it should be substring(4,6)"
+   },
+   {
+    "id": "F2",
+    "description": "isAccessTokenId inverts the equality check: it returns false when the shortcut equals the expected value, so it never validates the grant type"
+   },
+   {
+    "id": "F3",
+    "description": "isAccessTokenId has no length guard on items[0] before calling substring, so a malformed ID can throw StringIndexOutOfBoundsException"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_be2a870e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_f2171902",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_a148cd25",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5ae95ca9",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_88dcd5ff",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_511ab22a",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_dccfaa16",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_756b95c2",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

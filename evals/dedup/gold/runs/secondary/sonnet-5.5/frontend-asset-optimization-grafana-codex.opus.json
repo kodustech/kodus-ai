@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0cbe997b",
+    "mainDefect": "After taking the write lock, the code does not check the cache again, so concurrent first requests each rebuild the manifest one after another.",
+    "secondary": [
+     {
+      "defect": "The cache is assigned even when the read fails, so a transient error stores nil or bad data in the cache and replaces a valid value.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b82e1353",
+    "mainDefect": "After taking the write lock, the code does not check the cache again, so concurrent first callers each rebuild the entry point assets.",
+    "secondary": [
+     {
+      "defect": "entryPointAssetsCache = result runs even when err != nil, so a failed or partial load is cached and served to every later reader in non-dev mode.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

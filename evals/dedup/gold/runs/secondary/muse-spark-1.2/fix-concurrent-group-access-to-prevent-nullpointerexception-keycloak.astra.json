@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_7a9f177c",
+    "mainDefect": "getSubGroupsCount() returns null when modelSupplier.get() is null, violating its non-null contract and risking unboxing failures.",
+    "secondary": [
+     {
+      "defect": "The three getSubGroupsStream methods lack null guards and still throw NullPointerException during concurrent group deletion.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

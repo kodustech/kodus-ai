@@ -1,0 +1,68 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Client-side size check in utilities.js:182 hardcodes 10MB instead of reading the per-type site setting"
+   },
+   {
+    "id": "F2",
+    "description": "413 error handler in utilities.js:246 hardcodes 10MB, so the error message can show the wrong limit"
+   },
+   {
+    "id": "F3",
+    "description": "Server-side FileHelper.download cap in uploads_controller.rb:55 hardcodes 10.megabytes instead of using SiteSetting.max_image_size_kb"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_aaaa47e8",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a3648b8e",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c7c633cc",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7e515b13",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_278d3350",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_73fe7ee9",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4faeab88",
+     "s_a03526cd",
+     "s_2c46aaba"
+    ],
+    "defect": "Unguarded access to integration.metadata[\"sender\"][\"login\"] raises KeyError (HTTP 500) for ACTIVE integrations without sender metadata instead of rendering the error page."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S6 e S7 relatam o mesmo defeito: o acesso sem proteção a integration.metadata[\"sender\"][\"login\"] gera KeyError (500) quando a integração não tem metadados de sender. A correção é a mesma (usar .get() e cair no error()). Só mudam o intervalo de linhas e a justificativa, e nenhuma delas traz um segundo defeito."
+ }
+}

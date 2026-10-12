@@ -1,0 +1,30 @@
+{
+ "s_f3ed8c70": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: tagDeviceUI grava o dispositivo no localCache (linha 87) antes de CreateOrUpdateDevice ser executado, e não remove a entrada quando essa chamada retorna ErrDeviceLimitReached. POR QUÊ: após a primeira rejeição, o mesmo ID de dispositivo acerta o cache por 29 minutos, então tagDeviceUI retorna nil e o limite é silenciosamente contornado. O dispositivo é então admitido sem ser registrado, e o novo caminho de erro em client.go o rejeita apenas uma vez. COMO: defina a entrada do cache somente depois que CreateOrUpdateDevice tiver sucesso, ou delete a chave quando ele retornar um erro."
+ },
+ "s_9c3809e7": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: ProvideAnonDBStore agora recebe um parâmetro extra int64 deviceLimit, mas pkg/server/wire.go:374 ainda o lista como um provider do wire. POR QUÊ: o wire não consegue fornecer um int64 puro, então a geração do wire ou o build falha. O provider também não é mais usado, já que ProvideAnonymousDeviceService constrói o store por conta própria. COMO: remova anonstore.ProvideAnonDBStore e o Bind de AnonStore do wire.go, ou faça o wire fornecer o store e continue injetando-o."
+ },
+ "s_3b443542": {
+  "summaryPt": "",
+  "contentPt": "ProvideAnonDBStore agora exige um argumento extra int64 deviceLimit. pkg/server/wire.go:374-375 ainda o registra como um provider do wire e faz o bind de anonstore.AnonStore para *AnonDBStore, e esse arquivo não foi atualizado. O wire não tem provider para um int64 puro, então a geração do wire ou o build vai falhar. Remova o provider e o Bind do wire.go, já que impl.go agora constrói o store por conta própria. Alternativamente, mantenha a assinatura original do provider e leia o limite de cfg dentro dele, por exemplo recebendo *setting.Cfg."
+ },
+ "s_52be6958": {
+  "summaryPt": "",
+  "contentPt": "tagDeviceUI coloca a chave do dispositivo no cache local (SetDefault, linha 87) antes da escrita no banco. Quando a escrita agora falha com ErrDeviceLimitReached, a chave permanece em cache por 29 minutos. Requisições posteriores do dispositivo rejeitado acertam o cache, retornam cedo sem erro e são autenticadas como anônimas, então o limite de dispositivos é contornado após a primeira rejeição. Correção: defina a entrada do cache somente depois que CreateOrUpdateDevice tiver sucesso, ou delete a chave quando ele retornar um erro."
+ },
+ "s_2f5725cb": {
+  "summaryPt": "",
+  "contentPt": "O limite de dispositivos é aplicado com uma sequência check-then-act. CountDevices é executado, depois o insert roda em uma instrução separada, sem transação, lock ou constraint. Requisições concorrentes de novos dispositivos podem todas ver count < limit e todas inserir, de modo que o limite é excedido. O PR também removeu a goroutine assíncrona, então as requisições agora fazem o tagging em paralelo. Correção: faça a contagem e o insert de forma atômica, por exemplo em uma única transação com lock, ou com um INSERT ... SELECT ... WHERE (SELECT COUNT(*) ...) < limit condicional, ou serialize por meio de um lock no servidor."
+ },
+ "s_df37064d": {
+  "summaryPt": "",
+  "contentPt": "A chave do cache local é definida (impl.go:87) antes da escrita no store. Se tagDeviceUI falhar, inclusive com ErrDeviceLimitReached, a chave permanece em cache, então o dispositivo provavelmente é tratado como já marcado durante o TTL do cache (29 minutos) e as requisições seguintes não são reavaliadas. A entrada do cache deve ser removida, ou definida somente após uma escrita bem-sucedida."
+ },
+ "s_4c4e75d7": {
+  "summaryPt": "",
+  "contentPt": "ProvideAnonDBStore agora exige um parâmetro deviceLimit int64, mas pkg/server/wire.go:374-375 ainda o registra como um provider do wire e faz o bind de anonstore.AnonStore para *AnonDBStore. O wire não consegue fornecer um int64 puro, então a geração do wire ou a compilação falha. Nada mais consome esse binding, porque ProvideAnonymousDeviceService agora constrói o store por conta própria a partir de db.DB e cfg.AnonymousDeviceLimit. Remova essas duas entradas do wire.go, ou faça ProvideAnonDBStore receber *setting.Cfg."
+ }
+}

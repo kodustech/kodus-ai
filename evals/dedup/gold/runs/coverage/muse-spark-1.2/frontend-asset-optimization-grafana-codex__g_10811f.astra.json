@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GetWebAssets lacks a cache recheck after acquiring the write lock, causing waiting callers to reload and overwrite cached entries, potentially with nil on error."
+   },
+   {
+    "id": "F2",
+    "description": "GetWebAssets holds the exclusive lock across file/CDN I/O, serializing all cache misses."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0d3625df",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_505b8655",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "RuleActionsButtons.V2 passes the now-optional `rule` prop to `useRulerRuleAbility`, but that hook's parameter is still a required `RulerRuleDTO`. Only the plural `useRulerRuleAbilities` was widened to accept undefined."
+   },
+   {
+    "id": "F2",
+    "description": "`getEditableIdentifier` can return undefined, so the whole actions block (Edit button and More menu) silently returns null with no feedback to the user."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_61ba8ef0",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9d5d3468",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

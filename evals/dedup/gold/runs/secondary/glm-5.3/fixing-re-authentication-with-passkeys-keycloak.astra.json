@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_259020b6",
+    "mainDefect": "The wrong-password re-authentication tests assert only the error message and would miss regressions that expose an editable username or registration link.",
+    "secondary": [
+     {
+      "defect": "No test exercises a failed or cancelled conditional passkey during re-authentication to cover the new WebAuthnConditionalUIAuthenticator.errorChallenge call site.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

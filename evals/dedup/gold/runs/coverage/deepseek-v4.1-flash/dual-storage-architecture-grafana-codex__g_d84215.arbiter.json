@@ -1,0 +1,63 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create (line 51): the async legacy write goroutine builds its timeout from the request-scoped ctx, so the write can be cancelled when the handler returns"
+   },
+   {
+    "id": "F2",
+    "description": "Delete (line 110): same request-scoped ctx is used for the async legacy delete"
+   },
+   {
+    "id": "F3",
+    "description": "Update (line 135): same request-scoped ctx is used for the async legacy update"
+   },
+   {
+    "id": "F4",
+    "description": "DeleteCollection (line 163): same request-scoped ctx is used for the async legacy deletecollection"
+   },
+   {
+    "id": "F5",
+    "description": "The legacy write error is no longer logged; it is only recorded in a metric"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0fa90f2c",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7e8b6adf",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b0ebef03",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": true
+   }
+  ],
+  "decisive": true,
+  "reasoning": "The group problem has two parts: the request-scoped ctx used at four goroutine sites (Create, Delete, Update, DeleteCollection), and the legacy error no longer being logged. That gives five facets. Labeler 2 added two more. F6, the lost synchronous guarantee, is just a consequence of the same ctx and async defect, not a separate edit. F7, out-of-order commits, appears in only one member as a side remark and is not part of the group's problem. So those two facets wrongly made complete members look incomplete. s_0fa90f2c names all four goroutine ranges (50-57, 108-114, 134-141, 161-167), says the goroutine builds its timeout from the request ctx, and says the error is 'only recorded in a metric with no log'. It covers all five. s_7e8b6adf names lines 51, 110, 135 and 163 but never mentions the missing log, so it is incomplete. s_b0ebef03 names all four locations and states the error 'is no longer logged', so it covers all five."
+ }
+}

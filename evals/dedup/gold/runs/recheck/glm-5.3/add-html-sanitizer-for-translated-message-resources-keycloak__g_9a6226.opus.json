@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a63922db",
+     "s_d1bdd70e"
+    ],
+    "defect": "The common-prefix and common-suffix trimming used to build the 'Illegal HTML' message can overlap, so substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S12 apontam o mesmo defeito: os contadores de prefixo (start) e sufixo (end) comuns podem se sobrepor, e aí a chamada substring na linha 111 lança StringIndexOutOfBoundsException. Os exemplos e os intervalos de linhas são um pouco diferentes, mas a correção é a mesma: limitar os índices antes do substring. Nenhuma das duas traz um segundo defeito, então o grupo fica como está."
+ }
+}

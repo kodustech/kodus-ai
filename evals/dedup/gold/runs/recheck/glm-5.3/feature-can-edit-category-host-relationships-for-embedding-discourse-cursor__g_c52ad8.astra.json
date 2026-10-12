@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c4c17811",
+     "s_a74fdd01"
+    ],
+    "defect": "A hidratação plural substitui e apaga os atributos *_ids mesmo quando as referências não são resolvidas, perdendo os IDs originais e produzindo uma lista inválida."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c4c17811",
+   "s_a74fdd01"
+  ],
+  "reasoningPt": "S15 e S17 descrevem o mesmo defeito principal: consumir *_ids sem verificar o sucesso das buscas; o fallback inoperante de S17 faz parte desse problema. Ambas também incluem a falta de validação antes de chamar .map, mencionada na correção de S15 e explicitamente em S17, por isso ambas são bundles."
+ }
+}

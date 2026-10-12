@@ -1,0 +1,49 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_4875e870",
+    "mainDefect": "The test never joins the reader thread before asserting caughtExceptions is empty, so an exception from the last in-flight read can be added after the assertion has passed.",
+    "secondary": [
+     {
+      "defect": "Nothing makes the reader thread overlap the deletions, so it can run zero reads and the test passes without testing anything.",
+      "coveredBy": [
+       "s_609a1176"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_624823a3",
+    "mainDefect": "The test never joins the reader thread before asserting caughtExceptions is empty, so it can miss an exception from the final in-flight read and pass when it should fail.",
+    "secondary": [
+     {
+      "defect": "Nothing checks that any reads happened before deletedAll was set, so a reader thread that starts late can let the test pass without testing anything.",
+      "coveredBy": [
+       "s_609a1176"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_af3017dc",
+    "mainDefect": "The test never joins the reader thread before the assertion, so an exception from its last in-flight HTTP call can be recorded after the assertion has already run.",
+    "secondary": [
+     {
+      "defect": "No barrier syncs the reader thread's start with the deletion loop, so the reader may not overlap the deletions at all.",
+      "coveredBy": [
+       "s_609a1176"
+      ]
+     },
+     {
+      "defect": "The reader thread is not a daemon and is not always stopped or joined, so it can keep running into later tests.",
+      "coveredBy": [
+       "s_e9cf117f"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

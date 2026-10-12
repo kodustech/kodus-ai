@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_85e64d31",
+     "s_3fd440dd",
+     "s_35d9e782",
+     "s_0c735ff0",
+     "s_75996780"
+    ],
+    "defect": "O mixin order() repassa $val diretamente às propriedades legadas box-ordinal-group, sem o ajuste de +1 apontado pelas sugestões."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4, S5, S6 e S8 relatam o mesmo defeito no mixin order() e propõem a mesma correção. As referências aos consumidores e ao caso order(0) apenas exemplificam esse defeito; nenhuma sugestão apresenta um segundo problema independente."
+ }
+}

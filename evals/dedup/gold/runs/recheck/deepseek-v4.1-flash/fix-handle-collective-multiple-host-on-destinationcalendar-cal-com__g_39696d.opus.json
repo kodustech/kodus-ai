@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6e5785bb",
+     "s_ad515981",
+     "s_fd5d22ad"
+    ],
+    "defect": "evt.destinationCalendar is null when neither the event type nor the organizer has a destination calendar, so evt.destinationCalendar?.push(...teamDestinationCalendars) silently does nothing and the collective hosts' calendars are lost."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4, S6 e S10 relatam o mesmo defeito: destinationCalendar fica null e o push com optional chaining não faz nada, perdendo os calendários dos hosts COLLECTIVE. Só mudam o intervalo de linhas e a correção sugerida (inicializar com [] ou atribuir o array mesclado). Nenhuma delas traz um segundo defeito."
+ }
+}

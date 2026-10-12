@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler without implementing its abstract methods, so the registered metric_alert_fire handler raises TypeError when instantiated in process_detectors.",
+    "members": [
+     "s_82a751ea",
+     "s_0c6a4bbd",
+     "s_56246ed6"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S7 relatam o mesmo defeito no mesmo trecho: MetricAlertDetectorHandler virou subclasse de StatefulDetectorHandler sem implementar os métodos abstratos. Com isso, Detector.detector_handler lança TypeError ao instanciar o handler dentro de process_detectors. As correções sugeridas variam (implementar os métodos, voltar para um stub ou remover o handler), mas resolvem o mesmo problema, então o grupo se mantém."
+ }
+}

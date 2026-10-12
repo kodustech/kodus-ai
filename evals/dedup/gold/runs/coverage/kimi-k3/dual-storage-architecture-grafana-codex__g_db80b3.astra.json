@@ -1,0 +1,43 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "TestMode3_Create never awaits or asserts the async legacy write, leaving its registered expectation unverified."
+   },
+   {
+    "id": "F2",
+    "description": "TestMode3_Update never awaits or asserts the async legacy write."
+   },
+   {
+    "id": "F3",
+    "description": "TestMode3_Delete leaves async legacy deletion unverified, with no legacy expectations or synchronized assertions."
+   },
+   {
+    "id": "F4",
+    "description": "TestMode3_DeleteCollection leaves async legacy deletion unverified, with no legacy expectations or synchronized assertions."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a1fd1880",
+    "covers": [
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6e8d049a",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

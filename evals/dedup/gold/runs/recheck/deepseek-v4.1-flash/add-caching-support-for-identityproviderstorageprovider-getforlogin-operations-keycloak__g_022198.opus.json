@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1a15af6b",
+     "s_25a59b36"
+    ],
+    "defect": "The cached branch of getForLogin returns raw getById models without applying createOrganizationAwareIdentityProviderModel, unlike the uncached branches, so the result shape depends on cache state."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S7 apontam o mesmo defeito: o ramo com cache de getForLogin retorna os modelos crus de getById, sem o mapeamento createOrganizationAwareIdentityProviderModel que os ramos sem cache aplicam. As duas propõem a mesma correção nas mesmas linhas, e nenhuma traz um segundo defeito. Por isso o grupo fica como está."
+ }
+}

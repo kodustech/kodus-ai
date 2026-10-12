@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e87a2835",
+     "s_a4f55b36",
+     "s_73967244"
+    ],
+    "defect": "As goroutines de escrita no legado herdam o cancelamento do contexto da requisição, podendo abortar as operações quando o handler retorna."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_e87a2835",
+   "s_a4f55b36",
+   "s_73967244"
+  ],
+  "reasoningPt": "S1, S17 e S23 têm o mesmo defeito principal: as escritas assíncronas no legado continuam vinculadas ao cancelamento da requisição, nos mesmos quatro métodos. As três também apontam a ausência de logs das falhas, um defeito adicional que exige correção própria; por isso entram em bundles, sem alterar o agrupamento pelo defeito principal."
+ }
+}

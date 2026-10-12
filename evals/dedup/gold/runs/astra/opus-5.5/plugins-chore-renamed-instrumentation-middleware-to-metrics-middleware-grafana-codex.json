@@ -1,0 +1,29 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "promptSha": "a12c862b1aea1cf3f02f788e2b739ebbf30579ad",
+  "attempt": 1,
+  "ms": 22418,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_51e1465e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d964d5c0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e1aa277e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0de4d7a6",
+        "confidence": "high"
+      }
+    ]
+  }
+}

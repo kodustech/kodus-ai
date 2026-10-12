@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "BuildIndex: narrowed cacheMu locking permits concurrent same-key builds, causing directory collisions, duplicate work, leaked or overwritten indexes, and double metrics."
+   },
+   {
+    "id": "F2",
+    "description": "TotalDocs: iterates b.cache without a read lock while BuildIndex writes to it, causing a data race."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_6f655174",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4cfadd1d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_53aa8e91",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

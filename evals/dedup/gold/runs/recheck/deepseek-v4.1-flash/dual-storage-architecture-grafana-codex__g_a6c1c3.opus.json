@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "On the storage error path, recordLegacyDuration is called instead of recordStorageDuration, so a storage failure is recorded under the legacy metric (Create and Update).",
+    "members": [
+     "s_7dc5b2ce",
+     "s_fdf78d6e"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S18 e S28 apontam o mesmo erro: no caminho de erro do storage, a métrica é gravada com recordLegacyDuration. S18 trata do Update e S28 do Create, e a mesma troca corrige os dois pontos. Como cada uma relata um único defeito, o grupo fica como está."
+ }
+}

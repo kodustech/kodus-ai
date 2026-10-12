@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_dd0b9d2b",
+     "s_5dfdf59a",
+     "s_03602ec1"
+    ],
+    "defect": "A delegação de useAllAlertRuleAbilities para useAllRulerRuleAbilities perdeu a detecção de grupos federados, removendo a proteção de imutabilidade dessas regras."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S4 e S5 relatam o mesmo defeito: isFederated passou a ser fixado em false, permitindo ações antes bloqueadas para regras federadas. As diferenças de ênfase e correção proposta não alteram a causa; preservar a informação de federação resolve os três relatos."
+ }
+}

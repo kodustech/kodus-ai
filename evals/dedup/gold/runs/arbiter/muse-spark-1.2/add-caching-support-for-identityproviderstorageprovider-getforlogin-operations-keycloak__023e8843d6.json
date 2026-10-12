@@ -1,0 +1,25 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "component": [
+    "s_72746574",
+    "s_c0312a1d"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_72746574",
+          "s_c0312a1d"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "defect": "The getForLogin login cache (cacheKeyForLogin) is only invalidated by IdentityProviderStorageProvider create/update/remove. Linking or unlinking an IdP through OrganizationProvider.addIdentityProvider/removeIdentityProvider changes the result of the login predicate, but nothing invalidates the cache, so stale IdentityProviderListQuery entries are left behind."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "Both suggestions report the same defect. When an IdP is linked to or unlinked from an organization through InfinispanOrganizationProvider, the login cache is not invalidated. Both propose the same fix: invalidate cacheKeyForLogin for all FetchModes in that provider. s_c0312a1d also mentions the organization-enabled toggle, but only inside its proposed fix and not as a separately reported defect. So it does not add a second defect, and one comment from either suggestion covers the issue. They are in the same file but anchor on different, non-adjacent code: getForLogin at lines 213-255 and the invalidation helpers at lines 382-418. Because of that I chose cross_location, though same_location would also be defensible. The kind choice is a judgment call, but the grouping itself is clear."
+  }
+}

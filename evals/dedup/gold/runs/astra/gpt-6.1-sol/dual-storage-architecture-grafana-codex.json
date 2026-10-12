@@ -1,0 +1,64 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "0b46568ec930a5fbcac25cd5bb78a2aeadc4f5bf",
+  "attempt": 1,
+  "ms": 51391,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_b490b494",
+          "s_6cb9049c",
+          "s_11922f88"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Timing metrics use the wrong backend recorder for Storage Create failures, Storage Update failures, and Legacy DeleteCollection operations.",
+        "rationale": "All three report the repeated mistake of recording an operation's duration against the other backend. Each call site needs its recorder corrected."
+      },
+      {
+        "members": [
+          "s_b8b19a32",
+          "s_a9049b82"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Legacy Update receives the original UpdatedObjectInfo instead of Storage's persisted result, allowing the update to be recomputed inconsistently.",
+        "rationale": "Both identify the removed update wrapper and the resulting independent evaluation of the updater. Passing Storage's result through a wrapper resolves both."
+      },
+      {
+        "members": [
+          "s_0469979e",
+          "s_faba93e0"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Asynchronous legacy Create, Delete, Update, and DeleteCollection operations inherit request cancellation and can be canceled when the response returns.",
+        "rationale": "Both report the same cancellation defect at the legacy Create goroutine. The broader suggestion also identifies its repetition in the other three asynchronous write paths, whose corresponding edits must remain in the merged comment."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_751ded27",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3af77dc3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_68108285",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5a02bd8a",
+        "confidence": "high"
+      }
+    ]
+  }
+}

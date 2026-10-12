@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_07999ed0",
+     "s_87249f18",
+     "s_1412483d"
+    ],
+    "defect": "In AddGuestsDialog's onError, the fallback t(\"unable_to_add_guests\") can never run because the template-literal message is always a non-empty string."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S14, S17 e S26 apontam o mesmo defeito: o fallback `|| t(\"unable_to_add_guests\")` nunca é executado, porque o template literal `message` nunca fica vazio. A menção de S17 ao prefixo de código de erro exibido ao usuário é consequência desse mesmo problema e se resolve com a mesma correção. Por isso, o grupo é mantido."
+ }
+}

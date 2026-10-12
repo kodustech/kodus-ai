@@ -1,0 +1,22 @@
+{
+ "s_c2f1d70e": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `queued: datetime = timezone.now()` é avaliado uma única vez, quando o módulo é importado, então todo AssignmentSource criado sem um `queued` explícito (incluindo todas as instâncias de `from_integration` e de `from_dict` sem a chave `queued`) compartilha o mesmo timestamp antigo de início do worker. POR QUÊ: `queued` não registra quando a atribuição foi enfileirada, então qualquer lógica de ordenação, debouncing ou obsolescência baseada nele estará errada, e o test_to_dict só verifica `is not None`, o que esconde o problema. CORREÇÃO: use `queued: datetime = field(default_factory=timezone.now)` (importe `field` de dataclasses)."
+ },
+ "s_b183150d": {
+  "summaryPt": "O campo `queued` não guarda o horário de enfileiramento: seu default `timezone.now()` roda uma vez no import.",
+  "contentPt": "O nome do campo `queued` diz que é o horário em que esta assignment source foi criada ou enfileirada. Mas `timezone.now()` como default de dataclass roda apenas uma vez, no import do módulo. Todo AssignmentSource criado por `from_integration` recebe o horário de início do processo, o que está errado e confunde quem lê `queued` mais adiante. Use `field(default_factory=timezone.now)` e importe `field` de dataclasses."
+ },
+ "s_9eae5caf": {
+  "summaryPt": "`queued` tem como default um único timestamp capturado no import do módulo, e não o horário de criação de cada assignment source.",
+  "contentPt": "`queued: datetime = timezone.now()` roda uma vez, quando a classe é definida. Todo AssignmentSource criado depois sem um `queued` explícito (incluindo toda chamada a `from_integration`) recebe o mesmo timestamp: o momento em que o processo importou este módulo. O campo deveria indicar quando uma atribuição foi enfileirada, mas nunca faz isso. Use `field(default_factory=timezone.now)` para que cada instância receba o horário em que foi criada."
+ },
+ "s_0ee85020": {
+  "summaryPt": "O default de `queued` é calculado uma vez no import, então todo AssignmentSource recebe o mesmo timestamp antigo.",
+  "contentPt": "O default `timezone.now()` roda uma vez, quando a classe é definida no import do módulo, e não a cada criação de instância. Todo `AssignmentSource.from_integration(...)` e todo `AssignmentSource(...)` criado sem um `queued` explícito compartilha, portanto, o horário de início do processo. Esse timestamp errado é então gravado no payload de toda task por `to_dict()`, então `queued` está sempre incorreto e fica mais defasado quanto mais tempo o worker ou processo web ficar rodando. Use `dataclasses.field(default_factory=timezone.now)` e importe `field` de dataclasses."
+ },
+ "s_03c0a1d9": {
+  "summaryPt": "test_to_dict verifica que queued não é None, o que é sempre verdadeiro, então o default `timezone.now()` avaliado no import passa despercebido.",
+  "contentPt": "`queued: datetime = timezone.now()` (assignment_source.py:18) é avaliado uma vez, quando a classe é definida. Todo AssignmentSource compartilha, portanto, o timestamp do início do processo. O teste só verifica `result.get(\"queued\") is not None`, o que vale para qualquer default, então ele continuaria passando com este bug ou com qualquer valor errado. Verifique algo sobre o valor em si: que ele fica entre timestamps capturados logo antes e logo depois da construção, ou que duas instâncias criadas em momentos diferentes recebem valores de `queued` diferentes. Depois troque o campo para `field(default_factory=timezone.now)` para que o teste mais forte passe."
+ }
+}

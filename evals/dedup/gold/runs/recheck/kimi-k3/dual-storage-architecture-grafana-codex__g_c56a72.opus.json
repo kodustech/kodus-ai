@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e75f841d",
+     "s_38c1c7d8"
+    ],
+    "defect": "Delete in mode 3 now returns early on a NotFound error from unified storage, which removes the fallback to the legacy delete and leaves legacy-only objects orphaned."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S18 apontam o mesmo defeito: o Delete do modo 3 passou a retornar cedo também em NotFound do storage unificado e deixou de apagar o objeto no legacy, o que deixa objetos órfãos. A correção é a mesma: restaurar o fall-through de IsNotFound. A menção a tolerar NotFound no delete do legacy faz parte dessa mesma correção, então nenhuma das duas reúne mais de um defeito."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f11cce9a",
+     "s_524f81d1",
+     "s_efd3a597",
+     "s_6628baaf"
+    ],
+    "defect": "O pareamento posicional de error_ids com events.values() pode associar IDs aos dados de outros eventos; a consulta pela chave node_id resolve o defeito."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S6, S7 e S8 apontam o mesmo defeito no mesmo trecho: associar IDs e resultados do nodestore por posição. As diferenças sobre cache, duplicatas e IDs ausentes descrevem situações que expõem a mesma falha, corrigida pela consulta por node_id; nenhuma sugestão reúne defeitos distintos."
+ }
+}

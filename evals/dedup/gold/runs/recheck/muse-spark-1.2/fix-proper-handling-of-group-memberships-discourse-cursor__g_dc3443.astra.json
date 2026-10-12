@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_aaef7623",
+     "s_5a9e72ea"
+    ],
+    "defect": "findMembers retorna undefined quando o nome está vazio, quebrando o contrato de sempre retornar uma promise."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S13 relatam o mesmo retorno antecipado de findMembers e a mesma quebra do contrato de promise. Uma única correção no caso de nome vazio resolve ambas; nenhuma relata um segundo defeito."
+ }
+}

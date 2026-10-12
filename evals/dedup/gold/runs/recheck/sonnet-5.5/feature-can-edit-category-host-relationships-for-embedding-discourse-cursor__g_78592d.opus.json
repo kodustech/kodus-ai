@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5fd8900b",
+     "s_5d6ec13d"
+    ],
+    "defect": "record_for_host compares lower(host) against uri.host without downcasing it, so referers with mixed-case hosts fail to match."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S9 apontam o mesmo defeito em record_for_host: a comparação usa lower(host) no banco, mas uri.host não é convertido para minúsculas. As duas propõem a mesma correção (downcase). Nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

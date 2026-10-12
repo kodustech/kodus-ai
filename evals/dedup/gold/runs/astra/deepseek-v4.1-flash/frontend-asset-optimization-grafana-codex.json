@@ -1,0 +1,38 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "promptSha": "b3d0604b3ef2d449efce0c85f4f6111f9e61427f",
+  "attempt": 1,
+  "ms": 30823,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_12bc3466",
+          "s_6b35380b",
+          "s_efe46b6a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The cache is not re-checked after acquiring the write lock, causing redundant cold-cache loads, and the write lock is held across file/CDN I/O, serializing requests.",
+        "rationale": "s_12bc3466 reports both defects: the missing second cache check reported by s_6b35380b and the lock held across I/O reported by s_efe46b6a. These overlapping reports form one group, and the merged comment must preserve both problems."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_1c290815",
+        "confidence": "high"
+      },
+      {
+        "id": "s_929a54a6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5cd23add",
+        "confidence": "high"
+      }
+    ]
+  }
+}

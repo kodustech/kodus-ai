@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_f8dcf583",
+    "mainDefect": "In the list view only promRule is passed, so the SilenceGrafanaRuleDrawer, which is gated on the ruler rule, never renders when Silence is clicked.",
+    "secondary": [
+     {
+      "defect": "The clone/duplicate redirect probably also depends on the ruler rule, so the Duplicate action enabled from promRule abilities may do nothing in the list view.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

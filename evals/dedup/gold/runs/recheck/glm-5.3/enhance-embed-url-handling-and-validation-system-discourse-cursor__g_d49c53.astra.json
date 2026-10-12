@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3e20fdea",
+     "s_157d31c5"
+    ],
+    "defect": "O layout de embed interpola request.referer em uma string JavaScript sem escape adequado ao contexto, permitindo injeção de script."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S19 relatam o mesmo defeito na mesma interpolação de request.referer. Os exemplos de exploração e as correções propostas diferem, mas uma única correção nessa interpolação resolve ambos os relatos."
+ }
+}

@@ -1,0 +1,55 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "2738658b7ca80814870d5e7878a4f3491b0fc5ac",
+  "attempt": 1,
+  "ms": 41407,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_e0e24b04",
+          "s_88cab4e0",
+          "s_a5c1072a",
+          "s_aeb710a3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The added synchronization sleep in test_basic is ineffective because time.sleep was already monkeypatched to a no-op.",
+        "rationale": "All four suggestions identify the same neutralized sleep at lines 60–62. Their descriptions of the inert statement and remaining synchronization race describe the same defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_aeb21e17",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9b82cde3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a6ca4743",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9f83c1a1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_dd07cc81",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bba2b5d2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_15effdab",
+        "confidence": "high"
+      }
+    ]
+  }
+}

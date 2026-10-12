@@ -1,0 +1,51 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "isTeamAdminOrOwner (addGuests.handler.ts lines 46-48) joins isTeamAdmin and isTeamOwner with && instead of ||, so admins who are not owners are denied"
+   },
+   {
+    "id": "F2",
+    "description": "isAttendee check (line 52) lets any attendee whose email matches add guests, which is too permissive"
+   },
+   {
+    "id": "F3",
+    "description": "FORBIDDEN message key 'you_do_not_have_permission' (line 55) is missing from en/common.json, so the toast may show the raw key"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_cc6b5fef",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bd0c0912",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_88211022",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b87c3cd2",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

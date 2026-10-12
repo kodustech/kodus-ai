@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_12bc3466",
+     "s_6b35380b"
+    ],
+    "defect": "After the write lock is taken, the code does not check entryPointAssetsCache again (incomplete double-checked locking), so concurrent callers recompute the cache and overwrite it."
+   }
+  ],
+  "unique": [
+   "s_efe46b6a"
+  ],
+  "bundles": [
+   "s_12bc3466"
+  ],
+  "reasoningPt": "O defeito principal de S1 é a falta de nova verificação do cache depois de pegar o write lock, que é o mesmo defeito de S2. S1 também fala do lock mantido durante a I/O, mas como segundo ponto, por isso entra em bundles. S3 trata só do lock mantido durante a I/O de arquivo/CDN, que é outro defeito com outra correção (calcular fora do lock), e fica sozinho."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6c6e846f",
+     "s_eec91158"
+    ],
+    "defect": "Variable names userType, greetName and userJaName in UserStory.java are misleading or confusing."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S10 e S11 apontam o mesmo problema: os nomes de variáveis userType, greetName e userJaName em UserStory.java são enganosos. S11 só acrescenta o ângulo cultural das convenções de nome, e a diferença de linhas não muda o defeito. Vale notar que UserStory.java não aparece no diff deste PR, então as duas sugestões parecem inventadas, mas continuam sendo duplicatas entre si."
+ }
+}

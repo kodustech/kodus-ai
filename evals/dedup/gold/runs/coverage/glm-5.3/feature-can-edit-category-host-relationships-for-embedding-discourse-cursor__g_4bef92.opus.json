@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Migration inserts legacy embeddable_hosts values verbatim without scheme/path normalization, so record_for_host never matches migrated rows"
+   },
+   {
+    "id": "F2",
+    "description": "Migration INSERT interpolates raw value unquoted/unescaped, so apostrophes break the SQL"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3284f51d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_82cdee2b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e1df980e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bccd111a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

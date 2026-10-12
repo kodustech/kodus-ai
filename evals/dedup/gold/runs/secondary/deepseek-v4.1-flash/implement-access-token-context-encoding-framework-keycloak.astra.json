@@ -1,0 +1,110 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_88dcd5ff",
+    "mainDefect": "The grant comparison is inverted, returning false when the shortcut equals the expected value.",
+    "secondary": [
+     {
+      "defect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+      "coveredBy": [
+       "s_511ab22a",
+       "s_be2a870e",
+       "s_5ae95ca9",
+       "s_f2171902",
+       "s_756b95c2",
+       "s_dccfaa16"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_511ab22a",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The grant comparison is inverted, returning false when the shortcut equals the expected value.",
+      "coveredBy": [
+       "s_88dcd5ff",
+       "s_a148cd25"
+      ]
+     },
+     {
+      "defect": "The matcher lacks a prefix-length guard before substring extraction, allowing malformed IDs to cause StringIndexOutOfBoundsException.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_5ae95ca9",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The grant comparison is inverted, returning false when the shortcut equals the expected value.",
+      "coveredBy": [
+       "s_88dcd5ff",
+       "s_a148cd25"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a148cd25",
+    "mainDefect": "The grant comparison is inverted, returning false when the shortcut equals the expected value.",
+    "secondary": [
+     {
+      "defect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+      "coveredBy": [
+       "s_511ab22a",
+       "s_be2a870e",
+       "s_5ae95ca9",
+       "s_f2171902",
+       "s_756b95c2",
+       "s_dccfaa16"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f2171902",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The grant comparison is inverted, returning false when the shortcut equals the expected value.",
+      "coveredBy": [
+       "s_88dcd5ff",
+       "s_a148cd25"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_756b95c2",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The grant comparison is inverted, returning false when the shortcut equals the expected value.",
+      "coveredBy": [
+       "s_88dcd5ff",
+       "s_a148cd25"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_dccfaa16",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The grant comparison is inverted, returning false when the shortcut equals the expected value.",
+      "coveredBy": [
+       "s_88dcd5ff",
+       "s_a148cd25"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

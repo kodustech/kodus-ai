@@ -1,0 +1,52 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_56e8eec5",
+    "mainDefect": "request.referer is interpolated into a JS string literal in the embed layout without JS escaping, enabling XSS.",
+    "secondary": [
+     {
+      "defect": "The full referer URL (with path) is passed as the postMessage targetOrigin, which must be a bare origin, so the browser drops the resize message.",
+      "coveredBy": [
+       "s_3ed07a3a"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_52c21f9e",
+    "mainDefect": "PollFeed has no error handling around open(feed_polling_url) and the SimpleRSS parse, so network errors or bad RSS crash the scheduled job.",
+    "secondary": [
+     {
+      "defect": "i.content can be nil, so CGI.unescapeHTML(i.content.scrub) raises NoMethodError and stops the feed import.",
+      "coveredBy": [
+       "s_8c2349e8",
+       "s_3adf9f4b"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c7cf0d7d",
+    "mainDefect": "TopicEmbed.import_remote calls open(url).read with no error handling, so network errors crash the RetrieveTopic job.",
+    "secondary": [
+     {
+      "defect": "Readability can return a nil title or content, and import then calls contents << on nil, which raises NoMethodError.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7ba9ce4b",
+    "mainDefect": "The invalid-host examples in the TopicRetriever spec don't stub retrieved_recently? to false, so they may test the throttle branch instead of the host check.",
+    "secondary": [
+     {
+      "defect": "The $redis setnx/expire calls aren't cleared or mocked, so state can leak between tests.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

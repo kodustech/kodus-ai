@@ -1,0 +1,104 @@
+{
+  "judge": "opus",
+  "model": "kimi-k3",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "170134d0a748aaa5d9d1c6f3319a83328266d4dc",
+  "attempt": 1,
+  "ms": 15627,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 69905,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 974,
+    "output_tokens_details": {
+      "thinking_tokens": 282
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 69905,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 974,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 69905,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 69905
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.5805016,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_c91d29d0",
+          "s_0f7f00ca"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The feature-flagged TableWidgetVisualization branch is given hardcoded empty columns and data, so it ignores the query results and renders an empty table.",
+        "rationale": "Both point at chart.tsx lines 164-174 and describe the same empty placeholder props that drop result.data and result.meta."
+      },
+      {
+        "members": [
+          "s_5ebba24e",
+          "s_b803431c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "fetch_error_details zips error_ids with get_multi values by position, so missing, duplicate or reordered nodestore results pair event ids with the wrong data.",
+        "rationale": "Both report the same zip(error_ids, events.values()) misalignment and propose the same fix: look results up by node_id key."
+      },
+      {
+        "members": [
+          "s_06a69ac5",
+          "s_73ccec8d",
+          "s_b934e7bb",
+          "s_5617da88"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The age/timestamp mutual-exclusion validators check truthiness, so a field set to 0 slips past the check. Also, a report with neither field still validates, which contradicts the docstrings.",
+        "rationale": "All four report the same truthiness bypass in the same validators. s_06a69ac5 also reports that a report with neither field is accepted, so the merged comment must carry that second defect too."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_c8f5a1e5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_07b5f6bf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_05939d85",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1199d6cb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b6f586de",
+        "confidence": "high"
+      }
+    ]
+  }
+}

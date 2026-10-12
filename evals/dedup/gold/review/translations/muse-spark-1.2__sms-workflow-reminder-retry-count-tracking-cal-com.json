@@ -1,0 +1,14 @@
+{
+ "s_dc093c16": {
+  "summaryPt": "O incremento de retryCount usa um valor lido desatualizado (stale) em vez de um incremento atômico, e o update no catch pode abortar o cron",
+  "contentPt": "O QUÊ: `retryCount: reminder.retryCount + 1` usa um valor desatualizado em memória em vez de um incremento atômico no banco, e o update no caminho do catch não tem proteção contra erros. POR QUÊ: Duas execuções concorrentes do cron entram em race condition e perdem um incremento (exigindo uma tentativa extra para deletar); se o próprio update do catch falhar, a unhandled rejection aborta o loop e abandona os lembretes restantes, sem tratamento de resposta. CORREÇÃO: Use `data: { retryCount: { increment: 1 } }` e envolva o update do caminho do catch em seu próprio try/catch, para que uma linha com falha não impeça o processamento das demais."
+ },
+ "s_4e2a8deb": {
+  "summaryPt": "Leitura desatualizada (stale) de retryCount+1 perde incrementos concorrentes",
+  "contentPt": "O incremento não atômico com leitura desatualizada (stale) causa lost updates e retry infinito sob concorrência. Use o incremento atômico { increment: 1 } em vez de reminder.retryCount+1."
+ },
+ "s_973148f4": {
+  "summaryPt": "Update sem proteção no catch lança exceção não tratada e aborta o batch",
+  "contentPt": "O update no catch não está protegido — se ele lançar uma exceção (registro já deletado por um deleteMany concorrente, falha transitória do banco), a exceção escapa do handler, aborta o loop e quebra a resposta. Envolva o update de retryCount em seu próprio try/catch ou use um incremento seguro."
+ }
+}

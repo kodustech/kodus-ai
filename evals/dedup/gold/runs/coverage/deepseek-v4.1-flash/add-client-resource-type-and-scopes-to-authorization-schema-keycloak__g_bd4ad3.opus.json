@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "getClientsWithPermission (lines 136-144) enumerates with findByType(server, 'Clients'), which does not match the type key used to store or look up per-client resources (hasPermission uses server.getId()), so the result is a wrong or empty set of client ids"
+   },
+   {
+    "id": "F2",
+    "description": "The all-clients resource-type resource named 'Clients' is also returned by findByType, so its name is added to the granted set as a bogus client id"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_1f6fc379",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_2383a0c6",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

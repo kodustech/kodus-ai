@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_93595c3f",
+     "s_e4393123",
+     "s_4aa5d124",
+     "s_3c85c91e"
+    ],
+    "defect": "O fallback de updateEvent e deleteEvent busca um destino comparando seu externalId com externalCalendarId ausente, perdendo o calendário de destino correto."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4, S13, S16 e S21 relatam o mesmo fallback inválido, repetido em updateEvent e deleteEvent. As diferenças na descrição das consequências e nas correções propostas não alteram o defeito; corrigir o critério de seleção nos dois pontos resolve todos os relatos."
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_3b74d3b1",
+    "mainDefect": "OAuth state uses a public, globally constant pipeline signature instead of a random value bound to the individual authorization flow.",
+    "secondary": [
+     {
+      "defect": "The installation_id GET parameter overrides the installation ID bound in pipeline state, allowing an attacker to substitute their own installation.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,55 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_f5735a93",
+    "mainDefect": "Independently computed prefix and suffix lengths can overlap, causing substring calls to throw.",
+    "secondary": [
+     {
+      "defect": "The verifier does not handle unchecked exceptions, allowing them to escape its declared failure contract.",
+      "coveredBy": [
+       "s_8919f827"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_83a004e9",
+    "mainDefect": "The admin-ui English placeholder format changed without updating sibling translations, leaving inconsistent placeholder contracts.",
+    "secondary": [
+     {
+      "defect": "The new single-brace placeholders and choice expression are incompatible with the admin-ui frontend formatter and render literally.",
+      "coveredBy": [
+       "s_a4b43d5c",
+       "s_d0c68d28"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_3a1c7eb0",
+    "mainDefect": "The account-ui English placeholder format changed without updating community translations, leaving inconsistent placeholder contracts.",
+    "secondary": [
+     {
+      "defect": "The new placeholder format is incompatible with the account-ui frontend formatter, preventing argument substitution.",
+      "coveredBy": [
+       "s_b29c946a",
+       "s_e7dee35f"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_8919f827",
+    "mainDefect": "IOException failures are wrapped in unchecked RuntimeException instances that escape the verifier's declared failure contract.",
+    "secondary": [
+     {
+      "defect": "The derived English reference path is not checked for existence, causing valid message files to fail verification when that reference file is missing.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

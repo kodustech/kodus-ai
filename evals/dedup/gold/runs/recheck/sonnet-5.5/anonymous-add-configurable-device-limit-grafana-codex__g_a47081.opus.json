@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9c3809e7",
+     "s_3b443542",
+     "s_4c4e75d7"
+    ],
+    "defect": "ProvideAnonDBStore now takes a bare int64 deviceLimit, but pkg/server/wire.go still registers it as a wire provider (with the AnonStore Bind), so wire generation or the build fails."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S3 e S7 apontam o mesmo defeito: ProvideAnonDBStore passou a receber um int64 sem provider, mas continua registrado no wire.go, o que quebra a geração do wire ou o build. A observação de que o provider ficou sem uso faz parte da mesma correção (remover o provider e o Bind do wire.go), então não é um segundo defeito. O grupo deve ser mantido."
+ }
+}

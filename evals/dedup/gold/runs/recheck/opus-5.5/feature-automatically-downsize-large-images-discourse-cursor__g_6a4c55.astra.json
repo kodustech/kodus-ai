@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3094b78d",
+     "s_d07c7bcd",
+     "s_9e7bd507",
+     "s_de97d0e3",
+     "s_349bb657"
+    ],
+    "defect": "A segunda definição de downsize substitui a versão que recebe largura e altura, quebrando os chamadores existentes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S7, S8, S9 e S11 apontam o mesmo defeito: a redefinição de downsize substitui a assinatura anterior. S8 descreve também o efeito nas chamadas com quatro argumentos, mas isso é outra manifestação do mesmo defeito e se resolve com a mesma correção."
+ }
+}

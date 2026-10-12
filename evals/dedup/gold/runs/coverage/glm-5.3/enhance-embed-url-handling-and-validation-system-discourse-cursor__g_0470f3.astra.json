@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "poll_feed.rb:35: Missing item content causes an unguarded scrub call to abort the import loop with retries disabled."
+   },
+   {
+    "id": "F2",
+    "description": "poll_feed.rb:35: String#scrub is unavailable on older supported Ruby versions, causing failure even when content exists."
+   },
+   {
+    "id": "F3",
+    "description": "poll_feed.rb:36: A nil item title reaches PostCreator with validations skipped and causes a null-title insert failure."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_42e6661a",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_090409bf",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

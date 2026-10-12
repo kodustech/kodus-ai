@@ -1,0 +1,39 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "promptSha": "0ea870a0f1ef04bd994cdc5e9a75f38ce9e020bc",
+  "attempt": 1,
+  "ms": 90876,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_389b8963",
+          "s_df9ce485",
+          "s_08cbca4d",
+          "s_831e218a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The fallback list accesses SiteSetting.default_locale without guarding nil or lookup failures, and mixes String/Symbol locale identities, defeating deduplication and causing duplicate locale loading.",
+        "rationale": "s_389b8963, s_df9ce485, and s_08cbca4d share the unguarded default-locale defect; s_df9ce485 additionally reports lookup availability failures. s_08cbca4d also reports the String/Symbol duplication described by s_831e218a, connecting all four through explicit defect overlap."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_31a0ccb6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a8f8fa1a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_46cb0f3f",
+        "confidence": "high"
+      }
+    ]
+  }
+}

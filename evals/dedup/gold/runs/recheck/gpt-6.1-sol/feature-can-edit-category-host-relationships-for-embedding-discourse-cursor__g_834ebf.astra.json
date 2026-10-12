@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ee0c2eb0",
+     "s_ad0aab9e"
+    ],
+    "defect": "Update e destroy não tratam a ausência do host consultado pelo ID e desreferenciam nil, causando uma exceção não tratada."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 descrevem o mesmo defeito nos mesmos endpoints: a consulta pode retornar nil, que é usado sem verificação. Ambas pedem o tratamento de registro ausente antes de salvar ou excluir, portanto são redundantes e permanecem juntas."
+ }
+}

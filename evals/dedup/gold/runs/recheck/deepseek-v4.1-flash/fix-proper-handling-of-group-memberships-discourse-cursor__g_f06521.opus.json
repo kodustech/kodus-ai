@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "totalPages uses Math.floor(user_count/limit)+1 instead of Math.ceil, which adds a phantom extra page when user_count is an exact multiple of limit and leaves Next enabled on the real last page.",
+    "members": [
+     "s_70fe4c12",
+     "s_5e51e255",
+     "s_06df0f6c",
+     "s_ce7d145c",
+     "s_8f2939ce"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3, S5, S6 e S7 apontam o mesmo defeito em totalPages: o uso de Math.floor(user_count/limit)+1 em vez de Math.ceil gera uma página extra vazia quando user_count é múltiplo exato de limit. Todas propõem a mesma correção com Math.ceil. Nenhuma sugestão traz um segundo defeito, então o grupo fica como está."
+ }
+}

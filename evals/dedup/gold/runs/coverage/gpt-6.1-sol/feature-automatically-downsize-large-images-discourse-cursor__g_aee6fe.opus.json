@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Pre-upload size check in utilities.js (line 182-184) hard-codes 10 MB instead of using the configured max size setting"
+   },
+   {
+    "id": "F2",
+    "description": "413 handler in utilities.js (line 246-247) hard-codes 10 MB instead of using SiteSettings.max_image_size_kb"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_ba068ffa",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5a3bcb7f",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

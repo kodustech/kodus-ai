@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6cf3f09f",
+     "s_c1f76361"
+    ],
+    "defect": "A ausência de uma segunda verificação do cache após adquirir o lock de escrita faz requisições concorrentes reconstruírem o cache desnecessariamente."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_6cf3f09f"
+  ],
+  "reasoningPt": "S1 e S2 têm o mesmo defeito principal: falta verificar novamente o cache após adquirir o lock de escrita, corrigido pela mesma alteração. S1 também aponta a sobrescrita de um cache válido com nil em caso de falha, por isso entra em bundles sem alterar o agrupamento."
+ }
+}

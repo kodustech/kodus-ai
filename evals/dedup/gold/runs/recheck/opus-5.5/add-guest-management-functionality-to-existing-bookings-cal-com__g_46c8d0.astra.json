@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bc207073",
+     "s_6b5ea536",
+     "s_3e2f564b",
+     "s_67d69ac5"
+    ],
+    "defect": "A combinação das verificações de administrador e proprietário com && restringe indevidamente a autorização de administradores da equipe."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_bc207073"
+  ],
+  "reasoningPt": "S1, S14, S16 e S19 têm como defeito principal o uso de && na autorização de administradores ou proprietários, portanto permanecem juntas. S1 também aponta consultas desnecessárias com teamId 0 quando não há equipe, sendo marcada como bundle sem alterar seu agrupamento."
+ }
+}

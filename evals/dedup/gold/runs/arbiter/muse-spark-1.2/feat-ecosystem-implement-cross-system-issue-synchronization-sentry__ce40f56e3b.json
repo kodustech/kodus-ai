@@ -1,0 +1,35 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "component": [
+    "s_0a96d57b",
+    "s_34589453",
+    "s_4500db00",
+    "s_597377f6",
+    "s_84bd5bf4",
+    "s_b2100c10",
+    "s_e0de5ccd"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0a96d57b",
+          "s_84bd5bf4",
+          "s_b2100c10",
+          "s_e0de5ccd",
+          "s_4500db00",
+          "s_34589453",
+          "s_597377f6"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "defect": "AssignmentSource.queued defaults to timezone.now(), which runs once at import time, so every instance gets the same stale timestamp. Separately, to_dict() returns a raw datetime that Celery's JSON serialization of the apply_async kwargs in sync_group_assignee_outbound cannot handle. Fix: use field(default_factory=timezone.now), and write queued as an ISO string in to_dict() and parse it back in from_dict() (or leave queued out of the dict)."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "The suggestions report two defects. (A) The stale queued default evaluated at import time: s_0a96d57b, s_84bd5bf4 and s_b2100c10 report it (s_b2100c10 also asks for tests that would catch the same bug). s_e0de5ccd reports it too; its JSON round-trip parsing appears only in its proposed fix. (B) The raw datetime from to_dict() breaking Celery JSON: s_34589453 reports it at the call site in sync.py, and s_597377f6 at the definition. s_597377f6 mentions default_factory only in its fix. s_4500db00 states both defects in its summary (\"emits non-JSON datetime via Celery and queued default is static import time\"), so it overlaps both sets and the chain rule puts all seven in one group. The members point at assignment_source.py and at the apply_async call site in sync.py, so the kind is cross_location. needsUnifiedComment is true because the merged comment has to carry two distinct defects."
+  }
+}

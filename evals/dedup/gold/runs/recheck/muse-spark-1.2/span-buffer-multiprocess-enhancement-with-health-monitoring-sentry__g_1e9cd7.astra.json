@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8fdca476",
+     "s_d3df5db3"
+    ],
+    "defect": "O teste usa time.sleep(0.1) para aguardar o flusher após substituir time.sleep por uma função sem efeito, tornando a espera ineficaz e permitindo uma corrida."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_8fdca476"
+  ],
+  "reasoningPt": "S5 e S9 relatam como defeito principal a mesma espera anulada pelo monkeypatch em test_basic, portanto permanecem juntas. S5 também aponta o loop ocupado no flusher pela remoção de sua pausa interna, sendo marcada como bundle."
+ }
+}

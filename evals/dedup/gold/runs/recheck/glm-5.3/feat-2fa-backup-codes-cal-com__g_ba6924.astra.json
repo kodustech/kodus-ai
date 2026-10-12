@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_ac3a5ed0",
+   "s_be1b7939"
+  ],
+  "bundles": [
+   "s_ac3a5ed0"
+  ],
+  "reasoningPt": "S10 aponta que o teste de cópia não verifica o conteúdo do clipboard; S11 aponta a falta de validação da quantidade e do formato dos códigos gerados, verificáveis no arquivo ou na tela. Essas verificações detectam falhas independentes, portanto as sugestões devem ficar separadas. S10 também inclui o defeito do handler que exibe sucesso sem aguardar writeText, sendo um bundle."
+ }
+}

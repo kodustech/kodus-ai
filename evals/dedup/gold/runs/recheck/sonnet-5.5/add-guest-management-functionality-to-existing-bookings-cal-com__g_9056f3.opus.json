@@ -1,0 +1,24 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_66ed9605",
+     "s_dc76b747",
+     "s_bdaa90a8"
+    ],
+    "defect": "Guest emails are compared case-sensitively against the lowercased blacklist and existing attendees, so mixed-case addresses bypass the blacklist and dedupe."
+   }
+  ],
+  "unique": [
+   "s_7a5dc6fd"
+  ],
+  "bundles": [
+   "s_66ed9605",
+   "s_7a5dc6fd"
+  ],
+  "reasoningPt": "S2, S4 e S7 têm como defeito principal a comparação de e-mails sensível a maiúsculas/minúsculas na blacklist e na deduplicação de attendees. O defeito principal do S9 é outro: a falta de deduplicação no servidor dentro da própria lista de convidados. A questão das maiúsculas aparece só depois no S9, por isso ele fica sozinho. S2 e S9 tratam de mais de um defeito."
+ }
+}

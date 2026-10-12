@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0f309c2e",
+     "s_7340d73f",
+     "s_f8dcf583"
+    ],
+    "defect": "A ação Silence fica disponível para regras com apenas promRule, mas o drawer depende de rulerRule e não abre ao clicar."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_f8dcf583"
+  ],
+  "reasoningPt": "S1, S5 e S8 apontam primeiro o mesmo defeito: Silence aparece disponível, mas o drawer não abre sem rulerRule. S8 também levanta um possível problema em Duplicate, sendo uma sugestão composta; pela regra do defeito principal, permanece no grupo de Silence."
+ }
+}

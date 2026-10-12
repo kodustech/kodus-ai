@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_778e09a3",
+    "mainDefect": "The imported_from link puts the URL into raw HTML (both the href and the link text) without escaping, so it can break the markup or inject HTML.",
+    "secondary": [
+     {
+      "defect": "`contents << ...` changes the caller's contents string in place instead of building a new string.",
+      "coveredBy": [
+       "s_22702472"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

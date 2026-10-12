@@ -1,0 +1,48 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_78b42b19",
+    "mainDefect": "Hardcoded client-side upload limits ignore admin-configured size settings.",
+    "secondary": [
+     {
+      "defect": "The 413 error alert reports a hardcoded maximum instead of the configured limit.",
+      "coveredBy": [
+       "s_ac29b93c"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ac29b93c",
+    "mainDefect": "Upload size warnings use a hardcoded 10MB limit.",
+    "secondary": [
+     {
+      "defect": "Client-side upload validation uses a hardcoded 10MB limit instead of the configured setting.",
+      "coveredBy": [
+       "s_78b42b19",
+       "s_550877fa"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_550877fa",
+    "mainDefect": "Client-side validation replaces configured upload limits with a hardcoded 10MB limit for every upload type.",
+    "secondary": [
+     {
+      "defect": "The 413 error handler also uses a hardcoded limit.",
+      "coveredBy": [
+       "s_ac29b93c"
+      ]
+     },
+     {
+      "defect": "Non-image uploads lack a server-side attachment-size check, leaving max_attachment_size_kb unenforced after client validation is relaxed.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

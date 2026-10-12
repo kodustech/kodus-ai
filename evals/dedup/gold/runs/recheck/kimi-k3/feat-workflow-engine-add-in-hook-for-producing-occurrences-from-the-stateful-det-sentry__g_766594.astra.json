@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_534126e2",
+     "s_96af5979",
+     "s_18d4e01d",
+     "s_1aa747bf"
+    ],
+    "defect": "MetricAlertDetectorHandler passa a herdar de StatefulDetectorHandler sem implementar os membros abstratos exigidos, causando TypeError ao ser instanciado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S2, S3 e S4 relatam o mesmo defeito na mesma classe: a mudança de herança torna MetricAlertDetectorHandler não instanciável. A inclusão de counter_names em S1 e as diferenças nas correções propostas não caracterizam defeitos distintos."
+ }
+}

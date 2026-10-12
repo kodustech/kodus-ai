@@ -1,0 +1,92 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_cc6b5fef",
+    "mainDefect": "isTeamAdminOrOwner uses && instead of ||, so team admins who are not owners are denied.",
+    "secondary": [
+     {
+      "defect": "Any attendee matched by email can add guests, which is a looser permission than the organizer/admin model.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_66ed9605",
+    "mainDefect": "The blacklist and existing-attendee checks are case-sensitive, so mixed-case emails bypass the blacklist and duplicate existing attendees.",
+    "secondary": [
+     {
+      "defect": "Duplicate emails inside the submitted guest list are not removed on the server.",
+      "coveredBy": [
+       "s_7a5dc6fd"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c03cd3b4",
+    "mainDefect": "sendAddGuestsEmails receives the raw guests input instead of the filtered uniqueGuests, so filtered-out or existing attendees get the wrong email.",
+    "secondary": [
+     {
+      "defect": "updateCalendarAttendees has no error handling and runs after the DB write, so a calendar failure leaves the attendees saved while the request returns an error.",
+      "coveredBy": [
+       "s_72a13bc3"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_dc76b747",
+    "mainDefect": "The blacklist and attendee dedupe checks compare guest emails without lowercasing them, so changing the case bypasses both checks.",
+    "secondary": [
+     {
+      "defect": "The isAttendee permission check at line 52 compares attendee.email to user.email case-sensitively.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7a5dc6fd",
+    "mainDefect": "Duplicate emails within the submitted guests list are not deduplicated on the server, so createMany inserts duplicate attendees.",
+    "secondary": [
+     {
+      "defect": "The blacklist check is case-sensitive because the guest email is not lowercased.",
+      "coveredBy": [
+       "s_bdaa90a8",
+       "s_dc76b747",
+       "s_66ed9605"
+      ]
+     },
+     {
+      "defect": "sendAddGuestsEmails is passed guests instead of uniqueGuests.",
+      "coveredBy": [
+       "s_c03cd3b4",
+       "s_d430022b"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ddc0673e",
+    "mainDefect": "The error toast string is always truthy, so the unable_to_add_guests fallback never runs and that translation key is dead.",
+    "secondary": [
+     {
+      "defect": "Users see a raw tRPC error code such as 'BAD_REQUEST:' in the toast.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_bd0c0912",
+    "mainDefect": "isTeamAdminOrOwner uses && instead of ||, so it means admin AND owner instead of admin OR owner.",
+    "secondary": [
+     {
+      "defect": "The FORBIDDEN message key 'you_do_not_have_permission' is missing from en/common.json, so the toast may show the raw key.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

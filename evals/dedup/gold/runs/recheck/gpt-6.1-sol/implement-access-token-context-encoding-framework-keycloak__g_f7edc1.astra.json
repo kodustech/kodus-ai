@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_5f605bbb",
+     "s_f5e7d9a5",
+     "s_5bd24a7d",
+     "s_0767cf64",
+     "s_b26743e8"
+    ],
+    "defect": "O matcher inverte a comparação do grant, rejeitando a igualdade com o valor esperado."
+   },
+   {
+    "members": [
+     "s_cd0716d2",
+     "s_5454e119"
+    ],
+    "defect": "O matcher extrai o grant nas posições erradas, usando substring(3, 5) em vez de substring(4, 6)."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_cd0716d2",
+   "s_5454e119",
+   "s_b26743e8"
+  ],
+  "reasoningPt": "S2, S3, S4, S7 e S9 têm como defeito principal a comparação invertida. S5 e S6 começam pela extração nas posições erradas, que exige uma correção independente, e por isso formam outro grupo. S5 e S6 também relatam a inversão; S9 também corrige os índices no código proposto, tornando os três sugestões com múltiplos defeitos."
+ }
+}

@@ -1,0 +1,38 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "promptSha": "c0bef9f269babf1f3b5fad538e2f92c841679692",
+  "attempt": 1,
+  "ms": 44076,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_c9ce7bf7",
+          "s_e4020fa2",
+          "s_d2aeb4fc"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The unguarded retry-count update inside the catch block can throw and abort processing of the remaining reminders.",
+        "rationale": "All three report the same loss of per-reminder failure isolation, with concurrent deletion and database failures as triggering examples. The else-branch discussion explains how execution reaches the failing catch; guarding the catch-block update resolves the shared defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_4c191760",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a9ca671d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_18b8a2b6",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ef813b8e",
+    "mainDefect": "The downsize loop ignores OptimizedImage.downsize's boolean return value, so failed conversions use up attempts and the original oversized file can be kept.",
+    "secondary": [
+     {
+      "defect": "Because the conversion rewrites tempfile.path in place, the open Tempfile can still point at the old inode, so tempfile.size and the uploaded content can reflect the original oversized file.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ee27a71c",
+    "mainDefect": "The client-side validator uses a hardcoded 10MB limit for every upload type, which disagrees with the server's per-type limits, especially max_attachment_size_kb.",
+    "secondary": [
+     {
+      "defect": "The file_too_large alert and the 413 handler always report 10240 KB as the maximum, whatever limit is actually configured.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7b3553a9",
+    "mainDefect": "The flat 10MB client limit lets through non-image attachments larger than max_attachment_size_kb, which the server then rejects because it only downsizes images.",
+    "secondary": [
+     {
+      "defect": "Images that five 80% downsizing passes cannot bring under max_image_size_kb pass the client check but are then rejected by the server.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

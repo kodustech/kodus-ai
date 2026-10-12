@@ -1,0 +1,42 @@
+{
+ "s_ce311187": {
+  "summaryPt": "ClientPermissionsV2 usa o owner errado (server.getId()) na busca de resources, sempre falhando em encontrar resources por client",
+  "contentPt": "O QUÊ: hasPermission(ClientModel,String) e hasPermission(String) buscam resources com o owner errado (server.getId() em vez de server.getClientId()). POR QUÊ: O owner padrão de ResourceStore.findByName é server.getClientId() e AdminPermissionsSchema.create usa server.getClientId(); usar server.getId() nunca encontra resources por client (e nunca encontra o resource do tipo \"Clients\" na segunda sobrecarga), então as permissões por client nunca são avaliadas e toda verificação cai no fallback de todos os clients ou retorna false, quebrando a autorização granular de clients. COMO: Altere resourceStore.findByName(server, client.getId(), server.getId()) para resourceStore.findByName(server, client.getId()) ou resourceStore.findByName(server, client.getId(), server.getClientId()) e, de forma similar, resourceStore.findByName(server, CLIENTS_RESOURCE_TYPE, server.getId()) para getResourceTypeResource ou findByName com server.getClientId()."
+ },
+ "s_40e62510": {
+  "summaryPt": "Listener de limpeza condicionado apenas à flag V1, desabilitado em deployments V2",
+  "contentPt": "O QUÊ: O listener de ProviderEvent agora é condicionado apenas a ADMIN_FINE_GRAINED_AUTHZ, não a ADMIN_FINE_GRAINED_AUTHZ_V2. POR QUÊ: Quando o V2 está habilitado (KeycloakAdminPermissionsServerConfig habilita apenas o V2), o listener nunca executa, então RoleRemovedEvent / ClientRemovedEvent / GroupRemovedEvent não limpam as permissões, deixando policies/resources órfãos e grants obsoletos. COMO: Altere a condição para if (Profile.isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ) || Profile.isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ_V2))."
+ },
+ "s_1a8ab58c": {
+  "summaryPt": "Falta de verificação de resourceId permite vazamento de permissão entre clients",
+  "contentPt": "O QUÊ: hasPermission(ClientModel,String) avalia ResourcePermission, mas retorna true se qualquer scope concedido corresponder ao scope esperado sem verificar se permission.getResourceId() é igual ao id do resource solicitado. POR QUÊ: Diferente de UserPermissionsV2:135, que verifica permission.getResourceId().equals(resource.getId()), ClientPermissionsV2 pode ser autorizado por uma permissão pertencente ao resource de outro client se o evaluator retornar múltiplas permissões, causando escalonamento de privilégio (permissão no client A concede acesso ao client B). COMO: Adicione o guard if (!permission.getResourceId().equals(resource.getId())) continue; antes da verificação de scope, espelhando UserPermissionsV2."
+ },
+ "s_c29b13de": {
+  "summaryPt": "O Javadoc de requireViewClientScopes() afirma que retorna boolean, mas o método é void/throws",
+  "contentPt": "Corrija o Javadoc para corresponder ao contrato void/throws: \"Throws ForbiddenException if {@link #canViewClientScopes()} returns {@code false}.\""
+ },
+ "s_a3224d7a": {
+  "summaryPt": "Javadoc dos métodos void requireView/requireViewClientScopes diz incorretamente 'Returns true if...', copiado dos métodos boolean can*",
+  "contentPt": "Corrija o Javadoc para corresponder ao contrato void/throws dos outros métodos require*: substitua 'Returns true if ...' por 'Throws ForbiddenException if ... returns false' em requireView() e requireViewClientScopes()."
+ },
+ "s_400a7f71": {
+  "summaryPt": "O helper privado getEvaluationContext é dead code — calculado mas nunca usado",
+  "contentPt": "Remova o método privado não utilizado getEvaluationContext e seus imports agora mortos (ClientModelIdentity, DefaultEvaluationContext, EvaluationContext, Scope) ou conecte-o ao fluxo de avaliação pretendido, caso tenha sido feito para suportar token exchange no V2."
+ },
+ "s_d0f69e7e": {
+  "summaryPt": "O setPermissionsEnabled do V2 agora lança exceção, quebrando a limpeza de AdminPermissions que ainda o chama na remoção de client/role/group.",
+  "contentPt": "setPermissionsEnabled (e os outros 10 overrides em 147-205) agora lançam UnsupportedOperationException incondicionalmente, quebrando o contrato anterior de best-effort. O consumidor em AdminPermissions.java:91 (ProviderEventListener em ClientRemovedEvent/RoleRemovedEvent/GroupRemovedEvent) ainda chama clients().setPermissionsEnabled(..., false) quando ADMIN_FINE_GRAINED_AUTHZ está habilitado, então no V2 ele agora lança exceção e pode fazer a transação de remoção falhar. Torne o V2 um no-op para a limpeza do ciclo de vida (ou restrinja o listener apenas ao V1 / verifique a versão), ou faça MgmtPermissionsV2.clients().setPermissionsEnabled tratar o storage do V2 em vez de lançar exceção."
+ },
+ "s_0aae0a10": {
+  "summaryPt": "a sugestão não pode ser gerada porque sua análise não existe",
+  "contentPt": "null"
+ },
+ "s_cff36f10": {
+  "summaryPt": "O Javadoc de requireView() afirma que retorna boolean, mas o método é void/throws",
+  "contentPt": "Corrija o Javadoc para corresponder ao contrato void/throws, de forma consistente com requireManage/requireList: \"Throws ForbiddenException if {@link #canView()} returns {@code false}.\""
+ },
+ "s_86975f9e": {
+  "summaryPt": "O setPermissionsEnabled do V2 lança UOE, mas ainda é chamado em ClientRemovedEvent quando FGAP está habilitado, quebrando a exclusão de client.",
+  "contentPt": "O caminho de ClientRemovedEvent em AdminPermissions chama clients().setPermissionsEnabled(..., false) quando ADMIN_FINE_GRAINED_AUTHZ está habilitado. ClientPermissionsV2 atualmente lança UnsupportedOperationException em setPermissionsEnabled/isPermissionsEnabled/resource/etc, então a exclusão de client (e similarmente a remoção de role/group, se essas implementações V2 lançarem exceção) quebra com uma exceção não tratada. Torne o V2 no-op / retorne false para os métodos de ciclo de vida/limpeza (setPermissionsEnabled -> no-op, isPermissionsEnabled -> false, resource -> null/vazio) em vez de lançar exceção, ou faça o listener pular a chamada quando a instância de gerenciamento for V2."
+ }
+}

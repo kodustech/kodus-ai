@@ -1,0 +1,71 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "assignment_source.py line 18: `queued` defaults to timezone.now(), which runs once at import time, so every instance shares the same stale timestamp"
+   },
+   {
+    "id": "F2",
+    "description": "assignment_source.py to_dict()/from_dict(): to_dict() puts a raw datetime into the Celery apply_async kwargs (sync.py:141). It either fails JSON serialization or comes back as an ISO string that from_dict doesn't turn back into a datetime"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7123f91d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_221233e4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ad4d76d9",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_87e5e747",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_81d5305c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7dcbf2c4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_30f59a75",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ],
+  "decisive": false,
+  "reasoning": "The group problem names two defects: the default is evaluated at import time, and the raw datetime in the Celery kwargs causes trouble. It describes the second as one defect with two possible results: serialization fails, or an ISO string comes back unparsed. The fix is a single serialize/parse change in AssignmentSource, so I'm treating it as one facet (F2). Labeler 1 split F2 into two facets, which is a reasonable call but finer than the problem statement. Under the two-facet reading: s_ad4d76d9 says outright that the Celery JSON round-trip turns queued into an ISO string whose type no longer matches datetime. That covers F2, so it's complete. s_30f59a75 says outright that the raw datetime fails to serialize under a JSON broker, so it covers F2 and is complete. s_87e5e747 reports only the serialization failure, not the stale default, so it covers F2 only. s_221233e4, s_81d5305c and s_7dcbf2c4 report only the stale default. s_7dcbf2c4 notes that to_dict carries the bogus timestamp into the kwargs, but that's about the value being wrong, not about serialization. s_7123f91d covers both. I'm not marking this decisive because the result depends on how finely F2 is split, and that's a judgment call."
+ }
+}

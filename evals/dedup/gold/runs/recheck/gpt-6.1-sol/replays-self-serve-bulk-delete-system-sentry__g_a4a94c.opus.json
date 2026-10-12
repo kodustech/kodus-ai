@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_856eb85a",
+     "s_509ab8e8"
+    ],
+    "defect": "The age/timestamp mutual-exclusion validators check truthiness instead of key presence, so a zero value lets both fields through together."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 apontam o mesmo defeito nas mesmas linhas: os validadores de exclusão mútua usam truthiness (`.get(...)`) e por isso valores zero de age/timestamp passam pela checagem. As duas propõem a mesma correção, que é verificar se a chave está presente. Nenhuma delas traz um segundo defeito."
+ }
+}

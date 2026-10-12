@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ab28c1c1",
+    "mainDefect": "getBaseConditions() returns the authorization Sql without enclosing parentheses, so when callers embed it as `WHERE ${baseConditions} AND ...`, operator precedence binds the AND to only the last OR branch, returning rows that violate the caller's constraints.",
+    "secondary": [
+     {
+      "defect": "The `else if (filterConditions)` and final `else` branches in getBaseConditions are unreachable because getAuthorizationConditions() always returns a truthy Prisma.Sql object.",
+      "coveredBy": [
+       "s_fa724245",
+       "s_0ed4a288"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

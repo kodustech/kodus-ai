@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a0690d05",
+     "s_ca606e8f"
+    ],
+    "defect": "Inicializar a busca antes do watcher cria uma janela em que escritas durante a construção dos índices não são capturadas."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 apontam o mesmo defeito na ordem de inicialização, destacando consequências para os clientes de watch e para o índice de busca. Iniciar o watcher antes da construção com buffering, ou reproduzir os eventos desde um RV anterior, resolve ambos os relatos."
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_505b8655",
+    "mainDefect": "GetWebAssets doesn't check entryPointAssetsCache again after taking entryPointAssetsCacheMu.Lock(), so waiters that lose the race repeat the work and overwrite the cache.",
+    "secondary": [
+     {
+      "defect": "Holding the exclusive lock during readWebAssetsFromFile/readWebAssetsFromCDN file and network I/O makes every cache miss wait behind blocking I/O.",
+      "coveredBy": []
+     },
+     {
+      "defect": "A transient read error writes a nil result over a valid cached value, which breaks the cache for later Prod callers and returns an error even though a cached value was available.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

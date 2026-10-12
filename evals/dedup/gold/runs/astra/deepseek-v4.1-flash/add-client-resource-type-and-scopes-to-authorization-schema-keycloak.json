@@ -1,0 +1,52 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "f8c427152dee6b20305af10ae1bcd3f0360ed841",
+  "attempt": 1,
+  "ms": 47964,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_752a0659",
+          "s_ca951180",
+          "s_736fc3f5"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The removal-event listener can invoke unsupported setPermissionsEnabled cleanup on the V2 evaluator, causing deletion to throw.",
+        "rationale": "All three report the same listener-to-V2 dispatch failure, pointing either at the listener or the newly overridden clients() factory. Guarding that cleanup path resolves the shared defect."
+      },
+      {
+        "members": [
+          "s_1f6fc379",
+          "s_2383a0c6"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Client-resource enumeration and lookup allegedly use inconsistent resource types, and enumeration can also include the all-clients resource name as a client ID.",
+        "rationale": "Both explicitly report that enumeration may miss per-client resources because of a resource-type mismatch. The first additionally reports the bogus all-clients entry, while the second identifies inconsistent lookup sites; these details must survive consolidation."
+      },
+      {
+        "members": [
+          "s_1a66b466",
+          "s_8fa1fa63"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The Javadocs for void requireView() and requireViewClientScopes() incorrectly promise boolean return values instead of documenting exception behavior.",
+        "rationale": "These are repeated instances of the same documentation mistake in two methods. Each requires its own equivalent correction."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_2e78439c",
+        "confidence": "high"
+      }
+    ]
+  }
+}

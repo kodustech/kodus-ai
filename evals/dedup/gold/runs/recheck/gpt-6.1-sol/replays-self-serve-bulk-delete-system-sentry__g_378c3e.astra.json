@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a0a50caa",
+     "s_69b85b59"
+    ],
+    "defect": "O hook acessa propriedades de data sem verificar sua existência quando a consulta está desabilitada, podendo causar uma exceção antes da proteção do componente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S9 relatam o mesmo acesso desprotegido a data no mesmo trecho do hook. Ambas propõem uma proteção para dados ausentes, que resolve os dois relatos; nenhuma reúne defeitos distintos."
+ }
+}

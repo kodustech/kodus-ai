@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1f9c507d",
+     "s_b171a9e5",
+     "s_39848fe6",
+     "s_0eba4ccb"
+    ],
+    "defect": "Update e destroy desreferenciam um host inexistente sem verificar o resultado da busca, retornando 500 em vez de 404."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_b171a9e5"
+  ],
+  "reasoningPt": "S2, S9, S15 e S19 têm o mesmo defeito principal: falta de verificação de existência do host em update/destroy. S9 também relata a ausência de validação de params[:embeddable_host], um defeito independente, por isso entra em bundles sem mudar de grupo."
+ }
+}

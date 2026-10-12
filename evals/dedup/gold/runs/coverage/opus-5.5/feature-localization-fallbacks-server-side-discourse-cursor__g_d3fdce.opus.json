@@ -1,0 +1,68 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "translate_accelerator.rb `translate` lazy-loads only config.locale. Fallback locales (site default, :en) are loaded only by ApplicationController#set_locale, so in jobs, mailers, rake tasks and the console, fallback lookups return 'translation missing'."
+   },
+   {
+    "id": "F2",
+    "description": "The 'translation missing' result from a failed fallback lookup is frozen into the LRU cache under the normal key, so it stays wrong even after the fallback locales load."
+   },
+   {
+    "id": "F3",
+    "description": "The LRU cache key (key+locale+backend id) leaves out SiteSetting.default_locale or the fallback chain, so cached fallback text goes stale after the default locale changes."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c94570f5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_35d3c9d2",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e15dc8b6",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6a01472a",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a0b43d2d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d02ab584",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

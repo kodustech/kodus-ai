@@ -1,0 +1,67 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "fbc492a3d6c8b4064e7810074014b7afcd248caa",
+  "attempt": 1,
+  "ms": 50215,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_cabf60f8",
+          "s_8d844482",
+          "s_7f53154c",
+          "s_40f5268c",
+          "s_47286227",
+          "s_0df1d418",
+          "s_271c9373"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "isAccessTokenId extracts the grant shortcut at the wrong offset and inverts the equality check; it also lacks a prefix-length guard, allowing short prefixes to throw.",
+        "rationale": "Every member reports the same offset and polarity errors in the matcher. s_271c9373 additionally reports the short-prefix exception, which must survive consolidation."
+      },
+      {
+        "members": [
+          "s_5dfded2e",
+          "s_1e8b96cd",
+          "s_2929e252",
+          "s_3d6dcc45"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "AccessTokenContext checks grantType twice instead of checking rawTokenId, allowing null raw token IDs.",
+        "rationale": "All four identify the same incorrect argument in the constructor's fourth null check. Changing that argument resolves every report."
+      },
+      {
+        "members": [
+          "s_d50d9f26",
+          "s_f0bbf95c",
+          "s_07f54fcf"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The documented and unvalidated grant-shortcut length conflicts with the decoder's fixed two-character requirement; the decoder also rejects colon-containing IDs with non-six-character prefixes instead of applying UNKNOWN/legacy handling.",
+        "rationale": "All three report the same shortcut-length contract mismatch, pointing at either its documentation or the decoder. s_07f54fcf additionally reports inconsistent fallback handling for IDs from other encoder deployments."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_afbc13d9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5625161c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_05665bcb",
+        "confidence": "high"
+      }
+    ]
+  }
+}

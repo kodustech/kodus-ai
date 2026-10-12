@@ -1,0 +1,25 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "component": [
+    "s_3de994d1",
+    "s_b9468b8e"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_3de994d1",
+          "s_b9468b8e"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "defect": "A hardcoded 10 MB cap (10*1024 in utilities.js at lines 182 and 246, 10.megabytes in the uploads_controller URL download) replaces the configured SiteSetting size limits. The controller suggestion also reports that downsize failures go unchecked and that content_type is left unset for URL uploads."
+      }
+    ],
+    "unique": [],
+    "decisive": false,
+    "reasoning": "Both suggestions say the PR swaps a configured SiteSetting size limit for a hardcoded 10 MB value. s_3de994d1 flags it in the client-side JS, at both the validation and the 413 handler. s_b9468b8e flags it in the controller's remote-download cap. Making the 10 MB cap a setting, or restoring the setting lookups everywhere, would fix both. That makes them a repeated-pattern (systemic) duplicate. s_b9468b8e also reports separate problems: downsize failures are not checked and content_type is nil for URL uploads. Those must be kept, so the group needs a unified comment. This is a judgment call because the two describe different consequences. The JS one says attachments get through above their own limit. The controller one says images over 10 MB get truncated when an admin allows larger ones. Seen that way, they could count as distinct defects."
+  }
+}

@@ -1,0 +1,26 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The grant-shortcut check in isAccessTokenId at line 483 is broken: it reads the wrong offset, substring(3,5) instead of substring(4,6), and inverts the comparison, so the grant type is never validated. One rewrite of that line fixes it.",
+    "members": [
+     "s_88dcd5ff",
+     "s_511ab22a",
+     "s_be2a870e",
+     "s_5ae95ca9",
+     "s_a148cd25",
+     "s_f2171902",
+     "s_756b95c2",
+     "s_dccfaa16"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_511ab22a"
+  ],
+  "reasoningPt": "Todas as sugestões apontam a mesma linha 483 do isAccessTokenId, onde a checagem do atalho de grant está quebrada. O offset errado e a comparação invertida se corrigem com uma única troca de linha, e por isso o S5, que cita só o offset, continua no grupo. O S3 também propõe proteger contra StringIndexOutOfBounds (verificar items[0].length()==6), um defeito secundário, e por isso entra em bundles."
+ }
+}

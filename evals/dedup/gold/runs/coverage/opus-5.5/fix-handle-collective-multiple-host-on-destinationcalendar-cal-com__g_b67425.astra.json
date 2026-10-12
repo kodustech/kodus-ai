@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Office365 createEvent selects the first destination calendar instead of matching the current host's credential."
+   },
+   {
+    "id": "F2",
+    "description": "Lark createEvent (line 128) selects the main host's destination calendar for other hosts' credentials."
+   },
+   {
+    "id": "F3",
+    "description": "CalDAV BaseCalendarService (line 156) selects the main host's destination calendar for other hosts' credentials."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_94084073",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cd578af7",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

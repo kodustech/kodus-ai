@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ff822a38",
+     "s_2fa589ab",
+     "s_77ce515e",
+     "s_a421800b"
+    ],
+    "defect": "O handler passa guests em vez de uniqueGuests para sendAddGuestsEmails, fazendo participantes existentes serem tratados como recém-adicionados na escolha do email."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_ff822a38"
+  ],
+  "reasoningPt": "S3, S10, S15 e S20 relatam o mesmo defeito principal, resolvido passando uniqueGuests para sendAddGuestsEmails. S3 também aponta a falta de registro do erro capturado, portanto é um bundle, mas esse defeito secundário não altera seu agrupamento."
+ }
+}

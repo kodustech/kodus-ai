@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "A negative flusher_processes value is truthy, so it gets through `max_processes or len(...)`. num_processes then goes negative and zero flusher processes are created, so Redis is never flushed and nothing is detected or restarted."
+   },
+   {
+    "id": "F2",
+    "description": "An explicit 0 is falsy, so `max_processes or len(...)` treats it like None (auto mode) and starts one process per shard, not what the user configured."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0686ed03",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ed5056d1",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

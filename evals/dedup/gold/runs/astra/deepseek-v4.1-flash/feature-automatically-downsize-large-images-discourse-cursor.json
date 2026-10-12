@@ -1,0 +1,44 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "b2748d4a60ea2087532077507e3a9ca5c6a622a3",
+  "attempt": 1,
+  "ms": 34383,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_550877fa",
+          "s_ac29b93c",
+          "s_78b42b19"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Hardcoded 10MB limits replace configurable upload validation and error-message limits, bypassing attachment limits and reporting an incorrect limit in 413 alerts.",
+        "rationale": "All three report the same hardcoded-limit change in utilities.js. The merged comment must preserve both the attachment-enforcement concern and the separate 413 warning issue."
+      },
+      {
+        "members": [
+          "s_df94a989",
+          "s_0146ce15",
+          "s_94d764a3",
+          "s_605675a4",
+          "s_2ffd8527"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The second self.downsize definition overwrites the width/height signature, breaking existing numeric callers through incorrect argument binding or rejected arity.",
+        "rationale": "Every suggestion identifies the same method overwrite at lines 145–151. The four-argument failures and five-argument ResizeEmoji failure are consequences of that single signature incompatibility."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_e77d3c3e",
+        "confidence": "high"
+      }
+    ]
+  }
+}

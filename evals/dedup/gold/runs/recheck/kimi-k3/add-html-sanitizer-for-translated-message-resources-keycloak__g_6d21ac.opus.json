@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b64d3118",
+     "s_181ae40a"
+    ],
+    "defect": "The zh_CN account bundle's new totpStep1 value is written in Traditional Chinese (手機/安裝/應用程式) instead of Simplified Chinese."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 apontam o mesmo defeito na mesma linha: o totpStep1 do messages_zh_CN.properties foi escrito em chinês tradicional em vez de simplificado. As duas propõem a mesma correção (在您的手机上安装以下应用程序之一：), então o grupo fica como está."
+ }
+}

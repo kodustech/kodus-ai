@@ -1,0 +1,89 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "optimized_image.rb:145-151 defines downsize twice; the later definition shadows the width/height definition, leaving dead code."
+   },
+   {
+    "id": "F2",
+    "description": "Old five-argument calls, including resize_emoji.rb:14, now raise ArgumentError."
+   },
+   {
+    "id": "F3",
+    "description": "Old four-argument calls bind the height Integer to opts, causing TypeError on option access."
+   },
+   {
+    "id": "F4",
+    "description": "Old positional dimensions can produce width-only geometry instead of the requested width-by-height geometry."
+   },
+   {
+    "id": "F5",
+    "description": "uploads_controller.rb:67 depends on the later definition winning; retaining the width/height definition would produce invalid geometry and break automatic shrinking."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_b461ae4f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cbd3b669",
+    "covers": [
+     "F1",
+     "F3",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8b2d465f",
+    "covers": [
+     "F1",
+     "F2",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_203824b0",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_171153b8",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8980c0e3",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ef1eb159",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

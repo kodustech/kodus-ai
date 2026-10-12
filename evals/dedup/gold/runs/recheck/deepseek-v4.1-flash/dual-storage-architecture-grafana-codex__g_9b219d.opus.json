@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_47464eda",
+     "s_3f5cbb96",
+     "s_5866e509",
+     "s_e9ab5dc2",
+     "s_0202df1b",
+     "s_b95471bc"
+    ],
+    "defect": "The legacy DeleteCollection goroutine records its result with recordStorageDuration instead of recordLegacyDuration, so legacy timings and errors end up in the storage metric."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S3, S9, S12, S16, S20, S24) apontam o mesmo defeito: na goroutine legada do DeleteCollection (linha 166), o código usa recordStorageDuration no lugar de recordLegacyDuration. Só mudam o intervalo de linhas e o nível de detalhe, e a correção é a mesma. Nenhuma delas traz um segundo defeito."
+ }
+}

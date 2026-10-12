@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "defect": "The `queued` dataclass default `timezone.now()` runs only once, at import time, so every AssignmentSource shares the same stale timestamp; it should use `field(default_factory=timezone.now)`.",
+    "members": [
+     "s_221233e4",
+     "s_30f59a75",
+     "s_81d5305c",
+     "s_7dcbf2c4",
+     "s_ad4d76d9"
+    ]
+   },
+   {
+    "defect": "`to_dict()` puts a raw datetime (`queued`) into the Celery task kwargs, so the JSON serializer fails when the task is enqueued, or `from_dict` gets the value back as a string.",
+    "members": [
+     "s_7123f91d",
+     "s_87e5e747"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_30f59a75",
+   "s_ad4d76d9",
+   "s_7123f91d"
+  ],
+  "reasoningPt": "S1, S3, S4, S5 e S6 têm como defeito principal o default `timezone.now()` avaliado uma única vez no import; S3 e S6 só acrescentam a serialização no final (\"Additionally\"). S8 começa pelo datetime cru indo para os kwargs do Celery (o default aparece só como observação secundária), e S10 trata apenas dessa serialização, então os dois formam outro grupo. Por isso o grupo precisa ser dividido."
+ }
+}

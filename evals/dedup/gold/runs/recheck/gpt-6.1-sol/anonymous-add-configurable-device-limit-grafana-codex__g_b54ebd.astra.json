@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_26a094d0",
+     "s_445423dd"
+    ],
+    "defect": "Uma falha na admissão do dispositivo deixa uma entrada no cache local, permitindo que novas tentativas ignorem a verificação do limite e sejam autenticadas."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S4 descrevem o mesmo defeito: o dispositivo permanece no cache após a rejeição pelo limite, permitindo acesso na tentativa seguinte. As duas apontam a mesma correção, remover a entrada em caso de erro ou preencher o cache somente após sucesso, apesar dos intervalos de linhas diferentes."
+ }
+}

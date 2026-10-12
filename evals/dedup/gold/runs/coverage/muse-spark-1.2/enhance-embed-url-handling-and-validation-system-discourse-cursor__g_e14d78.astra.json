@@ -1,0 +1,44 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "poll_feed.rb:35 calls scrub on nil item content, aborting feed import."
+   },
+   {
+    "id": "F2",
+    "description": "poll_feed.rb:29 lacks rescue for network or RSS parsing failures, crashing the scheduled job."
+   },
+   {
+    "id": "F3",
+    "description": "poll_feed.rb:31 does not guard against a nil rss.items collection."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_8c2349e8",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3adf9f4b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_52c21f9e",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

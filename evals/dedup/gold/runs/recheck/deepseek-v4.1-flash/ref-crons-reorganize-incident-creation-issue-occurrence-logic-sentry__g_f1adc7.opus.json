@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_24ce89e8",
+     "s_b9ad27f9"
+    ],
+    "defect": "get_monitor_environment_context returns the raw monitor config instead of the copy with the schedule_type substitution, so that substitution never takes effect."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 apontam o mesmo defeito: a função get_monitor_environment_context devolve monitor.config em vez da variável config alterada, e com isso a troca do schedule_type se perde. A correção é a mesma nas duas (retornar config). Só muda o intervalo de linhas, então o grupo continua como está."
+ }
+}

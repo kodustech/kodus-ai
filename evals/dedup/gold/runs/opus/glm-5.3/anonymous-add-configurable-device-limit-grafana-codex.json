@@ -1,0 +1,102 @@
+{
+  "judge": "opus",
+  "model": "glm-5.3",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "a28f8ee4f823f8dfae26a8e0601d399f3b043337",
+  "attempt": 1,
+  "ms": 9678,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 13476,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 886,
+    "output_tokens_details": {
+      "thinking_tokens": 195
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 13476,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 886,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 13476,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 13476
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1256944,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_95fab8b2",
+          "s_ee1a1b68"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "tagDeviceUI caches the device key before the store write and doesn't evict it on ErrDeviceLimitReached. The first request is rejected, and retries during the 29-minute TTL get through without the device being recorded.",
+        "rationale": "Both describe the same cache-poisoning bypass of the device limit and propose the same fix."
+      },
+      {
+        "members": [
+          "s_162332ff",
+          "s_afdcd067"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The count-then-insert limit check is not atomic: CountDevices and the upsert run in separate sessions with no transaction or lock, so concurrent new devices can go over the limit.",
+        "rationale": "Both report the same check-then-act race at the same lines."
+      },
+      {
+        "members": [
+          "s_94ef8b50",
+          "s_9e5e643b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "updateDevice treats rowsAffected==0 as ErrDeviceLimitReached. On MySQL, which counts changed rows rather than matched rows, an identical update returns 0 and an existing device gets rejected. Clock skew outside the 1-minute window can cause the same false rejection.",
+        "rationale": "Both report the MySQL changed-rows false ErrDeviceLimitReached. One also adds the clock-skew case, so the merged comment needs to include both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_23179061",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e01fa11d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_057ebbec",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e14a8784",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_760b7747",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

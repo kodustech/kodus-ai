@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_a0b15b83",
+    "mainDefect": "OrganizationAwareIdentityProviderBean re-checks only isEnabled() on the cached getForLogin results, so stale cached brokers whose hideOnLogin or linkOnly flags changed are still shown on the login page.",
+    "secondary": [
+     {
+      "defect": "The Infinispan provider's login-cache invalidation misses updates to non-public org-linked brokers, so stale entries stay in the cached login lists.",
+      "coveredBy": [
+       "s_aaaf78af"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

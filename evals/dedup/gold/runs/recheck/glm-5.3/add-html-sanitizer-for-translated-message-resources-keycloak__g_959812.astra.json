@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c4bb13a0",
+     "s_d93655e7",
+     "s_0e7da5d3",
+     "s_c090859a",
+     "s_ecc11bba",
+     "s_4b64c7d5"
+    ],
+    "defect": "A mensagem error-invalid-multivalued-size dos bundles SPA foi convertida de placeholders i18next para sintaxe Java MessageFormat, que os consoles não interpolam."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4, S6, S7, S10, S11 e S18 descrevem o mesmo erro repetido nos bundles de admin e account, corrigível restaurando a sintaxe i18next nas duas ocorrências. As observações sobre divergência entre idiomas reforçam esse defeito, sem introduzir um problema independente."
+ }
+}

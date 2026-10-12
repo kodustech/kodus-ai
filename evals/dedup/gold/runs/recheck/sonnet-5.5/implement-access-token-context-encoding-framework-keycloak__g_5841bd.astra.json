@@ -1,0 +1,36 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_c4e9c10a",
+     "s_0f11c762"
+    ],
+    "defect": "A comparação está invertida: o matcher retorna false quando o trecho coincide com o grant esperado."
+   },
+   {
+    "members": [
+     "s_dedf90ac",
+     "s_9fe47bb1",
+     "s_48023927",
+     "s_843e5d06",
+     "s_16105147"
+    ],
+    "defect": "O matcher extrai o grant com substring(3,5), embora os índices corretos sejam substring(4,6)."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c4e9c10a",
+   "s_dedf90ac",
+   "s_0f11c762",
+   "s_9fe47bb1",
+   "s_48023927",
+   "s_843e5d06",
+   "s_16105147"
+  ],
+  "reasoningPt": "S1 e S4 relatam primeiro a comparação invertida; S3, S6, S7, S9 e S13 relatam primeiro os índices incorretos da substring. Esses defeitos exigem correções independentes, mesmo estando na mesma expressão. Todas as sugestões descrevem ambos e entram em bundles, mas o agrupamento segue o primeiro defeito."
+ }
+}

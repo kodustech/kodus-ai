@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0f78e9fc",
+    "mainDefect": "Submitted guest addresses with different casing can bypass the normalized blacklist.",
+    "secondary": [
+     {
+      "defect": "Case-sensitive comparisons against existing attendees allow duplicate attendee identities under casing variants.",
+      "coveredBy": [
+       "s_969329e8"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_969329e8",
+    "mainDefect": "Case-sensitive comparisons against existing attendees allow duplicate attendee identities under casing variants.",
+    "secondary": [
+     {
+      "defect": "Submitted guest addresses with different casing can bypass the normalized blacklist.",
+      "coveredBy": [
+       "s_2eda8d39",
+       "s_0f78e9fc"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

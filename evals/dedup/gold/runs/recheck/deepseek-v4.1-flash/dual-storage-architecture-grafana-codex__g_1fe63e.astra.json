@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bdded596",
+     "s_a52a2300"
+    ],
+    "defect": "Delete instala d.Log no contexto em vez de log, descartando os campos name/kind/method do logger enriquecido."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S14 relatam o mesmo defeito na mesma atribuição do contexto em Delete. Ambas propõem usar log no lugar de d.Log; uma única correção resolve os dois relatos."
+ }
+}

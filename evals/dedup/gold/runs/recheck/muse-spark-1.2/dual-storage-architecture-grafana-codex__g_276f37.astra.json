@@ -1,0 +1,43 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_db51092c",
+     "s_0f8576a3",
+     "s_e95c784c",
+     "s_705859db",
+     "s_6451b2bb",
+     "s_4c68a502"
+    ],
+    "defect": "Os caminhos de erro de Storage.Create e Storage.Update registram a duração com recordLegacyDuration em vez de recordStorageDuration."
+   },
+   {
+    "members": [
+     "s_28699aa5",
+     "s_bc787d91",
+     "s_d464c133"
+    ],
+    "defect": "A goroutine de Legacy.DeleteCollection registra a duração com recordStorageDuration em vez de recordLegacyDuration."
+   },
+   {
+    "members": [
+     "s_0d3070ec",
+     "s_02ad3834",
+     "s_0256cf0e"
+    ],
+    "defect": "O caminho de sucesso de Delete usa name em vez de options.Kind no rótulo da métrica."
+   }
+  ],
+  "unique": [
+   "s_d8591060"
+  ],
+  "bundles": [
+   "s_0d3070ec",
+   "s_4c68a502"
+  ],
+  "reasoningPt": "S1, S2, S10, S12, S13 e S22 compartilham o erro de registrar falhas de Storage como Legacy; S4, S8 e S14 tratam da inversão em DeleteCollection, que exige outra correção. S3, S9 e S15 compartilham o rótulo incorreto em Delete, enquanto S11 trata da perda dos campos do logger e fica sozinho. S3 e S22 agregam defeitos adicionais, mas pertencem aos grupos do primeiro defeito relatado."
+ }
+}

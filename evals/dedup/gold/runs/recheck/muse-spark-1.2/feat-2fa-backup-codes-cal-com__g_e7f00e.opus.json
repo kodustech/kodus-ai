@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "Backup-code consumption in authorize() is a non-atomic read-modify-write, so two concurrent logins can both reuse the same single-use code.",
+    "members": [
+     "s_cf0c790d",
+     "s_bca7ea55"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_cf0c790d"
+  ],
+  "reasoningPt": "S3 e S10 têm como defeito principal o mesmo problema: o read-modify-write não atômico dos backup codes, que permite reutilizar o mesmo código em logins concorrentes. S3 também fala do acúmulo de nulls no array, que nunca gera MissingBackupCodes, mas esse é um defeito secundário. Por isso S3 entra em bundles e o grupo continua junto."
+ }
+}

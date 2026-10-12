@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_2ab6ce36",
+     "s_7c209af1"
+    ],
+    "defect": "The test cleanup removes an IDP with the literal alias \"alias\" instead of the created IDPs' aliases, so the created IDPs leak into other tests."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S3 apontam o mesmo defeito: o cleanup usa o literal \"alias\" em vez do alias real do IDP criado, nas linhas 381 e 425. A correção proposta é a mesma (usar o alias verdadeiro), então o grupo deve ser mantido. Nenhuma das duas sugestões traz um segundo defeito."
+ }
+}

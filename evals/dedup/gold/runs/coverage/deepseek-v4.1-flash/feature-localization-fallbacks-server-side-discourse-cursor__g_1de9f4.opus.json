@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "FallbackLocaleList#[] (i18n.rb line 17) calls SiteSetting.default_locale.to_sym with no guard, and .compact runs too late, so a nil or unavailable default locale raises on every translation or request"
+   },
+   {
+    "id": "F2",
+    "description": "The String I18n.locale is mixed with Symbol locales, so .uniq doesn't remove the duplicate 'en' and :en entries and en.yml is loaded twice"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_08cbca4d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_389b8963",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_831e218a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_df9ce485",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

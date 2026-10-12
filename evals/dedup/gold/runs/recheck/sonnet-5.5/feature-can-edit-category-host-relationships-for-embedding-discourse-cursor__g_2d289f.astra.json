@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c715ef0c",
+     "s_0fd17a9d",
+     "s_1b696765",
+     "s_dca123ba"
+    ],
+    "defect": "A migração acessa campos de resultados SQL vazios sem verificar nil nas consultas de categoria, causando NoMethodError."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c715ef0c",
+   "s_dca123ba"
+  ],
+  "reasoningPt": "S1, S6, S7 e S10 têm como defeito principal a ausência de verificação de resultados vazios nas mesmas consultas de categoria, portanto o grupo deve ser mantido. S1 e S10 também relatam problemas no tratamento dos valores interpolados no INSERT e são bundles, sem alterar o agrupamento pelo defeito principal."
+ }
+}

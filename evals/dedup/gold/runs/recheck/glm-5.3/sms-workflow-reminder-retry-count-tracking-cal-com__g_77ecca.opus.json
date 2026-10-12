@@ -1,0 +1,15 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_ad72bd96",
+   "s_4d254d59"
+  ],
+  "bundles": [
+   "s_4d254d59"
+  ],
+  "reasoningPt": "O defeito principal de S1 é que falhas temporárias (conta em SMSLockState.LOCKED, indisponibilidade da Twilio) contam no retryCount. Com isso, lembretes pendentes são apagados após duas execuções. A correção seria diferenciar o bloqueio ou aumentar o limite de tentativas. O defeito principal de S2 é que o catch conta falhas do update do prisma depois que o SMS já foi agendado, o que apaga uma linha com SMS ativo na Twilio e impede o cancelamento. A correção é restringir o try à chamada scheduleSMS. Além disso, S2 acrescenta outro defeito, a falta de filtro method: SMS no deleteMany, e por isso entra em bundles."
+ }
+}

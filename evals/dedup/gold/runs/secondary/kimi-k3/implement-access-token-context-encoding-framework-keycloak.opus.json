@@ -1,0 +1,155 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_f5f884a5",
+    "mainDefect": "isAccessTokenId reads the grant shortcut with substring(3, 5) when it actually sits at indices 4-5, so it should be substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The matcher's condition is inverted: it returns false when the substring equals the expected grant shortcut.",
+      "coveredBy": [
+       "s_f60d4003",
+       "s_4d9f7dee"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_1afe381d",
+    "mainDefect": "The AssertEvents comment says the grant shortcut starts at the 4th character, but it starts at the 5th character (index 4).",
+    "secondary": [
+     {
+      "defect": "The matcher reads the grant shortcut with substring(3, 5) when it should use substring(4, 6).",
+      "coveredBy": [
+       "s_f5f884a5",
+       "s_2017887b",
+       "s_dd50b51b",
+       "s_1a067d7d",
+       "s_f1c91035",
+       "s_ffcfc8fc"
+      ]
+     },
+     {
+      "defect": "The matcher's equals condition is inverted, so it returns false when the shortcut matches.",
+      "coveredBy": [
+       "s_f60d4003",
+       "s_4d9f7dee"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_2017887b",
+    "mainDefect": "isAccessTokenId reads the grant shortcut with substring(3, 5) when it actually sits at indices 4-5, so it should be substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The matcher's condition is inverted: it returns false when the extracted shortcut equals the expected one.",
+      "coveredBy": [
+       "s_f60d4003",
+       "s_4d9f7dee"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_dd50b51b",
+    "mainDefect": "isAccessTokenId never really checks the grant shortcut because it reads substring(3, 5) when it should read substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The matcher's condition is inverted (a '!' is missing), so it rejects tokens whose shortcut matches the expected one.",
+      "coveredBy": [
+       "s_f60d4003",
+       "s_4d9f7dee"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_1a067d7d",
+    "mainDefect": "isAccessTokenId reads items[0].substring(3, 5), one position off from the real grant-shortcut slice at (4, 6).",
+    "secondary": [
+     {
+      "defect": "The matcher's polarity is inverted: it returns false when the slice equals expectedGrantShortcut.",
+      "coveredBy": [
+       "s_f60d4003",
+       "s_4d9f7dee"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f1c91035",
+    "mainDefect": "isAccessTokenId reads the grant shortcut with substring(3, 5) when it should use substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The matcher's condition is inverted: it returns false when the segment equals the expected shortcut.",
+      "coveredBy": [
+       "s_f60d4003",
+       "s_4d9f7dee"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ffcfc8fc",
+    "mainDefect": "isAccessTokenId reads the grant shortcut with substring(3, 5) when it should use substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The equality check is inverted, so the matcher rejects exactly the tokens that carry the expected shortcut.",
+      "coveredBy": [
+       "s_f60d4003",
+       "s_4d9f7dee"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f60d4003",
+    "mainDefect": "isAccessTokenId's condition is inverted: it returns false when the substring equals the expected grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher reads the grant shortcut with substring(3, 5) when it should use substring(4, 6).",
+      "coveredBy": [
+       "s_f5f884a5",
+       "s_2017887b",
+       "s_dd50b51b",
+       "s_1a067d7d",
+       "s_f1c91035",
+       "s_ffcfc8fc"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_4d9f7dee",
+    "mainDefect": "isAccessTokenId's equals comparison is inverted.",
+    "secondary": [
+     {
+      "defect": "The matcher uses an off-by-one substring(3, 5) where it should use substring(4, 6).",
+      "coveredBy": [
+       "s_f5f884a5",
+       "s_2017887b",
+       "s_dd50b51b",
+       "s_1a067d7d",
+       "s_f1c91035",
+       "s_ffcfc8fc"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_efbf1629",
+    "mainDefect": "Shortcut length is never checked at registration or encode time, even though decoding assumes every shortcut is exactly 2 characters.",
+    "secondary": [
+     {
+      "defect": "The OAuth2GrantTypeFactory.getShortcut javadoc says shortcuts are usually 3 letters, which contradicts the enforced 2-character format.",
+      "coveredBy": [
+       "s_071b2150"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5a3bcb7f",
+     "s_ba068ffa"
+    ],
+    "defect": "The client-side upload error messages hard-code a 10 MB limit, but the server still uses the configurable SiteSetting.max_image_size_kb, so users can be shown the wrong maximum."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S5 apontam o mesmo erro repetido em dois pontos de utilities.js: o limite de 10 MB fixo no código e mostrado na mensagem de erro, sem usar o valor configurado no servidor. As duas se resolvem com a mesma troca, usando o limite configurado. Nenhuma das duas traz um segundo defeito, então o grupo fica como está."
+ }
+}

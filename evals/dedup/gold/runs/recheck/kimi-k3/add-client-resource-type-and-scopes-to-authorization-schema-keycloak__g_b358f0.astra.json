@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9ac2aa83",
+     "s_886d9c42"
+    ],
+    "defect": "Os métodos de gerenciamento de permissões de clientes lançam UnsupportedOperationException no V2, fazendo os endpoints REST correspondentes retornarem HTTP 500."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S7 relatam o mesmo defeito: os endpoints de gerenciamento de permissões passam a chamar implementações que lançam UnsupportedOperationException no V2. A lista mais ampla de métodos e as alternativas de correção em S7 não caracterizam outro defeito."
+ }
+}

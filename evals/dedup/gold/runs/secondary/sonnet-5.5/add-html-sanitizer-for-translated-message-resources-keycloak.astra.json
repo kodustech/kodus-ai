@@ -1,0 +1,47 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_732d5528",
+    "mainDefect": "The Lithuanian login bundle's loginTotpStep1 contains Italian text instead of Lithuanian.",
+    "secondary": [
+     {
+      "defect": "The Lithuanian account bundle's totpStep1 also contains Italian text instead of Lithuanian.",
+      "coveredBy": [
+       "s_ee4e0e15",
+       "s_f60fe56a",
+       "s_a8060ba7"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ee4e0e15",
+    "mainDefect": "The Lithuanian account bundle's totpStep1 contains Italian text instead of Lithuanian.",
+    "secondary": [
+     {
+      "defect": "The Lithuanian login bundle's loginTotpStep1 also contains Italian text instead of Lithuanian.",
+      "coveredBy": [
+       "s_732d5528",
+       "s_0b9e8b6a"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f60fe56a",
+    "mainDefect": "The Lithuanian account bundle's totpStep1 contains Italian text instead of Lithuanian.",
+    "secondary": [
+     {
+      "defect": "The Lithuanian login bundle's loginTotpStep1 also contains Italian text instead of Lithuanian.",
+      "coveredBy": [
+       "s_732d5528",
+       "s_0b9e8b6a"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

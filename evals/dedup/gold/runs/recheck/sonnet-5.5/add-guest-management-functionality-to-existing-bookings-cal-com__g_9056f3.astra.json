@@ -1,0 +1,25 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_66ed9605",
+     "s_dc76b747",
+     "s_bdaa90a8"
+    ],
+    "defect": "A falta de normalização dos e-mails permite contornar a blacklist usando diferenças de maiúsculas e minúsculas."
+   }
+  ],
+  "unique": [
+   "s_7a5dc6fd"
+  ],
+  "bundles": [
+   "s_66ed9605",
+   "s_dc76b747",
+   "s_7a5dc6fd"
+  ],
+  "reasoningPt": "S2, S4 e S7 compartilham como defeito principal as comparações de e-mail sensíveis a maiúsculas e minúsculas. S9 começa pela ausência de deduplicação dentro da lista enviada, que exige uma correção distinta; sua observação posterior sobre a blacklist não une os grupos. S2, S4 e S9 incluem defeitos adicionais e são bundles."
+ }
+}

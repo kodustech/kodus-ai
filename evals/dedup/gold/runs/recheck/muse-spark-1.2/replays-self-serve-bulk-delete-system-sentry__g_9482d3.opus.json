@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_222ac473",
+     "s_0b48b37f"
+    ],
+    "defect": "The age/timestamp mutual-exclusion validators check presence by truthiness with .get(), so a value of 0 skips the check and a report can carry both fields."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S9 apontam o mesmo defeito nas mesmas linhas: os validadores usam .get() com checagem de truthiness, então age=0 ou timestamp=0 passa pela exclusão mútua. As duas propõem a mesma correção, trocar por \"in\" ou \"is not None\". Nenhuma traz um segundo defeito."
+ }
+}

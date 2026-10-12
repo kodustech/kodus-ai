@@ -1,0 +1,24 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_006ed08a",
+     "s_9009c9ce",
+     "s_e63608d7"
+    ],
+    "defect": "A conversão de SiteSetting.default_locale com to_sym antes de compact causa uma exceção quando o valor é nil."
+   }
+  ],
+  "unique": [
+   "s_c8aed49e"
+  ],
+  "bundles": [
+   "s_006ed08a",
+   "s_e63608d7"
+  ],
+  "reasoningPt": "S1, S4 e S5 têm como primeiro defeito a exceção ao chamar to_sym em default_locale nil e ficam juntas. S1 e S5 também relatam a mistura de String/Symbol, por isso são bundles. S7 trata dessa mistura como defeito principal e fica separada, pois normalizar os tipos exige uma correção distinta da proteção contra default_locale nil."
+ }
+}

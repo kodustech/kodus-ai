@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b803431c",
+     "s_5ebba24e"
+    ],
+    "defect": "fetch_error_details pairs error_ids with nodestore get_multi values by position using zip, so a missing, duplicate or reordered result gives an ErrorEvent the wrong id."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 apontam o mesmo defeito em fetch_error_details: o zip(error_ids, events.values()) assume que os resultados do get_multi seguem a ordem dos error_ids. As duas propõem a mesma correção, que é buscar cada resultado pelo node_id em vez da posição. Os detalhes extras de S5 (o guard de None nunca dispara, a ordem cronológica quebra) são consequências do mesmo erro, e não um segundo defeito."
+ }
+}

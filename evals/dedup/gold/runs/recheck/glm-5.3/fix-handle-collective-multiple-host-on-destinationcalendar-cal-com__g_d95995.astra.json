@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0fcfd2d6",
+     "s_a23b880b",
+     "s_a98dfe02"
+    ],
+    "defect": "Office365, Lark e BaseCalendarService selecionam destinationCalendar[0] em vez do destino correspondente à credencial do host, direcionando eventos coletivos ao calendário errado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6, S17 e S28 descrevem o mesmo erro de seleção do calendário, repetido nos mesmos provedores e corrigido pela seleção do destino correspondente à credencial. A inconsistência da referência mencionada em S17 é uma consequência desse erro, não um defeito independente."
+ }
+}

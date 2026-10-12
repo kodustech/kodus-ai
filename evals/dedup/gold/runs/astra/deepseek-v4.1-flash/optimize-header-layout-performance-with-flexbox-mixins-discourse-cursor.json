@@ -1,0 +1,29 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "promptSha": "ec5ea3f524626cf276671ad04adfb5cc38a1a7ee",
+  "attempt": 1,
+  "ms": 27227,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_b1e0be12",
+          "s_1dbf5554"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The align-items mixin emits the unrecognized -ms-align-items property despite already emitting -ms-flex-align.",
+        "rationale": "Both suggestions flag the same declaration on line 121 and recommend removing it; one edit resolves both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_1e43a4ec",
+        "confidence": "high"
+      }
+    ]
+  }
+}

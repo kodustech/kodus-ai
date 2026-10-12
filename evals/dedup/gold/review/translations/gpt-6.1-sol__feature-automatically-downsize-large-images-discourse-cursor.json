@@ -1,0 +1,26 @@
+{
+ "s_72e910b1": {
+  "summaryPt": "A nova assinatura de downsize substitui a existente e quebra em runtime o caller ResizeEmoji.",
+  "contentPt": "O QUÊ: a nova definição `downsize(from, to, dimensions, opts={})` substitui a existente de cinco argumentos `downsize(from, to, max_width, max_height, opts={})` em vez de sobrecarregá-la. POR QUÊ: o Ruby mantém apenas a última definição, então `Jobs::ResizeEmoji`, que ainda chama `OptimizedImage.downsize(path, path, 100, 100, opts)`, agora lança `ArgumentError` e impede a conclusão dos jobs de redimensionamento de emoji. CORREÇÃO: preservar a API numérica de largura/altura (por exemplo, convertendo-a dentro de um único método variádico/compatível com a assinatura) e também aceitar a forma de string de dimensões usada pelos uploads."
+ },
+ "s_82c35c19": {
+  "summaryPt": "Uma definição duplicada de `downsize` sobrescreve a assinatura legada e quebra callers que fornecem largura e altura.",
+  "contentPt": "A nova definição `downsize(from, to, dimensions, opts={})` sobrescreve a definição existente `downsize(from, to, max_width, max_height, opts={})` no Ruby. Qualquer caller existente que passe argumentos separados de largura e altura agora lança `ArgumentError` em vez de ser convertido para uma string de dimensões. Renomeie o novo ponto de entrada ou una as duas convenções de chamada em um único método para que a assinatura antiga continue suportada."
+ },
+ "s_6d66fb8e": {
+  "summaryPt": "O novo overload de downsize não é um overload em Ruby e quebra os callers existentes de cinco argumentos.",
+  "contentPt": "Esta segunda definição de `downsize` sobrescreve o método anterior `(from, to, max_width, max_height, opts={})` no Ruby. Callers existentes que usam a antiga assinatura de cinco argumentos agora lançarão `ArgumentError: wrong number of arguments`; preserve a API antiga ou atualize todos os callers antes de alterar a assinatura."
+ },
+ "s_5a3bcb7f": {
+  "summaryPt": "O cliente informa aos usuários que o limite é sempre 10 MB, embora o limite de upload configurado no servidor possa ser diferente.",
+  "contentPt": "A mensagem de erro agora sempre interpola 10240 KB (10 MB), mas o servidor ainda usa o `SiteSetting.max_image_size_kb` configurável e pode rejeitar ou redimensionar com um limite diferente. Usuários de instalações com uma configuração não padrão receberão o máximo errado; use a configuração definida (ou passe de outra forma o limite real do servidor) ao construir esta mensagem."
+ },
+ "s_ba068ffa": {
+  "summaryPt": "A mensagem 413 fixa um máximo no código que pode não corresponder ao limite de imagem configurado no servidor.",
+  "contentPt": "A mensagem de erro 413 sempre informa 10 MB, embora o tamanho de imagem aceito pelo servidor continue configurável via `SiteSetting.max_image_size_kb`. Uma resposta 413 causada por um limite configurado menor ou maior mostrará, portanto, um máximo incorreto; use o limite configurado fornecido pela aplicação em vez de um valor fixo no código."
+ },
+ "s_835cc57c": {
+  "summaryPt": "O caller de upload passa dimensões apenas em porcentagem para um consumidor de downsize alterado que agora espera dimensões explícitas.",
+  "contentPt": "Passe dimensões máximas explícitas para OptimizedImage.downsize em vez da string de porcentagem \"80%\". A implementação alterada de OptimizedImage encaminha este argumento diretamente como o operando de dimensões, então o valor apenas em porcentagem deste caller não satisfaz o novo contrato de dimensões e pode produzir um comando de downsize de imagem inválido ou ineficaz."
+ }
+}

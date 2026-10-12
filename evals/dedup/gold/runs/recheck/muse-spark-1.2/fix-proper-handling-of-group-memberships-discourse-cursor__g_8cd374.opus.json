@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b4165a65",
+     "s_69ee82ab",
+     "s_651b27bf",
+     "s_bfe39327"
+    ],
+    "defect": "totalPages uses Math.floor(user_count/limit)+1, which gives one extra page when user_count is an exact multiple of limit, so the next button can reach an empty page."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S6, S8 e S15 apontam o mesmo defeito: totalPages calcula floor+1 e, quando user_count é múltiplo exato de limit, sobra uma página vazia. Todas sugerem trocar por Math.ceil. Nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

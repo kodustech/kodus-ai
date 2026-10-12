@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0f836d52",
+    "mainDefect": "Truthiness-based mutual-exclusion checks accept reports containing both age and timestamp when either value is zero.",
+    "secondary": [
+     {
+      "defect": "Reports containing neither age nor timestamp pass validation because both fields are optional.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

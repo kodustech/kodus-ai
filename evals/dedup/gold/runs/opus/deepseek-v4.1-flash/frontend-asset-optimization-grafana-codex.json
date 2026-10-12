@@ -1,0 +1,73 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "promptSha": "e757a841026494fa38e1bd4ff361253ede281bca",
+  "attempt": 1,
+  "ms": 8635,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 4542,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 521,
+    "output_tokens_details": {
+      "thinking_tokens": 155
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 4542,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 521,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 4542,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 4542
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.0485376,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_6b35380b",
+          "s_12bc3466",
+          "s_efe46b6a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "After taking the write lock, GetWebAssets does not re-check entryPointAssetsCache (incomplete double-checked locking), and it holds the write lock during the manifest file/CDN I/O, which serializes concurrent callers.",
+        "rationale": "s_12bc3466 reports both the missing re-check (also reported by s_6b35380b) and the lock held across I/O (also reported by s_efe46b6a). Because each of the other two shares a defect with it, all three belong in one overlapping group."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_929a54a6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5cd23add",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1c290815",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

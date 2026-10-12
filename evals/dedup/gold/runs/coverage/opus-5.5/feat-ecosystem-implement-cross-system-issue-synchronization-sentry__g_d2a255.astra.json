@@ -1,0 +1,54 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "assignment_source.py:18 evaluates queued's timezone.now() default at import time, giving instances a shared stale timestamp."
+   },
+   {
+    "id": "F2",
+    "description": "test_assignment_source.py:36 only checks queued is not None, so test_to_dict fails to detect incorrect timestamps."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_03c0a1d9",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_9eae5caf",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c2f1d70e",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_0ee85020",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b183150d",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

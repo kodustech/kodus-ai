@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e2d834e6",
+     "s_5b48f22e"
+    ],
+    "defect": "TestLogger.FromContext returns a new, disconnected TestLogger instead of the receiver, so logs emitted via FromContext are lost to the test's instance."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 apontam o mesmo defeito: TestLogger.FromContext devolve uma instância nova e desconectada em vez do receptor. Por isso, os logs feitos via logger_middleware.go:58 se perdem. As duas propõem a mesma correção (return f), então o grupo continua como está."
+ }
+}

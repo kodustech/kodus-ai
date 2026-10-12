@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8e161876",
+    "mainDefect": "resetState in EnableTwoFactorModal does not clear backupCodes or revoke/clear backupCodesUrl, so stale backup codes and a live blob URL remain after cancel/close.",
+    "secondary": [
+     {
+      "defect": "resetState also does not clear dataUri and secret, leaving the previous TOTP setup data in state.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

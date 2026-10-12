@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Account bundle messages_lt.properties: totpStep1 holds an Italian string instead of Lithuanian"
+   },
+   {
+    "id": "F2",
+    "description": "Login bundle messages_lt.properties: loginTotpStep1 holds an Italian string instead of Lithuanian"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_8a4cfc73",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ab141308",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

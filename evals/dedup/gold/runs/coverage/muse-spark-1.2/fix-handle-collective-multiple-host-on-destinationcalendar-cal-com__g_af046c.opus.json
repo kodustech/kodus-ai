@@ -1,0 +1,75 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "updateEvent (line ~256): the else-branch looks for externalId === externalCalendarId while externalCalendarId is falsy, so selectedCalendar is always undefined"
+   },
+   {
+    "id": "F2",
+    "description": "deleteEvent (line ~317): the same dead find-by-falsy-externalCalendarId fallback, so calendarId is never resolved from destinationCalendar"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_e877f786",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3c79f482",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5c8e19ea",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_5ce67a29",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7b202983",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_67a98570",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_aa76ef5a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9acef6ae",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

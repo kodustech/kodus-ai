@@ -1,0 +1,22 @@
+{
+ "s_3abf3cfd": {
+  "summaryPt": "",
+  "contentPt": "`CGI.unescapeHTML(i.content.scrub)` falha de duas formas. Primeiro, String#scrub só existe no Ruby 2.1+, e o CI do projeto (.travis.yml) roda Ruby 2.0.0. Segundo, o SimpleRSS retorna nil para `content` em itens RSS 2.0 padrão que só têm <description>. Qualquer um dos casos levanta NoMethodError e aborta a importação inteira: o job tem retry: false e nenhum rescue. TopicRetriever#perform_retrieve chama Jobs::PollFeed.new.execute de forma síncrona, então o mesmo erro também impede a execução do fallback fetch_http. Correção: use `(i.content || i.description).to_s`, e só chame scrub se estiver disponível (ou use encode com invalid: :replace)."
+ },
+ "s_8ac429ca": {
+  "summaryPt": "",
+  "contentPt": "`url` é interpolada sem escape em `<a href='#{url}'>`. O conteúdo da página remota vindo do Readability (que permite `href`, então links `javascript:` sobrevivem) e o conteúdo do RSS também são armazenados como HTML bruto com cook_method raw_html. embed_url vem de um parâmetro de requisição não autenticado: o EmbedController só verifica o Referer, que pode ser falsificado, e se o host corresponde a embeddable_host. Um atacante pode, portanto, requisitar uma URL como `http://host/x'onmouseover='alert(1)` ou apontar para páginas daquele host influenciadas por ele. O post resultante é renderizado sem sanitização tanto na visualização do tópico no fórum quanto na visualização embed, gerando stored XSS na origem do Discourse. Correção: faça o escape de `url` (ERB::Util.html_escape / CGI.escapeHTML) e passe o HTML importado por um sanitizer (por exemplo, Sanitize com uma whitelist que rejeite hrefs que não sejam http(s)) antes de armazená-lo."
+ },
+ "s_8882a392": {
+  "summaryPt": "",
+  "contentPt": "`cook` agora retorna `raw` literalmente para posts raw_html e pula todo o pipeline de cooking e sanitização. O cook method persiste no post, então toda revisão posterior via PostRevisor também é armazenada como HTML não sanitizado, incluindo edições de qualquer pessoa que possa editar o post (dono, staff). Qualquer HTML que acabe em raw (conteúdo da página remota, conteúdo do RSS, edições) é servido como está no fórum, o que cria um sink de XSS persistente. Sanitize o HTML aqui, por exemplo com a mesma abordagem de whitelist usada pelo PrettyText, em vez de retornar raw inalterado."
+ },
+ "s_bfc86ebc": {
+  "summaryPt": "A URL no link 'imported from' é colocada no HTML sem escape, e esse HTML é depois renderizado como bruto.",
+  "contentPt": "A URL de embed vem do link ou id do item RSS, ou do parâmetro de requisição embed_url. Ela é colocada em `<a href='#{url}'>#{url}</a>` sem nenhum escape. O post é criado com cook_method raw_html, então `cook` retorna raw inalterado, e best.html.erb o renderiza com `raw post.cooked`. Uma URL contendo `'` ou `<` pode escapar do atributo ou injetar markup no texto mostrado aos usuários. Faça o escape com `ERB::Util.html_escape(url)` antes de interpolar."
+ },
+ "s_5748a076": {
+  "summaryPt": "",
+  "contentPt": "No SimpleRSS, `i.content` só é definido para elementos <content> do Atom. Itens RSS 2.0 padrão usam <description> ou content:encoded, então `i.content` é nil e `i.content.scrub` levanta NoMethodError. Como não há rescue por item, um único item assim aborta o poll inteiro do feed, e com ele o TopicRetriever#perform_retrieve, de modo que nenhum item é importado. Use como fallback `i.content_encoded || i.description` e pule itens sem conteúdo."
+ }
+}

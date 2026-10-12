@@ -1,0 +1,118 @@
+{
+  "judge": "opus",
+  "model": "glm-5.3",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "promptSha": "ce3ea3eca111b8871c4f9689856ffc504ca5b602",
+  "attempt": 1,
+  "ms": 19982,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 43418,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 1889,
+    "output_tokens_details": {
+      "thinking_tokens": 523
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 43418,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1889,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 43418,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 43418
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.3852904,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_2c2a6b10",
+          "s_79b9dc96",
+          "s_ca4bf0da",
+          "s_38fe9a59"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "The Lithuanian totpStep1 (account theme) and loginTotpStep1 (login theme) values were replaced with an Italian sentence instead of a Lithuanian translation.",
+        "rationale": "It is the same copy-paste of the Italian sentence into two Lithuanian files. Each file needs its own edit, and both are fixed by supplying a Lithuanian translation."
+      },
+      {
+        "members": [
+          "s_f6a54b69",
+          "s_f38384b4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The zh_CN totpStep1 value uses Traditional Chinese script instead of Simplified.",
+        "rationale": "Both point to the same line and report the same script mismatch."
+      },
+      {
+        "members": [
+          "s_c090859a",
+          "s_d93655e7",
+          "s_c4bb13a0",
+          "s_0e7da5d3",
+          "s_ecc11bba",
+          "s_4b64c7d5"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "error-invalid-multivalued-size in the admin-ui and account-ui JS-served English bundles was switched from i18next {{n}} placeholders to Java MessageFormat {n}/{2,choice,...} syntax, which the SPAs cannot interpolate and which no longer matches the sibling translations.",
+        "rationale": "The same syntax change was made in two SPA bundles. All members report the same interpolation breakage, and it is fixed by keeping the {{n}} syntax in the JS bundles."
+      },
+      {
+        "members": [
+          "s_d1bdd70e",
+          "s_a63922db"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The common prefix/suffix trimming in the Illegal HTML diagnostic can overlap, so substring is called with begin > end and throws StringIndexOutOfBoundsException.",
+        "rationale": "Both report the same overlap crash in the same diff-display code and propose clamping the indexes."
+      },
+      {
+        "members": [
+          "s_2f45f628",
+          "s_b5a7f414"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "verifySafeHtml throws an unchecked RuntimeException when the derived English file is missing, which aborts the verification instead of reporting the problem.",
+        "rationale": "Both point to the same lines with the same failure mode and the same proposed fix."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_e592dee0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ab5c4c5d",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cd15646d",
+     "s_05a21148",
+     "s_72000ea2"
+    ],
+    "defect": "O zip posicional entre error_ids e events.values() pode associar IDs aos dados de outros eventos por não usar as chaves dos resultados do nodestore."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S4 e S7 relatam o mesmo defeito em fetch_error_details: a associação posicional entre IDs e dados retornados pelo nodestore. S2 destaca a deduplicação, enquanto S4 e S7 discutem omissões ou diferenças de ordem; associar os dados pela chave node_id resolve todos os relatos."
+ }
+}

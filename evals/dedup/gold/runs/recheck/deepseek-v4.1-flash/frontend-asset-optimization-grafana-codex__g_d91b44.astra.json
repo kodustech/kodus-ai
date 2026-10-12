@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_12bc3466",
+     "s_6b35380b"
+    ],
+    "defect": "Falta verificar novamente o cache após adquirir o write lock, causando recomputações redundantes por chamadas concorrentes."
+   }
+  ],
+  "unique": [
+   "s_efe46b6a"
+  ],
+  "bundles": [
+   "s_12bc3466"
+  ],
+  "reasoningPt": "S1 começa pela falta de uma segunda verificação do cache, o mesmo defeito de S2. S1 também aborda manter o lock durante o I/O, defeito de S3 que exige uma correção distinta, pois a segunda verificação não retira o I/O da seção crítica. Portanto, S1 é um bundle, fica com S2 e S3 fica separado."
+ }
+}

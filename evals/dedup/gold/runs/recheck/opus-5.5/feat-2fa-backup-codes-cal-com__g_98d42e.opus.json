@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e334db10",
+     "s_7f2428e8"
+    ],
+    "defect": "Backup code consumption in authorize() is a non-atomic read-modify-write, so concurrent logins can reuse one code or bring back a code that was already used."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S7 relatam o mesmo defeito: o consumo do código de backup em authorize() é um read-modify-write não atômico. Isso permite reutilizar um código ou reviver um código já consumido em logins concorrentes. As duas propõem a mesma correção (transação com lock ou update condicional) e nenhuma traz um segundo defeito."
+ }
+}

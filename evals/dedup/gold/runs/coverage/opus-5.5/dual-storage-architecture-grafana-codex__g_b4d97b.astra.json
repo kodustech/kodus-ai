@@ -1,0 +1,55 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create, line 45: storage failures use recordLegacyDuration instead of recordStorageDuration."
+   },
+   {
+    "id": "F2",
+    "description": "Update, line 129: storage failures use recordLegacyDuration instead of recordStorageDuration."
+   },
+   {
+    "id": "F3",
+    "description": "DeleteCollection, line 166: the legacy call uses recordStorageDuration instead of recordLegacyDuration."
+   },
+   {
+    "id": "F4",
+    "description": "Delete, line 106: success metrics use name instead of options.Kind as the kind label, causing unbounded cardinality."
+   },
+   {
+    "id": "F5",
+    "description": "Delete, line 97: the context receives d.Log instead of the enriched log."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_9977cb66",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ef1efee6",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_74e86eb7",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,55 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create (lines 50–57): the async legacy write inherits request cancellation and can be aborted, causing storage divergence."
+   },
+   {
+    "id": "F2",
+    "description": "Delete (lines 108–114): the async legacy write inherits request cancellation and can be aborted, causing storage divergence."
+   },
+   {
+    "id": "F3",
+    "description": "Update (lines 134–141): the async legacy write inherits request cancellation and can be aborted, causing storage divergence."
+   },
+   {
+    "id": "F4",
+    "description": "DeleteCollection (lines 161–167): the async legacy write inherits request cancellation and can be aborted, causing storage divergence."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_52fd068c",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_66a23edf",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_d8b196b6",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

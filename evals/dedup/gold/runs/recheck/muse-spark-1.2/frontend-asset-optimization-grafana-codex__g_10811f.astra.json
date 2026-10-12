@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_505b8655",
+     "s_0d3625df"
+    ],
+    "defect": "Falta revalidar o cache após adquirir o lock exclusivo, permitindo que chamadas em espera repitam o carregamento e sobrescrevam o cache já preenchido."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_505b8655"
+  ],
+  "reasoningPt": "S1 e S2 têm como defeito principal a ausência da segunda verificação do cache após adquirir o lock exclusivo. S1 também aponta a manutenção do lock durante I/O, que exige uma correção distinta, por isso entra em bundles sem alterar o agrupamento."
+ }
+}

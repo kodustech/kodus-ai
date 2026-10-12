@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_99672758",
+     "s_ee27a71c",
+     "s_7b3553a9"
+    ],
+    "defect": "O limite fixo de 10 MB na validação do cliente ignora max_attachment_size_kb, aceitando ou rejeitando anexos em desacordo com o servidor."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_ee27a71c",
+   "s_7b3553a9"
+  ],
+  "reasoningPt": "S3, S11 e S20 têm como primeiro defeito o limite fixo de 10 MB aplicado também aos anexos, portanto permanecem juntas. S11 acrescenta o limite incorreto informado no alerta de erro 413, e S20 acrescenta as imagens que continuam grandes após cinco reduções; esses defeitos secundários tornam ambas bundles, sem alterar o agrupamento."
+ }
+}

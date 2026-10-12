@@ -1,0 +1,25 @@
+{
+  "model": "glm-5.3",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "component": [
+    "s_28120ad1",
+    "s_fb963067"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_28120ad1",
+          "s_fb963067"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "defect": "The relaxed isConditionalPasskeysEnabled(context.getUser()) guard no longer requires that no user is selected yet. So per-user WebAuthn data (it shows that passkeys exist and can include credential IDs via passkeys.ftl) is now filled into pages served to a visitor who has only typed a username. That reveals that the account exists and has passkeys. Suggested fix: allow this only during re-authentication (USER_SET_BEFORE_USERNAME_PASSWORD_AUTH)."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "Both suggestions report the same disclosure with the same root cause: the new isConditionalPasskeysEnabled guard drops the old context.getUser()==null condition, so per-user passkey or credential data reaches visitors who have not authenticated. Both propose the same fix: allow it only when USER_SET_BEFORE_USERNAME_PASSWORD_AUTH is set. s_28120ad1 points at UsernamePasswordForm.challenge. s_fb963067 points at PasswordForm.render and also names UsernamePasswordForm.challenge lines 137-140, so it already covers both locations. Both call sites use the same helper, so one change to the gating fixes both. That makes this cross_location. needsUnifiedComment is false because s_fb963067 already covers both places. That last point is a minor judgment call, but the grouping itself is clear."
+  }
+}

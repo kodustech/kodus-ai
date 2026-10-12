@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7b9850c3",
+     "s_3dc681cc",
+     "s_bb5adb31"
+    ],
+    "defect": "The Lithuanian TOTP step-1 messages (login loginTotpStep1 and account totpStep1) were replaced with Italian text instead of a Lithuanian translation."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S6 e S10 apontam o mesmo erro: texto em italiano colocado nos arquivos de tradução lituana. A falha se repete em dois lugares (login e account) e se corrige com uma única troca de texto. S10 cita os dois lugares, mas trata de um único defeito, então não é bundle."
+ }
+}

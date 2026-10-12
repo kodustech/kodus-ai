@@ -1,0 +1,80 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "src/theme/config.js: MAX_ALLOWED_REQUESTS is 150 instead of 100 for proper throttling."
+   },
+   {
+    "id": "F2",
+    "description": "src/components/search.js: unnecessary wrapper around performSearch."
+   },
+   {
+    "id": "F3",
+    "description": "src/utils/helpers.js: sanitizeInput naming is inconsistent with the API."
+   },
+   {
+    "id": "F4",
+    "description": "src/analytics/tracker.js: analytics timing needs a higher-resolution timer."
+   },
+   {
+    "id": "F5",
+    "description": "src/api/client.js: API call uses the incorrect HTTP method."
+   },
+   {
+    "id": "F6",
+    "description": "src/forms/handler.js: mismatched form field binding for body.name."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_e8005d12",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_fec7e43b",
+    "covers": [
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dba5cf11",
+    "covers": [],
+    "complete": false
+   },
+   {
+    "id": "s_be8c18fb",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c04307da",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ed2f4754",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e345fbc9",
+    "covers": [
+     "F6"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

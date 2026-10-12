@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4ddd4520",
+     "s_00480f16",
+     "s_5b1de316"
+    ],
+    "defect": "The direct lookup integration.metadata[\"sender\"][\"login\"] raises KeyError (HTTP 500) when the Integration's metadata has no sender, instead of failing closed with the error page."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S7 e S9 apontam o mesmo defeito nas linhas 500-505: o acesso direto a metadata[\"sender\"][\"login\"] gera KeyError/500 quando falta o sender. Os três propõem a mesma correção, um lookup defensivo com .get() que trata a ausência como divergência. Nenhum deles reporta um segundo defeito."
+ }
+}

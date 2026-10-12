@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0aac8642",
+     "s_59f05c45"
+    ],
+    "defect": "Quando o organizador e o tipo de evento não têm calendário de destino, destinationCalendar fica null e o uso de ?.push descarta os calendários dos demais membros do evento coletivo."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S21 relatam o mesmo defeito nas mesmas linhas: o ?.push não adiciona os calendários dos membros quando destinationCalendar é null. As correções propostas apenas variam na forma de inicializar o array, portanto o grupo deve ser mantido."
+ }
+}

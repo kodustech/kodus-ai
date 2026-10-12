@@ -1,0 +1,72 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Google CalendarService.updateEvent fallback (lines 254-256): find() compares externalId against the falsy externalCalendarId, so it never matches and calendar.events.update gets calendarId undefined."
+   },
+   {
+    "id": "F2",
+    "description": "Google CalendarService.deleteEvent fallback (lines 315-317): the same find() never matches, so it falls back to 'primary' or undefined and misses the event on the real destination calendar."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7aa0f717",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7f78185c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_f50a5d4f",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e57c1a14",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dd554f89",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_08035170",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_29b344c5",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": false,
+  "reasoning": "There are two facets: the broken fallback in updateEvent and the same broken fallback in deleteEvent. The labelers only disagree on s_dd554f89. Its first sentence says \"deleteEvent has the same broken fallback as updateEvent\", which names updateEvent and says its fallback is broken too. That matches the task's \"this also happens in Update\" example, so I count F1 and mark it complete. This is still a judgment call, because the rest of the comment only discusses delete, so I set decisive to false. s_e57c1a14 says deleteEvent \"repeats the same self-negating find\" but never names updateEvent, so that is only context and it covers F2 alone. s_f50a5d4f and s_29b344c5 only discuss updateEvent. s_7aa0f717, s_7f78185c and s_08035170 each name both updateEvent and deleteEvent as broken."
+ }
+}

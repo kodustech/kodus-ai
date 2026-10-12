@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0bb6afb4",
+     "s_97dfdc72"
+    ],
+    "defect": "The fallback in updateEvent/deleteEvent searches destinationCalendar for an externalId equal to the absent externalCalendarId, so it never finds a valid destination calendar."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S12 apontam o mesmo defeito: o fallback procura em destinationCalendar um externalId igual ao externalCalendarId ausente e, por isso, nunca acha um calendário válido. Os dois citam o mesmo erro tanto no update quanto no delete, e uma única correção resolve os dois pontos. Por isso o grupo fica como está."
+ }
+}

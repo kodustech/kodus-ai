@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bd0cbb6b",
+     "s_52703d76"
+    ],
+    "defect": "canView(ClientModel) short-circuits on the global all-clients VIEW permission via canView(), so an explicit client-level VIEW denial is never evaluated."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 apontam o mesmo defeito: canView(ClientModel) retorna verdadeiro pela permissão global de VIEW antes de avaliar a permissão específica do client, o que ignora negações individuais. As duas propõem a mesma correção: manter só o atalho dos papéis administrativos e avaliar hasPermission(client, VIEW). Nenhuma traz um segundo defeito."
+ }
+}

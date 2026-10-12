@@ -1,0 +1,58 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "TestMode3_Create never waits for or verifies the async Legacy.Create call."
+   },
+   {
+    "id": "F2",
+    "description": "TestMode3_Delete never waits for or verifies the async Legacy.Delete call."
+   },
+   {
+    "id": "F3",
+    "description": "TestMode3_DeleteCollection never waits for or verifies the async Legacy.DeleteCollection call."
+   },
+   {
+    "id": "F4",
+    "description": "TestMode3_Update never waits for or verifies async Legacy.Update; missing calls or legacy failures leave it green."
+   },
+   {
+    "id": "F5",
+    "description": "The DeleteCollection legacy goroutine incorrectly calls recordStorageDuration, and the test does not catch this metric bug."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_9cd9483f",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_028635c3",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b32e2b9e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_49bc7a3a",
+    "covers": [
+     "F3",
+     "F5"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

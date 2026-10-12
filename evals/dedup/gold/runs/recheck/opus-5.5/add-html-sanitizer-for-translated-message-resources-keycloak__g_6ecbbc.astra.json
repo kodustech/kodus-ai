@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_83c33348",
+     "s_bb54d9cd"
+    ],
+    "defect": "As varreduras independentes de prefixo e sufixo podem se sobrepor, causando StringIndexOutOfBoundsException ao montar a mensagem de HTML ilegal."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S13 descrevem o mesmo defeito nas mesmas linhas: a sobreposição entre prefixo e sufixo faz substring receber índices inválidos. Ambas propõem limitar a varredura do sufixo, e essa correção resolve os dois relatos."
+ }
+}

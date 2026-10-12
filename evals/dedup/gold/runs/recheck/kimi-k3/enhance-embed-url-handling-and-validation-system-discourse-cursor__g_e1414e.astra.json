@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7eeb14d4",
+     "s_f0a16222"
+    ],
+    "defect": "absolutize_urls trata URLs relativas ao protocolo (//host/path) como caminhos relativos à raiz, corrompendo href e src ao prefixar o host de origem."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S12 descrevem o mesmo defeito nos mesmos trechos de absolutize_urls, tanto para links quanto para imagens. A mesma correção no tratamento de URLs iniciadas por // resolve ambas; nenhuma sugestão inclui outro defeito."
+ }
+}

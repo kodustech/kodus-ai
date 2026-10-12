@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7271d3e1",
+     "s_7175c4a5"
+    ],
+    "defect": "In AddGuestsDialog's onError, the template literal message is always truthy, so the `|| t(\"unable_to_add_guests\")` fallback can never run."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S8 apontam o mesmo defeito nas mesmas linhas: a mensagem montada com template literal nunca é falsy, então o fallback `unable_to_add_guests` nunca é usado. O comentário de S2 sobre o \"undefined: ...\" é só a consequência desse mesmo problema, não um segundo defeito. Por isso o grupo fica como está."
+ }
+}

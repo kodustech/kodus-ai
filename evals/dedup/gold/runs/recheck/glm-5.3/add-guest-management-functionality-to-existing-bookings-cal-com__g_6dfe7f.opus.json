@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_400ea655",
+     "s_7d8e5cc8"
+    ],
+    "defect": "The blacklist is lowercased but guest emails are compared raw, so a mixed-case address gets past BLACKLISTED_GUEST_EMAILS."
+   },
+   {
+    "members": [
+     "s_17395beb",
+     "s_c4f90580",
+     "s_bcca7cc3",
+     "s_0b97f8ef"
+    ],
+    "defect": "The server never checks that guest emails are unique: duplicates inside the submitted array are not removed, so createMany inserts duplicate attendee rows and the same emails are sent twice."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_7d8e5cc8",
+   "s_c4f90580",
+   "s_bcca7cc3"
+  ],
+  "reasoningPt": "S1 e S7 tratam principalmente do bypass da blacklist por diferença de maiúsculas/minúsculas. S2, S8, S15 e S19 têm como defeito principal a falta de deduplicação dos convidados no servidor, o que gera attendees duplicados. S7 (duplicata case-sensitive), S8 (race condition) e S15 (bypass da blacklist) trazem defeitos secundários, mas eles não mudam o grupo de cada uma."
+ }
+}

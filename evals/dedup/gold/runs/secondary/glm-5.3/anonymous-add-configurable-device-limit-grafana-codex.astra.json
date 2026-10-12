@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_23179061",
+    "mainDefect": "Moving device tagging into the synchronous authentication path makes anonymous authorization depend on database count and write latency.",
+    "secondary": [
+     {
+      "defect": "Removing the previous two-minute timeout leaves device tagging without an explicit bound when the database is slow or unresponsive.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_94ef8b50",
+    "mainDefect": "The update timestamp window can exclude an existing device, causing a false ErrDeviceLimitReached rejection, including under clock skew between instances.",
+    "secondary": [
+     {
+      "defect": "MySQL can report zero affected rows for an unchanged update to an existing device, causing a false ErrDeviceLimitReached rejection.",
+      "coveredBy": [
+       "s_9e5e643b"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_e14a8784",
+    "mainDefect": "The updateDevice comment incorrectly describes its internally computed timestamp window as times supplied to the function.",
+    "secondary": [
+     {
+      "defect": "The updateDevice comment omits that zero affected rows causes the function to return ErrDeviceLimitReached.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

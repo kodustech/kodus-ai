@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_71d2527d",
+     "s_56e6f1eb",
+     "s_d30a42e6",
+     "s_bfacd192",
+     "s_2168dca2"
+    ],
+    "defect": "MetricAlertDetectorHandler passa a herdar de StatefulDetectorHandler sem implementar os membros abstratos exigidos, tornando sua instanciação impossível e causando TypeError no processamento de detectores desse tipo."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S2, S3, S4 e S5 descrevem o mesmo defeito na mesma classe: a mudança de herança com corpo vazio impede sua instanciação. As diferenças na enumeração dos membros obrigatórios e nas alternativas de correção não caracterizam defeitos independentes."
+ }
+}

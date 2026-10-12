@@ -1,0 +1,24 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_6f563687",
+     "s_907d17d3"
+    ],
+    "defect": "A asserção ocorre antes do término da thread leitora e pode ignorar exceções de uma leitura ainda em andamento."
+   }
+  ],
+  "unique": [
+   "s_cfee9f21",
+   "s_4687a409"
+  ],
+  "bundles": [
+   "s_cfee9f21",
+   "s_4687a409"
+  ],
+  "reasoningPt": "S2 e S3 apontam principalmente a asserção executada sem esperar a thread leitora terminar. S4 começa pela ausência de garantia de leituras concorrentes, que pode persistir mesmo com join, e depois acrescenta a perda de exceções tardias. S5 começa pela falta de sinalização de parada quando uma exclusão lança exceção e depois acrescenta a falta de join; pela regra do primeiro defeito, S4 e S5 ficam separados."
+ }
+}

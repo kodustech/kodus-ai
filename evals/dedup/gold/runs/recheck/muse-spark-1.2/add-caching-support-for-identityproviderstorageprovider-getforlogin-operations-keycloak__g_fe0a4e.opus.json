@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_996b3792",
+     "s_dd4bb6a5"
+    ],
+    "defect": "Both are no-issue notes saying getLoginPredicate (orgId/BROKER_PUBLIC check) and the login-cache invalidation logic in the Infinispan provider agree with each other."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S8 relatam o mesmo resultado: não há divergência entre getLoginPredicate e os métodos registerIDPLoginInvalidation/registerIDPLoginInvalidationOnUpdate. Muda só o ponto de partida (S7 olha da definição do predicado, S8 dos hunks de invalidação), mas o conteúdo é o mesmo. Nenhuma das duas traz um segundo defeito, então o grupo fica como está."
+ }
+}

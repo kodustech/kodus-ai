@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b1025ecf",
+     "s_167fdedb",
+     "s_ec4800aa"
+    ],
+    "defect": "Os conteúdos de category_fabricator.rb e embeddable_host_fabricator.rb foram trocados, deixando as definições nos arquivos errados."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S6 e S7 relatam a mesma troca de conteúdo entre os dois arquivos de fabricators, embora destaquem lados diferentes. Restaurar as definições aos arquivos correspondentes resolve as três sugestões; nenhuma reúne defeitos distintos."
+ }
+}

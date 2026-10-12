@@ -1,0 +1,15 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_31c65e84",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5fd8900b",
+     "s_5d6ec13d"
+    ],
+    "defect": "A consulta compara lower(host) com uri.host sem normalizar o valor recebido para minúsculas, impedindo correspondências com hosts que contenham letras maiúsculas."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S9 apontam o mesmo defeito na mesma consulta: falta converter o host recebido para minúsculas. A mesma correção resolve ambas, e nenhuma relata um segundo defeito."
+ }
+}

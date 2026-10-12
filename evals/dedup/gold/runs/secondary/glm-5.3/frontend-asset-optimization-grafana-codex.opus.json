@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_25eea308",
+    "mainDefect": "The cache is not checked again after the write lock is taken, so at a non-Dev cold start every caller waiting on the lock re-reads and re-parses assets-manifest.json.",
+    "secondary": [
+     {
+      "defect": "In Dev mode every call takes the process-wide exclusive write lock and holds it during disk I/O, so all concurrent index, frontend-settings and recovery callers run one at a time.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7e94bcff",
+    "mainDefect": "The cache is not checked again after the write lock is taken, so at a non-Dev cold start every caller waiting on the lock re-reads and re-parses assets-manifest.json.",
+    "secondary": [
+     {
+      "defect": "In Dev mode every request takes the exclusive write lock and holds it during the os.Open and JSON-decode work, so all concurrent requests run one at a time.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

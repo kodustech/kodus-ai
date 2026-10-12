@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f44896cd",
+     "s_9787549d",
+     "s_41c01c77"
+    ],
+    "defect": "As métricas usam chaves inconsistentes, `shard` e `shards`, para a mesma dimensão, prejudicando consultas que dependem de uma chave uniforme."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S6 e S9 relatam a mesma inconsistência entre as chaves `shard` e `shards` nos mesmos três pontos de emissão. Padronizar a chave resolve todas as sugestões; a preferência por singular ou plural não muda o defeito."
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "safe_urlopen token exchange call (line 423) sits outside the try/except, so network errors or timeouts cause a 500"
+   },
+   {
+    "id": "F2",
+    "description": "get_user_info call (line 434) is not wrapped, so API, network or JSON errors cause a 500 instead of the error page"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_25ae84d7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_2e15df29",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

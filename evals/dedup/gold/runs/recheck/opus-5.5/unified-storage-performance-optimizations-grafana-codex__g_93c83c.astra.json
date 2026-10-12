@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_484e33fe",
+     "s_c8164ed2"
+    ],
+    "defect": "BuildIndex permite builds concorrentes para a mesma chave, causando sobrescrita do índice em cache e conflitos na criação de índices em disco."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S5 descrevem a mesma falta de sincronização dos builds por chave após a redução do escopo de cacheMu. Vazamento, perda de documentos e conflitos em disco são consequências desse mesmo defeito, resolvido pela deduplicação dos builds."
+ }
+}

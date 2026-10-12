@@ -1,0 +1,58 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "The _ids branch always deletes the raw id array, even when _lookupSubType resolves nothing. The ids are lost and replaced with an array of undefined."
+   },
+   {
+    "id": "F2",
+    "description": "Writing to obj[pluralize(subType)] can overwrite a real field that already has that name."
+   },
+   {
+    "id": "F3",
+    "description": "obj[k].map is called without a null or array check, so a null *_ids value throws a TypeError."
+   },
+   {
+    "id": "F4",
+    "description": "The `hydrated || []` guard is dead code because map always returns an array."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_d5eddfe5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_083999f0",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_777115f9",
+    "covers": [
+     "F1",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_36199324",
+    "covers": [
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

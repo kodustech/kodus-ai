@@ -1,0 +1,40 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "scheduleSMSReminders.ts deleteMany retryCount > 1 branch lacks an SMS method filter, allowing deletion of EMAIL and WHATSAPP reminders."
+   },
+   {
+    "id": "F2",
+    "description": "scheduleSMSReminders.ts deleteMany retryCount > 1 branch lacks a scheduled: false filter, allowing deletion of already scheduled reminders."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_51ce1fbc",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_6fbe394f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_4680bb7e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

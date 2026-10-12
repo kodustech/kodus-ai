@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ef28ad3a",
+     "s_298069c3",
+     "s_e74b5d11"
+    ],
+    "defect": "O default de cook_method na migração seleciona raw_html, fazendo posts comuns ignorarem o processamento de conteúdo."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S9 e S10 relatam o mesmo defeito no mesmo ponto: o default da migração faz posts comuns ignorarem o pipeline de renderização. S9 enfatiza a contradição com o comentário, mas isso descreve o mesmo problema, sem acrescentar um defeito independente."
+ }
+}

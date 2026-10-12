@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bcd54d22",
+     "s_37e50b4d"
+    ],
+    "defect": "update and destroy in EmbeddableHostsController use a nil host when the id is unknown, which raises NoMethodError and returns a 500 instead of a not-found error."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S11 apontam o mesmo defeito: em update e destroy, o resultado de `.first` pode ser nil e é usado sem checagem, o que gera NoMethodError e erro 500. As duas propõem a mesma correção, que é retornar not-found quando o registro não existe. Nenhuma delas traz um segundo defeito."
+ }
+}

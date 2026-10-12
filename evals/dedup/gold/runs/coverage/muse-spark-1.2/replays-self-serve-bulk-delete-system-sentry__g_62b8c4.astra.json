@@ -1,0 +1,42 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "get_condition_query_groups: dcg_to_slow_conditions[dcg.id] can raise KeyError for a missing DCG."
+   },
+   {
+    "id": "F2",
+    "description": "get_groups_to_fire: dcg_to_slow_conditions[dcg.id] can raise KeyError for a missing DCG."
+   },
+   {
+    "id": "F3",
+    "description": "get_condition_query_groups: workflows_to_envs[workflow_id] can raise KeyError for a missing workflow."
+   },
+   {
+    "id": "F4",
+    "description": "get_groups_to_fire: workflows_to_envs[workflow_id] can raise KeyError for a missing workflow."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f9dadae9",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9c86f0c6",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,46 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "5866d0cada4f2c52ef64fb8ad7641acfd54ed539",
+  "attempt": 1,
+  "ms": 47119,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_ad4d76d9",
+          "s_7dcbf2c4",
+          "s_81d5305c",
+          "s_87e5e747",
+          "s_221233e4",
+          "s_30f59a75",
+          "s_7123f91d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "AssignmentSource freezes queued at import time, transports a raw datetime that reportedly fails JSON serialization, and does not restore the datetime type when deserialization produces a string.",
+        "rationale": "The timestamp-default reports overlap with the serialization-failure report through s_30f59a75 and s_7123f91d. The latter also shares the deserialization type problem with s_ad4d76d9, connecting all members while requiring the merged comment to preserve three defects."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_1aa94032",
+        "confidence": "high"
+      },
+      {
+        "id": "s_adc64e50",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9f03c9cf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b202afb8",
+        "confidence": "high"
+      }
+    ]
+  }
+}

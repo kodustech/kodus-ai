@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "No re-check of entryPointAssetsCache after acquiring the write lock (incomplete double-checked locking), so concurrent callers recompute and overwrite the cache"
+   },
+   {
+    "id": "F2",
+    "description": "Write lock is held across the manifest file/CDN I/O, which serializes concurrent GetWebAssets callers"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_6b35380b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_12bc3466",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_efe46b6a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

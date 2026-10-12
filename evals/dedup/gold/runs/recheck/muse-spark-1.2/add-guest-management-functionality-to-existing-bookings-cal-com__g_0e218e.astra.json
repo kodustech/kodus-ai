@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9d50fd99",
+     "s_513389d3",
+     "s_73bf0bb8",
+     "s_9be369b2"
+    ],
+    "defect": "O handler passa guests em vez de uniqueGuests para sendAddGuestsEmails, classificando participantes existentes como novos."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_9d50fd99",
+   "s_9be369b2"
+  ],
+  "reasoningPt": "S3, S8, S15 e S18 têm o mesmo defeito principal: enviar a lista original à função de e-mails. S3 também aponta a falta de validação de unicidade no servidor, e S18 acrescenta comparações em minúsculas na correção proposta. Esses pontos secundários não alteram o agrupamento pelo defeito principal."
+ }
+}

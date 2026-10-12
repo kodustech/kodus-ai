@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The wait_produce timer uses the tag key \"shards\" while the produce and segment_size_bytes metrics use \"shard\" for the same shard_tag value, which splits the telemetry across two keys.",
+    "members": [
+     "s_f44896cd",
+     "s_9787549d",
+     "s_41c01c77"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S6 e S9 apontam o mesmo defeito: a chave de tag \"shards\" no timer wait_produce não bate com a chave \"shard\" usada nas métricas irmãs. A diferença está só no intervalo de linhas e na chave sugerida para padronizar, mas a correção é a mesma: unificar a chave. Nenhuma delas traz um segundo defeito."
+ }
+}

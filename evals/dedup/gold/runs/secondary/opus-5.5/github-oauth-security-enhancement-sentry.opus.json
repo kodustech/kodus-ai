@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_b8cedde1",
+    "mainDefect": "test_installation_not_found sends an OAuth state that doesn't match the pipeline signature, so it fails at the state check and never reaches the installation-not-found path it is meant to test.",
+    "secondary": [
+     {
+      "defect": "The test's assertion was loosened from the specific 'The GitHub installation could not be found.' message to the generic 'Invalid installation request.' error, so it would still pass if not-found handling were broken.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

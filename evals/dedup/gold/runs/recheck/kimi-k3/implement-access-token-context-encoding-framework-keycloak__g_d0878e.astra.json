@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_071b2150",
+     "s_efbf1629"
+    ],
+    "defect": "O contrato documentado permite atalhos de grant com três caracteres, mas o decoder exige exatamente dois, fazendo atalhos que seguem a documentação falharem na decodificação."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S18 apontam a mesma incompatibilidade entre a documentação do SPI e o formato exigido pelo decoder. A validação adicional sugerida por S18 reforça esse mesmo contrato e não constitui um defeito independente."
+ }
+}

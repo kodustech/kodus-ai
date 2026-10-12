@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c2a5e9e7",
+    "mainDefect": "The age/timestamp checks run only when a field is present, so a report with neither age nor timestamp passes validation.",
+    "secondary": [
+     {
+      "defect": "The truthiness check on initial_data.get('age')/get('timestamp') lets a value of 0 skip the mutual-exclusion check.",
+      "coveredBy": [
+       "s_fecd973c"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

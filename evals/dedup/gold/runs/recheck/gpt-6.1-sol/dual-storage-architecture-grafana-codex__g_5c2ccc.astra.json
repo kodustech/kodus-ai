@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_11922f88",
+     "s_6cb9049c"
+    ],
+    "defect": "As falhas de Storage.Create e Storage.Update são registradas com recordLegacyDuration em vez de recordStorageDuration."
+   }
+  ],
+  "unique": [
+   "s_b490b494"
+  ],
+  "bundles": [],
+  "reasoningPt": "S4 e S5 repetem o mesmo uso incorreto de recordLegacyDuration nas falhas de Storage e admitem a mesma substituição. S7 exige a correção inversa na operação Legacy.DeleteCollection; essa falha permanece após corrigir S4 e S5, portanto fica separada."
+ }
+}

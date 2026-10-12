@@ -1,0 +1,94 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "promptSha": "65096233787f932feb1e5c6a2f52c3e22c5f8d48",
+  "attempt": 1,
+  "ms": 57266,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_777115f9",
+          "s_d5eddfe5",
+          "s_083999f0",
+          "s_36199324"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Plural relationship hydration crashes on null values, unconditionally removes raw IDs despite unresolved lookups, produces undefined entries, and can overwrite an existing pluralized field.",
+        "rationale": "These reports overlap through the unchecked map call and unconditional replacement of ID arrays. The merged comment must also preserve the field-overwrite defect reported by s_d5eddfe5."
+      },
+      {
+        "members": [
+          "s_e1409577",
+          "s_6580f8e0"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Updating or deleting an unknown embeddable host dereferences nil and returns a 500 instead of a 404.",
+        "rationale": "Both suggestions identify the same unchecked lookups in update and destroy and cover the same required changes."
+      },
+      {
+        "members": [
+          "s_974e8b50",
+          "s_f1af608e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The test claiming to check absent embeddable hosts actually passes because the unsaved topic has no topic embed.",
+        "rationale": "Both describe the same misleading test name and ineffective coverage after removal of the production host check."
+      },
+      {
+        "members": [
+          "s_abc77493",
+          "s_1f259cc1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The host normalization callback calls sub! on nil, raising instead of returning a validation error.",
+        "rationale": "Both report the same missing nil guard in the same callback; their validation recommendations are alternative fixes."
+      },
+      {
+        "members": [
+          "s_29d8f6c2",
+          "s_59aa04a7",
+          "s_93eb20ca"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Host lookup fails for mixed-case incoming hostnames and for stored hosts containing a port because it compares a lowercased stored value with the unnormalized bare URI host.",
+        "rationale": "All three report the incoming-host case mismatch. s_93eb20ca additionally reports the port mismatch, which must survive in the merged comment."
+      },
+      {
+        "members": [
+          "s_c76cedb8",
+          "s_13c616c7",
+          "s_dbcf98a4",
+          "s_7900c369",
+          "s_0621eb9a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The migration indexes potentially empty category-setting results and inserts legacy hosts without normalization or SQL quoting, causing migration failures or nonmatching migrated hosts.",
+        "rationale": "s_c76cedb8 explicitly reports both the empty-result indexing and unsafe, unnormalized host insertion, linking the narrower reports. The combined comment must retain missing-setting handling, host normalization, and SQL quoting."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_6d5def1b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3e791796",
+        "confidence": "high"
+      }
+    ]
+  }
+}

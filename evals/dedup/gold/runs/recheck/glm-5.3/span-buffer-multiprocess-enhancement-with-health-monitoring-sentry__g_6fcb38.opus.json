@@ -1,0 +1,15 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_ed5056d1",
+   "s_0686ed03"
+  ],
+  "bundles": [
+   "s_ed5056d1"
+  ],
+  "reasoningPt": "O defeito principal de S5 é a checagem por truthiness que trata um 0 explícito como 'auto', levando ao máximo de processos (um por shard). O caso de valores negativos que geram zero processos aparece em S5 só como segundo defeito, por isso S5 entra em bundles. S11 trata apenas do valor negativo e considera correto o tratamento de None/0, ou seja, o defeito e a correção são diferentes, e as duas sugestões ficam separadas."
+ }
+}

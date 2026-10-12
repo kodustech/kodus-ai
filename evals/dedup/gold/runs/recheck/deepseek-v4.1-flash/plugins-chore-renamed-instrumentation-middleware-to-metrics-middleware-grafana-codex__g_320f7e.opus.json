@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_cd94ae6e",
+     "s_305b9098"
+    ],
+    "defect": "ContextualLoggerMiddleware dereferences req.PluginContext with no nil-request guard, so a nil request panics instead of being forwarded like in LoggerMiddleware."
+   }
+  ],
+  "unique": [
+   "s_8d96da0a"
+  ],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 apontam o mesmo defeito: falta a verificação de req nil nos métodos do ContextualLoggerMiddleware, e a correção é a mesma. S4 trata do MetricsMiddleware, que é outro componente em outro arquivo, com acessos diferentes (req.Queries, req.Body). A correção precisa ser feita à parte nesse middleware, então publicar S4 junto com S1/S3 não seria redundante."
+ }
+}

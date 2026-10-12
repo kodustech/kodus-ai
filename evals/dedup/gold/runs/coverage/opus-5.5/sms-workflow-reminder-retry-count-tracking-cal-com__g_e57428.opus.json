@@ -1,0 +1,40 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "retryCount > 1 OR branch in SMS cleanup deleteMany (lines 38-42) has no method: WorkflowMethods.SMS filter, so EMAIL/WHATSAPP reminders get deleted"
+   },
+   {
+    "id": "F2",
+    "description": "retryCount branch has no scheduled filter, so it can delete reminders that are already scheduled"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_51ce1fbc",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_6fbe394f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_4680bb7e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

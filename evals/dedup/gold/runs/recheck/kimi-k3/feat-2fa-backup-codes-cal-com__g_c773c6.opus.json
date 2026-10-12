@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4d1117b0",
+     "s_0eac7801"
+    ],
+    "defect": "Backup-code consumption in authorize is a non-atomic read-modify-write, so under concurrency the same single-use code can be spent twice or an update can be lost."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S11 apontam o mesmo defeito nas mesmas linhas: o consumo do código de backup é um read-modify-write não atômico, e logins concorrentes podem usar o mesmo código duas vezes. A perda de atualização com códigos diferentes, citada em S11, vem da mesma causa e se resolve com a mesma correção (transação ou update condicional). Por isso não é um segundo defeito, e o grupo fica como está."
+ }
+}

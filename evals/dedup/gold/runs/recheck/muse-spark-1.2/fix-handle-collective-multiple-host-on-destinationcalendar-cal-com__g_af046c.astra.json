@@ -1,0 +1,24 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e877f786",
+     "s_67a98570",
+     "s_7b202983",
+     "s_9acef6ae",
+     "s_3c79f482",
+     "s_aa76ef5a",
+     "s_5ce67a29",
+     "s_5c8e19ea"
+    ],
+    "defect": "O fallback de updateEvent e deleteEvent busca um calendário pelo externalCalendarId ausente, impedindo a resolução do calendário de destino."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S7 e S9 apontam o mesmo fallback inválido em updateEvent; S2, S8 e S10 apontam a repetição desse erro em deleteEvent. S14 e S18 abrangem ambas as ocorrências, corrigíveis pela mesma substituição da lógica de fallback, portanto todos permanecem juntos e nenhum é bundle."
+ }
+}

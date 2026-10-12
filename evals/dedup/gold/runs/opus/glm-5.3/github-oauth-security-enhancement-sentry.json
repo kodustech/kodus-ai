@@ -1,0 +1,77 @@
+{
+  "judge": "opus",
+  "model": "glm-5.3",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "f8cd889ba4a70eaaf60edcb91ec0834f191d362d",
+  "attempt": 1,
+  "ms": 6418,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 12931,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 338,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 12931,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 338,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 12931,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 12931
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1103744,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_a03526cd",
+          "s_2c46aaba",
+          "s_4faeab88"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The unguarded access to integration.metadata[\"sender\"][\"login\"] raises a KeyError (HTTP 500) for ACTIVE integrations that have no sender metadata, when it should render the error page.",
+        "rationale": "All three point at the same line and report the same missing guard. A single .get() chain fixes all of them."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_3b74d3b1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ac2213c4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0ccf73aa",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c9ebb8d6",
+        "confidence": "high"
+      }
+    ]
+  }
+}

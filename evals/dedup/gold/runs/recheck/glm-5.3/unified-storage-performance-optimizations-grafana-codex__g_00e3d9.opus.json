@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_87d9d8ee",
+     "s_c3704159"
+    ],
+    "defect": "bleveBackend.TotalDocs iterates b.cache without taking cacheMu, so the TotalDocs call newly added to searchSupport.init can race with BuildIndex writing to the cache from the watch-event goroutine and crash the process with a concurrent map read/write error."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 relatam o mesmo defeito: TotalDocs lê o mapa b.cache sem o cacheMu, e isso entra em corrida com a escrita feita em BuildIndex durante o init. S2 aponta o local onde o problema aparece (search.go:216) e S5 aponta onde o mapa é escrito (bleve.go:137-139). Nos dois casos a correção é a mesma: adquirir o lock no início de TotalDocs."
+ }
+}

@@ -1,0 +1,86 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "3c291c1bc5e13c1351735e298077ea0ca05cbf53",
+  "attempt": 1,
+  "ms": 58695,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_843a4529",
+          "s_46bbb3d3",
+          "s_f069ee71",
+          "s_ca5a3ea5",
+          "s_8d9e86d7",
+          "s_9cc99ae8",
+          "s_a649b4be",
+          "s_5a7ce5b2",
+          "s_dc2edf67"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The second downsize definition overrides the width/height signature, leaving the first definition dead and breaking existing callers.",
+        "rationale": "Every member reports the same method redefinition and resulting signature incompatibility. Differences in the described exception or affected caller do not change the underlying defect."
+      },
+      {
+        "members": [
+          "s_99672758",
+          "s_7b3553a9",
+          "s_ee27a71c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The flat 10MB client limit ignores attachment settings, accepts images that may remain oversized after five reductions, and advertises a maximum inconsistent with server limits in validation and 413 errors.",
+        "rationale": "All three report the attachment-limit mismatch introduced by the same client check. The merged comment must also preserve the insufficient-image-reduction case from s_7b3553a9 and the error-message problem, including the 413 handler, from s_ee27a71c."
+      },
+      {
+        "members": [
+          "s_d6e025e2",
+          "s_82fe504b"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The 10MB upload ceiling is repeated as a magic number in the controller and JavaScript utilities instead of using named constants or configuration.",
+        "rationale": "Both explicitly report the same repeated magic-number practice, with each file requiring an edit. This differs from the behavioral defect of ignoring per-type upload limits."
+      },
+      {
+        "members": [
+          "s_1dd107cd",
+          "s_1fcaa473"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Values flow through direct interpolation into the shell command executed by convert_with, creating a command-injection surface.",
+        "rationale": "Both identify the same shell-command construction and execution path. Their differing characterization of whether the risk is new or pre-existing does not distinguish the reported defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_45439824",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8ebf0e70",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b723f545",
+        "confidence": "high"
+      },
+      {
+        "id": "s_056810db",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ef813b8e",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_8944a234",
+     "s_61b47067",
+     "s_24bc143e",
+     "s_6ee5a633",
+     "s_5e595406"
+    ],
+    "defect": "EventManager acessa mainHostDestinationCalendar.integration sem proteção quando destinationCalendar está vazio ou nulo, causando TypeError em reservas com Google Meet."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S8, S11 e S15 relatam o mesmo acesso inseguro à propriedade integration no mesmo trecho de EventManager. As diferenças são de detalhamento e exemplos de produtores; uma única correção com optional chaining resolve todas, e nenhuma sugestão relata um segundo defeito."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bbf4f23f",
+     "s_4bf82420"
+    ],
+    "defect": "In GroupsController#members, limit and offset come from request params with no bounds or sign checks, so negative values make PostgreSQL error with a 500 and very large limits are accepted."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S11 apontam o mesmo defeito: limit e offset vêm dos parâmetros da requisição sem validação de limites em groups_controller.rb, o que leva a erro 500 com valores negativos e aceita limites enormes. As duas propõem a mesma correção (clamp dos valores). A menção de S11 ao NaN no cliente quando limit=0 é só mais uma consequência da mesma falta de validação, não um defeito separado."
+ }
+}

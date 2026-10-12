@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_82fe504b",
+     "s_d6e025e2"
+    ],
+    "defect": "O limite de upload de 10 MB está fixado diretamente no código em vez de ser definido por uma configuração reutilizável."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S17 e S18 apontam a mesma repetição do limite fixo de 10 MB, no JavaScript e no controller Ruby. Uma configuração comum utilizada nos dois pontos resolve ambas as sugestões, mantendo o grupo pela regra do mesmo erro repetido em vários locais."
+ }
+}

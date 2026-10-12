@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Copy-button test (login.2fa.e2e.ts ~lines 119-122) never checks clipboard content; it only waits for the success toast, which the handler shows unconditionally"
+   },
+   {
+    "id": "F2",
+    "description": "Download test (login.2fa.e2e.ts ~lines 112-117) checks only suggestedFilename, never the downloaded file contents"
+   },
+   {
+    "id": "F3",
+    "description": "The rendered grid of backup codes is never checked (no check of code count or XXXXX-XXXXX format)"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_ac3a5ed0",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_be1b7939",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

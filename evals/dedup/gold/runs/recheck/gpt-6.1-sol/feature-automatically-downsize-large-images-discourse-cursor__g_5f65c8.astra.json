@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_72e910b1",
+     "s_82c35c19",
+     "s_6d66fb8e"
+    ],
+    "defect": "A segunda definição de downsize sobrescreve a assinatura anterior em Ruby, quebrando chamadas existentes que passam cinco argumentos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S2 e S3 relatam o mesmo defeito: a nova definição de downsize substitui a anterior e quebra a compatibilidade com chamadas de cinco argumentos. S1 identifica o chamador ResizeEmoji, enquanto S2 e S3 descrevem o problema de forma geral; preservar a assinatura antiga resolve os três relatos."
+ }
+}

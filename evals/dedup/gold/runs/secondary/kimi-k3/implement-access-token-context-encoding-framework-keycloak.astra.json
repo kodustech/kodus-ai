@@ -1,0 +1,163 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_f5f884a5",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The comparison is inverted, returning false when the extracted shortcut equals the expected shortcut.",
+      "coveredBy": [
+       "s_4d9f7dee",
+       "s_f60d4003"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_1afe381d",
+    "mainDefect": "The comment incorrectly says the grant shortcut starts at the fourth character instead of the fifth.",
+    "secondary": [
+     {
+      "defect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+      "coveredBy": [
+       "s_f5f884a5",
+       "s_2017887b",
+       "s_dd50b51b",
+       "s_1a067d7d",
+       "s_f1c91035",
+       "s_ffcfc8fc"
+      ]
+     },
+     {
+      "defect": "The comparison is inverted, returning false when the extracted shortcut equals the expected shortcut.",
+      "coveredBy": [
+       "s_4d9f7dee",
+       "s_f60d4003"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_2017887b",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The comparison is inverted, returning false when the extracted shortcut equals the expected shortcut.",
+      "coveredBy": [
+       "s_4d9f7dee",
+       "s_f60d4003"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_4d9f7dee",
+    "mainDefect": "The matcher uses an inverted equality comparison for the expected grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+      "coveredBy": [
+       "s_f5f884a5",
+       "s_2017887b",
+       "s_dd50b51b",
+       "s_1a067d7d",
+       "s_f1c91035",
+       "s_ffcfc8fc"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_dd50b51b",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The comparison is inverted, returning false when the extracted shortcut equals the expected shortcut.",
+      "coveredBy": [
+       "s_4d9f7dee",
+       "s_f60d4003"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_aed13dee",
+    "mainDefect": "The test fixture omits postInit, causing the unknown-grant lookup to throw an incidental NullPointerException instead of the intended IllegalArgumentException.",
+    "secondary": [
+     {
+      "defect": "Catching RuntimeException lets unrelated NullPointerExceptions satisfy the test even if unknown-grant rejection is removed.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_1a067d7d",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The comparison is inverted, returning false when the extracted shortcut equals the expected shortcut.",
+      "coveredBy": [
+       "s_4d9f7dee",
+       "s_f60d4003"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f1c91035",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The comparison is inverted, returning false when the extracted shortcut equals the expected shortcut.",
+      "coveredBy": [
+       "s_4d9f7dee",
+       "s_f60d4003"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_efbf1629",
+    "mainDefect": "The grant-shortcut javadoc suggests three-letter shortcuts despite the decoder requiring exactly two characters.",
+    "secondary": [
+     {
+      "defect": "Neither registration nor encoding validates shortcut length, allowing token IDs to be produced that fail decoding.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f60d4003",
+    "mainDefect": "The comparison is inverted, returning false when the extracted shortcut equals the expected shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+      "coveredBy": [
+       "s_f5f884a5",
+       "s_2017887b",
+       "s_dd50b51b",
+       "s_1a067d7d",
+       "s_f1c91035",
+       "s_ffcfc8fc"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ffcfc8fc",
+    "mainDefect": "The matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The comparison is inverted, returning false when the extracted shortcut equals the expected shortcut.",
+      "coveredBy": [
+       "s_4d9f7dee",
+       "s_f60d4003"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

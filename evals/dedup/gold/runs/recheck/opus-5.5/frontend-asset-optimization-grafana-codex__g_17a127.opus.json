@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "After the write lock is taken in GetWebAssets, the cache is not checked again, so every concurrent cache miss re-reads and re-parses the manifest and overwrites the cache.",
+    "members": [
+     "s_6cf3f09f",
+     "s_c1f76361"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_6cf3f09f"
+  ],
+  "reasoningPt": "S1 e S2 apontam o mesmo defeito principal: não há uma segunda checagem do cache depois de pegar o Lock(). Com isso, requisições concorrentes recarregam o manifest e sobrescrevem o cache uma após a outra. S1 acrescenta no fim uma observação à parte, a de não sobrescrever um cache válido com nil quando o carregamento falha. Por isso S1 entra em bundles, e o grupo fica como está."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d0f69e7e",
+     "s_86975f9e"
+    ],
+    "defect": "ClientPermissionsV2.setPermissionsEnabled throws UnsupportedOperationException, yet the AdminPermissions removal listener still calls it when FGAP is enabled, which breaks client/role/group deletion."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S10 apontam o mesmo defeito: setPermissionsEnabled no ClientPermissionsV2 lança UnsupportedOperationException, mas o listener de remoção no AdminPermissions ainda chama esse método. A correção é a mesma nos dois: tornar o método no-op ou proteger o listener. As faixas de linhas e os detalhes da correção mudam um pouco, mas isso não faz deles defeitos diferentes."
+ }
+}

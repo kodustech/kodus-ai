@@ -1,0 +1,50 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "onError (lines 43-44): the template-string message is always truthy, so the unable_to_add_guests fallback never shows"
+   },
+   {
+    "id": "F2",
+    "description": "onError: when err.data is undefined, the toast reads 'undefined: ...'"
+   },
+   {
+    "id": "F3",
+    "description": "onSuccess (lines 36-41): isInvalidEmail is not reset"
+   },
+   {
+    "id": "F4",
+    "description": "Dialog onOpenChange (line 61): closing via overlay/Esc does not reset isInvalidEmail or multiEmailValue"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_69410500",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b459ede8",
+    "covers": [
+     "F1",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_37e96fa9",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

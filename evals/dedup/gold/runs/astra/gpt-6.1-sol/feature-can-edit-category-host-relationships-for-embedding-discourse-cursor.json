@@ -1,0 +1,49 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "promptSha": "94337a4e6120ce2dabbf27dcce1df13de24b2164",
+  "attempt": 1,
+  "ms": 38307,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_ee0c2eb0",
+          "s_ad0aab9e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Update and destroy dereference missing embeddable-host records, raising exceptions instead of returning controlled not-found responses.",
+        "rationale": "Both report the same unchecked lookups in the same two actions and cover identical failure cases. Either comment fully captures the other's scope."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_72f624a1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7b556db8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_05f2f501",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d6a91e5d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9ba3dcbe",
+        "confidence": "high"
+      },
+      {
+        "id": "s_79ef5edc",
+        "confidence": "high"
+      }
+    ]
+  }
+}

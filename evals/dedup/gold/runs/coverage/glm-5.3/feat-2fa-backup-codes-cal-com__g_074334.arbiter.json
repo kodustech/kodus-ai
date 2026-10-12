@@ -1,0 +1,38 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "next-auth-options.ts authorize() (line 144): backup code verified with non-constant-time indexOf"
+   },
+   {
+    "id": "F2",
+    "description": "disable.ts (line 61): backup code verified with non-constant-time indexOf"
+   },
+   {
+    "id": "F3",
+    "description": "disable.ts (line 61): req.body.backupCode.replaceAll throws TypeError (500) when backupCode is not a string"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_32fdabb3",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e721eff4",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": false,
+  "reasoning": "s_32fdabb3 covers only the login path (F1). s_e721eff4 reports the disable.ts indexOf problem (F2) and the non-string TypeError (F3). Its opening line, 'Same defect as the login path, one endpoint over', reads as context for its own location rather than a report about authorize(): it gives no line, code or fix for the login path. Reading that phrase as a report of F1 is possible, which would make s_e721eff4 complete, so this is not fully decisive."
+ }
+}

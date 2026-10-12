@@ -1,0 +1,42 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "server.go:258: synchronous Init blocks construction for the full search index build."
+   },
+   {
+    "id": "F2",
+    "description": "server.go:259-262: any initialization error now aborts construction and startup, without corresponding caller updates."
+   },
+   {
+    "id": "F3",
+    "description": "bleve.go:96-98: existing file-backed index directories cause bleve.New to fail on restart, now permanently preventing startup."
+   },
+   {
+    "id": "F4",
+    "description": "bleve.go:96-98: two ResourceServer instances using the same index directory can also collide on first boot and prevent startup."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_b3fa293f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b1fa092d",
+    "covers": [
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

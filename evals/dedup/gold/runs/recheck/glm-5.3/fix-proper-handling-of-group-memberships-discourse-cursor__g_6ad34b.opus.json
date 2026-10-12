@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1c75cdaf",
+     "s_f7bfc988",
+     "s_80c1c466"
+    ],
+    "defect": "totalPages uses Math.floor(user_count/limit)+1, which adds a phantom empty last page when user_count is an exact multiple of limit, so the next action can land on a blank member list."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S6 apontam o mesmo off-by-one em totalPages (floor+1 em vez de ceil), que cria uma página extra vazia quando user_count é múltiplo de limit. A menção ao clamp do offset em next faz parte da mesma correção, não é um defeito separado. Por isso o grupo se mantém."
+ }
+}

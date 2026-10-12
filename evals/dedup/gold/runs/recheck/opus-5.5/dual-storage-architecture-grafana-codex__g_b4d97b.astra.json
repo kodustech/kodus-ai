@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_74e86eb7",
+     "s_9977cb66",
+     "s_ef1efee6"
+    ],
+    "defect": "Falhas do Unified Storage em Create e Update são registradas por recordLegacyDuration em vez de recordStorageDuration."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_74e86eb7",
+   "s_ef1efee6"
+  ],
+  "reasoningPt": "S3, S8 e S9 têm como defeito principal o mesmo uso incorreto de recordLegacyDuration, repetido em Create e Update, e devem permanecer juntas. S3 e S9 também incluem defeitos adicionais com correções distintas, por isso entram em bundles sem alterar o agrupamento principal."
+ }
+}

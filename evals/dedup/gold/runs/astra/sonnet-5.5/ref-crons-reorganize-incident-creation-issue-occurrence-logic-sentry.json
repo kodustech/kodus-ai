@@ -1,0 +1,21 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+  "promptSha": "a0fbb33f4566e57c0450b12d0f6fd11f98c40364",
+  "attempt": 1,
+  "ms": 15733,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_75ad896c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9d4092f2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

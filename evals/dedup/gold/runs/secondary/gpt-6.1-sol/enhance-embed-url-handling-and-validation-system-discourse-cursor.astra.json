@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d66938c6",
+    "mainDefect": "Protocol-relative URLs are incorrectly treated as paths on the article host, breaking imported links and images.",
+    "secondary": [
+     {
+      "defect": "Directory-relative URLs are left unchanged, causing them to resolve against the Discourse page instead of the imported article.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

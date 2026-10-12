@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "Removing cacheMu from BuildIndex lets the errgroup workers in searchSupport.init run in parallel, causing a data race on the shared captured `err` variable and the `totalBatchesIndexed` counter.",
+    "members": [
+     "s_a1b0441f",
+     "s_38444aa4"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 apontam o mesmo defeito: sem o lock em BuildIndex, as goroutines do errgroup em init passam a rodar em paralelo e disputam a variável `err` e o contador `totalBatchesIndexed`. As duas propõem a mesma correção: um `err` local na goroutine e um contador atômico. O `err` e o contador fazem parte da mesma condição de corrida, então nenhuma das duas reúne defeitos distintos."
+ }
+}

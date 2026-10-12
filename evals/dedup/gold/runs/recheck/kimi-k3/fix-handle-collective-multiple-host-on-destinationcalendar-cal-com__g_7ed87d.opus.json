@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a860d069",
+     "s_0972bbcb"
+    ],
+    "defect": "In EventManager.ts, video (non-calendar) results now set credentialId to undefined instead of result.credentialId, so their booking references can no longer be used to update or delete the video meeting."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S16 apontam o mesmo defeito nas mesmas linhas (169-170): o ramo de vídeo passou a gravar credentialId como undefined, o que impede excluir ou atualizar a reunião depois. A correção é a mesma nas duas (usar result.credentialId), por isso o grupo fica como está."
+ }
+}

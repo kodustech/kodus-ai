@@ -1,0 +1,68 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "utilities.js:182 hardcodes the client size limit to 10MB, disregarding per-type site settings and potentially displaying the wrong limit."
+   },
+   {
+    "id": "F2",
+    "description": "utilities.js:246 hardcodes 10MB in the 413 error message instead of reporting the configured limit."
+   },
+   {
+    "id": "F3",
+    "description": "uploads_controller.rb:55 hardcodes the API URL download cap to 10MB, preventing uploads allowed by higher configured limits."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_aaaa47e8",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a3648b8e",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c7c633cc",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7e515b13",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_278d3350",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_73fe7ee9",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

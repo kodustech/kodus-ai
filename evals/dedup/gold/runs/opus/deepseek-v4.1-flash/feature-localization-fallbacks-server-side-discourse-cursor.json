@@ -1,0 +1,74 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "promptSha": "22501e87c8f88dd3d56e83cf209f3e5e06771112",
+  "attempt": 1,
+  "ms": 9111,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 6306,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 691,
+    "output_tokens_details": {
+      "thinking_tokens": 250
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 6306,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 691,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 6306,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 6306
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.0660496,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_df9ce485",
+          "s_389b8963",
+          "s_08cbca4d",
+          "s_831e218a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "FallbackLocaleList#[] calls SiteSetting.default_locale.to_sym with no guard, so a nil or unavailable default locale raises on every translation and request (.compact runs too late to help). It also mixes the String I18n.locale with Symbol locales, so .uniq doesn't remove the duplicate 'en' and :en entries and en.yml gets loaded twice.",
+        "rationale": "All four point at the same expression on line 17. s_08cbca4d reports both the nil .to_sym crash (also reported by s_df9ce485 and s_389b8963) and the String/Symbol dedup bug (also reported by s_831e218a), which links the whole chain into one group."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_46cb0f3f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_31a0ccb6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a8f8fa1a",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_420384ae",
+     "s_01ffe2b2",
+     "s_37c5da68",
+     "s_8842361c",
+     "s_54bc46ef"
+    ],
+    "defect": "O construtor de AccessTokenContext verifica grantType duas vezes e deixa de validar rawTokenId, permitindo IDs terminados em ':null'."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S7, S11, S13 e S16 descrevem o mesmo defeito na linha 73: a validação usa grantType em vez de rawTokenId. Uma única troca do argumento corrige todos os relatos, e nenhuma sugestão inclui um defeito independente."
+ }
+}

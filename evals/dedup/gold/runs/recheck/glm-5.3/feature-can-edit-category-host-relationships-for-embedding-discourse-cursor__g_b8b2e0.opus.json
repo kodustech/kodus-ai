@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_326027c2",
+     "s_92bfacc6"
+    ],
+    "defect": "The contents of category_fabricator.rb and embeddable_host_fabricator.rb were swapped, so each file's name contradicts the fabricators it defines."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S12 relatam o mesmo defeito: o conteúdo dos dois arquivos de fabricators foi trocado, e cada um aponta isso a partir de um dos arquivos. A correção é a mesma, destrocar o conteúdo dos dois arquivos, então o grupo fica como está."
+ }
+}

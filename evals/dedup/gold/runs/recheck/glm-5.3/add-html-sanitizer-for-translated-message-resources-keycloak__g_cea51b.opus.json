@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f6a54b69",
+     "s_f38384b4"
+    ],
+    "defect": "The zh_CN totpStep1 value is written in Traditional Chinese script instead of Simplified Chinese."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S17 apontam o mesmo defeito na mesma linha: o totpStep1 do arquivo zh_CN foi escrito em chinês tradicional, e não em simplificado. A correção é a mesma nas duas: usar a forma simplificada. Nenhuma delas traz um segundo defeito."
+ }
+}

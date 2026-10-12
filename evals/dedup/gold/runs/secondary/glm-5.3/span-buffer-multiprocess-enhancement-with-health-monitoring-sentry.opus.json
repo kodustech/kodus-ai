@@ -1,0 +1,59 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ed5056d1",
+    "mainDefect": "`max_processes or len(...)` treats an explicit 0 like None, so `--flusher-processes 0` gives one process per shard (the maximum) instead of a single process.",
+    "secondary": [
+     {
+      "defect": "A negative `--flusher-processes` value passes the `or`, makes `num_processes` negative and creates zero flusher processes, so nothing ever flushes Redis.",
+      "coveredBy": [
+       "s_0686ed03"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_d8e8bf32",
+    "mainDefect": "The `wait_produce` timer is tagged with the key `shards`, while the related flusher metrics use `shard`, so the shard dimension is split across two tag keys.",
+    "secondary": [
+     {
+      "defect": "`flusher_unhealthy` puts single per-shard ids under the `shard` tag, while main() uses a comma-joined `shard_tag`, so the same tag key has inconsistent value formats.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_45039749",
+    "mainDefect": "The newly added `_create_process_for_shard` method is never called anywhere.",
+    "secondary": [
+     {
+      "defect": "If `_create_process_for_shard` were ever called, it would restart shards without killing the old (possibly hung) process, leaking that process and its shared state.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_956e4955",
+    "mainDefect": "The `isinstance(process, multiprocessing.Process)` guard in `_ensure_processes_alive` is never true for SpawnProcess instances, so hung processes are never killed before a replacement starts.",
+    "secondary": [
+     {
+      "defect": "The same wrong isinstance check gates `process.terminate()` in `join()`, so the shutdown terminate step never runs.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7c7ec2d9",
+    "mainDefect": "The internal child `ProcessSpansStrategyFactory(...)` instantiation does not forward `flusher_processes`, so on the multiprocess path the option is ignored and each child defaults to one flusher process per shard.",
+    "secondary": [
+     {
+      "defect": "Because `flusher_processes` was inserted right before `produce_to_pipe` in the signature, any call site that passes `produce_to_pipe` positionally now binds it to `flusher_processes`, causing a TypeError in `min()`.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

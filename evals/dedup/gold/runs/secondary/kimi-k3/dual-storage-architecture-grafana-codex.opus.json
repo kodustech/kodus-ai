@@ -1,0 +1,104 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_e87a2835",
+    "mainDefect": "The async legacy-write goroutines derive their context from the request context, so they are canceled when the handler returns and the legacy writes commonly fail.",
+    "secondary": [
+     {
+      "defect": "Legacy write errors inside the goroutines are never logged, only recorded as metrics, so legacy storage can drift out of sync without anyone noticing.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a4f55b36",
+    "mainDefect": "The fire-and-forget legacy-write goroutines use the request context, which is canceled when the handler returns, so the legacy writes nearly always fail.",
+    "secondary": [
+     {
+      "defect": "Legacy write errors are not logged, so nothing reports them now that the write is async.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_73967244",
+    "mainDefect": "The legacy-write goroutines wrap the HTTP request context, which is canceled right after the handler returns, so the legacy writes are aborted and the 10s timeout never takes effect.",
+    "secondary": [
+     {
+      "defect": "Legacy write failures are only recorded to metrics and never logged, so the stores diverge with no signal.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_63bda620",
+    "mainDefect": "Update passes the raw objInfo to the async Legacy.Update instead of an updateWrapper holding the unified-store result, so legacy can save a different object than unified storage.",
+    "secondary": [
+     {
+      "defect": "The caller's UpdatedObjectInfo is invoked a second time after Storage.Update has already used it, which may not be safe or idempotent.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_cc993937",
+    "mainDefect": "Update no longer pins the legacy write to the unified-storage result through updateWrapper, so legacy recomputes the object and the stores can diverge.",
+    "secondary": [
+     {
+      "defect": "UpdatedObject now runs twice, which breaks UpdatedObjectInfo implementations that are not idempotent.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4d3c3dc5",
+    "mainDefect": "Update hands the raw objInfo to the legacy store, which recomputes the object against its own old state, so legacy and unified storage can persist different objects.",
+    "secondary": [
+     {
+      "defect": "Because the async legacy writes have no ordering, concurrent updates to the same object can reach legacy in a different order than storage, leaving legacy permanently stale.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_9e1a3d59",
+    "mainDefect": "When Storage.Create fails, the error path records the legacy duration metric instead of the storage duration metric.",
+    "secondary": [
+     {
+      "defect": "When Storage.Update fails, the error path at line 129 also records the legacy duration metric instead of the storage duration metric.",
+      "coveredBy": [
+       "s_de5fad1d"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c273daf4",
+    "mainDefect": "When Storage.Create fails, the error path records the legacy duration metric instead of the storage duration metric.",
+    "secondary": [
+     {
+      "defect": "When Storage.Update fails, the error path also records the legacy duration metric, so storage errors pollute the legacy metric.",
+      "coveredBy": [
+       "s_de5fad1d"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_6b11a209",
+    "mainDefect": "The Delete success path passes the object name instead of options.Kind as the kind label of the storage duration metric.",
+    "secondary": [
+     {
+      "defect": "Delete puts the bare d.Log into the context instead of the enriched log, dropping the name, kind and method fields.",
+      "coveredBy": [
+       "s_ccf38f53",
+       "s_39ce7ed0"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

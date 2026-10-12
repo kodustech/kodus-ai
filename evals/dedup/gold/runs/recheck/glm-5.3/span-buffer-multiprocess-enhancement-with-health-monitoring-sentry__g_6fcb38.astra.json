@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_ed5056d1",
+   "s_0686ed03"
+  ],
+  "bundles": [
+   "s_ed5056d1"
+  ],
+  "reasoningPt": "S5 começa pelo defeito de interpretar 0 como modo automático, aumentando o número de processos. S11 trata da aceitação de valores negativos, que é o segundo defeito relatado em S5; pela regra do defeito principal, ficam separados e S5 é um bundle."
+ }
+}

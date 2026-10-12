@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a9049b82",
+     "s_b8b19a32"
+    ],
+    "defect": "In mode 3, the asynchronous legacy Update gets the original objInfo instead of an update wrapper holding the result persisted by Storage, so the update is recomputed and the two stores can diverge."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S11 apontam o mesmo defeito no Update do modo 3: o Legacy.Update recebe o objInfo original em vez do resultado já gravado pelo Storage, e isso pode deixar os dois stores inconsistentes. As duas propõem a mesma correção, que é passar ao legado um updateWrapper com o resultado do Storage. Só o intervalo de linhas muda, e nenhuma delas trata de um segundo defeito."
+ }
+}

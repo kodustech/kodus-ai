@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "test_basic patches time.sleep to a no-op (line 15), so the added time.sleep(0.1) settle wait (line 62) does nothing and the test stays racy"
+   },
+   {
+    "id": "F2",
+    "description": "The patched time.sleep also disables the flusher main loop's idle time.sleep(1), which turns it into a busy loop"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_d3df5db3",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8fdca476",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

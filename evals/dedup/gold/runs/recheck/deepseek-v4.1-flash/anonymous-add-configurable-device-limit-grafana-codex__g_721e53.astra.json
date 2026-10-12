@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f0772bc6",
+     "s_0631d17a",
+     "s_23136ec7",
+     "s_e1a4bcff"
+    ],
+    "defect": "tagDeviceUI preenche o cache antes da gravação no banco e mantém a entrada quando ocorre ErrDeviceLimitReached, permitindo que requisições seguintes contornem o limite de dispositivos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S6 e S9 descrevem o mesmo defeito: uma tentativa recusada fica no cache como se tivesse sido bem-sucedida, permitindo autenticação nas requisições seguintes. As diferenças de linhas e ênfase não mudam a causa; armazenar a entrada somente após sucesso resolve todas as sugestões."
+ }
+}

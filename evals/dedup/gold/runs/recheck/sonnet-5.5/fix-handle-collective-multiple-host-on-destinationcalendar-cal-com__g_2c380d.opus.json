@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0d466bb9",
+     "s_6996fe8e",
+     "s_0e8ac11d",
+     "s_e8f11cef",
+     "s_c779c607"
+    ],
+    "defect": "In GoogleCalendarService updateEvent/deleteEvent, the fallback searches destinationCalendar by the falsy externalCalendarId, so it never matches and always returns undefined instead of the destination calendar's externalId."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S2, S5, S8, S10, S14) apontam o mesmo defeito: o fallback em updateEvent/deleteEvent faz find comparando com externalCalendarId, que é falsy nesse ramo, e por isso sempre retorna undefined. As diferenças são só de faixa de linhas e de redação, e a correção é a mesma (usar destinationCalendar[0]). Nenhuma delas reporta um segundo defeito."
+ }
+}

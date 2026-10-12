@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "NewResourceServer (server.go:258) runs Init synchronously, so construction blocks startup for the whole search index build"
+   },
+   {
+    "id": "F2",
+    "description": "NewResourceServer returns nil, err on any Init failure (server.go:259-262), so init errors that only broke search before now stop the server from being constructed"
+   },
+   {
+    "id": "F3",
+    "description": "bleve.New in BuildIndex (bleve.go:96-98) fails with 'index path already exists' when the file index directory is already there, and since init errors are now fatal, every restart (or two servers in one process) fails to boot"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_b3fa293f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b1fa092d",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

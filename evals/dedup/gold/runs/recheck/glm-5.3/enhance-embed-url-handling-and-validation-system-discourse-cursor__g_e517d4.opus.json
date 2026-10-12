@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_ddd39050",
+     "s_7466b913"
+    ],
+    "defect": "The 'Imported from' footer in TopicEmbed.import builds its link by interpolating the external URL without escaping it, so a quote in the URL can break out of the href attribute and inject HTML."
+   }
+  ],
+  "unique": [
+   "s_3945cc4f"
+  ],
+  "bundles": [
+   "s_3945cc4f",
+   "s_7466b913"
+  ],
+  "reasoningPt": "S7 e S20 têm como defeito principal a interpolação da URL sem escape no rodapé 'Imported from' (linha 13), corrigida com escape da URL; S20 só acrescenta no fim a sanitização do conteúdo importado. Já o S3 começa pelo armazenamento do conteúdo externo como raw_html sem sanitização (passando por fora do pipeline de cook) e trata a URL como segundo defeito, então fica sozinho. S3 e S20 juntam mais de um defeito na mesma sugestão."
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8fdca476",
+    "mainDefect": "The test patches time.sleep to a no-op, so the later time.sleep(0.1) meant to wait for the flusher threads does nothing and the test stays racy.",
+    "secondary": [
+     {
+      "defect": "Because time.sleep is mocked, the flusher's own time.sleep(1) in its main loop also does nothing, so the flusher spins in a tight busy-loop during the test.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

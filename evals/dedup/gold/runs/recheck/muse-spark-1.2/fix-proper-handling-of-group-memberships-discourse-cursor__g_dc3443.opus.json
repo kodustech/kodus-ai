@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_aaef7623",
+     "s_5a9e72ea"
+    ],
+    "defect": "findMembers now returns undefined instead of a resolved promise when the group name is empty, which breaks promise chaining for callers such as next/previous."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S13 apontam o mesmo defeito: findMembers devolve undefined em vez de uma promise quando o nome está vazio, o que quebra o encadeamento em next/previous. As duas propõem a mesma correção (Ember.RSVP.resolve). A menção de S13 a continuar devolvendo a promise do ajax só reforça esse mesmo contrato e não é um segundo defeito."
+ }
+}

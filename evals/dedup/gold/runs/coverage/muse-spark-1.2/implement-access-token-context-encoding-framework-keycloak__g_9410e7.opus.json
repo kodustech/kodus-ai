@@ -1,0 +1,44 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Context constructor dereferences formParams (getFirst GRANT_TYPE) without null check, which throws an NPE when formParams is null"
+   },
+   {
+    "id": "F2",
+    "description": "Cached grantType goes stale: setFormParams() updates formParams but not grantType"
+   },
+   {
+    "id": "F3",
+    "description": "Context(Context) copy constructor was removed"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f886b821",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ce1639a8",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_611afbf2",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

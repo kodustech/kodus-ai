@@ -1,0 +1,10 @@
+{
+ "s_22702472": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `contents << ...` altera a string do chamador in place. POR QUÊ: gera exceção em uma frozen string e adiciona o rodapé à cópia do chamador, então um chamador que reutiliza a string recebe o rodapé duas vezes. CORREÇÃO: use `contents = contents + ...`."
+ },
+ "s_778e09a3": {
+  "summaryPt": "",
+  "contentPt": "O link `imported_from` interpola `url` no HTML (tanto no atributo href quanto no texto do link) sem escape. O post é armazenado como raw_html e renderizado com `raw`, então um feed ou URL contendo `'`, `<` ou `&` quebra a marcação ou injeta HTML. Faça o escape da URL (`ERB::Util.html_escape(url)`) nos dois lugares. A linha também altera a string `contents` do chamador com `<<`; construa uma nova string em vez disso."
+ }
+}

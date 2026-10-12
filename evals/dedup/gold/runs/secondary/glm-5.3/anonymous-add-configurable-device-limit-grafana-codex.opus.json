@@ -1,0 +1,29 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_94ef8b50",
+    "mainDefect": "updateDevice treats zero affected rows as ErrDeviceLimitReached, so an existing device whose stored updated_at falls outside the [UpdatedAt-30d, UpdatedAt+1m] window (for example, because of clock skew between HA instances) is wrongly rejected.",
+    "secondary": [
+     {
+      "defect": "On MySQL, RowsAffected counts changed rows rather than matched rows, so an identical UPDATE on an existing device returns 0 and wrongly triggers ErrDeviceLimitReached.",
+      "coveredBy": [
+       "s_9e5e643b"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_e14a8784",
+    "mainDefect": "The new updateDevice doc comment says it updates a device 'between the given times', but no times are passed in; the window is computed internally from device.UpdatedAt.",
+    "secondary": [
+     {
+      "defect": "The updateDevice doc comment does not mention that zero matched rows returns the sentinel ErrDeviceLimitReached, which the auth client depends on.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

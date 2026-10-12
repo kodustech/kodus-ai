@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_605675a4",
+     "s_94d764a3",
+     "s_df94a989",
+     "s_0146ce15",
+     "s_2ffd8527"
+    ],
+    "defect": "The new `self.downsize(from, to, dimensions, opts)` silently overrides the existing `downsize(from, to, max_width, max_height, opts)`, so callers that still pass numeric width/height break (ArgumentError or bad argument binding)."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S3, S4, S6, S7) apontam o mesmo defeito: a segunda definição de `self.downsize` sobrescreve a primeira e quebra quem chama com width/height. S1 e S3 mostram o efeito no caller resize_emoji.rb, e S4, S6 e S7 descrevem a mesma sobrescrita com consequências parecidas. Uma única correção resolve todas, então o grupo fica como está."
+ }
+}

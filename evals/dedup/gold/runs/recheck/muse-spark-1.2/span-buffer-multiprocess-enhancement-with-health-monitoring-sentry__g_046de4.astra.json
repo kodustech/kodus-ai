@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_ca82d915",
+     "s_975b3a2a"
+    ],
+    "defect": "O uso de `or` trata max_processes=0 como ausência de configuração e o substitui pela quantidade de shards."
+   }
+  ],
+  "unique": [
+   "s_f884b54a"
+  ],
+  "bundles": [
+   "s_ca82d915",
+   "s_f884b54a"
+  ],
+  "reasoningPt": "S1 começa pelo tratamento de 0 como valor ausente, o mesmo defeito de S11. S7 começa pela ausência de processos quando não há shards, que exige tratamento próprio e permanece mesmo com a comparação explícita com None. S1 também relata esse segundo problema; S7 inclui a correção de truthiness na solução proposta, portanto ambos são bundles sem unir os grupos."
+ }
+}

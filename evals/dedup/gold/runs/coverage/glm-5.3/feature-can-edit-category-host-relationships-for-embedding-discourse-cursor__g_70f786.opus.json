@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "spec/models/topic_spec.rb line 1403: the test 'is false if embeddable_host is blank' is stale. expandable_first_post? no longer checks embeddable hosts, so the test only passes vacuously and should be renamed, updated or removed."
+   },
+   {
+    "id": "F2",
+    "description": "spec/models/topic_spec.rb line 1407: the nested describe says 'with an emeddable host'; 'emeddable' should be 'embeddable'."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c050f347",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_21df2e7a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

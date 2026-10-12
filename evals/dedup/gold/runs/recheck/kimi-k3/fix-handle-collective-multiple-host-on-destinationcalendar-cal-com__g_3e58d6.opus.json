@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "In GoogleCalendarService updateEvent/deleteEvent, the fallback `find((cal) => cal.externalId === externalCalendarId)` runs only when externalCalendarId is falsy, so it never matches and the destination-calendar fallback is lost.",
+    "members": [
+     "s_f5b59d63",
+     "s_02b6e8cb",
+     "s_0a0cb899",
+     "s_a907ae4b",
+     "s_ac235e40",
+     "s_3ab53f11",
+     "s_6293a6a3"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S3, S12, S13, S17, S20, S22, S23) apontam o mesmo erro: o predicado do find compara com externalCalendarId, que já é falsy naquele ramo, e por isso nunca encontra nada. O erro se repete em updateEvent e deleteEvent e uma única correção resolve os dois (usar destinationCalendar[0]). Por isso o grupo fica como está."
+ }
+}

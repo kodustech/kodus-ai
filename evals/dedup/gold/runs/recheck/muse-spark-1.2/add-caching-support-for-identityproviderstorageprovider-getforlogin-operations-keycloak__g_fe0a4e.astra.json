@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_996b3792",
+     "s_dd4bb6a5"
+    ],
+    "defect": "Ambas concluem que não há inconsistência entre getLoginPredicate e a invalidação do cache quanto a BROKER_PUBLIC e ao vínculo com organizações."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S8 apresentam a mesma conclusão sobre a consistência entre o predicado e seus consumidores, apenas com foco em locais diferentes. Embora nenhuma relate um defeito, publicá-las juntas seria redundante; nenhuma acrescenta um problema independente."
+ }
+}

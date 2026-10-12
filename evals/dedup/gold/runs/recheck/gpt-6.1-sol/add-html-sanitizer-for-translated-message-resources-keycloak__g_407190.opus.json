@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a221d835",
+     "s_a34eab52"
+    ],
+    "defect": "The Lithuanian (lt) bundles for account and login now hold the same Italian sentence for the TOTP step-1 message instead of a Lithuanian translation."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S3 apontam o mesmo erro: a mesma frase em italiano colocada no lugar do texto lituano da etapa 1 do TOTP. A única diferença é o arquivo (account e login). É o mesmo erro repetido em dois lugares e a mesma correção resolve os dois, então o grupo continua como está."
+ }
+}

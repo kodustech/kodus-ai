@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_07049f2c",
+     "s_6e7a56a6"
+    ],
+    "defect": "ErrDeviceLimitReached é retornado pela autenticação anônima sem mapeamento para um status HTTP e uma mensagem adequados, causando uma falha genérica."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 apontam o mesmo defeito: a recusa por limite de dispositivos chega à cadeia de autenticação como um erro sem tratamento específico. Em S6, a mudança para uma chamada síncrona contextualiza esse problema; não constitui uma denúncia independente, e o mesmo tratamento do erro resolve ambas."
+ }
+}

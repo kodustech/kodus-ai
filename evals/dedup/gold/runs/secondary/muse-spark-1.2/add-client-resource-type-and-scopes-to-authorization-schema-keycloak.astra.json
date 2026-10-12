@@ -1,0 +1,29 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ce311187",
+    "mainDefect": "hasPermission(ClientModel,String) uses server.getId() as the resource owner, preventing lookup of per-client resources.",
+    "secondary": [
+     {
+      "defect": "hasPermission(String) uses server.getId() as the resource owner, preventing lookup of the Clients type resource.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a3224d7a",
+    "mainDefect": "requireView() has Javadoc describing a boolean return instead of its void/throws contract.",
+    "secondary": [
+     {
+      "defect": "requireViewClientScopes() has Javadoc describing a boolean return instead of its void/throws contract.",
+      "coveredBy": [
+       "s_c29b13de"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

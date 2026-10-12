@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_61ba8ef0",
+     "s_9d5d3468"
+    ],
+    "defect": "RuleActionsButtons.V2 now allows `rule` to be undefined, but it still passes `rule` to `useRulerRuleAbility`, whose signature was never widened to accept `RulerRuleDTO | undefined`."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_9d5d3468"
+  ],
+  "reasoningPt": "S9 e S10 apontam o mesmo defeito principal: o `rule` opcional (RequireAtLeastOne) é passado para `useRulerRuleAbility`, que ainda exige `RulerRuleDTO`. S10 acrescenta uma segunda questão, o `return null` silencioso quando `getEditableIdentifier` retorna undefined, por isso entra em bundles. Esse defeito extra não muda o grupo, então o grupo é mantido."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "In Delete's success path, recordStorageDuration is passed the object name instead of options.Kind, so the metric label is wrong and cardinality grows.",
+    "members": [
+     "s_6c5a2af8",
+     "s_806c2db2"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S10 apontam o mesmo defeito na linha 106: o Delete passa `name` em vez de `options.Kind` para recordStorageDuration. Isso deixa o label errado e aumenta a cardinalidade. Os dois se resolvem com a mesma correção e nenhum deles traz um segundo defeito, então o grupo fica como está."
+ }
+}

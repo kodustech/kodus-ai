@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_ddd39050",
+     "s_7466b913"
+    ],
+    "defect": "A URL externa é interpolada sem escape no HTML do rodapé, permitindo injeção de atributos ou marcação."
+   }
+  ],
+  "unique": [
+   "s_3945cc4f"
+  ],
+  "bundles": [
+   "s_3945cc4f",
+   "s_7466b913"
+  ],
+  "reasoningPt": "S3 começa pela ausência de sanitização do conteúdo importado, enquanto S7 e S20 começam pela interpolação da URL sem escape no rodapé. São defeitos distintos: escapar a URL não sanitiza o conteúdo externo. S3 e S20 abordam ambos e são bundles, mas ficam classificados pelo primeiro defeito relatado."
+ }
+}

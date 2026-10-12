@@ -1,0 +1,52 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_87a03b73",
+    "mainDefect": "The downsize loop checks `tempfile.size`, which reads the size from an open file handle that goes stale once ImageOptim replaces the file, so the loop never sees the file shrink and always runs all 5 passes.",
+    "secondary": [
+     {
+      "defect": "`Upload.create_for` receives the stale `tempfile.size`, so the stored upload filesize (and possibly width/height) doesn't match the image actually stored.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a3648b8e",
+    "mainDefect": "The client-side upload size check is hardcoded to 10MB instead of using the per-type site setting, so it no longer matches the limit the server enforces.",
+    "secondary": [
+     {
+      "defect": "The 'file too large' message in the 413 handler is hardcoded to 10MB, so it tells users a limit that isn't the one actually enforced.",
+      "coveredBy": [
+       "s_278d3350"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_147b3836",
+    "mainDefect": "Five fixed 80% downsize passes can't bring large images under `max_image_size_kb`, so oversized files still reach `Upload.create_for` and get rejected.",
+    "secondary": [
+     {
+      "defect": "The loop ignores the `false` that `OptimizedImage.downsize` returns when convert fails, so it uses up all its attempts and submits the untouched original.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_aaaa47e8",
+    "mainDefect": "The client hardcodes a 10MB limit in the size check and the 413 handler, disconnecting it from the `max_image_size_kb` and `max_attachment_size_kb` site settings.",
+    "secondary": [
+     {
+      "defect": "The server-side `FileHelper.download` cap in `uploads_controller.rb` is also fixed at 10 megabytes instead of following the site setting.",
+      "coveredBy": [
+       "s_7e515b13",
+       "s_73fe7ee9"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,24 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The async legacy writes in Create/Update/Delete/DeleteCollection derive their context from the request ctx, which is cancelled when the handler returns, so legacy writes may be aborted and the legacy store silently diverges (fix: context.WithoutCancel).",
+    "members": [
+     "s_03fc7aa9",
+     "s_f50f8610",
+     "s_68ce1673",
+     "s_ffe2609d"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_03fc7aa9",
+   "s_f50f8610",
+   "s_ffe2609d"
+  ],
+  "reasoningPt": "S1, S12, S13 e S20 têm o mesmo defeito principal: a goroutine de escrita legacy usa um contexto derivado do ctx da requisição, que é cancelado quando o handler retorna. A correção é a mesma para todas (context.WithoutCancel). S1 e S20 juntam ainda a falta de log dos erros legacy, e S12 junta a corrida nos testes de integração do mode 3, por isso as três entram em bundles."
+ }
+}

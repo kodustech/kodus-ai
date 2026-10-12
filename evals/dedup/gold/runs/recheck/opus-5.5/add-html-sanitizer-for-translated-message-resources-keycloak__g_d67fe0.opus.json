@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5de16c8b",
+     "s_3aa48dee"
+    ],
+    "defect": "The zh_CN totpStep1 message was replaced with Traditional Chinese text instead of Simplified Chinese."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S11 apontam o mesmo defeito na mesma linha: o totpStep1 do arquivo zh_CN foi trocado por texto em chinês tradicional em vez de simplificado. A correção é a mesma, então postar as duas seria redundante. Nenhuma das duas traz um segundo defeito."
+ }
+}

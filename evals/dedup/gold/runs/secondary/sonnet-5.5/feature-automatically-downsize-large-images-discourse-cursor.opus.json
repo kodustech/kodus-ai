@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_054a4ca7",
+    "mainDefect": "The file_too_large message in utilities.js shows a hard-coded 10240 KB instead of the configured per-type max_<type>_size_kb limit, so it misreports or bypasses the real limit for non-image uploads.",
+    "secondary": [
+     {
+      "defect": "The 413 handler at line 246 also reports a made-up size limit instead of the real configured one.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_dd0b9d2b",
+     "s_5dfdf59a",
+     "s_03602ec1"
+    ],
+    "defect": "The federated-rule check was replaced with a hardcoded `isFederated = false`, so federated rule groups are no longer immutable and show as editable or deletable."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S4 e S5 relatam o mesmo defeito: a remoção de isFederatedRuleGroup(rule.group), trocada por isFederated = false. Com isso, regras federadas deixam de ser imutáveis. A opção de remover a variável morta em S4 é só uma alternativa de correção para o mesmo problema, não um segundo defeito."
+ }
+}

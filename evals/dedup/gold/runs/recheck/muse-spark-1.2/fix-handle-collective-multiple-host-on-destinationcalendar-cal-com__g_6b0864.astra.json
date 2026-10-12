@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_039a6ecf",
+     "s_e6381e43",
+     "s_1933f6e3",
+     "s_6e328550",
+     "s_3a7bfe53"
+    ],
+    "defect": "O fallback do Google Meet acessa .integration de um primeiro elemento inexistente quando destinationCalendar está ausente ou vazio, causando TypeError."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S6, S11, S15 e S16 apontam o mesmo acesso sem proteção a mainHostDestinationCalendar.integration no fallback do Google Meet. Uma única correção com optional chaining ou guarda resolve todas as sugestões; nenhuma relata um segundo defeito."
+ }
+}

@@ -1,0 +1,45 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_3abf3cfd",
+    "mainDefect": "String#scrub is called in poll_feed, but it does not exist on Ruby 2.0.0, which is the Ruby version the project's CI uses.",
+    "secondary": [
+     {
+      "defect": "SimpleRSS returns nil for content on RSS 2.0 items that only have a description, so i.content.scrub raises NoMethodError and aborts the import.",
+      "coveredBy": [
+       "s_5748a076"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_8ac429ca",
+    "mainDefect": "The embed url is interpolated unescaped into an href attribute in TopicEmbed.import, which allows XSS.",
+    "secondary": [
+     {
+      "defect": "Imported remote page and RSS HTML is stored and rendered as raw_html without sanitization, so javascript: links and other markup survive and cause stored XSS.",
+      "coveredBy": [
+       "s_8882a392"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_6f86cbbe",
+    "mainDefect": "The retrieve throttle is keyed on the full embed_url, so an anonymous client can bypass it by changing the path or query string.",
+    "secondary": [
+     {
+      "defect": "Each RetrieveTopic job runs Jobs::PollFeed inline, so the whole feed is downloaded and every item imported on each request.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The remote fetch with open(url) has no read or open timeout, so it can block Sidekiq workers.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

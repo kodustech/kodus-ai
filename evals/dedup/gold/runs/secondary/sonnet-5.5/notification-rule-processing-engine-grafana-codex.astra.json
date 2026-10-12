@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_37747cd1",
+    "mainDefect": "The 'always supported' comment contradicts the support calculation, which depends on folder loading state.",
+    "secondary": [
+     {
+      "defect": "The stray '// duplicate' comment on useIsGrafanaPromRuleEditable provides no useful information.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The comment above isAlertingRule describes all GrafanaPromRuleDTO rules as Grafana-managed without explaining that the check excludes recording rules.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

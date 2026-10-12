@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "utilities.js lines 246–247: the 413 error message hard-codes 10 MB instead of the configured image limit."
+   },
+   {
+    "id": "F2",
+    "description": "utilities.js lines 182–184: the pre-upload size error message hard-codes 10 MB instead of the configured image limit."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_ba068ffa",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5a3bcb7f",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

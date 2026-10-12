@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_38ff2c05",
+     "s_8a2cf40c"
+    ],
+    "defect": "The before_validation callback calls sub! on self.host without a nil guard, so a missing host param raises NoMethodError (500) instead of a validation error."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S11 apontam o mesmo defeito no mesmo trecho (linhas 5-8): o before_validation chama sub! em host nulo e gera NoMethodError quando o parâmetro host está ausente. As duas propõem a mesma correção, uma proteção contra nil ou to_s. Nenhuma delas traz um segundo defeito."
+ }
+}

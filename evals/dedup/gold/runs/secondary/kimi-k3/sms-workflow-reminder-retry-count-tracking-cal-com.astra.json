@@ -1,0 +1,33 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d2aeb4fc",
+    "mainDefect": "A failed retry-count update can escape the catch block, abort the remaining batch, and return HTTP 500.",
+    "secondary": [
+     {
+      "defect": "The retry-limit deletion branch lacks an SMS method filter and can delete reminders for other methods.",
+      "coveredBy": [
+       "s_18b8a2b6"
+      ]
+     },
+     {
+      "defect": "The retry-limit deletion branch can delete scheduled reminders even when their scheduled date has not passed.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a9ca671d",
+    "mainDefect": "Updating retryCount from the findMany snapshot loses increments when cron runs overlap.",
+    "secondary": [
+     {
+      "defect": "The retry-limit deletion branch can delete a successfully scheduled reminder, orphaning its Twilio message and breaking later cancellation.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a0a3d1b7",
+     "s_df1a20da"
+    ],
+    "defect": "Fallback locales are loaded only by the explicit ensure_loaded! call in ApplicationController, and translate still loads only config.locale, so code outside a controller (jobs, mailers) gets 'translation missing' instead of the fallback."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 relatam o mesmo defeito: os locales de fallback só são carregados pelo ApplicationController, e o translate carrega apenas config.locale, o que gera 'translation missing' em jobs e mailers. As duas propõem a mesma correção, carregar os fallbacks dentro do translate. Nenhuma traz um segundo defeito."
+ }
+}

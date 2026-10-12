@@ -1,0 +1,40 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_583e834c",
+    "mainDefect": "When V2 is active, the ClientRemovedEvent listener in AdminPermissions calls ClientPermissionsV2.setPermissionsEnabled, which throws UnsupportedOperationException and can abort the client deletion.",
+    "secondary": [
+     {
+      "defect": "The role and group removal paths in V2 may throw the same UnsupportedOperationException from their setPermissionsEnabled calls.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8758638b",
+    "mainDefect": "In V2, ClientResource's management permissions endpoint unconditionally calls isPermissionsEnabled, setPermissionsEnabled, resource and getPermissions; these throw UnsupportedOperationException, so the request fails with HTTP 500 instead of a clean 4xx.",
+    "secondary": [
+     {
+      "defect": "When both V1 and V2 are enabled, the ClientRemovedEvent listener in AdminPermissions hits the same UnsupportedOperationException from setPermissionsEnabled.",
+      "coveredBy": [
+       "s_583e834c",
+       "s_1aab7b37"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a2452e35",
+    "mainDefect": "In V2, isPermissionsEnabled and setPermissionsEnabled throw instead of returning safe values, so the ClientResource management endpoints fail instead of returning a proper 4xx or feature-disabled response.",
+    "secondary": [
+     {
+      "defect": "In V2, canExchangeTo throws instead of returning false, which breaks the token exchange callers.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

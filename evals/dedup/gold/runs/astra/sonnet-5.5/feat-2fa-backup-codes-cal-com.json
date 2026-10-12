@@ -1,0 +1,29 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "promptSha": "6b45452a1dc4b9178a3a5b4a471bb43942381c7d",
+  "attempt": 1,
+  "ms": 18215,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_d02f32dc",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ea0eea49",
+        "confidence": "high"
+      },
+      {
+        "id": "s_50511f10",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c160c3f1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_47e65bca",
+     "s_99ffaedb",
+     "s_33ed9a24",
+     "s_dc30b21a",
+     "s_7335ccdf",
+     "s_af4c6322"
+    ],
+    "defect": "As implementações de createEvent mantêm a assinatura sem credentialId após a alteração da interface Calendar."
+   }
+  ],
+  "unique": [
+   "s_08905d22"
+  ],
+  "bundles": [
+   "s_47e65bca",
+   "s_dc30b21a"
+  ],
+  "reasoningPt": "S4, S12, S13, S17, S21 e S22 relatam primeiro a assinatura sem credentialId. S19 relata como defeito principal a seleção sempre do primeiro calendário, cuja correção exige mudar a seleção, além de aceitar o parâmetro. S4 e S17 também abordam essa seleção incorreta, mas são bundles e permanecem no grupo de seu primeiro defeito."
+ }
+}

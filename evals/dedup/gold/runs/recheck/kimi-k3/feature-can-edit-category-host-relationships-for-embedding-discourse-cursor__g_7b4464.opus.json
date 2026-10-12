@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The test \"is false if embeddable_host is blank\" in topic_spec.rb no longer checks the condition its name describes: it passes only because the unsaved topic has no topic embed.",
+    "members": [
+     "s_a9e465bd",
+     "s_264c9510"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S16 e S19 apontam o mesmo defeito no mesmo teste (linhas 1403-1405): o exemplo \"is false if embeddable_host is blank\" não testa mais a condição do nome e passa só porque o tópico não tem embed. As correções propostas são diferentes (renomear/remover versus restaurar o setup), mas o defeito é o mesmo, então o grupo se mantém."
+ }
+}

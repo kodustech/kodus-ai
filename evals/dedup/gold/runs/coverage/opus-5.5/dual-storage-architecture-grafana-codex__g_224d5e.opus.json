@@ -1,0 +1,76 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create (lines 50-57): async legacy write's timeout context comes from the request ctx, so it gets cancelled when the handler returns"
+   },
+   {
+    "id": "F2",
+    "description": "Update (lines 134-141): async legacy write's timeout context comes from the request ctx, so it gets cancelled"
+   },
+   {
+    "id": "F3",
+    "description": "Delete (lines 108-114): async legacy write's timeout context comes from the request ctx, so it gets cancelled"
+   },
+   {
+    "id": "F4",
+    "description": "DeleteCollection (lines 161-167): async legacy write's timeout context comes from the request ctx, so it gets cancelled"
+   },
+   {
+    "id": "F5",
+    "description": "Errors from the async legacy writes are never logged; they are only recorded as metrics"
+   },
+   {
+    "id": "F6",
+    "description": "New mode-3 playlist integration tests (playlist_test.go) read legacy right after writing, so they are racy against the async legacy write"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f50f8610",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F6"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ffe2609d",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_03fc7aa9",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_68ce1673",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

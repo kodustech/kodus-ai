@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_83f857de",
+     "s_15152af3",
+     "s_ba3a1487",
+     "s_c99c812a",
+     "s_70d8be1c"
+    ],
+    "defect": "The `queued` dataclass default `timezone.now()` is evaluated once at import time, so every AssignmentSource gets the same stale timestamp; it should use `field(default_factory=timezone.now)`."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S2, S3, S5, S6) apontam o mesmo defeito: o default `timezone.now()` do campo `queued` é avaliado uma vez na importação, e todas propõem a mesma correção com `default_factory`. As diferenças de intervalo de linhas e a sugestão de teste extra em S5 não criam um defeito novo, então o grupo é mantido."
+ }
+}

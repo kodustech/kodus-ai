@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0abd937d",
+     "s_444b9348"
+    ],
+    "defect": "The device limit in CreateOrUpdateDevice is a non-atomic count-then-insert, so concurrent requests from new devices can all pass the check and push the count past device_limit."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S8 apontam o mesmo defeito nas mesmas linhas (108-118): a contagem e a inserção são separadas, sem transação nem lock. Por isso, requisições concorrentes conseguem ultrapassar o device_limit. As duas propõem a mesma correção (INSERT condicional ou transação serializada) e nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

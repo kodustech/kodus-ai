@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "disable.ts:61 verifies backup codes with non-constant-time Array.indexOf, leaking prefix-match timing information."
+   },
+   {
+    "id": "F2",
+    "description": "next-auth-options.ts:144 verifies backup codes with non-constant-time Array.indexOf, leaking prefix-match timing information."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_801d97bf",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_548ddd10",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

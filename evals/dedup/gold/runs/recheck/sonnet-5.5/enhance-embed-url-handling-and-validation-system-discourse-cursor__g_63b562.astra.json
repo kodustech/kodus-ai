@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7271a207",
+     "s_6c00b667"
+    ],
+    "defect": "A validação de origem em embed.js usa correspondência por substring em vez de igualdade exata com a origem de discourseUrl, permitindo aceitar origens indevidas."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S4 apontam o mesmo defeito na linha 17 e propõem a mesma correção: comparar e.origin com a origem extraída de discourseUrl por igualdade exata. Os exemplos de origens aceitas variam, mas não representam defeitos distintos."
+ }
+}

@@ -1,0 +1,59 @@
+{
+  "judge": "opus",
+  "model": "opus-5.5",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "promptSha": "6398d11166f98420d9ae8b2fed9e952ad12d6510",
+  "attempt": 1,
+  "ms": 8438,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 21583,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 270,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 21583,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 270,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 21583,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 21583
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.17984560000000002,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_438385f5",
+          "s_bb646b1e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "PasswordForm now fills WebAuthn context for a user identified only by a typed username, so unauthenticated visitors can see whether the account has passkeys and read its credential IDs (rendered as hidden authn_use_chk inputs).",
+        "rationale": "Both suggestions report the same user enumeration and credential-ID leak at PasswordForm lines 51-54, and both propose the same fix: limit it to real re-authentication."
+      }
+    ],
+    "unique": []
+  }
+}

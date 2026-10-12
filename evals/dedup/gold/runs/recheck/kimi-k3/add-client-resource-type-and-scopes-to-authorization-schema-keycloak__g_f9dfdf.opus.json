@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_75e8893d",
+     "s_db009948"
+    ],
+    "defect": "Javadoc on the void require* view methods (requireView, requireViewClientScopes) wrongly says they return true, when it should say they throw ForbiddenException."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S10 apontam o mesmo erro, repetido em dois métodos vizinhos: o Javadoc dos métodos void require* foi copiado dos can* e diz que eles retornam true, em vez de dizer que lançam ForbiddenException. Uma única correção resolve os dois pontos, então o grupo deve ficar como está. Nenhuma das duas fala de um segundo defeito."
+ }
+}

@@ -1,0 +1,52 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "utilities.js:182 – the flat 10MB client check ignores max_attachment_size_kb, so for attachments the client rejects files the server would accept, or accepts files the server will reject."
+   },
+   {
+    "id": "F2",
+    "description": "Images that still exceed max_image_size_kb after the server's 5 downsize passes get past the 10MB client check and are then rejected by the server."
+   },
+   {
+    "id": "F3",
+    "description": "utilities.js:183-184 – the file_too_large alert in the validator shows 10240 KB as the maximum instead of the configured limit."
+   },
+   {
+    "id": "F4",
+    "description": "utilities.js:243-249 – the 413 handler also shows 10240 KB as the maximum regardless of the configured limit. This needs its own edit at line 246."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_ee27a71c",
+    "covers": [
+     "F1",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_99672758",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7b3553a9",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": false,
+  "reasoning": "The 413 handler sets maxSizeKB again at line 246, so it needs its own edit. I treat it as a separate facet (F4). The validator alert (F3) is fixed by the same line-182 change as F1.\n\n- **s_ee27a71c:** reports the attachment mismatch in both directions (F1). It also reports the wrong maximum in both the alert and the 413 handler (F3, F4). It names max_image_size_kb only as context, so it doesn't cover images that can't be shrunk enough (F2).\n- **s_99672758:** reports only the attachment problem (F1).\n- **s_7b3553a9:** reports attachments (F1) and images that can't be shrunk enough (F2). It hints at the message mismatch: the server's error text won't match the 10MB the client advertised. I count that, loosely, as F3. It never mentions the 413 handler (F4).\n\nSo no member is complete. This is not decisive because two calls are judgment calls: splitting the 413 handler into its own facet, and counting s_7b3553a9's indirect message remark as F3. If the error message were one combined facet, s_7b3553a9 could count as complete, as Labeler 1 found."
+ }
+}

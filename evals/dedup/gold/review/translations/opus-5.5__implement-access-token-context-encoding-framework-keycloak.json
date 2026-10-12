@@ -1,0 +1,74 @@
+{
+ "s_420384ae": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O null check com o rótulo 'Null rawTokenId not allowed' verifica `grantType` novamente em vez de `rawTokenId`. POR QUÊ: Um rawTokenId nulo passa, e encodeTokenId então monta um jti como `onrtac:null` em vez de falhar imediatamente. CORREÇÃO: Altere a linha 73 para `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\");`."
+ },
+ "s_d598c74b": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: isAccessTokenId lê `items[0].substring(3, 5)`, mas o encoder coloca o shortcut do grant nos caracteres 4-6 (sessionType 0-2, tokenType 2-4, grant 4-6). A verificação também retorna false quando o shortcut coincide, o que está invertido. POR QUÊ: O matcher nunca verifica o grant type. Um token com o shortcut de grant errado ainda passa, e um correto só passa porque a substring errada nunca é igual ao shortcut. Assim, as asserções de eventos em expectCodeToToken, expectRefresh, expectDeviceCodeToToken e expectAuthReqIdToToken não dão nenhuma cobertura contra regressões. CORREÇÃO: `if (items[0].length() != 6 || !items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+ },
+ "s_9c9743f6": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `getShortcut()` é um novo método abstrato de SPI sem implementação default. Seu contrato diz 'usually like 3-letters', mas DefaultTokenContextEncoderProvider.getTokenContextFromTokenId exige que o contexto codificado tenha exatamente 6 caracteres (2+2+2). Nada valida o tamanho do shortcut nem se ele é não nulo. POR QUÊ: Implementações customizadas existentes de OAuth2GrantTypeFactory deixam de compilar ou sofrem AbstractMethodError em runtime. Um shortcut customizado que não tenha 2 caracteres gera IDs de access token que o decoder rejeita com IllegalArgumentException. Um shortcut nulo faz `grantsByShortcuts.put(null, ...)` em DefaultTokenContextEncoderProviderFactory.postInit lançar um NPE, porque ConcurrentHashMap rejeita chaves nulas, e a inicialização do servidor falha. CORREÇÃO: Documente e imponha um shortcut não nulo de 2 caracteres (valide em postInit e em getShortcutByGrantType). Considere uma implementação default para que os providers existentes continuem compilando."
+ },
+ "s_a57e3ef3": {
+  "summaryPt": "O matcher isAccessTokenId lê os 2 caracteres errados (substring(3,5) em vez de substring(4,6)) e sua comparação está invertida, então nunca verifica o grant type.",
+  "contentPt": "O encoder escreve o prefixo do token ID como sessionType(0-2) + tokenType(2-4) + grantShortcut(4-6). Para o prefixo \"onrtac\", substring(3,5) resulta em \"ta\", que mistura os caracteres de token type e de grant. Além disso, a verificação retorna false quando o segmento *é igual* ao shortcut esperado. Na prática, o matcher aceita qualquer ID bem formado com qualquer grant type, e as novas asserções de teste em expectCodeToToken, expectRefresh, expectDeviceCodeToToken e expectAuthReqIdToToken não verificam nada sobre o grant. Use substring(4,6) e retorne false quando o segmento *não for igual* ao shortcut esperado."
+ },
+ "s_1f2d92bd": {
+  "summaryPt": "O matcher isAccessTokenId lê a substring errada e inverte a comparação, então nunca verifica o shortcut do grant.",
+  "contentPt": "O shortcut do grant são o 5º e o 6º caracteres do prefixo de 6 caracteres, portanto é `substring(4, 6)`, mas o matcher usa `substring(3, 5)`. Ele também retorna false quando o trecho *coincide* com o shortcut esperado, em vez de quando difere. Como resultado, token IDs com qualquer grant (incluindo \"na\" quando o atributo GRANT_TYPE nunca é definido) passam em `expectCodeToToken`, `expectRefresh`, na verificação de device-code e na verificação de CIBA. Correção: verifique `items[0].length() == 6` e `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+ },
+ "s_166630be": {
+  "summaryPt": "testIncorrectGrantType passa por causa de uma NullPointerException do sessionFactory nulo, e não pela validação do grant-type.",
+  "contentPt": "Neste fixture, `factory.sessionFactory` é null porque `postInit` nunca é chamado. Para o shortcut não mapeado \"ac\", `getGrantTypeByShortcut` chama `sessionFactory.getProviderFactoriesStream(...)` e lança uma NullPointerException. O teste captura qualquer RuntimeException, então passa sem nunca chegar ao branch `IllegalArgumentException(\"Unknown value ... for grant type\")`, e continuaria passando mesmo se essa validação fosse removida. Correção: forneça à factory um stub de sessionFactory que retorne um stream vazio, e capture especificamente IllegalArgumentException (idealmente também verificando a mensagem)."
+ },
+ "s_01ffe2b2": {
+  "summaryPt": "Este null check é sobre grantType, mas sua mensagem diz rawTokenId.",
+  "contentPt": "A linha 73 executa `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`. A mensagem diz rawTokenId, mas o valor verificado é grantType, que a linha 72 já verifica. Assim, rawTokenId nunca é de fato verificado, e a mensagem descreve uma verificação que nunca acontece."
+ },
+ "s_7cc8bcbd": {
+  "summaryPt": "O javadoc de getShortcut() sugere shortcuts de 3 letras, mas o encoder só aceita exatamente 2 caracteres.",
+  "contentPt": "O javadoc diz que o shortcut é \"usually like 3-letters\". DefaultTokenContextEncoderProvider.getTokenContextFromTokenId exige que o prefixo codificado tenha exatamente 6 caracteres e lê o shortcut do grant como os caracteres 4-6. Um grant customizado escrito seguindo este javadoc, com shortcut de 3 letras, geraria token IDs que falham na decodificação com \"Expected length of 6\". A documentação deveria dizer que o shortcut deve ter exatamente 2 caracteres."
+ },
+ "s_15c59a87": {
+  "summaryPt": "O comentário e o índice da substring para o shortcut do grant discordam do formato de codificação.",
+  "contentPt": "O comentário diz que o shortcut do grant \"starts at character 4th char\" e o código usa substring(3,5). O encoder organiza o prefixo como sessionType (0-2), tokenType (2-4), grantType (4-6), então o shortcut do grant começa no 5º caractere, índice 4. O comentário, o código e o formato discordam entre si. O branch de equals também retorna false quando há correspondência, o que é o inverso do que describeTo() diz. Use substring(4, 6), retorne false quando o shortcut não corresponder e corrija o comentário."
+ },
+ "s_8188e9fe": {
+  "summaryPt": "isAccessTokenId lê o shortcut do grant no offset errado e inverte a verificação, então na prática aceita qualquer grant type.",
+  "contentPt": "O encoder escreve o token id como sessionType(2) + tokenType(2) + grant(2) + ':' + uuid, então o shortcut do grant fica nos caracteres 4-6 (`substring(4, 6)`). O matcher, em vez disso, usa `substring(3, 5)`, que abrange o último caractere do token type e o primeiro do grant. Ele também retorna false quando essa substring é igual ao shortcut esperado. Na prática, a substring quase nunca coincide, então o matcher aceita qualquer id com sufixo UUID e nunca verifica o grant type. No caso raro em que os caracteres 3-5 são iguais ao shortcut, um id correto é rejeitado. Correção: `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+ },
+ "s_37c5da68": {
+  "summaryPt": "O null check de rawTokenId valida grantType em seu lugar, então um rawTokenId nulo nunca é rejeitado.",
+  "contentPt": "A quarta verificação é `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`. Ela repete a verificação de `grantType` da linha acima em vez de verificar `rawTokenId`. Um `rawTokenId` nulo é, portanto, aceito, e `encodeTokenId` então produziria um id terminado em ':null'. Verifique `rawTokenId` aqui."
+ },
+ "s_c309ae7b": {
+  "summaryPt": "O matcher isAccessTokenId lê a substring errada e inverte a comparação do shortcut do grant, então deixa de verificar o grant type do token ID.",
+  "contentPt": "O matcher compara os caracteres errados e inverte o resultado. Em `ssttgg:uuid`, o shortcut do grant está nos caracteres 4-6, mas `substring(3,5)` lê os caracteres 3-5. Retornar `false` quando eles são iguais também inverte a verificação. Como está escrito, um token ID com o shortcut de grant errado passa e só uma sobreposição bizarra falha, então a asserção não verifica o grant type. Compare `items[0].substring(4, 6)` e retorne `false` quando NÃO for igual a `expectedGrantShortcut`."
+ },
+ "s_8842361c": {
+  "summaryPt": "rawTokenId nunca passa por null check porque o segundo requireNonNull verifica grantType novamente.",
+  "contentPt": "O construtor verifica `grantType` duas vezes e nunca verifica `rawTokenId`. Um `rawTokenId` nulo é, portanto, aceito, e `encodeTokenId` montaria silenciosamente um token ID terminado em `:null` em vez de falhar imediatamente. Passe `rawTokenId` para a segunda verificação."
+ },
+ "s_859a4a3a": {
+  "summaryPt": "isAccessTokenId lê o offset errado (3,5 em vez de 4,6) e tem uma comparação invertida, então não verifica o shortcut do grant que o encoder escreve.",
+  "contentPt": "O encoder escreve o shortcut do grant nos caracteres 4-5 do prefixo de contexto (sessionType 2 + tokenType 2 + grant 2), mas este matcher lê substring(3,5) e rejeita o ID quando o shortcut coincide. Como os dois erros estão presentes, o matcher na prática sempre passa, então as novas asserções de grant type em expectCodeToToken e nas verificações de device, refresh e CIBA nunca verificam nada. Use substring(4,6) e retorne false quando o shortcut NÃO coincidir."
+ },
+ "s_cf0c2a48": {
+  "summaryPt": "O matcher isAccessTokenId lê os caracteres errados e tem a verificação invertida, então nunca verifica o shortcut do grant.",
+  "contentPt": "O prefixo codificado tem 6 caracteres: session(0-2), token type(2-4), grant(4-6). O matcher chama `substring(3,5)`, que abrange os campos de token type e de grant. Ele também retorna false quando essa substring É IGUAL ao shortcut esperado. Assim, para ids reais como `onrtac:<uuid>`, `substring(3,5)` é \"ta\", que nunca é igual a \"ac\", e o matcher aceita qualquer grant. As asserções dos eventos de code-to-token, refresh, device e CIBA, portanto, não verificam nada sobre o grant type. Use `items[0].length() == 6 && items[0].substring(4, 6).equals(expectedGrantShortcut)` e retorne false quando NÃO coincidir."
+ },
+ "s_54bc46ef": {
+  "summaryPt": "O construtor verifica grantType duas vezes e nunca verifica rawTokenId, apesar de a mensagem de erro dizer que verifica.",
+  "contentPt": "A linha 73 chama `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`. Ela verifica grantType novamente em vez de rawTokenId. Um rawTokenId nulo é aceito, e encodeTokenId então monta um id terminado na string \"null\" (ex.: `onrtac:null`), então a regra de não nulidade declarada não é imposta."
+ },
+ "s_a2208ca1": {
+  "summaryPt": "O matcher de teste `isAccessTokenId` tem uma condição invertida e lê o shortcut do grant com `substring(3, 5)` em vez das posições 4–6.",
+  "contentPt": "O matcher de teste `isAccessTokenId` tem uma condição invertida e lê offsets de substring errados. Ele usa `substring(3, 5)`, mas o shortcut do grant está nas posições 4–6. O revisor sinalizou isso como um bug de lógica de teste e o tratou como fora do escopo da revisão de propagação de contrato."
+ },
+ "s_c330ee03": {
+  "summaryPt": "initToken agora sempre chama getShouldUseLightweightToken, que desreferencia session.getContext().getClient() e pode lançar um NPE quando a criação do token ocorre fora de um contexto de requisição de client.",
+  "contentPt": "Antes deste PR, getShouldUseLightweightToken só era chamado a partir de mappers. Agora toda criação de access token passa por ele via initToken→getTokenContextFromClientSessionContext. Chamadores como PolicyEvaluationService.java:289 e KeycloakIdentity.java:148 criam tokens a partir de caminhos de admin e de authorization code, onde `session.getContext().getClient()` pode ser null. Isso faria a criação do token lançar uma NullPointerException. Use o client de `clientSessionContext.getClientSession().getClient()`, ou adicione um null guard ao client do contexto."
+ }
+}

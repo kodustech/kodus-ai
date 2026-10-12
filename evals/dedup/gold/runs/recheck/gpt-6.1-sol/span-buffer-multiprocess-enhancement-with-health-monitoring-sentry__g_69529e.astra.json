@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b2d766be",
+     "s_c04f59af",
+     "s_d1fa2794"
+    ],
+    "defect": "O isinstance com multiprocessing.Process não reconhece os workers SpawnProcess, impedindo que workers travados sejam mortos antes da criação de substitutos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S7 relatam o mesmo teste de tipo incorreto e suas consequências: workers antigos permanecem vivos após a substituição. A recomendação de join em S1 complementa a correção; nenhuma sugestão relata um segundo defeito independente."
+ }
+}

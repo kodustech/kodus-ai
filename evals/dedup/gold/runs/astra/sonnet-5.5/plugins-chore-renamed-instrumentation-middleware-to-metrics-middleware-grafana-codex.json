@@ -1,0 +1,25 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "promptSha": "39efef41025205d5885490fab99174b8ffb14955",
+  "attempt": 1,
+  "ms": 25051,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_f77e936d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3d80f86d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ef0c4fe2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

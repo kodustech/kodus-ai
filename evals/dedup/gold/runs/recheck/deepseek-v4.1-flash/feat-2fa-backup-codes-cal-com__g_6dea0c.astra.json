@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7ae7f156",
+     "s_8e161876"
+    ],
+    "defect": "resetState não limpa backupCodes nem revoga e limpa backupCodesUrl, mantendo dados antigos após o reset."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S11 apontam a mesma limpeza incompleta em resetState, resolvida pela mesma alteração. S11 detalha a persistência da URL e sugere ampliar a limpeza, sem relatar um defeito independente."
+ }
+}

@@ -1,0 +1,45 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Attachments: the flat 10MB client check ignores max_attachment_size_kb, so the client wrongly rejects or accepts files compared with the server limit."
+   },
+   {
+    "id": "F2",
+    "description": "Images that the server's 5-pass downsize loop can't bring under max_image_size_kb pass the 10MB client check, then the server rejects them."
+   },
+   {
+    "id": "F3",
+    "description": "The file_too_large error message always reports 10MB (10240 KB) instead of the real configured limit (validator alert / 413 handler)."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_ee27a71c",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_99672758",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7b3553a9",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

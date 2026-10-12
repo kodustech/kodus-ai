@@ -1,0 +1,68 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "promptSha": "28fdd4e46cc8612469b8b995e73f013c6620cfee",
+  "attempt": 1,
+  "ms": 34765,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_7b1466dd",
+          "s_3e96920f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The BackupCode component is incorrectly declared with the function name TwoFactor.",
+        "rationale": "Both suggestions flag the same stale function name at the same declaration and propose renaming it to BackupCode."
+      },
+      {
+        "members": [
+          "s_8e161876",
+          "s_7ae7f156"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "EnableTwoFactorModal.resetState leaves backupCodes and backupCodesUrl uncleared, retaining stale codes and the blob URL after reset.",
+        "rationale": "Both identify the same omitted cleanup in resetState. The longer suggestion explains the retained URL's lifetime and supplies the cleanup implementation."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_5937758e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_cda09d4d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4b6dba2f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7b2abff5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a9040f8f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4f88e788",
+        "confidence": "high"
+      },
+      {
+        "id": "s_82fc6f7e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4b5537ed",
+        "confidence": "high"
+      }
+    ]
+  }
+}

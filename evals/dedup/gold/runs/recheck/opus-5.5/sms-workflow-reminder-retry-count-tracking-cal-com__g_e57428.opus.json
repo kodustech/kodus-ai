@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The new `retryCount > 1` OR branch in the SMS cleanup deleteMany has no `method: SMS` filter, so the SMS cron deletes reminders of every method (EMAIL, WHATSAPP).",
+    "members": [
+     "s_51ce1fbc",
+     "s_6fbe394f",
+     "s_4680bb7e"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S7 apontam o mesmo defeito: o ramo `retryCount > 1` do OR no deleteMany não tem filtro de método. Por isso o cron de SMS apaga lembretes de EMAIL e WHATSAPP. O filtro `scheduled: false` que S1 sugere a mais só refina o mesmo escopo da correção e não é um defeito separado, então o grupo fica como está."
+ }
+}

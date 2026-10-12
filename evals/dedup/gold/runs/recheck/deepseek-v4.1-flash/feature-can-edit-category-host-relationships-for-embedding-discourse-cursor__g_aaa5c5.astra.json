@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_37416a55",
+     "s_5c00ae33",
+     "s_888da293"
+    ],
+    "defect": "A migração acessa a primeira linha das consultas sem verificar se existe, causando falha quando o resultado está vazio."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S9 relatam o mesmo acesso sem proteção ao resultado vazio da consulta de embed_category, que interrompe a migração antes do fallback. A proteção adicional na consulta de uncategorized_category_id trata a mesma falha repetida, portanto não caracteriza outro defeito."
+ }
+}

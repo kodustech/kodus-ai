@@ -1,0 +1,27 @@
+{
+  "model": "glm-5.3",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "component": [
+    "s_3e0dbc3c",
+    "s_952eaebd",
+    "s_c52e7744"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_3e0dbc3c",
+          "s_952eaebd",
+          "s_c52e7744"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "defect": "No mode-3 test checks that the async legacy write happens. The unit tests never assert the legacy mock calls, and the playlist integration subtests only read from unified storage. Removing or breaking the legacy write would leave every test passing."
+      }
+    ],
+    "unique": [],
+    "decisive": false,
+    "reasoning": "s_3e0dbc3c and s_952eaebd clearly describe the same defect at the same place: TestMode3_* lines 47-77 never wait for or assert the fire-and-forget legacy write. s_c52e7744 describes the same gap in a different file, the new mode-3 playlist integration subtests. s_952eaebd links the two because it reports the integration gap as part of its own problem, not just as background: its summary says removing the goroutine 'would still pass every unit and integration test', and its explanation names integration tests that read only from unified storage. Chaining through s_952eaebd puts all three in one group. The group is cross_location, not systemic_pattern: this is one test gap seen from the unit-test file and the integration-test file, not a copy-pasted mistake. Those two places need separate edits (mock call assertions vs. querying the legacy store), so the merged comment must keep both, and needsUnifiedComment is true. This is not decisive because s_c52e7744 could also be read as a separate integration-test gap with a different fix."
+  }
+}

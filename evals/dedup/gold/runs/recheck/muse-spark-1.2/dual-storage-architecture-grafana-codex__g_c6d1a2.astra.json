@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cb150066",
+     "s_99b73949",
+     "s_e90d80f5"
+    ],
+    "defect": "Os métodos de Mode3 acessam campos de options/listOptions sem verificar ponteiros nil, causando panic."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6, S20 e S24 relatam o mesmo defeito repetido nos métodos: acesso a campos de opções sem proteção contra nil. As diferenças de abrangência e o destaque de S24 ao comportamento anterior de Get não alteram o defeito nem a correção necessária."
+ }
+}

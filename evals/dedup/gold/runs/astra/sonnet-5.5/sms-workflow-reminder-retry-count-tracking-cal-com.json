@@ -1,0 +1,38 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "promptSha": "7b1745ee4bda6da31d1029e9d6b662a7940d7df6",
+  "attempt": 1,
+  "ms": 37999,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_d87c9c97",
+          "s_1d7d17c1",
+          "s_085b2df5",
+          "s_eb6c867b",
+          "s_9ff75425"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The retry-exhaustion deletion branch lacks an SMS filter and can delete non-SMS reminders; it also deletes future reminders, making the cleanup comment inaccurate.",
+        "rationale": "All five report the same missing method filter in the same OR branch. s_085b2df5 additionally reports the mismatch between the comment and the expanded deletion behavior, which the merged comment must preserve."
+      },
+      {
+        "members": [
+          "s_c8538465",
+          "s_a5b002c4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "An unguarded database update inside the catch block can abort processing of remaining reminders; the retry count also uses a stale read-then-write.",
+        "rationale": "Both report the same escaping exception from the catch-block update. s_c8538465 additionally identifies the stale retry-count assignment, so the merged comment must retain that concern."
+      }
+    ],
+    "unique": []
+  }
+}

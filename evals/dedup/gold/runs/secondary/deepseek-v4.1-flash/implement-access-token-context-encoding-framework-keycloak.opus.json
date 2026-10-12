@@ -1,0 +1,110 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_88dcd5ff",
+    "mainDefect": "isAccessTokenId inverts the grant-shortcut comparison, returning false when the extracted shortcut equals the expected one.",
+    "secondary": [
+     {
+      "defect": "The grant shortcut is read at the wrong offset with substring(3, 5) when it should be substring(4, 6).",
+      "coveredBy": [
+       "s_511ab22a",
+       "s_be2a870e",
+       "s_5ae95ca9",
+       "s_f2171902",
+       "s_756b95c2",
+       "s_dccfaa16"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_511ab22a",
+    "mainDefect": "The grant shortcut is read at the wrong offset with substring(3, 5) when it should be substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The comparison is inverted, so it returns false when the shortcut equals the expected value.",
+      "coveredBy": [
+       "s_88dcd5ff",
+       "s_a148cd25"
+      ]
+     },
+     {
+      "defect": "There is no length check on items[0] before calling substring, so a malformed id can throw StringIndexOutOfBoundsException.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_5ae95ca9",
+    "mainDefect": "The grant shortcut is read at the wrong offset with substring(3, 5) when it should be substring(4, 6), so the guard never fires.",
+    "secondary": [
+     {
+      "defect": "The comparison is inverted, so it returns false when the shortcut matches.",
+      "coveredBy": [
+       "s_88dcd5ff",
+       "s_a148cd25"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a148cd25",
+    "mainDefect": "The grant-shortcut equality check is inverted, so it returns false when the shortcut matches.",
+    "secondary": [
+     {
+      "defect": "The grant shortcut is read at the wrong offset (off by one) when it should be indexes 4..6.",
+      "coveredBy": [
+       "s_511ab22a",
+       "s_be2a870e",
+       "s_5ae95ca9",
+       "s_f2171902",
+       "s_756b95c2",
+       "s_dccfaa16"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f2171902",
+    "mainDefect": "The grant shortcut is read at the wrong offset with substring(3, 5) when it should be substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The comparison is inverted, so it rejects tokens whose shortcut equals the expected one.",
+      "coveredBy": [
+       "s_88dcd5ff",
+       "s_a148cd25"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_756b95c2",
+    "mainDefect": "The grant shortcut is read at the wrong offset with substring(3, 5) when it should be indices 4..6.",
+    "secondary": [
+     {
+      "defect": "The matchesSafely comparison is inverted, returning false when the extracted substring equals the expected shortcut.",
+      "coveredBy": [
+       "s_88dcd5ff",
+       "s_a148cd25"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_dccfaa16",
+    "mainDefect": "The grant shortcut is read at indexes 3-4 when it is actually at indexes 4-5.",
+    "secondary": [
+     {
+      "defect": "The condition is inverted, returning false when the shortcut equals the expected value instead of when it differs.",
+      "coveredBy": [
+       "s_88dcd5ff",
+       "s_a148cd25"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

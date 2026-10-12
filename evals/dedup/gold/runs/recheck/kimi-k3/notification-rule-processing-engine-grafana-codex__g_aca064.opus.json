@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_dbfac681",
+     "s_24eb89ae",
+     "s_4d7c990b"
+    ],
+    "defect": "GrafanaRuleListItem rendered inside the filtered-rules map in FilterView.tsx is missing the key={key} prop that the replaced GrafanaRuleLoader had."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S6 e S8 apontam o mesmo defeito: o elemento GrafanaRuleListItem no branch 'grafana' do map em FilterView.tsx perdeu a prop key={key}. As três propõem a mesma correção, que é restaurar key={key}, e só variam no intervalo de linhas e na ênfase dada aos efeitos sobre o estado de cada linha. Nenhuma delas traz um segundo defeito."
+ }
+}

@@ -1,0 +1,63 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Account-ui English messages_en.properties:188 changes error-invalid-multivalued-size to Java MessageFormat syntax incompatible with the SPA's i18next placeholder convention."
+   },
+   {
+    "id": "F2",
+    "description": "Admin-ui English messages_en.properties:3138 changes error-invalid-multivalued-size to Java MessageFormat syntax incompatible with the SPA's i18next placeholder convention."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_ecc11bba",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_0e7da5d3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_d93655e7",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c090859a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4b64c7d5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_c4bb13a0",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

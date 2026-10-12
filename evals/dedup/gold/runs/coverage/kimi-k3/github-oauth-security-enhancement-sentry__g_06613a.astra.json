@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "integration.py:423: safe_urlopen token-exchange failures escape exception handling and return a 500 instead of the error page."
+   },
+   {
+    "id": "F2",
+    "description": "integration.py:434: get_user_info failures escape exception handling and return a 500 instead of the error page."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_25ae84d7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_2e15df29",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

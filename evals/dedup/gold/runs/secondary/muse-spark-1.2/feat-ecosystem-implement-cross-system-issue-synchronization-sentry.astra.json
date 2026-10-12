@@ -1,0 +1,89 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_597377f6",
+    "mainDefect": "to_dict returns a raw datetime that fails Celery JSON serialization.",
+    "secondary": [
+     {
+      "defect": "The queued default is evaluated at import time, giving instances a shared timestamp.",
+      "coveredBy": [
+       "s_0a96d57b",
+       "s_84bd5bf4",
+       "s_e0de5ccd",
+       "s_b2100c10"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_e0de5ccd",
+    "mainDefect": "The queued default is evaluated at import time, giving instances a shared timestamp.",
+    "secondary": [
+     {
+      "defect": "from_dict lacks string-to-datetime parsing needed for the Celery JSON round-trip.",
+      "coveredBy": [
+       "s_34589453",
+       "s_597377f6",
+       "s_4500db00"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_4500db00",
+    "mainDefect": "to_dict returns a raw datetime that is passed through Celery JSON serialization.",
+    "secondary": [
+     {
+      "defect": "The queued default is evaluated at import time instead of freshly for each instance.",
+      "coveredBy": [
+       "s_0a96d57b",
+       "s_84bd5bf4",
+       "s_e0de5ccd",
+       "s_b2100c10"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_05544e55",
+    "mainDefect": "test_from_dict_empty_array is named for an array but tests an empty dictionary.",
+    "secondary": [
+     {
+      "defect": "test_from_dict_inalid_data contains a typo in its name.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The tests do not verify that from_dict rejects an empty array.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The tests do not verify rejection of incorrect queued and integration_id types.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8aeebc2a",
+    "mainDefect": "The tests do not verify that deassigning with a matching AssignmentSource blocks outbound sync.",
+    "secondary": [
+     {
+      "defect": "The tests do not verify that assigning or deassigning with a different integration's AssignmentSource still allows outbound sync.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_2bcd3f05",
+    "mainDefect": "Spawning causes avoidable per-spawn allocations that should be addressed with object pooling.",
+    "secondary": [
+     {
+      "defect": "Lookups are fragile and need cached references and explicit null handling.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

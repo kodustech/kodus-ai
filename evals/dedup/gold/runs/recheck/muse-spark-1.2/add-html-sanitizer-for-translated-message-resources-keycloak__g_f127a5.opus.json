@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f0a244fc",
+     "s_0b948a1d"
+    ],
+    "defect": "When the English bundle file is missing, verifySafeHtml throws an unchecked RuntimeException that verify() does not catch, so the mojo aborts instead of reporting a message or throwing MojoExecutionException."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_f0a244fc"
+  ],
+  "reasoningPt": "S1 e S8 apontam o mesmo defeito principal: a falha ao abrir o arquivo inglês derivado vira uma RuntimeException não tratada, que aborta o mojo. A correção proposta pelos dois é a mesma (registrar uma mensagem ou lançar MojoExecutionException). S1 também sugere, só na correção, parar de usar replaceAll com regex nos caminhos, por isso entra em bundles, mas continua no mesmo grupo."
+ }
+}

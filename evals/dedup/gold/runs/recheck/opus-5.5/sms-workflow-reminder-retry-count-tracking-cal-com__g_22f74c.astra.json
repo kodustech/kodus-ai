@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_910f4601",
+     "s_4a1383d7"
+    ],
+    "defect": "O update sem proteção dentro do catch pode lançar uma exceção, interrompendo o processamento dos lembretes restantes e fazendo o cron retornar 500."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S5 descrevem o mesmo update desprotegido dentro do catch e a mesma interrupção do lote quando ele falha. As diferenças são apenas de detalhamento dos cenários; uma única correção resolve ambas."
+ }
+}

@@ -1,0 +1,56 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_f5b59d63",
+    "mainDefect": "In Google CalendarService.updateEvent, the fallback find compares calendar externalIds against an always-falsy externalCalendarId, so selectedCalendar is always undefined and calendarId: undefined gets sent to the update call.",
+    "secondary": [
+     {
+      "defect": "deleteEvent has the same dead find fallback, so its calendarId can never come from the destination calendar.",
+      "coveredBy": [
+       "s_0a0cb899",
+       "s_6293a6a3"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a907ae4b",
+    "mainDefect": "In Google CalendarService.updateEvent, the fallback find compares calendar externalIds against a null or empty externalCalendarId, so it can never match and calendarId becomes undefined.",
+    "secondary": [
+     {
+      "defect": "deleteEvent has the same dead find fallback, so deletes for references without externalCalendarId get an undefined calendarId.",
+      "coveredBy": [
+       "s_0a0cb899",
+       "s_6293a6a3"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ac235e40",
+    "mainDefect": "In Google CalendarService.updateEvent, the fallback find predicate can never match because externalCalendarId is falsy in that branch, so updates go out with calendarId undefined.",
+    "secondary": [
+     {
+      "defect": "deleteEvent has the same dead predicate, so deletes are silently sent to the 'primary' calendar instead.",
+      "coveredBy": [
+       "s_0a0cb899",
+       "s_6293a6a3"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_b37d9668",
+    "mainDefect": "Office365 CalendarService always uses the first destination calendar's externalId, whichever team member's credential is running, so collective-event members get a 404 or a write to the wrong calendar.",
+    "secondary": [
+     {
+      "defect": "The larkcalendar service and the CalDAV base service also use the first destination calendar's externalId without matching it to the credential.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

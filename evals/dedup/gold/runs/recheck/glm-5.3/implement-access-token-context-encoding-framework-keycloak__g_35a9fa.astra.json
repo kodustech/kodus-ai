@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1e8b96cd",
+     "s_5dfded2e",
+     "s_3d6dcc45",
+     "s_2929e252"
+    ],
+    "defect": "O construtor de AccessTokenContext valida grantType duas vezes e deixa rawTokenId sem validação de nulidade."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S5, S7 e S15 descrevem o mesmo erro na linha 73, corrigido substituindo grantType por rawTokenId no requireNonNull. A geração de um token terminado em ':null' é consequência desse erro, não um defeito adicional."
+ }
+}

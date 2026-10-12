@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6eca779f",
+     "s_c31ce8c2"
+    ],
+    "defect": "The embed layout passes the full request.referer URL instead of only its origin as postMessage's targetOrigin, so the resize message never arrives and the iframe keeps the wrong height."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S8 apontam o mesmo defeito: usar o `request.referer` inteiro como targetOrigin do postMessage em vez de só a origem. Isso impede o redimensionamento do iframe. A única diferença é o intervalo de linhas, e uma única correção resolve as duas, por isso o grupo fica como está."
+ }
+}

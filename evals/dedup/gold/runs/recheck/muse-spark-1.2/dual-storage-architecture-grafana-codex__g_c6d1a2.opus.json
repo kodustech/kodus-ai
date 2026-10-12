@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cb150066",
+     "s_99b73949",
+     "s_e90d80f5"
+    ],
+    "defect": "Mode3 methods dereference options.Kind/ResourceVersion without a nil check, which panics when nil options are passed."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6, S20 e S24 relatam o mesmo defeito: acesso a options.Kind (e ResourceVersion) sem verificação de nil nos métodos do Mode3, causando panic. O mesmo erro aparece em vários métodos e uma única mudança (guarda de nil) corrige todos. Os intervalos de linhas diferem, mas o defeito é o mesmo, e nenhuma sugestão traz um segundo defeito."
+ }
+}

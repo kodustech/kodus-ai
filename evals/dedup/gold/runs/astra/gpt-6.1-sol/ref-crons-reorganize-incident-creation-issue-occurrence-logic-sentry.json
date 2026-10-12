@@ -1,0 +1,25 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+  "promptSha": "931338ddfb3c1ddc21a7d37734bcf33c10a5f02a",
+  "attempt": 1,
+  "ms": 27365,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_8a2ece02",
+        "confidence": "high"
+      },
+      {
+        "id": "s_64427fe7",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f66df8a9",
+        "confidence": "high"
+      }
+    ]
+  }
+}

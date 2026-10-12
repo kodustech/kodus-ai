@@ -1,0 +1,30 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_777115f9",
+     "s_d5eddfe5"
+    ],
+    "defect": "The new plural `_ids` branch always deletes the original `*_ids` key and replaces it with an array of possibly-undefined lookups, so the raw ids are lost when no sideloaded collection exists."
+   },
+   {
+    "members": [
+     "s_36199324",
+     "s_083999f0"
+    ],
+    "defect": "The new plural `_ids` branch calls `obj[k].map` without checking for null or non-array values, so a null `*_ids` field throws a TypeError during hydration."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_777115f9",
+   "s_36199324",
+   "s_d5eddfe5",
+   "s_083999f0"
+  ],
+  "reasoningPt": "S6 e S12 têm como defeito principal a remoção incondicional da chave `*_ids`, que é trocada por um array com entradas undefined. Isso faz perder os ids originais. Já S8 e S16 começam pelo TypeError ao chamar `.map` num valor null sem guarda, que é outro defeito com outra correção. As quatro sugestões citam também outros problemas (o `|| []` que nunca tem efeito, a perda de dados, o crash com null, a sobrescrita de campo), por isso todas entram em bundles."
+ }
+}

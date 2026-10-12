@@ -1,0 +1,42 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Plural *_ids branch (store.js.es6 lines 196-201) always deletes the original key and stores failed _lookupSubType results as falsy entries, unlike the singular branch, which only replaces the key when the lookup succeeds"
+   },
+   {
+    "id": "F2",
+    "description": "obj[k].map is called without checking for a null or non-array value, so it can throw a TypeError"
+   },
+   {
+    "id": "F3",
+    "description": "The `hydrated || []` fallback is dead code because .map always returns a truthy array"
+   },
+   {
+    "id": "F4",
+    "description": "Widening the regex to /(.+)\\_id(s?)$/ now consumes existing *_ids attributes (e.g. subcategory_ids, muted_category_ids) that used to pass through unchanged"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a74fdd01",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c4c17811",
+    "covers": [
+     "F1",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

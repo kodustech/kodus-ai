@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "requireView() Javadoc (lines 95-98) wrongly says 'Returns {@code true} if...' when it should say it throws ForbiddenException if canView() returns false"
+   },
+   {
+    "id": "F2",
+    "description": "requireViewClientScopes() Javadoc (lines 100-103) wrongly says 'Returns {@code true} if...' when it should say it throws ForbiddenException if canViewClientScopes() returns false"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a3224d7a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_c29b13de",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cff36f10",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

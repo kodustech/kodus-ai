@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5908271a",
+     "s_e5d9dd90",
+     "s_2b2b1546"
+    ],
+    "defect": "The postMessage origin check in embed.js uses a substring test (discourseUrl.indexOf(e.origin)) instead of an exact origin comparison, so spoofed or partial origins get through."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6, S12 e S14 apontam o mesmo defeito na linha 17 de embed.js. A checagem de origem usa indexOf de substring em vez de comparação exata, e as três propõem a mesma correção: normalizar a origem e comparar com igualdade estrita. Só mudam o intervalo de linhas e a redação, então o grupo continua como está."
+ }
+}

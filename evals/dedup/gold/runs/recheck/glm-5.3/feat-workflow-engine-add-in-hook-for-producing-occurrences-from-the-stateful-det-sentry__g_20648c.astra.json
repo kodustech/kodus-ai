@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_82a751ea",
+     "s_0c6a4bbd",
+     "s_56246ed6"
+    ],
+    "defect": "MetricAlertDetectorHandler herda de StatefulDetectorHandler sem implementar os métodos abstratos obrigatórios, causando TypeError ao instanciar o handler registrado para metric_alert_fire."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S7 descrevem o mesmo defeito: o handler passou a ser abstrato, mas continua registrado para instanciação, interrompendo process_detectors. As diferenças nos detalhes, nas consequências e nas correções propostas não constituem defeitos distintos; nenhuma sugestão reúne um segundo defeito."
+ }
+}

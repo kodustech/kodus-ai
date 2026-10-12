@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f5b59d63",
+     "s_02b6e8cb",
+     "s_0a0cb899",
+     "s_a907ae4b",
+     "s_ac235e40",
+     "s_3ab53f11",
+     "s_6293a6a3"
+    ],
+    "defect": "O fallback de updateEvent e deleteEvent busca um externalId igual ao externalCalendarId já falsy, impedindo a seleção do calendário de destino."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S12, S13, S17, S20, S22 e S23 apontam o mesmo predicado incorreto no fallback, repetido em updateEvent e deleteEvent e corrigível pela mesma substituição. As diferenças de consequência descrita não alteram o defeito; abordar os dois métodos não torna nenhuma sugestão um bundle."
+ }
+}

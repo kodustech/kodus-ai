@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4772139b",
+     "s_7789b76a"
+    ],
+    "defect": "ClientPermissionsV2.canExchangeTo lança UnsupportedOperationException no fluxo de token exchange com V2 ativo, causando HTTP 500 em vez de uma decisão de autorização."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_4772139b"
+  ],
+  "reasoningPt": "S2 e S6 relatam o mesmo defeito principal em canExchangeTo, cuja correção resolve ambos os relatos. S2 também aponta exchangeToPermission e, por isso, entra em bundles, sem alterar seu agrupamento pelo primeiro defeito."
+ }
+}

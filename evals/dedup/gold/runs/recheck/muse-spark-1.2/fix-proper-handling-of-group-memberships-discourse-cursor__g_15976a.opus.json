@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The members routes supply :id, but add_members/remove_member require :group_id, so real requests fail with ParameterMissing.",
+    "members": [
+     "s_14f65a41",
+     "s_ec5c3c72",
+     "s_44c02cb3"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9, S11 e S14 apontam o mesmo defeito: a rota de membros fornece :id, mas add_members/remove_member exigem :group_id. Por isso as requisições reais falham. As diferenças estão só no intervalo de linhas e nas variações da correção. Nenhuma delas traz um segundo defeito separado."
+ }
+}

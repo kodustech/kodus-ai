@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6eca779f",
+     "s_c31ce8c2"
+    ],
+    "defect": "Uso do referer completo como targetOrigin no postMessage, apontado como causa da falha no redimensionamento do iframe."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S8 relatam o mesmo defeito na mesma chamada a postMessage: passar request.referer completo como targetOrigin. Ambas propõem extrair a origem do referer, portanto uma única alteração atende às duas sugestões."
+ }
+}

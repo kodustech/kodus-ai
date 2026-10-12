@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7f78185c",
+     "s_f50a5d4f",
+     "s_dd554f89",
+     "s_29b344c5",
+     "s_e57c1a14",
+     "s_08035170",
+     "s_7aa0f717"
+    ],
+    "defect": "O fallback de updateEvent e deleteEvent compara os externalId dos destinos com externalCalendarId ausente, impedindo a seleção do calendário de destino."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4, S9, S10, S15, S16, S21 e S26 descrevem a mesma expressão de fallback incorreta, repetida em updateEvent e deleteEvent e corrigível pela mesma substituição. As diferenças entre falha na atualização e exclusão no calendário primary são consequências desse defeito; nenhuma sugestão reúne defeitos independentes."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c0312a1d",
+     "s_72746574"
+    ],
+    "defect": "O cache de login não é invalidado quando um IdP é vinculado ou desvinculado de uma organização via OrganizationProvider."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c0312a1d"
+  ],
+  "reasoningPt": "S1 e S3 relatam o mesmo defeito principal: falta de invalidação do cache de login nos vínculos e desvínculos via OrganizationProvider. S1 também menciona invalidar ao alterar OrganizationModel.isEnabled, um defeito adicional citado na solução proposta; por isso é um bundle, sem mudar seu agrupamento com S3."
+ }
+}

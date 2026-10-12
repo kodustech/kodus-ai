@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_cd94ae6e",
+     "s_305b9098"
+    ],
+    "defect": "ContextualLoggerMiddleware acessa req.PluginContext sem verificar se req é nil, causando panic."
+   }
+  ],
+  "unique": [
+   "s_8d96da0a"
+  ],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 descrevem a mesma ausência de proteção contra req nil no ContextualLoggerMiddleware. S4 aponta uma falha independente no MetricsMiddleware: corrigir os métodos do primeiro middleware não corrige os acessos do segundo, que exigem alterações próprias."
+ }
+}

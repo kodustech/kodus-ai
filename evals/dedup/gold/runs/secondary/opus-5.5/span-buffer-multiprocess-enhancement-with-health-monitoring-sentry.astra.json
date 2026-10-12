@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_7a1b8c6d",
+    "mainDefect": "When the join deadline expires, breaking out of the loop prevents termination of the remaining processes.",
+    "secondary": [
+     {
+      "defect": "The isinstance(process, multiprocessing.Process) guard rejects SpawnProcess instances, so join() never calls terminate() on them.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b2cc6608",
+    "mainDefect": "The isinstance(process, multiprocessing.Process) guard rejects SpawnProcess instances, preventing hung flushers from being killed before replacement.",
+    "secondary": [
+     {
+      "defect": "The same incorrect type guard in join() prevents terminate() from running on spawned flusher processes.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

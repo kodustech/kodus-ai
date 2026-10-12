@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The before_validation callback calls self.host.sub! without checking for nil, so a missing host param raises NoMethodError (a 500) before validates_format_of can run.",
+    "members": [
+     "s_dfb530f5",
+     "s_0b85e8b9",
+     "s_b3a7894c"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S6 e S10 apontam o mesmo defeito no mesmo trecho (linhas 5-8): o before_validation chama sub! em host nil e gera NoMethodError antes da validação de formato. A correção é a mesma nas três, guardar contra host em branco ou usar host.to_s. Nenhuma delas traz um segundo defeito."
+ }
+}

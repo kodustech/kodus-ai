@@ -1,0 +1,69 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "AssignmentSource.queued default timezone.now() (assignment_source.py line 18) is evaluated once at import time, so all instances share the same stale timestamp"
+   },
+   {
+    "id": "F2",
+    "description": "AssignmentSource.to_dict() returns a raw datetime (queued) that Celery's JSON serialization of the apply_async kwargs in sync_group_assignee_outbound cannot handle"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_34589453",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_84bd5bf4",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b2100c10",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0a96d57b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4500db00",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_e0de5ccd",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_597377f6",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": true,
+  "reasoning": "The group problem has two defects: the import-time queued default (F1) and the raw datetime in to_dict() that breaks Celery JSON (F2). Labeler 2's test-coverage facet comes from just one member and is not part of the group problem, so it is not a facet. s_4500db00 states both problems in its summary and text, so it is complete. s_e0de5ccd mentions the Celery round-trip only inside its fix, so it covers F1 only. s_597377f6 mentions default_factory only inside its fix, so it covers F2 only. The others each state one defect."
+ }
+}

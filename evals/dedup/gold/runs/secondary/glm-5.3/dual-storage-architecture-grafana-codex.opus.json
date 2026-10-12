@@ -1,0 +1,121 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_01f5b937",
+    "mainDefect": "The async legacy-write goroutines take their context from the request context, so the writes are canceled once the request finishes.",
+    "secondary": [
+     {
+      "defect": "Legacy write errors inside the goroutines are never logged, so the failures can't be seen.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f5076626",
+    "mainDefect": "Create's storage-error path records the storage failure with recordLegacyDuration instead of recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "Update's storage-error path records the storage failure with recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_abda811f"
+      ]
+     },
+     {
+      "defect": "DeleteCollection's legacy goroutine records the legacy operation with recordStorageDuration instead of recordLegacyDuration.",
+      "coveredBy": [
+       "s_8649b5e3"
+      ]
+     },
+     {
+      "defect": "Delete's success path passes the object name instead of options.Kind as the kind metric label.",
+      "coveredBy": [
+       "s_a19a1898"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_48464c58",
+    "mainDefect": "Update's async legacy write passes the raw objInfo instead of an updateWrapper holding the storage result, so legacy recomputes the object from its own old copy.",
+    "secondary": [
+     {
+      "defect": "Fire-and-forget legacy goroutines can apply successive updates out of order, so legacy storage diverges.",
+      "coveredBy": [
+       "s_3930204d"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_85cdb7f9",
+    "mainDefect": "The async legacy-write goroutines take their context from the request context, so the legacy writes are canceled when the HTTP handler returns.",
+    "secondary": [
+     {
+      "defect": "The mode-3 unit tests use context.Background() and never wait for or assert the legacy write, so they don't verify it.",
+      "coveredBy": [
+       "s_952eaebd",
+       "s_3e0dbc3c"
+      ]
+     },
+     {
+      "defect": "The new playlist mode-3 integration subtests can't check that the legacy write happened, so they flake or under-verify.",
+      "coveredBy": [
+       "s_c52e7744"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_bb72d331",
+    "mainDefect": "The legacy-write goroutines take their timeout context from the request context, which is canceled right after the handler returns, so the legacy writes are silently dropped.",
+    "secondary": [
+     {
+      "defect": "The unit tests pass context.Background(), which is never canceled, so they can't catch the request-cancellation problem.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_1f0c2877",
+    "mainDefect": "A storage Create failure is recorded with recordLegacyDuration, which inflates the legacy error metrics.",
+    "secondary": [
+     {
+      "defect": "Update's storage failure is recorded with recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_abda811f"
+      ]
+     },
+     {
+      "defect": "The legacy DeleteCollection is recorded with recordStorageDuration instead of recordLegacyDuration.",
+      "coveredBy": [
+       "s_8649b5e3"
+      ]
+     },
+     {
+      "defect": "Delete's success path passes the object name as the kind label, which is inconsistent and allows unbounded label cardinality.",
+      "coveredBy": [
+       "s_a19a1898"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_27f7b4ca",
+    "mainDefect": "Update's legacy goroutine passes the raw objInfo instead of an updateWrapper, so legacy recomputes the object from its own state and the stores diverge.",
+    "secondary": [
+     {
+      "defect": "The legacy update goroutine runs under a context derived from the request, which is canceled when the request ends.",
+      "coveredBy": [
+       "s_01f5b937",
+       "s_85cdb7f9",
+       "s_bb72d331",
+       "s_093e0431"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

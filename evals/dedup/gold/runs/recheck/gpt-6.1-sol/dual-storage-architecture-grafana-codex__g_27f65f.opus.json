@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_faba93e0",
+     "s_0469979e"
+    ],
+    "defect": "The asynchronous legacy write goroutines take their timeout context from the request context, so the legacy write is canceled when the API response returns."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 apontam o mesmo defeito: a escrita legacy assíncrona herda o contexto da requisição e é cancelada quando a resposta retorna. A correção é a mesma, desacoplar o contexto do cancelamento da requisição. O fato de S3 citar também Delete, Update e DeleteCollection é a mesma falha repetida em outros lugares, então o grupo continua junto."
+ }
+}

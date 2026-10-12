@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b1025ecf",
+     "s_167fdedb",
+     "s_ec4800aa"
+    ],
+    "defect": "The contents of category_fabricator.rb and embeddable_host_fabricator.rb are swapped, so each file defines the other's fabricators."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S6 e S7 apontam o mesmo defeito: o conteúdo dos arquivos category_fabricator.rb e embeddable_host_fabricator.rb foi trocado. S5 e S6 olham pelo lado de category_fabricator.rb e S7 pelo lado de embeddable_host_fabricator.rb. Uma única correção, que é destrocar o conteúdo, resolve tudo, então o grupo continua como está."
+ }
+}

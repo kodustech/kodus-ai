@@ -1,0 +1,25 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The second `self.downsize(from, to, dimensions, opts)` definition overwrites the `(from, to, max_width, max_height, opts)` version, so existing width/height callers break.",
+    "members": [
+     "s_5d7d2e7e",
+     "s_ed544c46",
+     "s_0640a963",
+     "s_f0d5db8a",
+     "s_a2efe6f7",
+     "s_12928c44",
+     "s_acdcfcf1"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_f0d5db8a"
+  ],
+  "reasoningPt": "Todas as sugestões (S1, S4, S5, S6, S7, S8, S11) apontam o mesmo defeito: a segunda definição de `downsize` sobrescreve a versão com largura/altura e quebra os chamadores antigos. S6 acrescenta no final um pedido para revisar quem chama `optimize` diretamente, o que é um defeito secundário. Por isso S6 entra em bundles, mas continua no grupo do seu defeito principal."
+ }
+}

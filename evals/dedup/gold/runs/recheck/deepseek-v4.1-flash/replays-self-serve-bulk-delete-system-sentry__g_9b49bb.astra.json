@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c319fa19",
+     "s_ade02fb9"
+    ],
+    "defect": "O hook passou a retornar attributes indefinido por não garantir um TagCollection vazio quando os dados estão ausentes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S10 apontam a mesma perda da garantia de retornar um objeto em attributes. As diferenças nos cenários citados e no alcance do fallback proposto não mudam o defeito principal."
+ }
+}

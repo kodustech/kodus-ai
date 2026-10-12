@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_36916a0e",
+     "s_a95966cb"
+    ],
+    "defect": "The GrafanaRuleListItem rendered inside the map in FilterView.tsx lost its `key={key}` prop, so React reconciles the list items by index."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S7 apontam o mesmo defeito: a prop `key` foi removida do GrafanaRuleListItem dentro do map em FilterView.tsx. A correção é a mesma (restaurar `key={key}`), e só muda um pouco o intervalo de linhas. Nenhuma das duas traz um segundo defeito, então o grupo fica como está."
+ }
+}

@@ -1,0 +1,69 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "MetricsMiddleware.QueryData dereferences nil requests without a guard."
+   },
+   {
+    "id": "F2",
+    "description": "MetricsMiddleware.CallResource dereferences nil requests without a guard."
+   },
+   {
+    "id": "F3",
+    "description": "ContextualLoggerMiddleware.QueryData dereferences nil req.PluginContext without a guard."
+   },
+   {
+    "id": "F4",
+    "description": "ContextualLoggerMiddleware.CallResource dereferences nil req.PluginContext without a guard."
+   },
+   {
+    "id": "F5",
+    "description": "ContextualLoggerMiddleware.CheckHealth dereferences nil req.PluginContext without a guard."
+   },
+   {
+    "id": "F6",
+    "description": "ContextualLoggerMiddleware.CollectMetrics dereferences nil req.PluginContext without a guard."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_29d4df72",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_87ece20e",
+    "covers": [
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ca7aeab6",
+    "covers": [
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c4bfaaf2",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

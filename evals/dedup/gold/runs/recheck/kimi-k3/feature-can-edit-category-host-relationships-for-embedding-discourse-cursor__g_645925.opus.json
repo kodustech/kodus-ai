@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The describe block added in spec/models/topic_spec.rb misspells 'embeddable' as 'emeddable'.",
+    "members": [
+     "s_5462a854",
+     "s_c864cfd5"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c864cfd5"
+  ],
+  "reasoningPt": "S17 e S20 apontam o mesmo erro de digitação ('emeddable' em vez de 'embeddable') no describe da linha 1407, e esse é o primeiro defeito de S20. O segundo ponto de S20, a fabricação inútil de EmbeddableHost, é secundário e não muda o grupo, mas faz de S20 um bundle."
+ }
+}

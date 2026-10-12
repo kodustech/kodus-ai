@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cf0c790d",
+     "s_bca7ea55"
+    ],
+    "defect": "O consumo não atômico dos códigos de backup permite que dois logins concorrentes utilizem o mesmo código de uso único."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_cf0c790d"
+  ],
+  "reasoningPt": "S3 e S10 relatam como defeito principal a mesma condição de corrida no consumo do código de backup, portanto permanecem juntas. S3 também aponta o acúmulo de entradas nulas e o tratamento dos códigos esgotados, sendo marcada como bundle sem alterar seu agrupamento."
+ }
+}

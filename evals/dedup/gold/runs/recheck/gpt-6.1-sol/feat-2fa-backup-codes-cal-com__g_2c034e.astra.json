@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_72b1da29",
+     "s_b0ff443d"
+    ],
+    "defect": "A validação e o consumo dos códigos de backup não são atômicos, permitindo reutilização ou restauração de códigos em logins concorrentes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S6 apontam o mesmo defeito de concorrência na validação e no consumo dos códigos de backup. S1 também descreve a restauração de códigos por sobrescrita concorrente, outra consequência da mesma falha, resolvida pela mesma correção de atomicidade."
+ }
+}

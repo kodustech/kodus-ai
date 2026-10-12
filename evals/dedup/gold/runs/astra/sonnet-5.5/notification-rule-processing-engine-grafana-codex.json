@@ -1,0 +1,41 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "promptSha": "44c4aa3e4d583802fa0edfb3417ad77dd0e4bd48",
+  "attempt": 1,
+  "ms": 35895,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_ce276048",
+          "s_cb496a37",
+          "s_898bc376"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Delegating CombinedRule abilities to a hook that hard-codes isFederated=false removes the immutability guard for federated Mimir groups.",
+        "rationale": "All three report the same lost federation check in the same ability path. Preserving the federation state resolves all three."
+      },
+      {
+        "members": [
+          "s_461ac7aa",
+          "s_989e1020"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The undefined-rule skipToken path enables the Grafana Duplicate ability, which can incorrectly enable Duplicate for cloud rules.",
+        "rationale": "Both describe the same undefined-rule handling and its propagation through AlertRuleMenu's OR operation. A guard disabling abilities when no rule exists resolves both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_37747cd1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

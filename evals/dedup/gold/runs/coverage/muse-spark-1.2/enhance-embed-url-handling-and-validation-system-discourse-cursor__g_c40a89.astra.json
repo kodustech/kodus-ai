@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "embed.html.erb:11 interpolates request.referer without JavaScript escaping, allowing XSS."
+   },
+   {
+    "id": "F2",
+    "description": "embed.html.erb:11 uses the full referer URL as targetOrigin, causing resize messages to be dropped."
+   },
+   {
+    "id": "F3",
+    "description": "embed.html.erb:11 turns a nil referer into an empty targetOrigin."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_56e8eec5",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_3ed07a3a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

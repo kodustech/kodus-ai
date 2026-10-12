@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d8b196b6",
+     "s_52fd068c",
+     "s_66a23edf"
+    ],
+    "defect": "The async legacy-write goroutines derive their timeout context from the request ctx, which is cancelled when the handler returns, so legacy writes get aborted and legacy storage silently diverges from unified storage."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_52fd068c"
+  ],
+  "reasoningPt": "S1, S9 e S13 apontam o mesmo defeito principal: as goroutines de escrita no legacy usam um contexto derivado do ctx da requisição, que é cancelado quando o handler retorna. A correção é a mesma (context.WithoutCancel antes do timeout). S9 também sugere fazer deep copy de obj por causa de uma condição de corrida, mas isso é um defeito secundário no fim da sugestão, então S9 entra em bundles e fica no grupo."
+ }
+}

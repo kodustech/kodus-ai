@@ -1,0 +1,68 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Migration lines 9-11: the embed_category lookup indexes [0]['id'] on a result that can be empty, so it crashes before the category_id == 0 fallback is reached"
+   },
+   {
+    "id": "F2",
+    "description": "Migration line 15: the uncategorized_category_id lookup indexes [0]['value'] on a result that can be empty, so it crashes"
+   },
+   {
+    "id": "F3",
+    "description": "Migration lines 22-26: host values are inserted without normalization (scheme, path, whitespace), so migrated hosts never match record_for_host's lower(host) = uri.host"
+   },
+   {
+    "id": "F4",
+    "description": "Migration line 25: host values are put into the INSERT by string interpolation without escaping, so a quote breaks the SQL and aborts the migration"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_dbcf98a4",
+    "covers": [
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7900c369",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c76cedb8",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_13c616c7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0621eb9a",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": false,
+  "reasoning": "The two empty-result crashes are separate facets because they are on different lines and each needs its own guard. I treat normalization (scheme, path, whitespace) as a single defect, because the group problem lists all three in one parenthetical and one normalization edit at the same spot fixes them all. Labeler 1 split out whitespace and carriage returns as their own facet; I merged it, so s_c76cedb8 counts as complete, since it covers both crashes, the scheme/path mismatch and the quote problem. s_0621eb9a only names the scheme/path mismatch as a problem. It mentions escaping and stripping whitespace only in its proposed fix, so those don't count. s_7900c369 and s_13c616c7 cover only the two crashes, at line 11 and line 15. s_dbcf98a4 covers normalization and escaping but not the crashes. This isn't decisive because whether whitespace is its own facet is a judgment call, and that call decides whether s_c76cedb8 is complete."
+ }
+}

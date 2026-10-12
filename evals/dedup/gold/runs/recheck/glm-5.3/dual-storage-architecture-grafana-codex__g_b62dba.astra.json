@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_952eaebd",
+     "s_3e0dbc3c",
+     "s_c52e7744"
+    ],
+    "defect": "Os testes de modo 3 não aguardam nem verificam a escrita assíncrona no legado, permitindo que sua ausência passe despercebida."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_3e0dbc3c"
+  ],
+  "reasoningPt": "S6, S12 e S14 apontam a mesma lacuna: os testes passam sem verificar a escrita no legado; S6 abrange explicitamente os testes unitários e de integração. S12 também menciona separar os mocks dos backends na correção proposta, um problema independente que a torna um bundle sem alterar seu defeito principal."
+ }
+}

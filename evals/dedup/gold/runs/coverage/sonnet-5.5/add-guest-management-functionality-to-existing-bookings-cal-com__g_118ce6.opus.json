@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "sendAddGuestsEmails is passed the raw guests list instead of uniqueGuests (line 168), so filtered-out emails get the wrong email"
+   },
+   {
+    "id": "F2",
+    "description": "updateCalendarAttendees (line 165) runs after the DB write with no error handling, so a calendar failure leaves the guests saved while the request returns an error"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_d430022b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_72a13bc3",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c03cd3b4",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

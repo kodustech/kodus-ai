@@ -1,0 +1,15 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_3abf3cfd",
+   "s_5748a076"
+  ],
+  "bundles": [
+   "s_3abf3cfd"
+  ],
+  "reasoningPt": "O primeiro defeito que S1 relata é que String#scrub não existe no Ruby 2.0 usado pelo CI. O `content` nil em itens RSS 2.0 só aparece como segundo ponto (\"Second\"), por isso S1 é um bundle. Já o defeito principal de S14 é justamente o `i.content` nil, que tem outra correção (usar description/content_encoded como fallback). Como os defeitos principais são diferentes, o grupo deve ser separado e cada sugestão fica sozinha."
+ }
+}

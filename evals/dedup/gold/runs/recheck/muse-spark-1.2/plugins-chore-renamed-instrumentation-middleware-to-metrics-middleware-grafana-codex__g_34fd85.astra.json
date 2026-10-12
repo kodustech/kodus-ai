@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_885d47eb",
+     "s_b49c2fba",
+     "s_eecc4a95"
+    ],
+    "defect": "SubscribeStream, PublishStream e RunStream encaminham o contexto sem chamar instrumentContext, deixando os logs de streaming sem os atributos contextuais."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S6 e S10 apontam a mesma omissão de instrumentContext nos três métodos de streaming, resolvida pela mesma alteração. A ênfase de S6 na documentação e de S3 e S10 na perda de atributos não caracteriza defeitos distintos."
+ }
+}

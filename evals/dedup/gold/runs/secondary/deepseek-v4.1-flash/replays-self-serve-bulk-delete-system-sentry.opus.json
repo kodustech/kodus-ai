@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d9881b31",
+    "mainDefect": "The new warning log writes the whole client-supplied browser report (raw_report=report) to the logs, which can leak sensitive data such as URL tokens, body and user agent.",
+    "secondary": [
+     {
+      "defect": "The 422 validation error response may return more than field names and messages, which can echo back sensitive client-supplied report data.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

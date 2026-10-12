@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_777be53f",
+     "s_af2d264c"
+    ],
+    "defect": "getBaseConditions contém dois ramos inalcançáveis porque getAuthorizationConditions sempre retorna um Prisma.Sql, que é truthy."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 apontam os mesmos ramos inalcançáveis em getBaseConditions, causados pela presença garantida de authConditions. A mesma simplificação resolve ambas as sugestões, e nenhuma relata um segundo defeito independente."
+ }
+}

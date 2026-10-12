@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_c03cd3b4",
+     "s_d430022b"
+    ],
+    "defect": "O envio de emails recebe guests em vez de uniqueGuests, classificando participantes existentes como novos convidados."
+   }
+  ],
+  "unique": [
+   "s_72a13bc3"
+  ],
+  "bundles": [
+   "s_c03cd3b4"
+  ],
+  "reasoningPt": "S3 e S5 têm como defeito principal o uso de guests em vez de uniqueGuests no envio de emails. S10 trata da falha na atualização do calendário após a persistência, que exige uma correção independente. S3 também menciona esse segundo defeito, sendo uma sugestão composta, mas permanece agrupada com S5 pela regra do defeito principal."
+ }
+}

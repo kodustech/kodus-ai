@@ -1,0 +1,80 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "promptSha": "692b7a9d4edbe6b5cf6ce322e1671e8cd15203df",
+  "attempt": 1,
+  "ms": 50592,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_7f72f09d",
+          "s_a24812df"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Form attributes are populated on allegedly discarded LoginFormsProvider instances, losing passkey data in PasswordForm and re-authentication visibility attributes in error responses.",
+        "rationale": "Both report the same repeated mistake: populating one context.form() instance and rendering another. The distinct population sites require edits to preserve their respective attributes."
+      },
+      {
+        "members": [
+          "s_eec91158",
+          "s_6c6e846f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "mid",
+        "defect": "Misleading userType, greetName, and userJaName naming confuses user identity and culturally dependent name conventions.",
+        "rationale": "Despite garbled wording, both identify the same variables in nearby UserStory.java lines and describe overlapping confusion about their meanings and language-dependent naming."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_0a596cc5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_29414c32",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ee4ff70f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a8054665",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3d1e26e5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ec0a7712",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d305e080",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3a5166d5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1dcf93ab",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ed1928b4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_fdb5b2dd",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_fe950d9b",
+     "s_7182f67f",
+     "s_78b72537"
+    ],
+    "defect": "O cálculo de isTeamAdminOrOwner usa && em vez de ||, restringindo indevidamente a permissão de administradores ou proprietários para adicionar convidados."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S9 e S11 apontam o mesmo operador incorreto na mesma verificação de permissão. As diferenças de explicação sobre os papéis não representam defeitos adicionais; a troca de && por || resolve o problema descrito nas três sugestões."
+ }
+}

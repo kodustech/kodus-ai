@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "setupReauthenticationInUsernamePasswordFormError sets USERNAME_HIDDEN/REGISTRATION_DISABLED on a discarded form, so re-authentication error responses lose those attributes."
+   },
+   {
+    "id": "F2",
+    "description": "PasswordForm.authenticate fills passkey conditional UI data on a discarded form, then renders createLoginPassword with a different instance."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a24812df",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7f72f09d",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

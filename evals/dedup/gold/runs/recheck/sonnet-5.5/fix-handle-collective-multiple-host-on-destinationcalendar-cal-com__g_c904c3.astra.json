@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a6c93c38",
+     "s_b364bc36"
+    ],
+    "defect": "Quando destinationCalendar é null, o push opcional não executa e os calendários dos demais membros do evento coletivo são descartados."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_a6c93c38"
+  ],
+  "reasoningPt": "S4 e S11 relatam o mesmo defeito principal: destinationCalendar nulo impede a inclusão dos calendários dos demais membros. S4 também aponta uma fragilidade no preenchimento dentro de callbacks assíncronos, sendo um bundle, mas essa observação secundária não altera seu agrupamento."
+ }
+}

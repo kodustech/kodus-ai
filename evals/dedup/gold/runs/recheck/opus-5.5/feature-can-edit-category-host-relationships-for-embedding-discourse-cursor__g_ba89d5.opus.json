@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f1af608e",
+     "s_974e8b50"
+    ],
+    "defect": "The test 'is false if embeddable_host is blank' passes only because has_topic_embed? is false on an unsaved topic, so its name no longer matches what it checks after the host check was removed from expandable_first_post?."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S10 e S19 apontam o mesmo defeito nas mesmas linhas: o teste 'is false if embeddable_host is blank' só passa porque has_topic_embed? é falso num tópico não salvo e não testa mais a ausência de hosts. As duas propõem renomear ou remover o teste. S10 também sugere reescrever a asserção, mas isso é outra forma de corrigir o mesmo problema, não um segundo defeito."
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_2673b2c5",
+    "mainDefect": "to_dict() returns asdict(self), which leaves queued as a raw datetime, so serializing the Celery task payload in sync_group_assignee_outbound can fail.",
+    "secondary": [
+     {
+      "defect": "queued = timezone.now() is evaluated only once, when the class is defined, so every instance that uses the default gets the same timestamp; it should use field(default_factory=timezone.now).",
+      "coveredBy": [
+       "s_2431eed5",
+       "s_b531a8e1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_3df28f24",
+    "mainDefect": "test_from_dict_empty_array says it tests an empty array, but it actually passes an empty dict, so the name does not match what the test does.",
+    "secondary": [
+     {
+      "defect": "The test name test_from_dict_inalid_data has a typo ('inalid' should be 'invalid').",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

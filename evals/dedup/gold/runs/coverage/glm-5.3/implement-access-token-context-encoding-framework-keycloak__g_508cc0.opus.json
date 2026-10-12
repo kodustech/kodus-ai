@@ -1,0 +1,78 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "isAccessTokenId reads the grant shortcut with substring(3,5) instead of substring(4,6), so it gets the wrong characters (AssertEvents.java line 483)"
+   },
+   {
+    "id": "F2",
+    "description": "isAccessTokenId has the equality check backwards: it returns no-match when the slice equals the expected shortcut, so the grant check never actually tests anything"
+   },
+   {
+    "id": "F3",
+    "description": "isAccessTokenId has no length check on items[0], so a short prefix makes substring throw StringIndexOutOfBoundsException"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7f53154c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cabf60f8",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0df1d418",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_40f5268c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_271c9373",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_47286227",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8d844482",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

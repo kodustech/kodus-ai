@@ -1,0 +1,84 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_e87a2835",
+    "mainDefect": "Async legacy writes inherit request cancellation and can fail when the HTTP handler returns.",
+    "secondary": [
+     {
+      "defect": "Legacy write errors are recorded only in metrics and are never logged.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_63bda620",
+    "mainDefect": "Legacy Update recomputes the updated object against legacy state instead of persisting the unified-store result.",
+    "secondary": [
+     {
+      "defect": "UpdatedObjectInfo is invoked a second time asynchronously even though its implementation may not be safe or idempotent.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_6b11a209",
+    "mainDefect": "Delete success metrics use the object name as the kind label, causing inconsistent labels and unbounded cardinality.",
+    "secondary": [
+     {
+      "defect": "Delete injects the bare logger into the context, losing the enriched name, kind, and method fields.",
+      "coveredBy": [
+       "s_ccf38f53",
+       "s_39ce7ed0"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a4f55b36",
+    "mainDefect": "Async legacy writes inherit the request context and can be canceled when the handler returns.",
+    "secondary": [
+     {
+      "defect": "Returning before the legacy write completes removes the completion-on-return guarantee relied on by legacy readers and migration logic.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Background legacy write failures are invisible to callers and are not logged.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_cc993937",
+    "mainDefect": "Passing raw objInfo to legacy Update allows it to persist a different object from unified storage.",
+    "secondary": [
+     {
+      "defect": "Calling UpdatedObject twice breaks UpdatedObjectInfo implementations that are not idempotent.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_73967244",
+    "mainDefect": "The background legacy write inherits request cancellation, allowing it to be aborted before its timeout.",
+    "secondary": [
+     {
+      "defect": "Legacy write failures are only recorded in metrics and never logged.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4d3c3dc5",
+    "mainDefect": "Legacy Update recomputes the object from legacy state instead of writing the exact unified-store result.",
+    "secondary": [
+     {
+      "defect": "Unordered asynchronous updates can reach legacy storage in reverse order and leave it permanently stale.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

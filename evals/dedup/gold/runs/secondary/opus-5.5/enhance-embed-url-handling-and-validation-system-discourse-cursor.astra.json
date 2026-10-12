@@ -1,0 +1,45 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_3abf3cfd",
+    "mainDefect": "String#scrub is unavailable on the project's Ruby 2.0 CI runtime, so calling it aborts the import.",
+    "secondary": [
+     {
+      "defect": "RSS items that provide description instead of content cause i.content.scrub to raise on nil.",
+      "coveredBy": [
+       "s_5748a076"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_8ac429ca",
+    "mainDefect": "Interpolating the embed URL into HTML without escaping allows stored XSS.",
+    "secondary": [
+     {
+      "defect": "Imported page and RSS HTML bypass sanitization through raw_html cooking, allowing persistent XSS.",
+      "coveredBy": [
+       "s_8882a392"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_6f86cbbe",
+    "mainDefect": "Throttling by the full embed URL lets anonymous clients bypass the throttle by varying paths or query strings.",
+    "secondary": [
+     {
+      "defect": "Each retrieval job synchronously downloads and processes the entire feed, allowing requests to multiply expensive feed polls.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Remote fetches lack explicit open and read timeouts, allowing blocking requests to occupy Sidekiq workers.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

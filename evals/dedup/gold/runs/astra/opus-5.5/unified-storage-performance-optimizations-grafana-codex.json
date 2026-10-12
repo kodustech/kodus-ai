@@ -1,0 +1,44 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "promptSha": "8cb65877242e8c8282c8e3f9a0950d53d5407f74",
+  "attempt": 1,
+  "ms": 35293,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_a1b0441f",
+          "s_38444aa4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Parallel index initialization races on the captured err variable and the unsynchronized totalBatchesIndexed counter.",
+        "rationale": "Both report exactly the same shared-variable races in searchSupport.init, exposed by removing the BuildIndex-wide lock, and propose the same fixes."
+      },
+      {
+        "members": [
+          "s_c8164ed2",
+          "s_484e33fe"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Concurrent builds for the same resource key are not deduplicated, allowing competing indexes, cache overwrites, lost writes, leaked indexes, and file-directory conflicts.",
+        "rationale": "Both identify the same unchecked concurrent build sequence and final cache overwrite. The additional leak consequence describes the same defect; per-key build deduplication resolves both reports."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_b79acdcb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_11ae6686",
+        "confidence": "high"
+      }
+    ]
+  }
+}

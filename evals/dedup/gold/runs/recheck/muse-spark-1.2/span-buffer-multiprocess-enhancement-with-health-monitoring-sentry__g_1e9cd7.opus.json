@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "In test_basic, time.sleep is monkeypatched to a no-op, so the added time.sleep(0.1) meant to let the flusher threads finish does nothing and the test stays racy.",
+    "members": [
+     "s_8fdca476",
+     "s_d3df5db3"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_8fdca476"
+  ],
+  "reasoningPt": "S5 e S9 apontam o mesmo defeito principal: o time.sleep(0.1) da linha 62 não espera nada, porque o time.sleep foi trocado por uma função vazia na linha 15, e o teste continua com condição de corrida. S5 também cita, no WHY, o busy-loop no main do flusher. Isso é um defeito secundário e por isso S5 entra em bundles, mas não muda o grupo."
+ }
+}

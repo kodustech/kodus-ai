@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7c49b05b",
+     "s_01a0543d"
+    ],
+    "defect": "A verificação de contagem e a inserção não são atômicas, permitindo que dispositivos novos concorrentes ultrapassem o limite configurado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S6 relatam a mesma condição de corrida entre CountDevices e a inserção de novos dispositivos. Uma única correção de atomicidade resolve ambas, e nenhuma sugestão inclui outro defeito."
+ }
+}

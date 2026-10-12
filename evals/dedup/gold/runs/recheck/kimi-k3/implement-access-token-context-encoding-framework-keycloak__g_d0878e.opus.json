@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_071b2150",
+     "s_efbf1629"
+    ],
+    "defect": "The getShortcut() javadoc describes 3-letter grant shortcuts, but the decoder hard-codes a 6-character prefix with 2-character slices, so a shortcut of any other length breaks token-id decoding."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S18 apontam o mesmo defeito: o javadoc fala em atalhos de 3 letras, mas o decodificador exige exatamente 2 caracteres por atalho, com prefixo fixo de 6. S5 trata o problema a partir do javadoc e S18 a partir do decodificador, e a mesma correção resolve os dois. A validação de tamanho sugerida em S18 faz parte da correção desse defeito e não é um defeito separado."
+ }
+}

@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_77d7a71e",
+    "mainDefect": "remove_member uses group.users.delete(user_id), which bypasses Group#remove and its destroy_deletions/callback logic.",
+    "secondary": [
+     {
+      "defect": "Removing the user directly leaves primary_group_id pointing at this group for users whose primary group it was.",
+      "coveredBy": []
+     },
+     {
+      "defect": "group.users.delete runs SQL immediately, so the later group.save does not control the removal (it is redundant and does not guard the mutation).",
+      "coveredBy": [
+       "s_f6758f64"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

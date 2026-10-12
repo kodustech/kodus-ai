@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bdded596",
+     "s_a52a2300"
+    ],
+    "defect": "In Delete, the context is built with the base logger d.Log instead of the enriched log, so the name/kind/method fields are lost."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S14 apontam o mesmo defeito: no Delete, `klog.NewContext(ctx, d.Log)` usa o logger base em vez do `log` enriquecido. A correção é a mesma (passar `log`), só muda o intervalo de linhas. Nenhuma das duas traz um segundo defeito."
+ }
+}

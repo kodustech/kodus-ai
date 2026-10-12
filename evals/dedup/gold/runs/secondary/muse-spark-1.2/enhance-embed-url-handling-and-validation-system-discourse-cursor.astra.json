@@ -1,0 +1,88 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8924c5ce",
+    "mainDefect": "Appending to contents mutates the caller's string.",
+    "secondary": [
+     {
+      "defect": "Appending to frozen contents raises FrozenError.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Appending to nil contents raises NoMethodError.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_56e8eec5",
+    "mainDefect": "Interpolating request.referer into JavaScript without escaping allows string breakout and XSS.",
+    "secondary": [
+     {
+      "defect": "Using the full referer URL as targetOrigin prevents resize messages from being delivered.",
+      "coveredBy": [
+       "s_3ed07a3a"
+      ]
+     },
+     {
+      "defect": "A nil referer produces an empty targetOrigin without a fallback.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_98e23b20",
+    "mainDefect": "Interpolating an unescaped external URL into HTML allows attribute breakout.",
+    "secondary": [
+     {
+      "defect": "Bypassing sanitization through raw_html and raw rendering permits unsafe URLs such as javascript: links.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_52c21f9e",
+    "mainDefect": "Unrescued feed-fetching and RSS-parsing errors crash the scheduled job.",
+    "secondary": [
+     {
+      "defect": "The job does not guard against a nil rss.items collection.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Calling scrub on nil item content raises NoMethodError and aborts importing.",
+      "coveredBy": [
+       "s_8c2349e8",
+       "s_3adf9f4b"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c7cf0d7d",
+    "mainDefect": "Unrescued network errors from open(url).read crash the RetrieveTopic job.",
+    "secondary": [
+     {
+      "defect": "Nil Readability content reaches import and raises NoMethodError when appended to.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The remote import assumes Readability returns a non-nil title without guarding that assumption.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7ba9ce4b",
+    "mainDefect": "Invalid-host tests can exercise the throttle branch instead of the intended host-validation branch.",
+    "secondary": [
+     {
+      "defect": "Unisolated Redis setnx and expire operations can pollute other tests.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

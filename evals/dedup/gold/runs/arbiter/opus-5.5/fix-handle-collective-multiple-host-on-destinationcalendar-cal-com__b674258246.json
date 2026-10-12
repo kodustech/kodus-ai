@@ -1,0 +1,25 @@
+{
+  "model": "opus-5.5",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "component": [
+    "s_94084073",
+    "s_cd578af7"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_94084073",
+          "s_cd578af7"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "defect": "Office365 createEvent always picks destinationCalendar[0] (the main host's calendar) and ignores the new credentialId argument. In collective events, another host's credential therefore posts to the main host's calendar. Lark has the same problem, and s_cd578af7 also flags the CalDAV BaseCalendarService."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "Both suggestions point at the same Office365 createEvent lines (72-77 and 73-77) and describe the same defect. Line 73 destructures the first destination calendar and ignores credentialId. When EventManager.createAllCalendarEvents calls createEvent for another host's credential, the request goes to the main host's calendar id. Both suggest the same fix: match the destination by credentialId, as the Google service does. Both also say Lark needs the same fix. s_cd578af7 adds the CalDAV BaseCalendarService (L156) as another place with the problem, so the merged comment must keep that. That is why needsUnifiedComment is true. Both suggestions anchor at the same Office365 location, and the other services are only extra mentions, so the kind is same_location (the rules say to use the kind that fits where the members point). Neither suggestion is a separate per-site report of a repeated pattern, so systemic_pattern does not fit."
+  }
+}

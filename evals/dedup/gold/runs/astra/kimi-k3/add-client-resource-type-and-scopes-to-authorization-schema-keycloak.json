@@ -1,0 +1,53 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "79200c279c1692d875577b505d6fa797a8265599",
+  "attempt": 1,
+  "ms": 82228,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_802136a9",
+          "s_7789b76a",
+          "s_4772139b",
+          "s_9ac2aa83",
+          "s_b9487ef1",
+          "s_04234c39",
+          "s_886d9c42"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "Throwing V2 client-permission overrides break client deletion through setPermissionsEnabled, token exchange through canExchangeTo, and management-permissions endpoints through the permission accessors and management methods.",
+        "rationale": "The REST reports explicitly flag setPermissionsEnabled, overlapping the deletion reports. The additional exchangeToPermission concern in s_4772139b overlaps the REST accessor reports, connecting the token-exchange pair into the same overlap chain."
+      },
+      {
+        "members": [
+          "s_db009948",
+          "s_75e8893d"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The Javadocs for void requireView and requireViewClientScopes incorrectly describe boolean return values instead of their ForbiddenException contracts.",
+        "rationale": "Both report the same documentation mistake repeated on adjacent require methods; each Javadoc needs correction."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_6ada5ba6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b50ded13",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a39e9ef4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

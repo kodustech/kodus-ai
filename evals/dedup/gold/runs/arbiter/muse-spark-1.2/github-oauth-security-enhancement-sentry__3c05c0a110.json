@@ -1,0 +1,35 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "component": [
+    "s_be8c18fb",
+    "s_c04307da",
+    "s_dba5cf11",
+    "s_e345fbc9",
+    "s_e8005d12",
+    "s_ed2f4754",
+    "s_fec7e43b"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_be8c18fb",
+          "s_c04307da",
+          "s_dba5cf11",
+          "s_e345fbc9",
+          "s_e8005d12",
+          "s_ed2f4754",
+          "s_fec7e43b"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "defect": "One six-step report covering: the MAX_ALLOWED_REQUESTS limit (150 to 100) in theme/config.js, the requestAnimationFrame wrapper in search.js, renaming sanitizeInput to sanitize in helpers.js, switching Date.now() to performance.now() in tracker.js, changing GET to POST in api/client.js, and form field binding (body.name). The same body was posted at seven different anchor files."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "All seven suggestions have the exact same body: the same six-step list of defects across six files. Only the anchor file and the one-line summary differ, and each summary just names one step of that shared list. None of it relates to the actual diff, which changes the GitHub integration's OAuth handling. Even so, the rules say a suggestion's correctness or relevance doesn't matter for duplicate labeling. Every member reports all six defects as problems, so every pair shares defects, and posting all seven would repeat the same comment. Under the overlap rule they form one group. The members are anchored in different files, so the kind is cross_location. needsUnifiedComment is true because the merged comment has to keep six separate edits at six locations. Judge 1 treated each suggestion as unique based on its summary, but that ignores that each body reports the same defects."
+  }
+}

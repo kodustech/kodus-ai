@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b30abb00",
+     "s_95688760"
+    ],
+    "defect": "In hasPermission, the fallback lookup through getResourceTypeResource for the 'Clients' type can return null, and there is no null check, so findByResource and resource.getScopes() throw a NullPointerException."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S4 apontam o mesmo defeito nas mesmas linhas (214-224): o fallback para o recurso 'Clients' pode retornar null sem verificação, o que causa um NPE. A correção é a mesma nas duas: retornar false quando o recurso for null. A migração citada por S2 é só uma alternativa de correção para o mesmo problema, e não um segundo defeito."
+ }
+}

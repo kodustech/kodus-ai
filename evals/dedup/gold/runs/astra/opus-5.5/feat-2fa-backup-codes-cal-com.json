@@ -1,0 +1,65 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "promptSha": "8c98fef2ae6532f64b2a5cfe5028fe39e5bc780a",
+  "attempt": 1,
+  "ms": 38898,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_e334db10",
+          "s_7f2428e8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Non-atomic backup-code consumption allows concurrent logins to reuse the same code or restore codes consumed by another request.",
+        "rationale": "Both report the same unconditional read-modify-write race in authorize(), including both concurrency outcomes. Making consumption atomic resolves both suggestions."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_d53b5780",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d336f7a7",
+        "confidence": "high"
+      },
+      {
+        "id": "s_33ece48b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9353e3d3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_44364016",
+        "confidence": "high"
+      },
+      {
+        "id": "s_cf5caa96",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e15ea189",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ea48b2e7",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8d71c3eb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_19d2551e",
+        "confidence": "high"
+      }
+    ]
+  }
+}

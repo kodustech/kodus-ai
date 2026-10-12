@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_fa609e7a",
+     "s_ce3f677e"
+    ],
+    "defect": "O cleanup usa o alias literal \"alias\" em vez do alias do IDP criado, nas linhas 381 e 425, deixando de remover os provedores criados."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S4 apontam o mesmo alias incorreto no cleanup e identificam sua repetição na linha 425. A divergência sobre a exceção resultante não muda o defeito: ambas são resolvidas usando o alias efetivamente criado."
+ }
+}

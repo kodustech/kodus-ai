@@ -1,0 +1,102 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "dbf018f1d511242476dd00deab7da012d3046ac7",
+  "attempt": 1,
+  "ms": 56976,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0aac8642",
+          "s_59f05c45"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Collective members' destination calendars are dropped because optional-chained push does nothing when the organizer's destinationCalendar is null.",
+        "rationale": "Both report the same null initialization and no-op push, resolved by ensuring an array before appending."
+      },
+      {
+        "members": [
+          "s_780c65e1",
+          "s_5bea39da",
+          "s_1662ee7c",
+          "s_52e4a667",
+          "s_3e132d0d",
+          "s_bd3efdf5"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The Google Meet fallback dereferences an undefined mainHostDestinationCalendar when the destination array is absent or empty.",
+        "rationale": "All six identify the same unsafe integration access in EventManager; restoring its null guard addresses every report."
+      },
+      {
+        "members": [
+          "s_f5b59d63",
+          "s_a907ae4b",
+          "s_6293a6a3",
+          "s_02b6e8cb",
+          "s_0a0cb899",
+          "s_ac235e40",
+          "s_3ab53f11"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Google updateEvent and deleteEvent both replace the destination-calendar fallback with a lookup against the already-falsy externalCalendarId, losing the intended target calendar.",
+        "rationale": "The same faulty predicate is repeated in two methods, each requiring an edit. Several suggestions explicitly report both occurrences, linking the update-only and delete-only reports."
+      },
+      {
+        "members": [
+          "s_0972bbcb",
+          "s_a860d069"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Non-calendar booking references lose their video credentialId because the mapping explicitly assigns undefined.",
+        "rationale": "Both identify the same mapping regression; their different downstream examples do not change the defect."
+      },
+      {
+        "members": [
+          "s_444e3754",
+          "s_acdadbe2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The integration-type creation branch omits destination.externalId, leaving the persisted booking reference without externalCalendarId.",
+        "rationale": "Both report the missing argument in the same createEvent call. The Google fallback failures cited downstream are consequences, not additional defects reported by these suggestions."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_0ede2f66",
+        "confidence": "high"
+      },
+      {
+        "id": "s_84db1464",
+        "confidence": "high"
+      },
+      {
+        "id": "s_febf39be",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bc8a84bd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b37d9668",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ef59d1c1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

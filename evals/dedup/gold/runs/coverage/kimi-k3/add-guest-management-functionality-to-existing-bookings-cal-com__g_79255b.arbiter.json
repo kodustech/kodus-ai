@@ -1,0 +1,48 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "BLACKLISTED_GUEST_EMAILS check (addGuests.handler.ts line 77): the blacklist is lowercased but the guest email is not, so a guest email in different case gets past the blacklist."
+   },
+   {
+    "id": "F2",
+    "description": "Existing-attendee duplicate check (addGuests.handler.ts line 76): `guest === attendee.email` is case-sensitive, so a case variant of an existing attendee is added again as a duplicate."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0005a575",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5ce0b553",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b8b58cda",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_76132555",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": false,
+  "reasoning": "The group problem names two checks: the blacklist check on line 77 and the existing-attendee duplicate check on line 76. s_b8b58cda states both defects outright. s_0005a575 only reports line 76. s_5ce0b553 only reports line 77. s_76132555 reports line 77 and brings up line 76 only inside its fix ('ideally before the attendee duplicate comparison... as well'), so line 76 doesn't count for it. Labeler 1 added a third facet for the client-side Set check in AddGuestsDialog. Only s_0005a575 mentions it, in a parenthetical. It is also a different problem (duplicates within one submitted list), not the server-side blacklist or existing-attendee checks the group is about. I left it out, so s_b8b58cda is complete. Including or dropping that parenthetical is a judgment call, so this isn't fully decisive."
+ }
+}

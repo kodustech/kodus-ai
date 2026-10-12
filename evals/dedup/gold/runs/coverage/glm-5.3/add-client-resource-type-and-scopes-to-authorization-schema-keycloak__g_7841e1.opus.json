@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "getClientsWithPermission (ClientPermissionsV2 lines 138-142) adds the name of the type-level \"Clients\" resource to the result instead of real client IDs when an all-clients permission grants the scope"
+   },
+   {
+    "id": "F2",
+    "description": "Per-client resources have no type attribute set (AdminPermissionsSchema.getOrCreateResource), so findByType misses them and per-client grants are not returned"
+   },
+   {
+    "id": "F3",
+    "description": "The caller (AvailableRoleMappingResource.getRoleIdsWithPermissions) looks up each returned ID with realm.getClientById(cid) and dereferences it, so the bogus \"Clients\" entry causes a NullPointerException / 500 error"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_924e2d8b",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_accc352b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,49 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "i18n.rb:17 calls SiteSetting.default_locale.to_sym, which raises NoMethodError when default_locale is nil, before compact can remove it"
+   },
+   {
+    "id": "F2",
+    "description": "FallbackLocaleList#[] mixes String and Symbol locales (e.g. \"en\" vs :en), which breaks uniq and makes the @loaded_locales.include? check miss"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_e63608d7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_c8aed49e",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9009c9ce",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_006ed08a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ],
+  "decisive": true,
+  "reasoning": "The two labelers disagree only on how to split the String/Symbol problem. Mixing String and Symbol locales on line 17 is one defect at one location. Breaking uniq and missing the @loaded_locales check are two results of that same defect, and fixing it means normalizing the types in one place. So there are two facets: the nil default_locale crash and the String/Symbol mixing. s_e63608d7 reports both: it says calling to_sym before compact defeats the nil guard, and it says the list mixes String and Symbol so uniq/dedup fails. That makes it complete. s_c8aed49e reports only the mixed types and the cache misses. Its nil handling is about `locale`, not default_locale, and it appears only in the fix. s_9009c9ce reports only the nil crash. s_006ed08a reports both facets."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_32fdabb3",
+     "s_e721eff4"
+    ],
+    "defect": "A verificação de backup codes usa indexOf sem comparação em tempo constante, tanto no login quanto na desativação do 2FA."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_e721eff4"
+  ],
+  "reasoningPt": "S4 e S5 relatam o mesmo erro de comparação de credenciais repetido em dois endpoints, portanto permanecem juntas. S5 também aponta um defeito independente de validação de tipo que pode causar erro 500; isso a torna um bundle, sem alterar seu agrupamento pelo primeiro defeito."
+ }
+}

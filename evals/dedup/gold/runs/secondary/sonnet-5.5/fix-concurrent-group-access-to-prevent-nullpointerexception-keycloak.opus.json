@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_2f48b633",
+    "mainDefect": "The reader thread is never joined, so the assertion can run before an exception from a read still in flight after deletedAll.set(true) has been recorded.",
+    "secondary": [
+     {
+      "defect": "Nothing guarantees the reader actually reads while the deletions happen, so the test can pass without testing anything, even if the null-handling fix is reverted.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The reader thread is not a daemon thread, so it could keep the JVM running.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8758638b",
+    "mainDefect": "ClientResource management-permissions endpoints call unsupported V2 methods, causing an unhandled exception and HTTP 500.",
+    "secondary": [
+     {
+      "defect": "The ClientRemovedEvent listener calls V2's unsupported setPermissionsEnabled method when both V1 and V2 are enabled, causing client deletion to throw.",
+      "coveredBy": [
+       "s_583e834c",
+       "s_1aab7b37"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a2452e35",
+    "mainDefect": "ClientResource management-permissions endpoints call unsupported V2 permission methods instead of returning a safe disabled response or proper 4xx.",
+    "secondary": [
+     {
+      "defect": "Token exchange calls V2's unsupported canExchangeTo method instead of returning false or a proper feature-disabled response.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

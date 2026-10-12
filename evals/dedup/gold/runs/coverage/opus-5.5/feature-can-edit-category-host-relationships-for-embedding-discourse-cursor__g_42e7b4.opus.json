@@ -1,0 +1,66 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Migration lines 9-11: embed_category lookup indexes [0]['id'] on a possibly empty result and crashes"
+   },
+   {
+    "id": "F2",
+    "description": "Migration line 15: uncategorized_category_id lookup indexes [0]['value'] on a possibly empty result and crashes"
+   },
+   {
+    "id": "F3",
+    "description": "Migration lines 22-26: host values are inserted without normalization (scheme, path, whitespace), so they never match record_for_host"
+   },
+   {
+    "id": "F4",
+    "description": "Migration line 25: host values are interpolated into the INSERT without escaping, so a quote breaks the migration"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_dbcf98a4",
+    "covers": [
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7900c369",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c76cedb8",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_13c616c7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0621eb9a",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

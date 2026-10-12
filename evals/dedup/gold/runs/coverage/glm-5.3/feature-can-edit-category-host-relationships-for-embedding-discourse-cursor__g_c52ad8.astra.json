@@ -1,0 +1,43 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "store.js.es6:197-200 stores failed plural lookups as falsy array entries."
+   },
+   {
+    "id": "F2",
+    "description": "store.js.es6:201 unconditionally deletes *_ids attributes even when referenced records are unavailable, losing previously preserved raw IDs."
+   },
+   {
+    "id": "F3",
+    "description": "store.js.es6:200 has an unreachable `|| []` fallback because .map returns a truthy array."
+   },
+   {
+    "id": "F4",
+    "description": "store.js.es6:197 calls .map on null *_ids values, throwing and aborting payload hydration."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a74fdd01",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_c4c17811",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

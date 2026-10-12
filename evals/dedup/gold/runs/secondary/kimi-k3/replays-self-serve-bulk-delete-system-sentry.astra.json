@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_06a69ac5",
+    "mainDefect": "Truthiness-based mutual-exclusion checks treat zero-valued age or timestamp fields as absent.",
+    "secondary": [
+     {
+      "defect": "Reports containing neither age nor timestamp pass validation because neither field is required and no object-level presence check exists.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b934e7bb",
+    "mainDefect": "Truthiness-based mutual-exclusion checks fail to enforce exclusion for zero-valued age or timestamp fields.",
+    "secondary": [
+     {
+      "defect": "The age field lacks a minimum-value constraint.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The new mutual-exclusion test covers only nonzero values, leaving zero-valued cases untested.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

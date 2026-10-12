@@ -1,0 +1,13 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_a24812df",
+   "s_7f72f09d"
+  ],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 partem da mesma suposição de que context.form() devolve uma instância nova, mas apontam defeitos diferentes em lugares diferentes. S1 trata dos atributos de reautenticação (USERNAME_HIDDEN/REGISTRATION_DISABLED) definidos em AuthenticatorUtils e usados em badPasswordHandler/createErrorResponse. S2 trata dos dados de passkey que o fillContextForm grava antes do createLoginPassword no PasswordForm, e cada um exige uma correção própria."
+ }
+}

@@ -1,0 +1,104 @@
+{
+  "judge": "opus",
+  "model": "glm-5.3",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "acf9c2bbab43a8b22228d9a52f15896d56db2b80",
+  "attempt": 1,
+  "ms": 16238,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 11777,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 1333,
+    "output_tokens_details": {
+      "thinking_tokens": 484
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 11777,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1333,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 11777,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 11777
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.12265759999999999,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_aaaa47e8",
+          "s_c7c633cc",
+          "s_278d3350",
+          "s_a3648b8e",
+          "s_7e515b13",
+          "s_73fe7ee9"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The 10MB limit is hardcoded instead of read from the site setting. This happens in the client size check (utilities.js:182), in the 413 error message (utilities.js:246) and in the server download cap (uploads_controller.rb:55), so the limits no longer match what admins configure and the error message can show the wrong limit.",
+        "rationale": "Every member reports the same 10MB hardcode that replaced SiteSetting-driven limits. s_aaaa47e8 names both the client and server locations, which links the client-only and server-only reports."
+      },
+      {
+        "members": [
+          "s_ef1eb159",
+          "s_cbd3b669",
+          "s_b461ae4f",
+          "s_171153b8",
+          "s_8b2d465f",
+          "s_8980c0e3",
+          "s_203824b0"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "OptimizedImage.downsize is defined twice. The later 3-arg dimensions version silently shadows the width/height version, which leaves dead code and breaks old-signature callers: the 5-arg call in resize_emoji.rb:14 raises ArgumentError, and 4-arg calls raise TypeError.",
+        "rationale": "All members report the same duplicate method definition and the broken calling contract that follows from it. Deleting one definition and updating the callers fixes all of them."
+      },
+      {
+        "members": [
+          "s_3af1aec9",
+          "s_147b3836",
+          "s_fd8d15e4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The 5-pass 80% downsize loop can't guarantee the image ends up under max_image_size_kb, contrary to what its comment says. It also ignores downsize failures, so an oversized or untouched file still reaches Upload.create_for.",
+        "rationale": "All three report that the bounded loop can exit with the file still over the limit. Two of them also mention that convert failures are ignored."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_87a03b73",
+        "confidence": "high"
+      },
+      {
+        "id": "s_16516803",
+        "confidence": "high"
+      },
+      {
+        "id": "s_fcc7145a",
+        "confidence": "high"
+      }
+    ]
+  }
+}

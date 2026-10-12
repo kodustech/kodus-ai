@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_9d5d3468",
+    "mainDefect": "The optional rule prop is passed unconditionally to useRulerRuleAbility, whose parameter still requires RulerRuleDTO.",
+    "secondary": [
+     {
+      "defect": "For rules that are neither a RulerRule nor a Grafana prom rule, getEditableIdentifier returns undefined and silently hides the entire actions block.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

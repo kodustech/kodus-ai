@@ -1,0 +1,26 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_4875e870",
+     "s_77082367",
+     "s_624823a3",
+     "s_af3017dc"
+    ],
+    "defect": "The reader thread is never joined before the assertion, so an exception from its last in-flight read can be recorded after the assertion has already passed."
+   }
+  ],
+  "unique": [
+   "s_609a1176"
+  ],
+  "bundles": [
+   "s_4875e870",
+   "s_624823a3",
+   "s_af3017dc"
+  ],
+  "reasoningPt": "O defeito principal de S2, S4, S6 e S7 é a falta de join na thread leitora antes do assert, então elas ficam juntas. O defeito principal de S8 é outro: nada garante que alguma leitura aconteça durante as deleções (sem barreira de início e sem contador). Isso pede outra correção, então S8 fica sozinha. S2, S6 e S7 aparecem como bundles porque também citam leituras zero, vazamento da thread ou barreira como pontos secundários."
+ }
+}

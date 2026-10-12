@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "BuildIndex in bleve.go now holds cacheMu only around the final cache write, so concurrent builds of the same key run in parallel. They collide on the index directory from bleve.New, repeat the same work and leak indexes."
+   },
+   {
+    "id": "F2",
+    "description": "TotalDocs loops over b.cache without taking a lock while BuildIndex writes to it, which is a data race on the map."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_6f655174",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4cfadd1d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_53aa8e91",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

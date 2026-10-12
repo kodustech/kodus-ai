@@ -1,0 +1,56 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "110f326870970c740ac573b0128c5184afc5a6e3",
+  "attempt": 1,
+  "ms": 35709,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_22702472",
+          "s_778e09a3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The footer construction mutates the caller's contents string and interpolates an unescaped URL into HTML.",
+        "rationale": "Both explicitly report the in-place mutation on line 13. s_778e09a3 additionally reports unescaped HTML interpolation, which must survive in the unified comment."
+      },
+      {
+        "members": [
+          "s_6c00b667",
+          "s_7271a207"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The postMessage handler validates origins using substring matching instead of exact origin equality.",
+        "rationale": "Both identify the same check on line 17 and propose the same correction. Their different examples illustrate the same defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_70c49f8e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f7f4f905",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7e6858e5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b3b472f5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_10811b6b",
+        "confidence": "high"
+      }
+    ]
+  }
+}

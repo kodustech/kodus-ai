@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_1f6fc379",
+    "mainDefect": "getClientsWithPermission takes every resource returned by findByType(server, 'Clients'), including the all-clients resource named 'Clients', so a bogus 'Clients' entry ends up in the set of granted client ids.",
+    "secondary": [
+     {
+      "defect": "Per-client resources are stored under a different resource type than the 'Clients' key used in findByType, so the lookup can miss them and return a wrong or empty set of client ids.",
+      "coveredBy": [
+       "s_2383a0c6"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

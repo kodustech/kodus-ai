@@ -1,0 +1,10 @@
+{
+  "judge": "opus",
+  "model": "kimi-k3",
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "unique": []
+  }
+}

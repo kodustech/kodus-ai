@@ -1,0 +1,72 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Office365 createEvent selects the first destination instead of the current credential's destination, causing failed or misdirected creation."
+   },
+   {
+    "id": "F2",
+    "description": "Office365 creation results identify the second destination even though creation targets the first, leaving calendar references inconsistent."
+   },
+   {
+    "id": "F3",
+    "description": "Lark calendar creation has the same first-destination selection problem."
+   },
+   {
+    "id": "F4",
+    "description": "Base CalendarService creation has the same first-destination selection problem."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_41c96050",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_23010781",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8dd680d0",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_60571361",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d2d1c6a5",
+    "covers": [
+     "F1",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6a0ae591",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

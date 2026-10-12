@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bbf4f23f",
+     "s_4bf82420"
+    ],
+    "defect": "O endpoint aceita limit e offset sem validar seus limites, permitindo valores inválidos ou excessivos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S11 relatam a mesma ausência de validação de limit e offset no mesmo endpoint. S11 acrescenta o efeito de limit=0 no cliente, mas a mesma correção dos limites resolve todas as manifestações descritas."
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_25ae84d7",
+    "mainDefect": "The safe_urlopen token-exchange call executes outside the try/except, so connection errors or timeouts cause an unhandled 500 instead of the graceful failure page.",
+    "secondary": [
+     {
+      "defect": "The get_user_info call executes without exception handling, so failures from the GitHub user endpoint cause an unhandled 500 instead of the graceful failure page.",
+      "coveredBy": [
+       "s_2e15df29"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

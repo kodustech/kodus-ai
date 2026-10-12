@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "self.downsize is defined twice, so the new (from, to, dimensions, opts) signature overrides the old (from, to, max_width, max_height, opts) one, and existing 5-argument callers such as resize_emoji.rb now raise ArgumentError.",
+    "members": [
+     "s_ba5fb2e8",
+     "s_82bc776a",
+     "s_a0c4295e",
+     "s_ac42de81",
+     "s_bd97a81c",
+     "s_c23a39bb"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S3, S4, S5, S6, S7) apontam o mesmo defeito: a segunda definição de downsize sobrescreve a primeira e quebra os chamadores com 5 argumentos, como o resize_emoji.rb. A S7 não confirma se esses chamadores existem, e a S5 fala em código morto, mas as duas descrevem o mesmo problema e a mesma correção. Nenhuma traz um segundo defeito diferente."
+ }
+}

@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_01f5b937",
+     "s_85cdb7f9",
+     "s_bb72d331",
+     "s_093e0431"
+    ],
+    "defect": "As escritas assíncronas no armazenamento legado herdam o cancelamento do contexto da requisição e podem ser abortadas quando o handler termina."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_01f5b937",
+   "s_85cdb7f9"
+  ],
+  "reasoningPt": "S1, S11, S15 e S19 relatam o mesmo defeito principal nas quatro operações, resolvido desvinculando o contexto das escritas legadas do cancelamento da requisição. S1 também aponta a ausência de logs de erro, e S11 acrescenta que os testes devem aguardar a chamada legada, por isso são bundles. Esses pontos secundários não alteram o agrupamento pelo defeito principal."
+ }
+}

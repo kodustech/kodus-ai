@@ -1,0 +1,29 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "promptSha": "e2686e702f8d03e3502f438a38654964d92c5f86",
+  "attempt": 1,
+  "ms": 36069,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_ad72bd96",
+          "s_4d254d59"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Counting locked-account, transient, unrelated, and post-success failures toward retry-based deletion drops recoverable reminders and can orphan or duplicate scheduled Twilio messages; the deletion branch also lacks SMS and unscheduled-only restrictions.",
+        "rationale": "Both explicitly report transient DB/parse failures incrementing retryCount and causing premature deletion. The merged comment must also preserve the locked-account scenario from s_ad72bd96 and the post-success scheduling and deletion-scope defects from s_4d254d59."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_a9d206d7",
+        "confidence": "high"
+      }
+    ]
+  }
+}

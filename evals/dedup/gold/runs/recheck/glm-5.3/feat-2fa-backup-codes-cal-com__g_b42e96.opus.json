@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e5d1d746",
+     "s_1c8a0bc2"
+    ],
+    "defect": "The missing_backup_codes message tells users to generate backup codes in settings. That is impossible from the login screen, and no regeneration feature exists, so pre-existing 2FA users with null backupCodes hit a dead end."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S8 apontam o mesmo defeito: a mensagem de MissingBackupCodes manda gerar códigos nas configurações, o que é impossível na tela de login e não existe no PR. Isso deixa sem saída os usuários antigos de 2FA com backupCodes nulo. Muda só o local reportado (login.tsx vs common.json), e reescrever a mensagem resolve os dois, então o grupo fica como está."
+ }
+}

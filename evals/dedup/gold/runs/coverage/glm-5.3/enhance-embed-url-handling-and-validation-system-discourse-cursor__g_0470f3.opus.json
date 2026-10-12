@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "poll_feed.rb line 35: i.content.scrub has no guard for items without content (nil), so one such item raises NoMethodError and aborts the whole items loop; retry: false means the remaining items are never imported"
+   },
+   {
+    "id": "F2",
+    "description": "String#scrub only exists on Ruby >= 2.1, so i.content.scrub can raise NoMethodError on older supported Ruby versions even when content exists"
+   },
+   {
+    "id": "F3",
+    "description": "A nil i.title is passed to TopicEmbed.import/PostCreator with skip_validations: true, so the insert fails on a null title"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_42e6661a",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_090409bf",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

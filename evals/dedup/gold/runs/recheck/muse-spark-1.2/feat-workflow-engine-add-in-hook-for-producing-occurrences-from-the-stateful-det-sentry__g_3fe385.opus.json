@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9a8c0bd8",
+     "s_aa47d29c",
+     "s_06650a50",
+     "s_8c12ccea",
+     "s_d4d154ab"
+    ],
+    "defect": "MetricAlertDetectorHandler now inherits from StatefulDetectorHandler with only `pass` and implements none of its abstract methods, so creating it raises TypeError."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S4, S5, S8, S9) apontam o mesmo defeito: MetricAlertDetectorHandler virou subclasse de StatefulDetectorHandler sem implementar os métodos abstratos, o que gera TypeError ao instanciar. A S9 cita outro caminho de arquivo e outros nomes de métodos, mas o defeito e a correção são os mesmos. Nenhuma sugestão traz um segundo defeito."
+ }
+}

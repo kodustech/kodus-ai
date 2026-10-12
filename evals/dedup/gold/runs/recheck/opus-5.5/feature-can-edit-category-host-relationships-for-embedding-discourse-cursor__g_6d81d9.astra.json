@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_dbcf98a4",
+     "s_0621eb9a"
+    ],
+    "defect": "A migração insere hosts antigos sem normalização, impedindo que valores com esquema, caminho ou espaços correspondam ao hostname usado na consulta."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_dbcf98a4",
+   "s_0621eb9a"
+  ],
+  "reasoningPt": "S2 e S13 têm o mesmo defeito principal: a falta de normalização dos hosts migrados, que quebra a correspondência com URI#host. Ambas também abordam o escape dos valores no SQL, S13 apenas na correção proposta, e por isso são bundles sem alterar o agrupamento."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_21df2e7a",
+     "s_c050f347"
+    ],
+    "defect": "The spec 'is false if embeddable_host is blank' is out of date: expandable_first_post? no longer checks embeddable hosts, so the test passes only vacuously and its name describes behavior this PR removed."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c050f347"
+  ],
+  "reasoningPt": "S8 e S13 apontam como defeito principal o mesmo teste desatualizado 'is false if embeddable_host is blank'. Esse teste passa de forma vazia porque o modelo deixou de consultar embeddable hosts. O erro de digitação 'emeddable' no S13 é um defeito secundário, por isso o S13 entra em bundles, mas isso não muda o grupo dele."
+ }
+}

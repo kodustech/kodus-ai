@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a68744fe",
+     "s_79e164e9",
+     "s_79243ad0",
+     "s_1dab3a9f"
+    ],
+    "defect": "totalPages uses Math.floor(user_count / limit) + 1, which counts one page too many when user_count is an exact multiple of limit, so the next button stays enabled and loads an empty page."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S6, S7 e S10 apontam o mesmo defeito: o cálculo de totalPages com floor+1 conta uma página a mais quando user_count é múltiplo exato de limit. A correção é a mesma em todas (usar Math.ceil). Nenhuma delas traz um segundo defeito."
+ }
+}

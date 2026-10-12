@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b4165a65",
+     "s_69ee82ab",
+     "s_651b27bf",
+     "s_bfe39327"
+    ],
+    "defect": "O cálculo de totalPages com Math.floor(user_count / limit) + 1 cria uma página extra quando user_count é um múltiplo exato positivo de limit."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S6, S8 e S15 descrevem o mesmo erro no cálculo de totalPages, no mesmo trecho de código. Todas são resolvidas pela mesma correção, usando Math.ceil; a navegação para uma página vazia é uma consequência desse defeito."
+ }
+}

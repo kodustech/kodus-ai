@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7d464dc6",
+     "s_282510ec"
+    ],
+    "defect": "sendAddGuestsEmails receives the original guests list instead of uniqueGuests, so existing attendees in the request are wrongly treated as newly added and get the wrong email."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 apontam o mesmo defeito, nas mesmas linhas: o handler passa `guests` em vez de `uniqueGuests` para `sendAddGuestsEmails`, e por isso participantes que já existiam são tratados como novos convidados. A correção proposta é a mesma, e nenhuma das duas traz um segundo defeito."
+ }
+}

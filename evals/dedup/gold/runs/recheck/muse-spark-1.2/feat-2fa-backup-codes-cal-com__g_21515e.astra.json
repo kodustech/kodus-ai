@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_522c099e",
+     "s_76e752b3"
+    ],
+    "defect": "A validação dos códigos de backup usa indexOf com comparação de tempo variável tanto no login quanto na desativação do 2FA."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_522c099e",
+   "s_76e752b3"
+  ],
+  "reasoningPt": "S4 e S5 apontam o mesmo defeito repetido em dois locais, corrigível pela mesma substituição por comparação em tempo constante. Ambas também propõem normalizar maiúsculas e minúsculas, uma questão independente incluída na correção; por isso são bundles, sem alterar o agrupamento pelo defeito principal."
+ }
+}

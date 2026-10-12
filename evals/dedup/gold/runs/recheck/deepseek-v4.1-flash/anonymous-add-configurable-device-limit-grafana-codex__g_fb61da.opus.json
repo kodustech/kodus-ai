@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f7e19fe4",
+     "s_a72e0711"
+    ],
+    "defect": "CreateOrUpdateDevice enforces the device limit with a non-atomic count-then-insert, so concurrent requests from new devices can exceed the configured limit (TOCTOU race)."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S4 relatam o mesmo defeito: a verificação de limite via CountDevices seguida do INSERT não é atômica, o que permite que requisições concorrentes ultrapassem o device_limit. Ambas apontam para as mesmas linhas e propõem a mesma correção (transação, lock ou guarda no banco). Nenhuma delas traz um segundo defeito."
+ }
+}

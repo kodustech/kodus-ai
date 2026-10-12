@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6c5a2af8",
+     "s_806c2db2"
+    ],
+    "defect": "O caminho de sucesso de Delete passa name em vez de options.Kind para recordStorageDuration, gerando um rótulo incorreto e alta cardinalidade."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S10 apontam o mesmo argumento incorreto na linha 106, corrigido pela troca de name por options.Kind. A cardinalidade elevada e a inconsistência dos rótulos são consequências desse mesmo defeito, portanto o grupo deve ser mantido."
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_d02ab584",
+     "s_6a01472a",
+     "s_a0b43d2d",
+     "s_c94570f5",
+     "s_35d3c9d2"
+    ],
+    "defect": "The fallback locales (site default and :en) are loaded only in ApplicationController, because translate lazy-loads only config.locale, so jobs, mailers, rake tasks and the console get 'translation missing' instead of the fallback, and that result can be cached."
+   }
+  ],
+  "unique": [
+   "s_e15dc8b6"
+  ],
+  "bundles": [
+   "s_6a01472a"
+  ],
+  "reasoningPt": "S1, S3, S4, S5 e S6 apontam o mesmo defeito: as locales de fallback só são carregadas no controller, e o translate carrega apenas config.locale. A correção é a mesma: carregar a cadeia inteira dentro do translate. S2 trata de outro defeito: a chave do cache LRU não inclui SiteSetting.default_locale, o que deixa texto antigo no cache depois de uma mudança em tempo de execução. Esse defeito pede outra correção, então S2 fica sozinha. S3 também cita a chave do cache como segundo ponto, mas seu defeito principal é o carregamento das locales, por isso fica no grupo principal e é marcada como bundle."
+ }
+}

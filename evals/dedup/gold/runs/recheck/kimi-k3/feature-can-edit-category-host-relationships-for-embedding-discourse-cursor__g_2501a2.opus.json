@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ec94f60b",
+     "s_6fa3626d",
+     "s_073fc623"
+    ],
+    "defect": "The migration indexes [0]['id'] on a possibly empty site_settings query result and crashes with NoMethodError before the category_id == 0 fallback can run."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S9 e S21 apontam o mesmo defeito: o acesso `[0]['id']` sem proteção no resultado da consulta de embed_category, que quebra a migração com NoMethodError. S9 e S21 também citam a linha 15, mas é o mesmo erro repetido em outro lugar e se corrige do mesmo jeito, então não conta como bundle. O grupo continua como está."
+ }
+}

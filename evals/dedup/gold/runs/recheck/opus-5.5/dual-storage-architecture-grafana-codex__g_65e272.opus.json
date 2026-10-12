@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4ee7f335",
+     "s_df703bb4"
+    ],
+    "defect": "In Create, the goroutine passes the same obj pointer, which Storage.Create already used and which may be returned to the caller, to Legacy.Create, so the two can mutate it concurrently or leak metadata between stores; it needs obj.DeepCopyObject()."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S15 apontam o mesmo defeito: o goroutine de Create passa o mesmo ponteiro obj para Legacy.Create enquanto o objeto é devolvido ao chamador, o que causa data race e mutação compartilhada. As duas propõem a mesma correção, obj.DeepCopyObject(). Só muda o intervalo de linhas, então o grupo se mantém."
+ }
+}

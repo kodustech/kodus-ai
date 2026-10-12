@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_135e8b0e",
+     "s_da7b8917"
+    ],
+    "defect": "O teste afirma verificar a ausência de embeddable_host, mas passa por outra condição e não exercita o comportamento descrito."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S17 apontam o mesmo defeito no mesmo teste: a condição anunciada deixou de ser verificada pela implementação. A diferença de ênfase entre cobertura e descrição, assim como as alternativas de correção, não justifica separar o grupo."
+ }
+}

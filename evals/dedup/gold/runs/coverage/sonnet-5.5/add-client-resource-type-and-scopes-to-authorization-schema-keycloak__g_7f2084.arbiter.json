@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "ClientResource management-permissions endpoints (lines ~710-742) call V2 isPermissionsEnabled/setPermissionsEnabled/resource/getPermissions unconditionally, so the UnsupportedOperationException surfaces as HTTP 500"
+   },
+   {
+    "id": "F2",
+    "description": "The AdminPermissions ClientRemovedEvent listener (lines 77-95) calls clients().setPermissionsEnabled. When V2 is active this throws, so client deletion fails"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a2452e35",
+    "covers": [],
+    "complete": false
+   },
+   {
+    "id": "s_583e834c",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_1aab7b37",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8758638b",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ],
+  "decisive": false,
+  "reasoning": "I sided with Labeler 2, though the call on s_a2452e35 is close. Its problem statement only says that \"existing callers invoke unconditionally\". It names the callers (ClientResource management endpoints, token exchange) only inside its proposed fix (\"or guard the callers (...)\"). Under the instructions, something mentioned only in the fix doesn't count, so this member covers nothing. That also means no member reports token exchange or canExchangeTo as a problem, so it isn't a facet; Labeler 1's F2 depends on reading the fix's parenthetical as part of the problem. Of the remaining members, s_583e834c and s_1aab7b37 each report only the ClientRemovedEvent listener. The remark in s_583e834c about checking the role and group paths is vague and not part of this problem. s_8758638b states the ClientResource HTTP 500 issue and explicitly says the same throw hits the ClientRemovedEvent listener, so it covers both facets and is complete. This isn't fully decisive: a looser reading of s_a2452e35 would make it count the ClientResource and token-exchange callers as problems."
+ }
+}

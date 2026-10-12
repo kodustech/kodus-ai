@@ -1,0 +1,45 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "fa6cff98d53e691d4f757052eb264d3f7d5231e0",
+  "attempt": 1,
+  "ms": 39238,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_95688760",
+          "s_b30abb00"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The fallback client permission check does not handle a missing 'Clients' type resource, causing a NullPointerException in previously initialized realms.",
+        "rationale": "Both report the same unchecked null fallback at the same lines. The broader list of affected checks and alternative migration fix do not introduce a separate defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_c1ec5a84",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e8a630ee",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c2941d8f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2494e4a4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2dfcf2cb",
+        "confidence": "high"
+      }
+    ]
+  }
+}

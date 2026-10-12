@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0bd77fe1",
+     "s_36a5b400",
+     "s_30992443",
+     "s_2719ce4a",
+     "s_289657e8",
+     "s_d040909a"
+    ],
+    "defect": "The Storage error branches in Create and Update call recordLegacyDuration instead of recordStorageDuration, so storage failures get counted under the legacy metric."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S2, S7, S8, S13, S15, S23) apontam o mesmo erro: os ramos de erro do Storage chamam recordLegacyDuration no lugar de recordStorageDuration. Esse erro se repete em Create e Update e se corrige com a mesma troca. S7 cita só o Create e S8 e S23 citam só o Update, mas isso não muda o defeito, então o grupo fica como está."
+ }
+}

@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_81101291",
+    "mainDefect": "FromContext's fallback to d.New() loses the original logger's name and contextual attributes.",
+    "secondary": [
+     {
+      "defect": "ConcreteLogger.New calls root.New() without returning its result when no context arguments are supplied.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_bdd6fc85",
+    "mainDefect": "The tests do not assert that request-size metrics remain absent for endpoints where request-size instrumentation is disabled.",
+    "secondary": [
+     {
+      "defect": "The tests never exercise error or cancelled statuses, allowing instrumentation that always reports ok to pass.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_908dadcd",
+    "mainDefect": "MetricsMiddleware dereferences nil requests without guards, potentially causing a panic.",
+    "secondary": [
+     {
+      "defect": "ContextualLoggerMiddleware also dereferences nil requests without guards, potentially causing a panic.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

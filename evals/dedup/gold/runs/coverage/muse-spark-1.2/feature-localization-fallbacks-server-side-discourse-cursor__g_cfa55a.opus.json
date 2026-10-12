@@ -1,0 +1,47 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "i18n.rb:17 calls SiteSetting.default_locale.to_sym, which raises NoMethodError when default_locale is nil, before compact can remove it"
+   },
+   {
+    "id": "F2",
+    "description": "The fallback list mixes String and Symbol locales (e.g. \"en\" vs :en), which breaks uniq and makes the @loaded_locales.include? check in ensure_loaded! miss"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_e63608d7",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_c8aed49e",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9009c9ce",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_006ed08a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

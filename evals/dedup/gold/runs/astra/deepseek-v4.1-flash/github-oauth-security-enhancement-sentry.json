@@ -1,0 +1,36 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "948a49c8b8c411a1d1b9bbe06b3d75d0b8940551",
+  "attempt": 1,
+  "ms": 35279,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_b6bcca54",
+          "s_4c48d4f6",
+          "s_412f55af",
+          "s_faf6b973",
+          "s_2c66d685"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The sender verification unconditionally indexes optional sender metadata, causing exceptions for missing or null values, and compares GitHub logins case-sensitively, potentially rejecting legitimate installers.",
+        "rationale": "All five report the same unguarded sender lookup at lines 500–505. The merged comment must also preserve the null-sender case from s_412f55af and the case-sensitive comparison defect explicitly reported by s_faf6b973."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_8ab7e647",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e3273b46",
+        "confidence": "high"
+      }
+    ]
+  }
+}

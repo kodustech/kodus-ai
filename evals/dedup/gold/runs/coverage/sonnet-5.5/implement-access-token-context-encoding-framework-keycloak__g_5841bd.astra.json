@@ -1,0 +1,83 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "AssertEvents.java:483 reads the grant shortcut with substring(3,5) instead of substring(4,6)."
+   },
+   {
+    "id": "F2",
+    "description": "AssertEvents.java:483 inverts the equality check, returning false when the shortcut matches."
+   },
+   {
+    "id": "F3",
+    "description": "AssertEvents.isAccessTokenId can throw StringIndexOutOfBounds on short ID prefixes."
+   },
+   {
+    "id": "F4",
+    "description": "AssertEvents.java:482 misleadingly says the grant shortcut starts at the 4th character."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_843e5d06",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_48023927",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_16105147",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c4e9c10a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0f11c762",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dedf90ac",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9fe47bb1",
+    "covers": [
+     "F1",
+     "F2",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

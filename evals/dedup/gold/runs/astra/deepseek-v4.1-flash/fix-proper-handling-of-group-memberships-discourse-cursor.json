@@ -1,0 +1,58 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "c64243c2a27dbcb4a5586e47c01c55c8d7288ec5",
+  "attempt": 1,
+  "ms": 47774,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_5c133571",
+          "s_62fe45ea"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "The membership routes disagree with the client URL and fail to provide the group_id parameter required by the handlers.",
+        "rationale": "Both explicitly report that routing fails to supply the required group_id, although they disagree about the generated route. s_5c133571 additionally reports that the client URL cannot match, so the merged comment must preserve that concern."
+      },
+      {
+        "members": [
+          "s_06df0f6c",
+          "s_70fe4c12",
+          "s_ce7d145c",
+          "s_8f2939ce",
+          "s_5e51e255"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "totalPages overcounts exact multiples of the page limit, enabling navigation to an empty extra page.",
+        "rationale": "All five identify the same floor-plus-one calculation and its consequences; replacing it with ceiling division addresses every report."
+      },
+      {
+        "members": [
+          "s_bff179c0",
+          "s_1ec09b12"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Public group member lists are truncated to 50 members without pagination controls to reach the remainder.",
+        "rationale": "Both report the same regression caused by applying pagination to non-automatic groups while leaving the public members page without navigation."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_cbd46c6e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_94da1b69",
+        "confidence": "high"
+      }
+    ]
+  }
+}

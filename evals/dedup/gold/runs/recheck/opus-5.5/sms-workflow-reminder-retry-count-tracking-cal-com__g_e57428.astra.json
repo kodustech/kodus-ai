@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_51ce1fbc",
+     "s_6fbe394f",
+     "s_4680bb7e"
+    ],
+    "defect": "O ramo retryCount > 1 do OR não restringe o método a SMS, permitindo excluir lembretes de outros métodos."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_51ce1fbc"
+  ],
+  "reasoningPt": "S1, S4 e S7 têm como defeito principal a ausência do filtro de método no ramo de retryCount, portanto permanecem juntas. S1 também aponta a ausência de scheduled: false, um defeito adicional que a torna um bundle. Em S4, a menção a registros já agendados apenas detalha o alcance da exclusão de outros métodos."
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "Direct indexing of integration.metadata[\"sender\"][\"login\"] raises KeyError (HTTP 500) when the integration has no sender metadata, instead of rendering the error page.",
+    "members": [
+     "s_cf238e42",
+     "s_f6ecc7cd",
+     "s_f4232fe5",
+     "s_b2a83cd2",
+     "s_7e38bae0"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S6, S7 e S9 apontam o mesmo defeito nas mesmas linhas: o acesso direto a integration.metadata[\"sender\"][\"login\"] gera KeyError (500) quando a integração não tem sender. Todas propõem a mesma correção, usar .get() e tratar a ausência como falha de verificação. Nenhuma delas traz um segundo defeito, então o grupo fica como está."
+ }
+}

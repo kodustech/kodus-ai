@@ -1,0 +1,40 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "promptSha": "b44e766b98b1146db44369c8f2c6140e7df241a0",
+  "attempt": 1,
+  "ms": 32587,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_56e6f1eb",
+          "s_d30a42e6",
+          "s_71d2527d",
+          "s_bfacd192",
+          "s_2168dca2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "MetricAlertDetectorHandler inherits StatefulDetectorHandler without supplying its required abstract members, making the previously concrete handler non-instantiable.",
+        "rationale": "All five report the same inheritance change and empty class body causing handler instantiation to raise TypeError. Differences in the enumerated required members and proposed remedies do not constitute separate defects."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_f765c425",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4a8ba0b8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3e3fb9e1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

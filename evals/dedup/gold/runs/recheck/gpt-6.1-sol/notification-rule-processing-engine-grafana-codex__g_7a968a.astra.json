@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_60a14d18",
+     "s_31df1725"
+    ],
+    "defect": "RuleActionsButtons passa rule potencialmente undefined para useRulerRuleAbility, cuja assinatura ainda exige RulerRuleDTO."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 apontam a mesma incompatibilidade entre a prop rule opcional e o contrato do hook singular no caminho que fornece apenas promRule. As alternativas de correção tratam o mesmo defeito, e nenhuma sugestão inclui um segundo problema."
+ }
+}

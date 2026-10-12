@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError sets USERNAME_HIDDEN/REGISTRATION_DISABLED on a context.form() instance that gets thrown away before the challenge is rendered."
+   },
+   {
+    "id": "F2",
+    "description": "PasswordForm.authenticate fills the passkey conditional UI data on one context.form() instance, but createLoginPassword renders with a different one."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a24812df",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7f72f09d",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

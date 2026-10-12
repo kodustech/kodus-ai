@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "get_condition_query_groups (line 364): dcg_to_slow_conditions[dcg.id] is indexed directly and can raise KeyError when a DCG is missing"
+   },
+   {
+    "id": "F2",
+    "description": "get_groups_to_fire (line 419): dcg_to_slow_conditions[dcg.id] is indexed directly and can raise KeyError when a DCG is missing"
+   },
+   {
+    "id": "F3",
+    "description": "workflows_to_envs[workflow_id] is indexed directly and can raise KeyError when the workflow is missing"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f9dadae9",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_9c86f0c6",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

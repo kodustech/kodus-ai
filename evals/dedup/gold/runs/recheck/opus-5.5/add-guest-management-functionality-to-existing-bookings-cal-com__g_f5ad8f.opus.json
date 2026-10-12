@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_12e66445",
+     "s_647627fa",
+     "s_ef00ffaa",
+     "s_e7d73ab7"
+    ],
+    "defect": "Guest emails are not lowercased before the check against the lowercased BLACKLISTED_GUEST_EMAILS list, so a blacklisted address written in a different letter case gets past the blacklist."
+   }
+  ],
+  "unique": [
+   "s_aed18a73"
+  ],
+  "bundles": [
+   "s_12e66445",
+   "s_647627fa",
+   "s_ef00ffaa",
+   "s_aed18a73"
+  ],
+  "reasoningPt": "S4, S9, S17 e S21 têm como defeito principal o bypass da blacklist por diferença de maiúsculas/minúsculas; a menção à checagem de duplicidade de attendees é secundária. Já S18 tem como defeito principal a falta de deduplicação de convidados no servidor (duplicatas no input, diferença de caixa, inserções concorrentes) e nem cita a blacklist. Por isso S18 fica sozinho e o grupo é dividido."
+ }
+}

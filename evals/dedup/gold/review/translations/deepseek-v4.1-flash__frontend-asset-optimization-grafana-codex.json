@@ -1,0 +1,14 @@
+{
+ "s_12bc3466": {
+  "summaryPt": "O write lock é mantido durante o I/O do manifest sem double-check, serializando requisições concorrentes com cache frio",
+  "contentPt": "O QUÊ: Depois de adquirir o write lock, o código não verifica novamente `entryPointAssetsCache`, então o write lock (l.48-49) é mantido durante o I/O do manifest (`readWebAssetsFromFile`/`readWebAssetsFromCDN`) e cada chamador concorrente com cache frio recalcula e sobrescreve o cache de forma redundante. POR QUÊ: o write lock serializa todos os chamadores concorrentes de GetWebAssets durante o primeiro carregamento (e no modo Dev, a cada requisição), transformando o que antes era não bloqueante em I/O bloqueante no caminho da requisição; a ausência da segunda verificação é o clássico padrão incompleto de double-checked-locking. CORREÇÃO: verifique novamente dentro do lock antes de fazer o trabalho, por exemplo: `entryPointAssetsCacheMu.Lock(); defer entryPointAssetsCacheMu.Unlock(); if ret = entryPointAssetsCache; cfg.Env != setting.Dev && ret != nil { return ret, nil }` e então calcule e atribua. Se for necessário evitar manter o lock durante o I/O, calcule em uma variável local fora do lock e adquira o lock apenas para a etapa de publicação."
+ },
+ "s_6b35380b": {
+  "summaryPt": "",
+  "contentPt": "O bloco de double-checked-lock nas linhas 41-49 não verifica novamente ret==nil após adquirir o write lock."
+ },
+ "s_efe46b6a": {
+  "summaryPt": "",
+  "contentPt": "O lock é mantido durante o I/O de arquivo/CDN."
+ }
+}

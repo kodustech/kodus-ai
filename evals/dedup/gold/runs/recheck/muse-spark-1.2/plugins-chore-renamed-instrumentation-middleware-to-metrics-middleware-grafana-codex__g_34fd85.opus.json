@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_885d47eb",
+     "s_b49c2fba",
+     "s_eecc4a95"
+    ],
+    "defect": "The streaming methods (SubscribeStream/PublishStream/RunStream) of ContextualLoggerMiddleware do not call instrumentContext, so their logs lose the contextual attributes (pluginId, endpoint, dsName, uname)."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S6 e S10 apontam o mesmo defeito: os métodos de streaming do ContextualLoggerMiddleware não chamam instrumentContext e por isso perdem os atributos contextuais de log. S6 trata o assunto pelo lado da documentação que promete cobrir todas as requisições e cita outro intervalo de linhas, mas a correção é a mesma. Nenhuma das sugestões traz um segundo defeito."
+ }
+}

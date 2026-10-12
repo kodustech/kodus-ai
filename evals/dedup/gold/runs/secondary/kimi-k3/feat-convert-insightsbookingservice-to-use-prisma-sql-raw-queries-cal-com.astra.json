@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ab28c1c1",
+    "mainDefect": "Returning authorization SQL without enclosing parentheses lets OR precedence bypass constraints appended by callers.",
+    "secondary": [
+     {
+      "defect": "The fallback branches in getBaseConditions are unreachable because authorization conditions always return a truthy Prisma.Sql object.",
+      "coveredBy": [
+       "s_fa724245",
+       "s_0ed4a288"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

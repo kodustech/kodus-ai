@@ -1,0 +1,127 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_3284f51d",
+    "mainDefect": "The migration inserts legacy URLs without normalizing them to bare hostnames, breaking host matching.",
+    "secondary": [
+     {
+      "defect": "Unescaped apostrophes in legacy host values break the interpolated SQL INSERT.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_73823258",
+    "mainDefect": "Updating or deleting a nonexistent embeddable host dereferences nil and returns a 500 instead of a 404.",
+    "secondary": [
+     {
+      "defect": "A missing embeddable_host request parameter causes save_host to dereference nil.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7128b0ce",
+    "mainDefect": "The migration dereferences an empty embed_category query result, aborting before the fallback can run.",
+    "secondary": [
+     {
+      "defect": "The uncategorized_category_id fallback query also dereferences its first row without checking whether one exists.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_d7c93799",
+    "mainDefect": "The embedding update endpoint ignores submitted changes and returns success with unchanged data.",
+    "secondary": [
+     {
+      "defect": "The frontend saveChanges action has no template control invoking it and is unreachable through the UI.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c050f347",
+    "mainDefect": "The outer topic spec describes a removed embeddable-host condition and passes without exercising that condition.",
+    "secondary": [
+     {
+      "defect": "The nested describe string misspells 'embeddable' as 'emeddable'.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_afaedccf",
+    "mainDefect": "The migration unconditionally dereferences an embed_category query result that can contain no rows.",
+    "secondary": [
+     {
+      "defect": "The migration matches the legacy category setting against category names even though the setting can contain a category ID.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c4c17811",
+    "mainDefect": "Plural relationship hydration deletes raw IDs and substitutes failed lookups when referenced records are absent from the side-loaded data.",
+    "secondary": [
+     {
+      "defect": "Plural relationship hydration calls .map without checking that the *_ids value is an array.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_17201292",
+    "mainDefect": "The migration dereferences the first embed_category query row without checking whether it exists.",
+    "secondary": [
+     {
+      "defect": "The uncategorized_category_id fallback query likewise dereferences a potentially absent first row.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The category lookup compares a legacy category ID value against category names, preventing a match.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a74fdd01",
+    "mainDefect": "The hydrated || [] fallback is unreachable because .map always returns a truthy array.",
+    "secondary": [
+     {
+      "defect": "Failed plural relationship lookups are retained as false entries while the original IDs are unconditionally deleted.",
+      "coveredBy": [
+       "s_c4c17811"
+      ]
+     },
+     {
+      "defect": "A null *_ids value causes .map to throw and abort hydration of the payload.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7c87fa7b",
+    "mainDefect": "Updating or deleting a nonexistent embeddable host dereferences nil and returns a 500 instead of a 404.",
+    "secondary": [
+     {
+      "defect": "save_host reads nested request fields without checking that params[:embeddable_host] exists.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f33a3118",
+    "mainDefect": "The category fallback cannot execute because an empty initial query crashes first and a matching category ID is never zero.",
+    "secondary": [
+     {
+      "defect": "The uncategorized_category_id lookup also lacks a guard before dereferencing its first row.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

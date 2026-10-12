@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "ClientPermissionEvaluator.java:95-98: requireView() is void but its Javadoc says it returns true instead of documenting ForbiddenException."
+   },
+   {
+    "id": "F2",
+    "description": "ClientPermissionEvaluator.java:100-103: requireViewClientScopes() is void but its Javadoc says it returns true instead of documenting ForbiddenException."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_1a66b466",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8fa1fa63",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

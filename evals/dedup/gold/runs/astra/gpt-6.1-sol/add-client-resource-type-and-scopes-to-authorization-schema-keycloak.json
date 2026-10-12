@@ -1,0 +1,45 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "da4c3119e4d64eee622f147b53fef44172041875",
+  "attempt": 1,
+  "ms": 32419,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_bd0cbb6b",
+          "s_52703d76"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The global fine-grained VIEW shortcut in canView(ClientModel) bypasses explicit client-specific VIEW denials.",
+        "rationale": "Both suggestions identify the same short-circuit and require evaluating client-specific permissions before falling back to the all-clients resource."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_d9eefa97",
+        "confidence": "high"
+      },
+      {
+        "id": "s_06f85daf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7b271f70",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5401b348",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b4e86fdf",
+        "confidence": "high"
+      }
+    ]
+  }
+}

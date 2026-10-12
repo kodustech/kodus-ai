@@ -1,0 +1,46 @@
+{
+  "model": "kimi-k3",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "component": [
+    "s_00216386",
+    "s_24958cb2",
+    "s_2d189e44",
+    "s_9e1a3d59",
+    "s_b6ded21f",
+    "s_c273daf4",
+    "s_daf946e9",
+    "s_de5fad1d",
+    "s_ec6af647"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_00216386",
+          "s_2d189e44",
+          "s_9e1a3d59",
+          "s_c273daf4",
+          "s_de5fad1d"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "defect": "In Create (line 45) and Update (line 129), the unified-storage failure path calls recordLegacyDuration, so storage failures show up in the legacy metric. These calls should use recordStorageDuration. The same copy-paste mistake appears at two call sites, and each needs its own edit."
+      },
+      {
+        "members": [
+          "s_24958cb2",
+          "s_b6ded21f",
+          "s_daf946e9",
+          "s_ec6af647"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The goroutine for the legacy DeleteCollection (line 166) records its latency with recordStorageDuration when it should use recordLegacyDuration."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "There are two separate defects, and they need opposite fixes. (1) In Create (line 45) and Update (line 129), the storage-failure path wrongly calls recordLegacyDuration; the fix is to switch it to recordStorageDuration. s_00216386 and s_2d189e44 cover Create, s_de5fad1d covers Update, and s_9e1a3d59 and s_c273daf4 cover both. That makes one systemic group spanning two call sites. (2) In DeleteCollection's legacy goroutine (line 166), the code wrongly calls recordStorageDuration; the fix is to switch it to recordLegacyDuration. s_b6ded21f and s_ec6af647 even describe it as \"the inverse\" of the Create/Update bug. These are different concrete mistakes at different places. One find-and-replace cannot fix them, because they go in opposite directions, so posting both comments is not redundant. Judge 2 merged them only because they share the general topic of mixed-up metric helpers, so Judge 1's split is correct."
+  }
+}

@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0cb37a15",
+    "mainDefect": "Matching destination calendars by credentialId fails for calendars without a credentialId, causing events to use 'primary' instead of the selected calendar.",
+    "secondary": [
+     {
+      "defect": "Office365, Lark, and CalDAV ignore the new credentialId argument, making the interface change inconsistent across implementations.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a6c93c38",
+    "mainDefect": "When evt.destinationCalendar is null, the optional push silently drops all team members' destination calendars.",
+    "secondary": [
+     {
+      "defect": "Populating teamDestinationCalendars inside async map callbacks is fragile.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

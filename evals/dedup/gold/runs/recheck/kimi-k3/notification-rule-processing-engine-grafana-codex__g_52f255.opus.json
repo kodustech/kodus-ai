@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ee1a9510",
+     "s_21537ff1"
+    ],
+    "defect": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false, so the federated-rule-group immutability check is lost and federated rules become editable/deletable."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S7 apontam o mesmo defeito, no mesmo trecho: a delegação de useAllAlertRuleAbilities para useAllRulerRuleAbilities remove a checagem isFederatedRuleGroup, porque isFederated fica fixo em false. As duas propõem a mesma correção, que é levar a informação de federação até o hook ou manter a checagem. Nenhuma delas reporta um segundo defeito, então o grupo fica como está."
+ }
+}

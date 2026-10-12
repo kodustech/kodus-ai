@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b461ae4f",
+     "s_ef1eb159",
+     "s_8980c0e3",
+     "s_8b2d465f",
+     "s_171153b8",
+     "s_203824b0",
+     "s_cbd3b669"
+    ],
+    "defect": "A segunda definição de downsize sobrescreve a assinatura anterior, deixando código morto e quebrando chamadas que ainda passam largura e altura separadamente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S6, S9, S12 e S15 descrevem a mesma sobrescrita de downsize, com consequências diferentes conforme os argumentos recebidos. S17 aborda o mesmo conflito pelo contrato usado no controller e pelo risco de remover a definição errada; não apresenta um defeito independente."
+ }
+}

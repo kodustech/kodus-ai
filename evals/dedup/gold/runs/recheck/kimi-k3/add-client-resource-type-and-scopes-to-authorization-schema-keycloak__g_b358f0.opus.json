@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9ac2aa83",
+     "s_886d9c42"
+    ],
+    "defect": "ClientPermissionsV2 throws UnsupportedOperationException from the management-permission methods (isPermissionsEnabled, resource, getPermissions, *Permission accessors), so the client management/permissions admin REST endpoints return HTTP 500 under V2."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S7 apontam o mesmo defeito: os métodos de management permissions em ClientPermissionsV2 lançam UnsupportedOperationException, e isso faz os endpoints REST de clients/{id}/management/permissions responderem com HTTP 500 no V2. A diferença está só no intervalo de linhas, já que S7 também cita exchangeToPermission e setPermissionsEnabled, e no detalhe da correção proposta. A correção é a mesma nos dois casos, então o grupo fica como está."
+ }
+}

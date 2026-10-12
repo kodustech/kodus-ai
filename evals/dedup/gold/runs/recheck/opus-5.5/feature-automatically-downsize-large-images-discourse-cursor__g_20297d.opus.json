@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_16e7d729",
+     "s_4e7770ed",
+     "s_6f42512f",
+     "s_60d70a41"
+    ],
+    "defect": "The client-side size check in utilities.js is hardcoded to 10MB for every upload type, so attachments are no longer checked against max_attachment_size_kb (and the error shows the wrong limit); the 10MB cap should apply only to images."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_16e7d729"
+  ],
+  "reasoningPt": "S5, S6, S10 e S12 apontam o mesmo defeito: o limite de 10MB fixo no cliente vale para todos os tipos e ignora max_attachment_size_kb. Todas propõem a mesma correção, que é aplicar os 10MB só a imagens. O S6 enfatiza a mensagem de erro, mas a causa e a correção são as mesmas. O S5 vai para bundles porque também cita, de passagem, o handler 413, que é outro ponto."
+ }
+}

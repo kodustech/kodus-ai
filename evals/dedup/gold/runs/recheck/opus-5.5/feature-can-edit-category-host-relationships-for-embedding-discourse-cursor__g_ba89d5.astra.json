@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f1af608e",
+     "s_974e8b50"
+    ],
+    "defect": "O teste afirma verificar a ausência de hosts permitidos, mas passa porque o tópico não possui um embed, sem testar o comportamento anunciado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S10 e S19 apontam o mesmo defeito no mesmo teste: o nome descreve uma condição que ele não verifica. As diferenças nas correções propostas não alteram a identidade do problema."
+ }
+}

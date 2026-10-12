@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c0312a1d",
+     "s_72746574"
+    ],
+    "defect": "The getForLogin cache (cacheKeyForLogin) is not invalidated when an IdP is linked to or unlinked from an organization through OrganizationProvider.addIdentityProvider/removeIdentityProvider, so stale entries stay in the cache."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c0312a1d"
+  ],
+  "reasoningPt": "S1 e S3 apontam o mesmo defeito principal: o cache de login não é invalidado quando um IdP é vinculado ou desvinculado de uma organização via OrganizationProvider. A correção é a mesma, ligar a invalidação no InfinispanOrganizationProvider. S1 também pede, só na correção proposta, invalidar quando OrganizationModel.isEnabled muda. Por isso é bundle, mas isso não muda o grupo dele."
+ }
+}

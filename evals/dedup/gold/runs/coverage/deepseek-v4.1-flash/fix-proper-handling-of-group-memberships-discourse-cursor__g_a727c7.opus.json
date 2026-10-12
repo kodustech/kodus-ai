@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "add_members/remove_member in admin/groups_controller.rb (lines 66, 85) require params[:group_id], but the routes never supply it, so every real request fails"
+   },
+   {
+    "id": "F2",
+    "description": "config/routes.rb lines 49-50 define bare /admin/groups/members paths with no id segment, so they never match the client's /admin/groups/:id/members.json"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_5c133571",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_62fe45ea",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

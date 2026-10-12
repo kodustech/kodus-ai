@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7793b970",
+     "s_10c6055f"
+    ],
+    "defect": "Exceções de safe_urlopen e get_user_info escapam do tratamento no callback OAuth, causando HTTP 500 em vez da página de erro."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S7 apontam a mesma falta de tratamento de exceções nas mesmas chamadas do callback OAuth. Ambas propõem proteger a troca de token e a consulta do usuário, de modo que uma única correção resolve os dois relatos."
+ }
+}

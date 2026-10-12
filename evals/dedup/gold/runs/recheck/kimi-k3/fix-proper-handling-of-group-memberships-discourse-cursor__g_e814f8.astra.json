@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f51c2a1e",
+     "s_6a2f511a",
+     "s_61e1edca"
+    ],
+    "defect": "O teste de remove_member usa PUT, embora a rota dessa ação aceite DELETE."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S3 e S6 apontam o mesmo defeito e propõem a mesma correção: trocar PUT por DELETE no teste de remove_member. A divergência entre S2 e S3 sobre o despacho do controller spec e o caminho de arquivo diferente em S6 não caracterizam defeitos distintos."
+ }
+}

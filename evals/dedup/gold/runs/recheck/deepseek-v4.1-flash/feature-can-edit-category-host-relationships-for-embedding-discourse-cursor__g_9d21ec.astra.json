@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7d922aa5",
+     "s_9c6d1a3d",
+     "s_193a4147"
+    ],
+    "defect": "A consulta em record_for_host aplica lowercase apenas à coluna, deixando o host recebido sem normalização e rejeitando URLs com maiúsculas no domínio."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4, S7 e S12 apontam a mesma comparação com normalização incompleta em record_for_host, corrigida ao normalizar também o parâmetro. As observações de S7 e S12 sobre before_validation contextualizam esse defeito e não constituem defeitos adicionais."
+ }
+}

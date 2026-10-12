@@ -1,0 +1,46 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "promptSha": "671cf771c64517055bb740b5a8da4f740e8162dc",
+  "attempt": 1,
+  "ms": 38574,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_cd94ae6e",
+          "s_305b9098",
+          "s_8d96da0a"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "ContextualLoggerMiddleware and MetricsMiddleware dereference potentially nil requests without guards before instrumentation.",
+        "rationale": "The first two suggestions report the same missing guards in ContextualLoggerMiddleware; the third reports the identical mistake in MetricsMiddleware. The merged comment must preserve both locations, which require separate guard additions."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_c6ed5cbd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7faa756a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4665ee1f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_91d545bd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_729ce220",
+        "confidence": "high"
+      }
+    ]
+  }
+}

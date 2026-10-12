@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c91d29d0",
+     "s_0f7f00ca"
+    ],
+    "defect": "O ramo ativado por use-table-widget-visualization passa colunas e dados vazios ao TableWidgetVisualization, ignorando os resultados reais da consulta."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S4 relatam o mesmo defeito no mesmo trecho: tabelas vazias para organizações com a flag habilitada. A observação de S4 sobre o fallback de colunas apenas explica esse comportamento; conectar os dados e as colunas reais resolve ambas as sugestões."
+ }
+}

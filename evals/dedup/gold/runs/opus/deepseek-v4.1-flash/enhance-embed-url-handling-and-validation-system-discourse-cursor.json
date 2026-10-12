@@ -1,0 +1,93 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "6ef9690be0eafcf56e0b933f3350f3fa0027acfe",
+  "attempt": 1,
+  "ms": 8912,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 19897,
+    "cache_read_input_tokens": 6564,
+    "output_tokens": 504,
+    "output_tokens_details": {
+      "thinking_tokens": 88
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 19897,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 504,
+        "cache_read_input_tokens": 6564,
+        "cache_creation_input_tokens": 19897,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 19897
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1705768,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_e74b5d11",
+          "s_298069c3",
+          "s_ef28ad3a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The migration defaults posts.cook_method to 1, which is :raw_html in Post.cook_methods, so ordinary posts skip the cooking pipeline. The default should be 0 (:regular).",
+        "rationale": "All three point at the same line and the same wrong default value. Changing the default to 0 fixes all of them."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_46a32b26",
+        "confidence": "high"
+      },
+      {
+        "id": "s_12dbd287",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9c86ed19",
+        "confidence": "high"
+      },
+      {
+        "id": "s_023987f4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bd53f7a8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d69f9639",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c67f5df6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3198bc01",
+        "confidence": "high"
+      }
+    ]
+  }
+}

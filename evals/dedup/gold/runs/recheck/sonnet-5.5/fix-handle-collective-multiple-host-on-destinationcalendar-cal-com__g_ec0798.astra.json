@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6881012d",
+     "s_fc6a067d",
+     "s_cbaba39f",
+     "s_56da48b0",
+     "s_3383b620",
+     "s_8752109f"
+    ],
+    "defect": "Acesso a mainHostDestinationCalendar.integration sem optional chaining causa TypeError em reservas Google Meet quando destinationCalendar é null ou um array vazio."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S6, S7, S9 e S12 descrevem o mesmo acesso inseguro nas mesmas linhas, resolvido com optional chaining. S13 propõe exatamente essa correção para o mesmo trecho; portanto, todas pertencem ao mesmo grupo e nenhuma reúne defeitos distintos."
+ }
+}

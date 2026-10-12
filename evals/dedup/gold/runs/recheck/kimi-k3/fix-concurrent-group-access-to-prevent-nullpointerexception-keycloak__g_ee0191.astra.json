@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a04f7645",
+     "s_aac44397",
+     "s_5d6e93db",
+     "s_ce320063",
+     "s_d110f3c0"
+    ],
+    "defect": "O teste verifica caughtExceptions sem aguardar o término da thread leitora, podendo passar antes que uma exceção da última requisição seja registrada."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S5, S6, S7 e S9 descrevem a mesma corrida entre a última leitura e a asserção, resolvida aguardando a thread com join(). A observação de S7 sobre a thread continuar após o teste é outra consequência da mesma falta de sincronização, não um defeito independente."
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_7ecf0d24",
+    "mainDefect": "Removing findMany breaks existing callers with TypeError: service.findMany is not a function.",
+    "secondary": [
+     {
+      "defect": "getBaseConditions cannot merge caller-provided filters, forcing manual composition that can lose filters or omit authorization conditions.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

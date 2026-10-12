@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_cde8d02f",
+    "mainDefect": "The Delete menu item is unavailable in the ruler-less list because its guard still requires a ruler rule.",
+    "secondary": [
+     {
+      "defect": "The Pause/Resume menu item is unavailable in the ruler-less list because it still requires a Grafana ruler rule.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e626c971",
+    "mainDefect": "GrafanaGroupLoader's documentation incorrectly says it loads from both Prometheus and Ruler endpoints.",
+    "secondary": [
+     {
+      "defect": "The expectedRulesCount documentation still describes discrepancies in a Ruler response that is no longer fetched.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

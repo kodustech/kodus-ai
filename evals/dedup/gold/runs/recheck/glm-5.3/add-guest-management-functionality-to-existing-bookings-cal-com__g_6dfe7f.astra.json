@@ -1,0 +1,33 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_400ea655",
+     "s_7d8e5cc8"
+    ],
+    "defect": "A comparação sem normalização permite contornar a blacklist com variações de maiúsculas e minúsculas."
+   },
+   {
+    "members": [
+     "s_c4f90580",
+     "s_bcca7cc3",
+     "s_0b97f8ef"
+    ],
+    "defect": "O servidor não impede emails repetidos dentro do array de convidados enviado na mesma requisição."
+   }
+  ],
+  "unique": [
+   "s_17395beb"
+  ],
+  "bundles": [
+   "s_17395beb",
+   "s_7d8e5cc8",
+   "s_c4f90580",
+   "s_bcca7cc3"
+  ],
+  "reasoningPt": "S1 e S7 têm como defeito principal o bypass da blacklist; S8, S15 e S19 começam pela falta de deduplicação do array recebido. S2 fica isolada porque o primeiro defeito específico relatado é a comparação sensível a maiúsculas com participantes já existentes, que exige uma correção distinta. S2, S7, S8 e S15 incluem defeitos adicionais, sem unir os respectivos grupos."
+ }
+}

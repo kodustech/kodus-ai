@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "On the unified-storage failure path in Mode3 Create (line 45) and Update (line 129), recordLegacyDuration is called instead of recordStorageDuration, so storage failures are counted in the legacy metric.",
+    "members": [
+     "s_9e1a3d59",
+     "s_2d189e44",
+     "s_00216386",
+     "s_de5fad1d",
+     "s_c273daf4"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões apontam o mesmo erro de copiar e colar: o caminho de falha do Storage chama recordLegacyDuration em vez de recordStorageDuration. S9 e S13 tratam do Create, S14 trata do Update, e S3 e S26 cobrem os dois lugares. Trata-se do mesmo erro repetido em dois pontos, e uma única troca de helper corrige os dois, então o grupo fica como está."
+ }
+}

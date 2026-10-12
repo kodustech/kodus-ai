@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ce320063",
+    "mainDefect": "The reader thread is never joined before the assertion, so an exception from its in-flight request can be added to caughtExceptions after the assertion has already passed, giving a false pass.",
+    "secondary": [
+     {
+      "defect": "The test leaves a non-daemon reader thread running after the test ends.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

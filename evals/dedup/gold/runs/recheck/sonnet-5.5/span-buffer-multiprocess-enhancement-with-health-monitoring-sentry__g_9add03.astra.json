@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_95a93597",
+     "s_91f6b187"
+    ],
+    "defect": "O timer flusher.wait_produce usa a chave de tag \"shards\", enquanto as demais métricas usam \"shard\", impedindo o agrupamento consistente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S8 relatam a mesma inconsistência na chave da tag de wait_produce, resolvida pela mesma alteração. A observação de S8 sobre o valor conter uma lista de shards não aponta outro defeito."
+ }
+}

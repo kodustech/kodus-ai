@@ -1,0 +1,104 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "f55b74ffadc61b488bb8934f51fd45ffc824e03b",
+  "attempt": 1,
+  "ms": 66001,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0382c995",
+          "s_21875822"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Calling scrub on missing feed-item content raises NoMethodError and aborts the feed poll.",
+        "rationale": "Both report the same unchecked i.content value in PollFeed and propose guarding it or falling back to description."
+      },
+      {
+        "members": [
+          "s_7eeb14d4",
+          "s_f0a16222"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "absolutize_urls incorrectly treats protocol-relative href and src values as root-relative paths, corrupting their hosts.",
+        "rationale": "Both identify the same slash handling in the same anchor and image loops. Each already covers the full defect and its affected locations."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_a9573377",
+        "confidence": "high"
+      },
+      {
+        "id": "s_08eb6f3f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_25e02b46",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0ead3858",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2a3a58c7",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2dac6f1a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_381503b6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4eb5310c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ff524526",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d03b1f18",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3208d052",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b7abd5b3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ff0c02e5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a2ef2111",
+        "confidence": "high"
+      },
+      {
+        "id": "s_def3d238",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8bc68705",
+        "confidence": "high"
+      },
+      {
+        "id": "s_229d7279",
+        "confidence": "high"
+      }
+    ]
+  }
+}

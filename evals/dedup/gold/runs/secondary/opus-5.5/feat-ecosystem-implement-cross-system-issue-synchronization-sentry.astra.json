@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c2f1d70e",
+    "mainDefect": "The queued default is evaluated at module import, giving instances a stale shared timestamp instead of their creation time.",
+    "secondary": [
+     {
+      "defect": "test_to_dict only checks that queued is non-null, so it fails to detect incorrect timestamps.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_03c0a1d9",
+    "mainDefect": "The queued default is evaluated at class definition, giving instances a shared process-start timestamp.",
+    "secondary": [
+     {
+      "defect": "The serialization test only checks that queued is non-null, so it fails to detect incorrect timestamps.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_400b91f4",
+    "mainDefect": "test_from_dict_empty_array passes an empty dictionary despite its name, leaving list inputs untested.",
+    "secondary": [
+     {
+      "defect": "The typo in test_from_dict_inalid_data prevents test runs filtered on 'invalid' from selecting it.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

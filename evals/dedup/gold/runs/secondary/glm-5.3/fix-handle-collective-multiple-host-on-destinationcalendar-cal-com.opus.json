@@ -1,0 +1,96 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_7f78185c",
+    "mainDefect": "In Google updateEvent, the fallback searches for the destination whose externalId equals a falsy externalCalendarId, so it never matches and the update is sent with an undefined calendarId.",
+    "secondary": [
+     {
+      "defect": "Google deleteEvent has the same dead fallback, so it falls back to the \"primary\" calendar, gets a 404 that is silently ignored, and leaves an orphaned event on the destination calendar.",
+      "coveredBy": [
+       "s_dd554f89",
+       "s_e57c1a14"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_aa8b5b10",
+    "mainDefect": "Google createEvent picks the calendar only by matching credentialId, so destinations with a null credentialId never match and the event is created on \"primary\" instead of the selected destination calendar.",
+    "secondary": [
+     {
+      "defect": "EventManager's no-credentialId else-branch calls createEvent without passing externalId, so the booking reference is saved with an undefined externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_b7a8f74b",
+    "mainDefect": "Google createEvent picks the calendar only by matching credentialId, so destinations with a null credentialId are silently created on \"primary\" instead of the configured externalId.",
+    "secondary": [
+     {
+      "defect": "EventManager's no-credentialId branch never passes destination.externalId to CalendarManager.createEvent, so the stored booking reference has no externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_65bc8258",
+    "mainDefect": "Google createEvent puts events on the credential's primary calendar instead of the configured destination when the destination has no credentialId.",
+    "secondary": [
+     {
+      "defect": "The no-credentialId path stores externalCalendarId as undefined in the booking reference, which feeds the broken update/delete fallback.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_8ebfd962",
+    "mainDefect": "EventManager createAllCalendarEvents' no-credentialId else-branch calls createEvent without externalId, so the booking reference is saved with a null externalCalendarId.",
+    "secondary": [
+     {
+      "defect": "Google createEvent selects the calendar only by credentialId match, so a destination with no credentialId is created on \"primary\" instead of the selected destination.externalId.",
+      "coveredBy": [
+       "s_aa8b5b10",
+       "s_b7a8f74b",
+       "s_65bc8258"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_08035170",
+    "mainDefect": "Google updateEvent's fallback find-by-externalId only runs when externalCalendarId is falsy, so it never matches and the update is called with calendarId undefined.",
+    "secondary": [
+     {
+      "defect": "Google deleteEvent has the same dead fallback, so calendarId is always undefined in that case.",
+      "coveredBy": [
+       "s_dd554f89",
+       "s_e57c1a14"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_7aa0f717",
+    "mainDefect": "Google updateEvent's fallback compares destination externalIds against a falsy externalCalendarId, so selectedCalendar is undefined and the Google update fails.",
+    "secondary": [
+     {
+      "defect": "Google deleteEvent contains the same self-nullifying fallback expression, so cancellations reached from handleCancelBooking fail too.",
+      "coveredBy": [
+       "s_dd554f89",
+       "s_e57c1a14"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

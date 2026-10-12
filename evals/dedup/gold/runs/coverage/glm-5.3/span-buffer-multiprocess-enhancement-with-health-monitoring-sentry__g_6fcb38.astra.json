@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "flusher.py:51–66 allows negative max_processes values, creating zero flushers and leaving Redis accumulation without health detection or backpressure."
+   },
+   {
+    "id": "F2",
+    "description": "flusher.py:51 treats explicit max_processes=0 as None/auto mode, unexpectedly creating one process per shard."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0686ed03",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ed5056d1",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

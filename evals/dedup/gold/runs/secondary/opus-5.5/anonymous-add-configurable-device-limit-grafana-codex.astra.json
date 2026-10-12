@@ -1,0 +1,47 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_19d84151",
+    "mainDefect": "Wire cannot resolve the new int64 argument required by ProvideAnonDBStore, causing code generation to fail.",
+    "secondary": [
+     {
+      "defect": "Wire also rejects the unused store provider because ProvideAnonymousDeviceService now constructs the store itself.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a943bfa2",
+    "mainDefect": "Anonymous clients can bypass the device limit by omitting the X-Grafana-Device-Id header.",
+    "secondary": [
+     {
+      "defect": "An unauthenticated attacker can exhaust the shared device limit with random device IDs and deny access to legitimate new viewers.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e002d46c",
+    "mainDefect": "Synchronous device registration puts repeated database round trips and an increasingly expensive COUNT query on the authentication hot path.",
+    "secondary": [
+     {
+      "defect": "The database work no longer has the previous bounded timeout.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_2e50d2cb",
+    "mainDefect": "The updateDevice comment implies a supplied time range even though the function derives a fixed window from device.UpdatedAt.",
+    "secondary": [
+     {
+      "defect": "The comment omits that updateDevice returns ErrDeviceLimitReached when no matching device exists.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

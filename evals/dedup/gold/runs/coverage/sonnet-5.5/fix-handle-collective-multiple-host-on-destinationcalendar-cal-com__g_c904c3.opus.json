@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "handleNewBooking.ts ~1063-1079: evt.destinationCalendar can be null, so evt.destinationCalendar?.push(...teamDestinationCalendars) does nothing and a collective event drops the team members' calendars"
+   },
+   {
+    "id": "F2",
+    "description": "handleNewBooking.ts ~987-1006: teamDestinationCalendars is filled as a side effect inside async map callbacks, which is fragile"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_b364bc36",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_a6c93c38",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4ddd4520",
+     "s_00480f16",
+     "s_5b1de316"
+    ],
+    "defect": "O acesso direto a integration.metadata[\"sender\"][\"login\"] causa KeyError e HTTP 500 quando os metadados não contêm o remetente, em vez de retornar a página de erro."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S7 e S9 relatam o mesmo acesso desprotegido aos metadados, no mesmo trecho, com a mesma consequência. As diferenças nos exemplos de origem dos registros e nas correções propostas não alteram o defeito; nenhuma sugestão reúne defeitos distintos."
+ }
+}

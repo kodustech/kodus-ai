@@ -1,0 +1,119 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_03fc7aa9",
+    "mainDefect": "Background legacy writes inherit request cancellation and can be cancelled when the handler returns.",
+    "secondary": [
+     {
+      "defect": "Legacy write failures are counted in metrics but never logged.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_0e56e8cb",
+    "mainDefect": "Legacy Update receives the original objInfo instead of the unified-storage result wrapped in updateWrapper, allowing conflicts or divergent updates.",
+    "secondary": [
+     {
+      "defect": "Legacy update failures or divergence occur without an error log.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_74e86eb7",
+    "mainDefect": "Unified-storage Create failures are recorded through recordLegacyDuration instead of recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "Unified-storage Update failures are recorded through recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_ef1efee6"
+      ]
+     },
+     {
+      "defect": "Successful Delete metrics use the object name instead of options.Kind, creating incorrect labels and unbounded cardinality.",
+      "coveredBy": [
+       "s_6c5a2af8",
+       "s_806c2db2"
+      ]
+     },
+     {
+      "defect": "Legacy DeleteCollection duration is recorded through recordStorageDuration instead of recordLegacyDuration.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Delete puts the base logger into the context instead of the enriched logger, losing contextual fields.",
+      "coveredBy": [
+       "s_849456ca",
+       "s_22b6a64c"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_4ee7f335",
+    "mainDefect": "Legacy.Create receives an object that Storage.Create may already have mutated with unified-storage metadata.",
+    "secondary": [
+     {
+      "defect": "Sharing the Create object with the background legacy write can race with response serialization.",
+      "coveredBy": [
+       "s_df703bb4"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ef1efee6",
+    "mainDefect": "Unified-storage Update failures are recorded through recordLegacyDuration instead of recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "Legacy DeleteCollection duration is recorded through recordStorageDuration instead of recordLegacyDuration.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f50f8610",
+    "mainDefect": "Background legacy writes inherit request cancellation and can be cancelled after the response is sent.",
+    "secondary": [
+     {
+      "defect": "The mode 3 playlist integration tests immediately read legacy storage without waiting for asynchronous writes, making them racy.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8fccae2c",
+    "mainDefect": "The unified-storage Create failure test configures its failing expectation on the legacy store instead of the storage store.",
+    "secondary": [
+     {
+      "defect": "Legacy and storage mocks share one mock.Mock, allowing calls to one store to satisfy expectations intended for the other.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_53a567b3",
+    "mainDefect": "Mode 3 unit tests neither wait for nor verify background legacy writes, so removing those writes would leave the tests passing.",
+    "secondary": [
+     {
+      "defect": "Delete and DeleteCollection tests omit legacy expectations, causing unexpected mock calls in background goroutines.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ffe2609d",
+    "mainDefect": "Background legacy writes inherit request cancellation and can be cancelled before completion.",
+    "secondary": [
+     {
+      "defect": "Legacy write failures are counted in metrics but never logged.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

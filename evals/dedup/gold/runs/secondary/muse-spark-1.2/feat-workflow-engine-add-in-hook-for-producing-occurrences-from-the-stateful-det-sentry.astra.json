@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_5a192909",
+    "mainDefect": "The expected occurrence for group_2 uses value 6 instead of 10.",
+    "secondary": [
+     {
+      "defect": "The mock occurrence builder does not surface the value, so equality assertions cannot detect incorrect value forwarding.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

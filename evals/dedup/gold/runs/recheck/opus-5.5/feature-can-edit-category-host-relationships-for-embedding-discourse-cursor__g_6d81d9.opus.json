@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_dbcf98a4",
+     "s_0621eb9a"
+    ],
+    "defect": "The migration inserts old embeddable_hosts values unchanged, with scheme, path or whitespace still in them, so EmbeddableHost.record_for_host's comparison against the bare uri.host never matches and embedding breaks after upgrade."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_dbcf98a4",
+   "s_0621eb9a"
+  ],
+  "reasoningPt": "S2 e S13 têm o mesmo defeito principal: a migração insere os hosts antigos sem normalizar (scheme, path, espaços), e por isso o lookup em record_for_host nunca encontra correspondência. As duas também falam da falta de escape/quote no INSERT como defeito secundário. Em S2 isso aparece no WHY e em S13 só na correção proposta, então as duas entram em bundles. O grupo fica como está."
+ }
+}

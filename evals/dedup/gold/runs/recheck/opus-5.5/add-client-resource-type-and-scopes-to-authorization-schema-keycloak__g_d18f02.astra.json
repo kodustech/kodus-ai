@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b30abb00",
+     "s_95688760"
+    ],
+    "defect": "O fallback para o recurso global 'Clients' não verifica retorno nulo, podendo causar NullPointerException nas verificações de permissão de clientes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S4 apontam a mesma ausência de verificação de nulo no mesmo fallback, com o mesmo cenário e consequência. A alternativa de migração mencionada em S2 é outra solução para esse defeito, não um defeito adicional."
+ }
+}

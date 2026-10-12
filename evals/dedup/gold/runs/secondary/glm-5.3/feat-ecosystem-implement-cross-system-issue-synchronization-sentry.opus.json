@@ -1,0 +1,59 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_30f59a75",
+    "mainDefect": "The dataclass default `queued: datetime = timezone.now()` runs only once, at import time, so every AssignmentSource gets the same stale timestamp.",
+    "secondary": [
+     {
+      "defect": "`to_dict()` puts a raw datetime into the Celery task kwargs, and a JSON broker serializer will fail on it, so the outbound sync task never gets enqueued.",
+      "coveredBy": [
+       "s_87e5e747",
+       "s_7123f91d"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ad4d76d9",
+    "mainDefect": "The dataclass default `queued: datetime = timezone.now()` runs only once, at import time, so `queued` holds the process import time instead of the time the sync was queued.",
+    "secondary": [
+     {
+      "defect": "After the Celery JSON round-trip (`to_dict` → kwargs → `from_dict`), `queued` comes back as an ISO string, which does not match its declared `datetime` type.",
+      "coveredBy": [
+       "s_7123f91d",
+       "s_87e5e747"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_7123f91d",
+    "mainDefect": "`to_dict()` leaves `queued` as a raw datetime in the Celery kwargs, so it either fails to serialize at enqueue or comes back as a string that `from_dict` stores in a datetime-typed field.",
+    "secondary": [
+     {
+      "defect": "The `queued` default `timezone.now()` runs only once, at module import, so every instance gets the same import-time timestamp.",
+      "coveredBy": [
+       "s_221233e4",
+       "s_81d5305c",
+       "s_7dcbf2c4",
+       "s_30f59a75",
+       "s_ad4d76d9"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_adc64e50",
+    "mainDefect": "The test is named `test_from_dict_empty_array`, but it passes an empty dict, not an array.",
+    "secondary": [
+     {
+      "defect": "The sibling test name `test_from_dict_inalid_data` misspells 'invalid'.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

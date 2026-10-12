@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "evt.destinationCalendar falls back to null, so the optional-chained push of teamDestinationCalendars does nothing and the destination calendars of the COLLECTIVE team hosts are silently dropped.",
+    "members": [
+     "s_b9c30153",
+     "s_63b14dbf"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S23 apontam o mesmo defeito em handleNewBooking.ts: o fallback para null faz o `evt.destinationCalendar?.push(...)` não fazer nada, e os calendários dos hosts COLLECTIVE se perdem. Os dois propõem a mesma correção (usar [] como padrão ou atribuir o array). A menção de S23 ao EventManager é só um benefício extra da mesma correção, não um defeito separado."
+ }
+}

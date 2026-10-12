@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1a66b466",
+     "s_8fa1fa63"
+    ],
+    "defect": "Javadoc of void require* methods (requireView, requireViewClientScopes) says 'Returns true' instead of 'Throws ForbiddenException if ...'."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S7 apontam o mesmo erro de copiar e colar no javadoc de métodos require* que retornam void: o texto diz \"Returns true\" em vez de \"Throws ForbiddenException if ...\". É o mesmo erro em dois lugares da mesma interface, e uma única correção resolve os dois. Nenhuma das duas sugestões traz um segundo defeito."
+ }
+}

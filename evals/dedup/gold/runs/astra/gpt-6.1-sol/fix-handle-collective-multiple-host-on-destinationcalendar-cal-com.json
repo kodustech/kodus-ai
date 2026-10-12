@@ -1,0 +1,66 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "c59ffbb9bca0a59a6437b7ebd5d69ab3080a8963",
+  "attempt": 1,
+  "ms": 56587,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0bb6afb4",
+          "s_97dfdc72"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Google update and delete fallbacks search for an absent externalCalendarId instead of selecting an available destination, losing the update calendar ID and directing deletion to primary.",
+        "rationale": "Both report the same broken fallback in both update and delete. The merged comment must retain both locations because each needs correction."
+      },
+      {
+        "members": [
+          "s_60571361",
+          "s_23010781",
+          "s_8dd680d0",
+          "s_d2d1c6a5",
+          "s_6a0ae591",
+          "s_41c96050"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Office365 creation selects the first host's destination instead of the current credential's destination, causing failed or misdirected creation and mismatched saved references; Lark and the base calendar service repeat this selection mistake.",
+        "rationale": "All six report the same Office365 destination-selection defect; reference mismatches are consequences of that defect. s_d2d1c6a5 additionally reports the mistake in Lark and the base service, which must survive in the merged comment."
+      },
+      {
+        "members": [
+          "s_cf65a107",
+          "s_d4b02182",
+          "s_a77731dd",
+          "s_7d89e4f9",
+          "s_8cb55fd3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The Google Meet fallback dereferences an undefined first destination when destinationCalendar is null or empty, throwing instead of falling back to Cal Video.",
+        "rationale": "All five identify the same missing optional guard in EventManager. One edit resolves every report."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_7b14dd71",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9ed13737",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6da68a46",
+        "confidence": "high"
+      }
+    ]
+  }
+}

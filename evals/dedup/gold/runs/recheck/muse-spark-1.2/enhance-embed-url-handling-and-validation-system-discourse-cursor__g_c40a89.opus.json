@@ -1,0 +1,15 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_56e8eec5",
+   "s_3ed07a3a"
+  ],
+  "bundles": [
+   "s_56e8eec5"
+  ],
+  "reasoningPt": "O primeiro defeito que S5 aponta é a injeção de JS (XSS), porque request.referer entra sem escape no literal JavaScript. O targetOrigin inválido só aparece depois, como segundo defeito, e por isso S5 entra em bundles. S13 trata só do targetOrigin com a URL completa em vez da origem, que é outro defeito com outra correção, então o grupo deve ser separado."
+ }
+}

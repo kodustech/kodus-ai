@@ -1,0 +1,15 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_9c9743f6",
+   "s_7cc8bcbd"
+  ],
+  "bundles": [
+   "s_9c9743f6"
+  ],
+  "reasoningPt": "O primeiro defeito que S3 aponta, tanto no WHAT quanto no WHY, é que getShortcut() entrou como método abstrato do SPI sem implementação padrão. Isso quebra a compilação das implementações customizadas já existentes ou causa AbstractMethodError. A divergência entre o javadoc (3 letras) e o decoder (exatamente 2 caracteres) e o NPE com shortcut nulo vêm depois em S3, por isso ele entra em bundles. S8 trata só da divergência do javadoc, que não é o defeito principal de S3, então os dois ficam separados."
+ }
+}

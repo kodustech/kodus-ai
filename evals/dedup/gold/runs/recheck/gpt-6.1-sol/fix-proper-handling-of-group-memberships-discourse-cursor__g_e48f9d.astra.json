@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6f3a72b3",
+     "s_e03bda55",
+     "s_76d835b4"
+    ],
+    "defect": "O cálculo de totalPages usa floor(user_count / limit) + 1 e cria uma página vazia extra quando a quantidade de membros é múltipla exata do limite."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3 e S4 descrevem o mesmo erro no cálculo de totalPages, nas mesmas linhas. Uma única correção com Math.ceil resolve todos os relatos; nenhuma sugestão inclui outro defeito."
+ }
+}

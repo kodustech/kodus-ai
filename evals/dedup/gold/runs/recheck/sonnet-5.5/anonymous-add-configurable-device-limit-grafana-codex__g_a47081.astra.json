@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9c3809e7",
+     "s_3b443542",
+     "s_4c4e75d7"
+    ],
+    "defect": "O registro em wire.go não foi atualizado após ProvideAnonDBStore passar a exigir deviceLimit, deixando o provider e o binding incompatíveis com a nova construção do store."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S3 e S7 relatam o mesmo defeito: o registro desatualizado no Wire após a mudança de assinatura de ProvideAnonDBStore. A observação de que o binding deixou de ser consumido contextualiza a mesma correção, sem constituir um defeito independente."
+ }
+}

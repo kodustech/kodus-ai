@@ -1,0 +1,70 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Google CalendarService.updateEvent, lines 254–256: fallback matches against a falsy externalCalendarId, yielding undefined and breaking updates."
+   },
+   {
+    "id": "F2",
+    "description": "Google CalendarService.deleteEvent, lines 315–317: fallback matches against a falsy externalCalendarId, causing deletion to target primary and miss the destination-calendar event."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7aa0f717",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7f78185c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_f50a5d4f",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e57c1a14",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dd554f89",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_08035170",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_29b344c5",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

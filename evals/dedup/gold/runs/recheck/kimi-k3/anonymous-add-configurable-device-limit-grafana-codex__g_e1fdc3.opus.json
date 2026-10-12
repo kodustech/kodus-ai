@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_34336505",
+     "s_e593e36c",
+     "s_c1891149"
+    ],
+    "defect": "tagDeviceUI writes the local-cache entry before CreateOrUpdateDevice, so a failed or limit-rejected device stays cached for 29 minutes and later requests skip the device-limit check."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S7 apontam o mesmo defeito: o localCache.SetDefault roda antes do CreateOrUpdateDevice, e o cache fica com uma entrada inválida quando a gravação falha. S1 e S5 detalham o efeito de burlar o limite de dispositivos. S7 descreve a mesma causa de forma mais genérica. A correção é a mesma para os três: preencher o cache só depois que a gravação der certo."
+ }
+}

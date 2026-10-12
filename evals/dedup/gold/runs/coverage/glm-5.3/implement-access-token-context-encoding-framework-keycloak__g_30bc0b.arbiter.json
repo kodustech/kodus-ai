@@ -1,0 +1,48 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "The getShortcut() javadoc in OAuth2GrantTypeFactory suggests 3-letter shortcuts, but getTokenContextFromTokenId requires a 6-char context, which means a 2-char grant shortcut. Tokens from a custom grant that follows the javadoc can't be decoded."
+   },
+   {
+    "id": "F2",
+    "description": "Nothing checks the grant shortcut length, either at registration in postInit or in encodeTokenId. As a result, token ids that can't be decoded are still issued."
+   },
+   {
+    "id": "F3",
+    "description": "In getTokenContextFromTokenId, an id that contains a colon but whose prefix isn't 6 chars throws IllegalArgumentException. It should fall back to UNKNOWN, as ids without a colon do."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_07f54fcf",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_d50d9f26",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_f0bbf95c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": true,
+  "reasoning": "The group problem has three parts: the javadoc and decoder disagree on shortcut length, nothing checks the length, and colon-containing ids with a non-6-char prefix throw instead of falling back. Labeler 2 split the missing check into two facets, one for postInit and one for encodeTokenId. Those are two alternative places to add the same check, and any one of them fixes it, so they are one defect. It stays one facet. All three members say the shortcut length is never checked: s_07 points to postInit, s_d50 to encodeTokenId, s_f0 to postInit. Only s_07f54fcf reports that colon-containing ids with a non-6-char prefix throw instead of returning UNKNOWN. The other two members never mention it. So s_07f54fcf covers every facet and the other two miss F3."
+ }
+}

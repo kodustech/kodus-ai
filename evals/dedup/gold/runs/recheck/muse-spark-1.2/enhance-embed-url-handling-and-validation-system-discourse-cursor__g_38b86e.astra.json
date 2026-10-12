@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5908271a",
+     "s_e5d9dd90",
+     "s_2b2b1546"
+    ],
+    "defect": "A validação de e.origin usa contenção de substring em discourseUrl em vez de comparação exata com a origem esperada."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6, S12 e S14 relatam o mesmo defeito na mesma validação de origem. As diferenças nos exemplos e nas linhas destacadas não alteram o problema; comparar exatamente com a origem normalizada resolve as três sugestões."
+ }
+}

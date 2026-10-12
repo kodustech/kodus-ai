@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f5735a93",
+     "s_980ed5af",
+     "s_f05796b7"
+    ],
+    "defect": "O cálculo independente do prefixo e do sufixo comuns permite sobreposição dos recortes, causando StringIndexOutOfBoundsException ao montar a mensagem de HTML ilegal."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S8 descrevem o mesmo defeito no mesmo bloco: a sobreposição entre prefixo e sufixo produz índices inválidos para substring. Os exemplos e as correções propostas variam, mas uma única correção dos limites resolve os três relatos; o encerramento do verificador mencionado em S1 é consequência desse defeito."
+ }
+}

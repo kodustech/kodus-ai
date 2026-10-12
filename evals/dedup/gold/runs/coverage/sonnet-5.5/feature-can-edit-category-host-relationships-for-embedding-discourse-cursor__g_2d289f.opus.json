@@ -1,0 +1,55 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Lines 9-11: execute(...)[0]['id'] for the embed_category lookup has no empty-result check, so it raises NoMethodError when no row or matching category exists"
+   },
+   {
+    "id": "F2",
+    "description": "Line 15: execute(...)[0]['value'] for the uncategorized_category_id fallback has no empty-result check, so it crashes if the row is missing"
+   },
+   {
+    "id": "F3",
+    "description": "Line 25: the host value is interpolated into the INSERT without escaping, so a quote or a blank line breaks the statement"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c715ef0c",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_1b696765",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0fd17a9d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dca123ba",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

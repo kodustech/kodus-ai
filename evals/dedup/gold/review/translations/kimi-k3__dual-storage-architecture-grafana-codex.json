@@ -1,0 +1,30 @@
+{
+ "s_442861c7": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O caminho de sucesso do Delete registra `d.recordStorageDuration(false, mode3Str, name, method, startStorage)` — o terceiro argumento é o `name` do objeto, enquanto todos os outros pontos de chamada (e a definição do label da métrica `[]string{\"is_error\",\"mode\",\"kind\",\"method\"}` em metrics.go:23) esperam o kind do recurso. POR QUÊ: As durações de Delete caem em um valor de label diferente de todos os outros métodos (kind vs nome do objeto) e, como `name` é por objeto, cada playlist/recurso deletado cria uma nova série temporal do Prometheus — uma explosão ilimitada de cardinalidade no histograma de duração do storage. CORREÇÃO: Passe `options.Kind` em vez de `name`, de forma consistente com a linha 103."
+ },
+ "s_ccf38f53": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: Delete constrói o `log := d.Log.WithValues(\"name\", name, \"kind\", options.Kind, \"method\", method)` enriquecido, mas depois injeta o `d.Log` não enriquecido no contexto: `ctx = klog.NewContext(ctx, d.Log)` — todos os outros métodos neste arquivo passam `log`. POR QUÊ: Os loggers downstream obtidos via klog.FromContext dentro de Storage.Delete e da goroutine legada perdem os campos name/kind/method, tornando os logs de Delete inconsistentes com Create/Update/List e mais difíceis de correlacionar. CORREÇÃO: Altere para `ctx = klog.NewContext(ctx, log)`."
+ },
+ "s_d0f19bee": {
+  "summaryPt": "O caminho de sucesso do Delete passa o nome do recurso individual como label da métrica Prometheus em vez do kind do recurso, expondo nomes de objetos no endpoint /metrics.",
+  "contentPt": "A linha 106 passa o `name` por objeto (o nome do recurso deletado) como terceiro argumento para recordStorageDuration, cuja assinatura (metrics.go:59) o trata como o label name/kind da métrica. Todos os outros pontos de chamada neste arquivo — incluindo o caminho de erro três linhas acima, na linha 103 — passam `options.Kind`. O resultado é que nomes de recursos individuais são publicados como valores de label do Prometheus no endpoint de métricas, expondo identificadores de objetos escolhidos pelo usuário e causando cardinalidade ilimitada de labels. Passe `options.Kind` em vez de `name`."
+ },
+ "s_7922ab52": {
+  "summaryPt": "`name` é passado como label de kind, produzindo métricas/logs com labels incorretos.",
+  "contentPt": "A variável `name` é passada como label de kind ao registrar métricas/logs, então o label conterá o nome do recurso em vez do kind do recurso. Passe o valor real do kind em vez de `name` para o label de kind."
+ },
+ "s_39ce7ed0": {
+  "summaryPt": "O log usa d.Log em vez do logger enriquecido, perdendo campos contextuais do log.",
+  "contentPt": "A instrução de log usa d.Log em vez do logger enriquecido, descartando os campos contextuais adicionados ao log enriquecido. Faça o log pelo logger enriquecido para que os pares chave/valor contextuais sejam incluídos."
+ },
+ "s_6b11a209": {
+  "summaryPt": "A métrica de sucesso do Delete é rotulada com o nome do objeto em vez do kind, e o contexto recebe o logger não enriquecido.",
+  "contentPt": "Dois descompassos entre declaração e uso em Delete: (1) a métrica do caminho de sucesso passa `name` (o nome do objeto) como label de kind, enquanto o caminho de erro na linha 103 e todos os outros pontos de chamada passam options.Kind — sucessos e falhas de delete são contados sob valores de label diferentes e a série de sucesso tem cardinalidade por nome de objeto; passe options.Kind. (2) a linha 96 enriquece `log`, mas a linha 97 coloca o `d.Log` puro no contexto (todos os outros métodos usam `log`), descartando os valores name/kind/method de qualquer logger obtido do ctx."
+ },
+ "s_20756cac": {
+  "summaryPt": "Delete:106 passa o `name` do objeto como label de kind da métrica em vez do kind do recurso.",
+  "contentPt": "Em Delete (linha 106), o `name` do recurso é passado como label de kind da métrica de duração. Passe o kind do recurso (uma constante de baixa cardinalidade) em vez do nome do objeto, para que o label da métrica identifique o tipo do recurso e não cause explosão de cardinalidade de labels."
+ }
+}

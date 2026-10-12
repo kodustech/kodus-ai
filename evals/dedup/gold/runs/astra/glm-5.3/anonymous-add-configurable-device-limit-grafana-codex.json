@@ -1,0 +1,67 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "6cc85ec6298019825e9aeb6ac3038f48096a5b4a",
+  "attempt": 1,
+  "ms": 40527,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_afdcd067",
+          "s_162332ff"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The non-atomic count-then-upsert allows concurrent new devices to exceed the configured limit.",
+        "rationale": "Both identify the same race between CountDevices and the subsequent insert, requiring the same atomic enforcement fix."
+      },
+      {
+        "members": [
+          "s_9e5e643b",
+          "s_94ef8b50"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Existing devices can be falsely rejected because MySQL reports zero changed rows for identical updates or clock skew places their stored timestamp outside the update window.",
+        "rationale": "Both report the MySQL unchanged-row rejection. s_94ef8b50 additionally reports rejection caused by clock skew and the timestamp window, which must survive in the merged comment."
+      },
+      {
+        "members": [
+          "s_ee1a1b68",
+          "s_95fab8b2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Caching a device before a failed database write lets a device rejected by the limit bypass enforcement on retries for 29 minutes.",
+        "rationale": "Both describe the same retained cache entry after ErrDeviceLimitReached and propose caching only successful writes or evicting failed entries."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_760b7747",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e01fa11d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_057ebbec",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e14a8784",
+        "confidence": "high"
+      },
+      {
+        "id": "s_23179061",
+        "confidence": "high"
+      }
+    ]
+  }
+}

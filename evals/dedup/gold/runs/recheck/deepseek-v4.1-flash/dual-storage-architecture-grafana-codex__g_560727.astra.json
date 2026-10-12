@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c5f2bfd6",
+     "s_3d27a0be"
+    ],
+    "defect": "Os testes do Mode3 não verificam que a escrita no legado ocorreu e passam mesmo quando ela é removida."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_3d27a0be"
+  ],
+  "reasoningPt": "S17 e S27 têm como defeito principal a ausência de verificação da escrita no legado, repetida em diferentes operações. S27 também relata execução não determinística com possível pânico por chamada inesperada, por isso é um bundle, sem alterar seu agrupamento pelo defeito principal."
+ }
+}

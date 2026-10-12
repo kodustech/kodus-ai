@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f6a54b69",
+     "s_f38384b4"
+    ],
+    "defect": "A tradução de totpStep1 em messages_zh_CN.properties usa chinês tradicional em um arquivo de chinês simplificado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S17 apontam o mesmo defeito na mesma chave e linha: o uso de chinês tradicional no locale zh_CN. A correção da tradução para chinês simplificado resolve ambas, e nenhuma relata um segundo defeito."
+ }
+}

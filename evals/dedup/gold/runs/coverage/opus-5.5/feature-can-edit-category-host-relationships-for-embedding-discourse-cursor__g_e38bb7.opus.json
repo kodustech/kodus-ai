@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "record_for_host lowercases only the stored host column, not the incoming uri.host, so mixed-case referers and embed URLs are rejected"
+   },
+   {
+    "id": "F2",
+    "description": "record_for_host compares only the bare uri.host, so hosts stored with a :port suffix (allowed by the validator) never match"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_29d8f6c2",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_93eb20ca",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_59aa04a7",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

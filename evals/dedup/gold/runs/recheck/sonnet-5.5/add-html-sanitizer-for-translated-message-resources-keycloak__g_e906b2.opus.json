@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c92095be",
+     "s_a5279db6"
+    ],
+    "defect": "The prefix and suffix scans in the diff-highlighting loop can overlap, so substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException instead of reporting the illegal HTML."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S9 apontam o mesmo defeito nas mesmas linhas (102-111): a varredura do sufixo não é limitada pelo prefixo, o que faz o substring lançar StringIndexOutOfBoundsException. As duas usam o mesmo exemplo (\"aa\" vs \"a\") e propõem limitar o laço do sufixo de forma equivalente. Nenhuma delas relata um segundo defeito, então o grupo fica como está."
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_d02ab584",
+     "s_6a01472a",
+     "s_a0b43d2d",
+     "s_c94570f5",
+     "s_35d3c9d2"
+    ],
+    "defect": "O carregamento dos locales de fallback ocorre apenas no controller, causando falhas de tradução fora das requisições e possível cache desses resultados."
+   }
+  ],
+  "unique": [
+   "s_e15dc8b6"
+  ],
+  "bundles": [
+   "s_6a01472a"
+  ],
+  "reasoningPt": "S1, S3, S4, S5 e S6 têm como defeito principal a falta de carregamento dos locales de fallback fora do controller. S2 trata de outro defeito: o cache não considera mudanças no locale padrão do site, exigindo uma correção distinta. S3 também relata esse segundo problema, mas permanece no grupo do primeiro pela regra do defeito principal."
+ }
+}

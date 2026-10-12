@@ -1,0 +1,24 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "promptSha": "7cf58eeb53de5dbb013277d1704935c3db35f920",
+  "attempt": 1,
+  "ms": 37459,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_db67742f",
+          "s_053e275d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The test registers IDP cleanup using the literal \"alias\" instead of the aliases of the created providers.",
+        "rationale": "Both suggestions identify the same incorrect cleanup target in testCacheIDPForLogin. Their differing assessments of its consequences do not change the reported defect."
+      }
+    ],
+    "unique": []
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "promptSha": "971413f6bbd42a6328a9a8076d215e5c4f805d83",
+  "attempt": 1,
+  "ms": 32751,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_9df70657",
+          "s_134d295f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Passing raw guests instead of uniqueGuests to sendAddGuestsEmails misclassifies existing attendees as newly added guests.",
+        "rationale": "Both identify the same incorrect argument at the same call site and propose replacing it with the filtered list."
+      },
+      {
+        "members": [
+          "s_e312d0f3",
+          "s_80b5cf4b",
+          "s_283838a3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The team authorization predicate uses && instead of ||, denying team admins who are not owners.",
+        "rationale": "All three report the same boolean operator defect on lines 46–48 of addGuests.handler.ts; the shortened filename refers to that same file."
+      },
+      {
+        "members": [
+          "s_7175c4a5",
+          "s_7271d3e1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The error toast fallback is unreachable because the interpolated message is always nonempty.",
+        "rationale": "Both report the same always-truthy template literal and ineffective fallback. The undefined-prefix example illustrates the consequence of that same error construction."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_9db07af0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ca0b1e81",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b1503f92",
+        "confidence": "high"
+      },
+      {
+        "id": "s_76d4416b",
+        "confidence": "high"
+      }
+    ]
+  }
+}

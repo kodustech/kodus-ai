@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d5ce31d3",
+     "s_663c3e53"
+    ],
+    "defect": "O backend não impede emails repetidos na mesma requisição, permitindo a criação de participantes duplicados."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S11 apontam o mesmo defeito: a unicidade dos emails é validada no cliente, mas não no servidor. A comparação sem distinguir maiúsculas de minúsculas e a deduplicação propostas por S11 são variações da correção desse mesmo problema."
+ }
+}

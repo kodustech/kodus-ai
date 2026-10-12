@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d8b196b6",
+     "s_52fd068c",
+     "s_66a23edf"
+    ],
+    "defect": "As escritas assíncronas no armazenamento legado herdam o contexto da requisição e podem ser canceladas quando o handler retorna."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_52fd068c"
+  ],
+  "reasoningPt": "S1, S9 e S13 relatam o mesmo defeito principal: o cancelamento do contexto da requisição interrompe as escritas assíncronas no legado. S9 também aponta uma possível corrida envolvendo obj, mas esse defeito adicional aparece na correção proposta e não altera seu agrupamento."
+ }
+}

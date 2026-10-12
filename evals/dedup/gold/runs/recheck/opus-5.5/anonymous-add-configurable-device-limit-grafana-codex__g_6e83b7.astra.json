@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0abd937d",
+     "s_444b9348"
+    ],
+    "defect": "A contagem e a inserção de dispositivos ocorrem sem atomicidade, permitindo que requisições concorrentes ultrapassem o limite configurado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S8 descrevem a mesma condição de corrida em CreateOrUpdateDevice, no mesmo trecho: requisições concorrentes podem passar pela contagem e inserir dispositivos além do limite. Ambas pedem atomicidade entre a verificação e a inserção, e nenhuma relata um segundo defeito."
+ }
+}

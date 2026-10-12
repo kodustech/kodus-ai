@@ -1,0 +1,46 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "utilities.js:182 hardcodes the client upload limit to 10 MB, ignoring type-specific SiteSettings."
+   },
+   {
+    "id": "F2",
+    "description": "utilities.js:246 hardcodes the 413 error message limit to 10 MB instead of the configured image limit."
+   },
+   {
+    "id": "F3",
+    "description": "uploads_controller.rb:55 hardcodes URL downloads to 10 MB, ignoring the configured limit and potentially truncating images."
+   },
+   {
+    "id": "F4",
+    "description": "uploads_controller.rb:67 ignores downsize failure, continuing retries and passing the failed image to Upload.create_for."
+   },
+   {
+    "id": "F5",
+    "description": "uploads_controller.rb URL upload branch leaves content_type unset when calling Upload.create_for."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3de994d1",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b9468b8e",
+    "covers": [
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

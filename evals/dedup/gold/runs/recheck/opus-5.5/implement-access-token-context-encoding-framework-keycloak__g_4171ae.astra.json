@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_9c9743f6",
+   "s_7cc8bcbd"
+  ],
+  "bundles": [
+   "s_9c9743f6"
+  ],
+  "reasoningPt": "O primeiro defeito de S3 é a quebra de compatibilidade causada pelo novo método abstrato sem implementação padrão. S8 trata da documentação que sugere três caracteres, incompatível com o decoder que exige dois, e requer uma correção independente. S3 também reúne problemas de tamanho e nulidade do shortcut, por isso entra em bundles, mas esses defeitos secundários não a vinculam a S8."
+ }
+}

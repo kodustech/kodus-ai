@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e334db10",
+     "s_7f2428e8"
+    ],
+    "defect": "O consumo não atômico dos códigos de backup permite que logins concorrentes reutilizem o mesmo código ou restaurem códigos já consumidos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S7 descrevem o mesmo defeito no mesmo trecho: leitura seguida de atualização incondicional dos códigos de backup. A reutilização e a restauração de códigos são consequências da mesma falha de concorrência, resolvidas pela mesma correção; portanto, nenhuma sugestão é um bundle."
+ }
+}

@@ -1,0 +1,106 @@
+{
+  "judge": "opus",
+  "model": "kimi-k3",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "3f3d533403faf7d09aeaa9919991671bf1b00e0e",
+  "attempt": 1,
+  "ms": 19142,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 40959,
+    "cache_read_input_tokens": 8868,
+    "output_tokens": 1569,
+    "output_tokens_details": {
+      "thinking_tokens": 747
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 40959,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1569,
+        "cache_read_input_tokens": 8868,
+        "cache_creation_input_tokens": 40959,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 40959
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.36083360000000003,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_b9487ef1",
+          "s_802136a9",
+          "s_04234c39"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "ClientPermissionsV2.setPermissionsEnabled throws UnsupportedOperationException, and the ClientRemovedEvent listener in AdminPermissions calls it, so deleting a client fails when V2 is enabled.",
+        "rationale": "All three describe the same listener-to-throwing-method interaction, some from the listener side and some from the method side. One fix resolves it."
+      },
+      {
+        "members": [
+          "s_4772139b",
+          "s_7789b76a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "ClientPermissionsV2.canExchangeTo throws UnsupportedOperationException, so token-exchange requests fail with HTTP 500 under V2.",
+        "rationale": "Both point at lines 147-150 and describe the token-exchange flow breaking because canExchangeTo throws."
+      },
+      {
+        "members": [
+          "s_9ac2aa83",
+          "s_886d9c42"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "mid",
+        "defect": "The management-permission methods in ClientPermissionsV2 (isPermissionsEnabled, getPermissions, resource, and the *Permission accessors) throw UnsupportedOperationException, so the client management/permissions admin REST endpoints return 500 under V2.",
+        "rationale": "Both report the same set of throwing overrides breaking the admin management-permissions REST endpoints."
+      },
+      {
+        "members": [
+          "s_db009948",
+          "s_75e8893d"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The Javadoc on the void methods requireView() and requireViewClientScopes() wrongly says they return true, instead of saying they throw ForbiddenException.",
+        "rationale": "The same copy-paste Javadoc mistake appears on two require* methods. Each needs its own edit, but one approach fixes both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_6ada5ba6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b50ded13",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a39e9ef4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

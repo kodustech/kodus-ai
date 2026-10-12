@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_87524dc7",
+     "s_0ffadc5f"
+    ],
+    "defect": "When the limit is reached, updateDevice returns ErrDeviceLimitReached for an existing device whose updated_at is outside the 30-day window, so client.go wrongly rejects the authentication of a returning device."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S10 relatam o mesmo defeito: updateDevice retorna ErrDeviceLimitReached quando nenhuma linha é afetada. Isso acontece com um dispositivo existente fora da janela de 30 dias, e o client.go rejeita a autenticação por causa desse erro. As correções propostas diferem um pouco, mas resolvem o mesmo problema, então o grupo deve ser mantido."
+ }
+}

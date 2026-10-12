@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "MetricAlertDetectorHandler became an empty subclass of the abstract StatefulDetectorHandler without implementing its abstract methods (including build_occurrence_and_event_data), so instantiating it raises TypeError.",
+    "members": [
+     "s_a9cb3ea0",
+     "s_addb3ff9",
+     "s_144b01e9",
+     "s_4edcb19f",
+     "s_aa4af8aa"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S2, S3, S4 e S8 apontam o mesmo defeito em grouptype.py: MetricAlertDetectorHandler virou uma subclasse vazia de StatefulDetectorHandler sem implementar os métodos abstratos, então não pode ser instanciado. A única diferença é que alguns listam mais métodos que faltam e usam intervalos de linhas um pouco diferentes, mas a correção é uma só. Nenhum deles traz um segundo defeito."
+ }
+}

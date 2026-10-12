@@ -1,0 +1,25 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "component": [
+    "s_020c1288",
+    "s_f8bb1b1d"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_020c1288",
+          "s_f8bb1b1d"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "defect": "EmbedController#best enqueues a :retrieve_topic job, but the controller spec (lines 40-45) still mocks and expects a synchronous TopicRetriever.new.retrieve call."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "Both suggestions describe the same mismatch: the controller enqueues a job asynchronously, and the spec still expects a synchronous TopicRetriever call. One points at the controller and the other at the spec's lines 40-45, which s_f8bb1b1d cites directly. Updating the stale spec expectation fixes both, and neither reports a distinct extra defect. The extras ('verify referer/host handling', 'retain sync fallback') are fix suggestions, so one comment describing the single mismatch is enough."
+  }
+}

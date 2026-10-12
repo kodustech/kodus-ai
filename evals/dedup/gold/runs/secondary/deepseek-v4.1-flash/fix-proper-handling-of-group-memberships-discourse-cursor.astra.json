@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_5c133571",
+    "mainDefect": "The member-management routes omit the group identifier segment, so the client's /admin/groups/<id>/members.json URLs do not match.",
+    "secondary": [
+     {
+      "defect": "The controller actions require group_id, whereas standard member routes supply id, causing a parameter mismatch unless the controller or route parameter is changed.",
+      "coveredBy": [
+       "s_62fe45ea"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

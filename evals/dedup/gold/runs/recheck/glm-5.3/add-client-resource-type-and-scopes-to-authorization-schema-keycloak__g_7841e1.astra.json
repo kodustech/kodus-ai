@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_924e2d8b",
+     "s_accc352b"
+    ],
+    "defect": "getClientsWithPermission inclui o recurso sentinela \"Clients\" em um conjunto destinado a IDs reais de clientes quando há uma concessão para todos os clientes."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_924e2d8b"
+  ],
+  "reasoningPt": "S2 e S7 relatam como defeito principal a inclusão de \"Clients\" como se fosse um ID de cliente, portanto permanecem juntas. S2 também aponta defeitos distintos: recursos individuais sem tipo e falta de limpeza após exclusão de clientes, por isso está em bundles."
+ }
+}

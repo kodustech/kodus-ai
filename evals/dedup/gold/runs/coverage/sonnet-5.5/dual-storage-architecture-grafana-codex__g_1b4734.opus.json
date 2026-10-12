@@ -1,0 +1,60 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create goroutine (lines 50-57): legacy write context derived from request ctx, cancelled when the handler returns"
+   },
+   {
+    "id": "F2",
+    "description": "Delete goroutine (lines 108-114): same request-derived context cancellation"
+   },
+   {
+    "id": "F3",
+    "description": "Update goroutine (lines 134-141): same request-derived context cancellation"
+   },
+   {
+    "id": "F4",
+    "description": "DeleteCollection goroutine (lines 161-167): same request-derived context cancellation"
+   },
+   {
+    "id": "F5",
+    "description": "obj is passed to the async goroutine without a deep copy, so it races with the response path"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_52fd068c",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_66a23edf",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d8b196b6",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

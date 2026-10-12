@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7271a207",
+     "s_6c00b667"
+    ],
+    "defect": "The postMessage origin check in embed.js uses a substring match (discourseUrl.indexOf(e.origin)) instead of an exact comparison with the parsed origin of discourseUrl, so origins that should be rejected are accepted."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S4 apontam o mesmo defeito na mesma linha 17 de embed.js: a validação de origem usa indexOf (correspondência por substring) em vez de igualdade exata. As duas propõem a mesma correção, comparar com a origem extraída de discourseUrl. Nenhuma delas traz um segundo defeito, então o grupo fica como está."
+ }
+}

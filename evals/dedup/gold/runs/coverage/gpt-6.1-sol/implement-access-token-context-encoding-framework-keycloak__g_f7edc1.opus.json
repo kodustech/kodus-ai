@@ -1,0 +1,68 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "isAccessTokenId (AssertEvents.java line 483) has the grant-shortcut check inverted: it returns false when the shortcut matches expectedGrantShortcut, so valid IDs are rejected and wrong grants can pass"
+   },
+   {
+    "id": "F2",
+    "description": "isAccessTokenId reads the grant shortcut with substring(3,5); the shortcut is actually at indices 4..6 (2-char session + 2-char token type + 2-char grant)"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f5e7d9a5",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5454e119",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_5bd24a7d",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5f605bbb",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0767cf64",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cd0716d2",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_b26743e8",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

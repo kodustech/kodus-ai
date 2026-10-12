@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_acdadbe2",
+     "s_444e3754"
+    ],
+    "defect": "In the no-credentialId fallback branch of createAllCalendarEvents, createEvent is called without destination.externalId, so the stored booking reference ends up with an undefined externalCalendarId."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S25 apontam o mesmo defeito: no ramo sem credentialId, createEvent é chamado sem destination.externalId, e a referência fica com externalCalendarId indefinido. A correção é a mesma nos dois (passar destination.externalId). As consequências citadas por S7 em updates e deletes vêm desse mesmo defeito e não são um segundo problema."
+ }
+}

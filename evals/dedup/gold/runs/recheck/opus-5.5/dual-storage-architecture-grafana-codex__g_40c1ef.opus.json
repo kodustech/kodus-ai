@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0e56e8cb",
+     "s_4df40c73",
+     "s_88b657e8"
+    ],
+    "defect": "Update passes the raw objInfo to Legacy.Update instead of wrapping the Unified Storage result in updateWrapper, so legacy recomputes the update and the stores can diverge."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S14 e S19 apontam o mesmo defeito nas mesmas linhas (134-141): o Update deixou de envolver o resultado em updateWrapper e passa o objInfo cru ao Legacy.Update, o que pode fazer os stores divergirem. Os três propõem a mesma correção (&updateWrapper{upstream: objInfo, updated: res}). A menção de S14 à execução assíncrona só reforça o mesmo problema e não é um defeito separado."
+ }
+}

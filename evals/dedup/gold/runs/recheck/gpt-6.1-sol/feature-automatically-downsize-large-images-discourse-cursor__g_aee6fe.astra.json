@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5a3bcb7f",
+     "s_ba068ffa"
+    ],
+    "defect": "As mensagens de arquivo grande demais informam um limite fixo de 10 MB que pode divergir do limite configurado no servidor."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S5 apontam o mesmo erro repetido em duas mensagens: apresentar 10 MB como limite independentemente da configuração. A diferença entre validação local e resposta 413 não altera o defeito relatado, cuja correção é usar o limite configurado em ambos os pontos."
+ }
+}

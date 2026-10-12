@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_34336505",
+     "s_e593e36c",
+     "s_c1891149"
+    ],
+    "defect": "O cache é preenchido antes da persistência do dispositivo, deixando uma entrada por 29 minutos quando a gravação falha e permitindo contornar o limite nas requisições seguintes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S7 apontam o mesmo defeito: preencher o cache antes de confirmar o sucesso de CreateOrUpdateDevice. S1 e S5 detalham o efeito sobre o limite de dispositivos, enquanto S7 descreve a causa; preencher o cache somente após o sucesso resolve os três relatos."
+ }
+}

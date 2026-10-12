@@ -1,0 +1,92 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "promptSha": "92a80baceb2829ad938934d04c556cf79322d78f",
+  "attempt": 1,
+  "ms": 62156,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_3480efde",
+          "s_059ba6b1",
+          "s_2ea70c55"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The migration inserts hosts with schemes and paths intact, preventing matches against the bare hostname used by the lookup.",
+        "rationale": "All three report the same missing normalization before insertion. SQL sanitization appears only in their proposed fixes, so it does not connect them to the SQL-escaping defect group."
+      },
+      {
+        "members": [
+          "s_74124a9e",
+          "s_9d76f63a",
+          "s_7cfecf36",
+          "s_5ffb9255"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The migration dereferences empty category lookup results and interpolates unescaped host values into SQL.",
+        "rationale": "s_74124a9e explicitly reports both defects, connecting the empty-result reports with the unescaped-insertion report. Both defects must survive in the merged comment."
+      },
+      {
+        "members": [
+          "s_1f9c507d",
+          "s_39848fe6",
+          "s_b171a9e5",
+          "s_0eba4ccb"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Update and destroy dereference missing host records, and save_host also dereferences a missing embeddable_host parameter object.",
+        "rationale": "Every member reports the unchecked record lookup in update and destroy. s_b171a9e5 additionally reports missing request parameters, which the merged comment must retain."
+      },
+      {
+        "members": [
+          "s_b1025ecf",
+          "s_ec4800aa",
+          "s_167fdedb"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The category and embeddable-host fabricator files contain each other's definitions.",
+        "rationale": "These describe the same swapped-file defect from its two locations. Correcting it requires restoring the definitions in both files."
+      },
+      {
+        "members": [
+          "s_cb61e986",
+          "s_be162c5e",
+          "s_aa827a30"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The before_validation callback calls sub! on a nil host, raising instead of allowing validation to fail.",
+        "rationale": "All three identify the same unguarded normalization callback and are resolved by the same nil handling."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_8b678c2c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_04b8d493",
+        "confidence": "high"
+      },
+      {
+        "id": "s_30442e28",
+        "confidence": "high"
+      },
+      {
+        "id": "s_794de377",
+        "confidence": "high"
+      }
+    ]
+  }
+}

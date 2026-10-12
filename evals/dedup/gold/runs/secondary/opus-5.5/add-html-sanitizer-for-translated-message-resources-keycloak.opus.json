@@ -1,0 +1,55 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_fae04201",
+    "mainDefect": "The admin-ui English bundle changes error-invalid-multivalued-size from i18next {{n}} placeholders to Java MessageFormat/choice syntax, which i18next cannot render, so users see raw placeholders.",
+    "secondary": [
+     {
+      "defect": "The account-ui English bundle (line 188) has the same switch to MessageFormat/choice syntax for error-invalid-multivalued-size, which i18next cannot render.",
+      "coveredBy": [
+       "s_42582bb1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_8507049f",
+    "mainDefect": "The admin-ui English bundle switches error-invalid-multivalued-size to MessageFormat {0} and choice syntax, which i18next does not interpolate, so users see the raw template.",
+    "secondary": [
+     {
+      "defect": "The account-ui messages_en.properties line 188 has the same MessageFormat/choice change, which i18next cannot render.",
+      "coveredBy": [
+       "s_42582bb1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_5dddabc9",
+    "mainDefect": "The admin-ui English bundle now uses MessageFormat {n} and choice syntax for error-invalid-multivalued-size instead of i18next {{n}}, so the validation error shows literal placeholders.",
+    "secondary": [
+     {
+      "defect": "The same MessageFormat/choice change was made in the account-ui messages_en.properties line 188, which i18next cannot render.",
+      "coveredBy": [
+       "s_42582bb1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_bb5adb31",
+    "mainDefect": "loginTotpStep1 in the Lithuanian login bundle was replaced with Italian text.",
+    "secondary": [
+     {
+      "defect": "totpStep1 in the Lithuanian account messages bundle (line 101) also holds the same Italian text.",
+      "coveredBy": [
+       "s_3dc681cc"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

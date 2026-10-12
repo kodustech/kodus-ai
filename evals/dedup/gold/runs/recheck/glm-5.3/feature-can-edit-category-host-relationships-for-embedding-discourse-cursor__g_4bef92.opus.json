@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The migration inserts the old embeddable_hosts values verbatim, scheme and path included, without the model's normalization, so record_for_host never matches them after the upgrade.",
+    "members": [
+     "s_3284f51d",
+     "s_82cdee2b",
+     "s_e1df980e",
+     "s_bccd111a"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_3284f51d"
+  ],
+  "reasoningPt": "S2, S7, S18 e S20 têm o mesmo defeito principal: a migration copia os hosts antigos sem normalizar (sem remover esquema e caminho). Por isso o lookup por uri.host falha depois do upgrade. S2 também fala da interpolação SQL sem escape (apóstrofo), mas como defeito secundário, o que faz dele um bundle sem tirá-lo do grupo."
+ }
+}

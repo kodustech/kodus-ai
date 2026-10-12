@@ -1,0 +1,71 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_3869a81c",
+    "mainDefect": "Hydration calls .map on null *_ids values, raising TypeError.",
+    "secondary": [
+     {
+      "defect": "Missing sideloaded records produce undefined entries in hydrated arrays, causing consumers to crash.",
+      "coveredBy": [
+       "s_9bf99a8b"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_9bf99a8b",
+    "mainDefect": "Failed sideload lookups produce undefined entries in hydrated arrays, causing consumers to crash.",
+    "secondary": [
+     {
+      "defect": "Globally consuming and replacing *_ids keys silently changes the shape of ordinary array attributes.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_6fa3626d",
+    "mainDefect": "The migration crashes when the embed_category lookup returns no rows because it accesses the first row unconditionally.",
+    "secondary": [
+     {
+      "defect": "The uncategorized_category_id fallback also accesses the first row unconditionally and can crash when that setting has no row.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4b5af67b",
+    "mainDefect": "Host matching normalizes only the database column, so mixed-case URL hosts fail case-insensitive hostname matching.",
+    "secondary": [
+     {
+      "defect": "Validation permits stored hosts with ports, but lookup uses uri.host without the port, so those entries never match.",
+      "coveredBy": [
+       "s_721295fb"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c864cfd5",
+    "mainDefect": "The context misspells embeddable as emeddable, causing correctly spelled name filters to skip its examples.",
+    "secondary": [
+     {
+      "defect": "The context fabricates an irrelevant embeddable host and misleadingly describes the examples as depending on its existence.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_073fc623",
+    "mainDefect": "The migration crashes when the embed_category lookup returns no rows because it accesses the first row unconditionally.",
+    "secondary": [
+     {
+      "defect": "The uncategorized_category_id fallback also accesses the first row unconditionally and can crash when that setting has no row.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

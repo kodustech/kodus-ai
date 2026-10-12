@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3af1aec9",
+     "s_fd8d15e4",
+     "s_147b3836"
+    ],
+    "defect": "The 5-pass 80% downsize loop in UploadsController can exit with the image still above SiteSetting.max_image_size_kb, so the promised automatic reduction is not guaranteed."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_147b3836"
+  ],
+  "reasoningPt": "S10, S13 e S16 têm como defeito principal o mesmo problema: o loop de 5 tentativas de 80% pode terminar com o arquivo ainda acima do limite. S13 apresenta isso como uma promessa falsa no comentário, mas o defeito de fundo é o mesmo. S16 acrescenta um segundo defeito, o retorno false de downsize ignorado, por isso entra em bundles, mas continua no grupo do seu defeito principal."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ed0e31d7",
+     "s_9602943b"
+    ],
+    "defect": "A comparação de códigos de backup com Array.indexOf expõe informações de tempo tanto no login quanto na desativação do 2FA."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S4 relatam a mesma comparação insegura repetida em dois pontos, com a mesma correção aplicável a ambos. Normalização e validação de comprimento são etapas da correção proposta, sem constituir relatos de defeitos adicionais."
+ }
+}

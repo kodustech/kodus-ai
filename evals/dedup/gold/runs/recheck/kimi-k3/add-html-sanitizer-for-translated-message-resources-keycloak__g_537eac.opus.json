@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e3f52c5e",
+     "s_b3a12b46",
+     "s_6a250a7b"
+    ],
+    "defect": "The TOTP step 1 messages in the Lithuanian bundles (account totpStep1 and login loginTotpStep1) were replaced with an Italian sentence instead of a Lithuanian translation."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S2 e S5 relatam o mesmo erro de copiar e colar: a frase em italiano foi colocada nos bundles lituanos no lugar da tradução para o lituano. S1 aponta o bundle de account, S2 o de login e S5 cita os dois lugares. É o mesmo erro repetido em dois arquivos e se resolve da mesma forma (traduzir para o lituano), então o grupo fica como está."
+ }
+}

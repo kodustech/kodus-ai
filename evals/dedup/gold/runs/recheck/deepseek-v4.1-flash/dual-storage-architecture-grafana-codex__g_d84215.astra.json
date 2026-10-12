@@ -1,0 +1,23 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_7e8b6adf",
+     "s_b0ebef03"
+    ],
+    "defect": "As escritas assíncronas no legado herdam o contexto da requisição e podem ser canceladas quando a resposta é enviada."
+   }
+  ],
+  "unique": [
+   "s_0fa90f2c"
+  ],
+  "bundles": [
+   "s_0fa90f2c",
+   "s_b0ebef03"
+  ],
+  "reasoningPt": "S1 e S25 têm como defeito principal o cancelamento das escritas pelo contexto da requisição. S21 começa pela perda da garantia síncrona, que exige uma correção diferente: desacoplar o contexto não garante que a escrita termine antes do retorno. S21 e S25 são bundles porque também relatam outros defeitos, incluindo a ausência de logs de erro."
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c6ed5cbd",
+    "mainDefect": "TestLogger.FromContext creates a fresh logger that discards the receiver’s entries and context, so subsequent logging is invisible to the original test logger.",
+    "secondary": [
+     {
+      "defect": "TestLogger.FromContext also ignores the supplied context instead of applying its contextual attributes.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

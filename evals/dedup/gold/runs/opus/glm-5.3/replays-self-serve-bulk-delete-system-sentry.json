@@ -1,0 +1,96 @@
+{
+  "judge": "opus",
+  "model": "glm-5.3",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "cf3b7d0a6df7c436ee800694793dcd43580fa4f3",
+  "attempt": 1,
+  "ms": 12124,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 68629,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 707,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 68629,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 707,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 68629,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 68629
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.5633384,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_9b433b01",
+          "s_c5ab9f8f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Age/timestamp mutual-exclusion validators use truthiness, so a value of 0 bypasses the check and mixed-spec reports are accepted.",
+        "rationale": "Both point at the same validators and describe the same truthiness bug with the same key-membership fix."
+      },
+      {
+        "members": [
+          "s_27b220c4",
+          "s_3f87de1a",
+          "s_1c4aa820",
+          "s_840a91a7"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "fetch_error_details zips error_ids positionally with nodestore get_multi dict values, mispairing error ids and event data when nodes are missing or reordered.",
+        "rationale": "All four describe the same positional zip mispairing in fetch_error_details and propose looking up by node id."
+      },
+      {
+        "members": [
+          "s_890c4551",
+          "s_9ea9f5fd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Flag-gated TableWidgetVisualization branch renders hardcoded empty columns/tableData, discarding real query results.",
+        "rationale": "Same branch in chart.tsx, same defect of passing placeholder empty data."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_8dfdf54b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9758e0bf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_883b9e86",
+        "confidence": "high"
+      }
+    ]
+  }
+}

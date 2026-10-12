@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_221233e4",
+     "s_30f59a75",
+     "s_81d5305c",
+     "s_7dcbf2c4",
+     "s_ad4d76d9"
+    ],
+    "defect": "O default de queued é avaliado na importação, fazendo as instâncias compartilharem um timestamp obsoleto."
+   },
+   {
+    "members": [
+     "s_7123f91d",
+     "s_87e5e747"
+    ],
+    "defect": "to_dict() transporta queued como datetime sem conversão explícita para um formato compatível com a serialização da fila."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_30f59a75",
+   "s_ad4d76d9",
+   "s_7123f91d"
+  ],
+  "reasoningPt": "S1, S3, S4, S5 e S6 relatam primeiro o timestamp fixado na importação. S8 começa pelo transporte do datetime bruto, mesmo defeito principal de S10, cuja correção é independente do default. S3, S6 e S8 incluem defeitos adicionais e são bundles, sem unir os dois grupos."
+ }
+}

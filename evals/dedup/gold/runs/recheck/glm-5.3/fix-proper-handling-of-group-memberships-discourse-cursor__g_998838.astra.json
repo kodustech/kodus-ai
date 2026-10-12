@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9ede52cf",
+     "s_191ff583"
+    ],
+    "defect": "Os endpoints de associação exigem group_id enquanto as rotas fornecem id, incompatibilidade mascarada pelos parâmetros usados nos testes."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_191ff583"
+  ],
+  "reasoningPt": "S4 e S8 tratam da mesma incompatibilidade entre os parâmetros das rotas e do controller; S4 mostra como os testes a mascaram. S8 também relata a ausência de tratamento das rejeições AJAX, um defeito secundário que a torna um bundle sem alterar seu agrupamento principal."
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_111e270c",
+     "s_42582bb1",
+     "s_fae04201",
+     "s_8507049f",
+     "s_5dddabc9"
+    ],
+    "defect": "Os bundles React de admin-ui e account-ui passaram a usar sintaxe MessageFormat incompatível com i18next, deixando placeholders e a cláusula choice sem interpretação."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 apontam o mesmo erro repetido nos dois bundles, corrigível pela mesma substituição da mensagem para a sintaxe i18next. S8, S9 e S12 descrevem esse mesmo defeito abrangendo ambos os locais, sem relatar um segundo defeito independente."
+ }
+}

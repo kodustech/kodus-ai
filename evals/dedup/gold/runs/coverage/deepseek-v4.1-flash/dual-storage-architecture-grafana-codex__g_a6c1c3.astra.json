@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Update, line 129: recordLegacyDuration receives literal true instead of the actual success/error result on the storage error path."
+   },
+   {
+    "id": "F2",
+    "description": "Create, line 45: recordLegacyDuration receives literal true instead of the actual success/error result on the storage error path."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7dc5b2ce",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_fdf78d6e",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

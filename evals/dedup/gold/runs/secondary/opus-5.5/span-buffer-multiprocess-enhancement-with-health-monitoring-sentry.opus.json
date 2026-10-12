@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_7a1b8c6d",
+    "mainDefect": "In join(), the loop breaks when the deadline expires, so the remaining flusher processes are never terminated.",
+    "secondary": [
+     {
+      "defect": "In join(), the check `isinstance(process, multiprocessing.Process)` is always False for SpawnProcess, so terminate() never runs for any process.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_27e04631",
+    "mainDefect": "submit() calls get_memory_info() and record_stored_segments() once per process buffer, which adds N cluster-wide Redis round-trips to the main thread.",
+    "secondary": [
+     {
+      "defect": "Each process buffer queries memory for the whole cluster, so the memory figures are counted N times.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b2cc6608",
+    "mainDefect": "The check `isinstance(process, multiprocessing.Process)` is always False for SpawnProcess, so a hung process is never killed on restart and duplicate flushers run for the same shards.",
+    "secondary": [
+     {
+      "defect": "The same isinstance check also stops terminate() from being called in join().",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

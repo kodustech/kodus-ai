@@ -1,0 +1,42 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "TopicEmbed.import, line 13: nil contents, including nil Readability doc.content from import_remote, causes NoMethodError."
+   },
+   {
+    "id": "F2",
+    "description": "TopicEmbed.import_remote, line 48: unrescued open(url).read failures crash the retrieval job."
+   },
+   {
+    "id": "F3",
+    "description": "TopicEmbed.import, line 13: << fails on frozen contents."
+   },
+   {
+    "id": "F4",
+    "description": "TopicEmbed.import, line 13: << mutates the caller's string, affecting reused content and its SHA."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c7cf0d7d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8924c5ce",
+    "covers": [
+     "F1",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

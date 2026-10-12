@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_9c3809e7",
+    "mainDefect": "Wire cannot supply the new int64 deviceLimit argument required by ProvideAnonDBStore, causing generation or build failure.",
+    "secondary": [
+     {
+      "defect": "ProvideAnonDBStore remains registered as an unused Wire provider because ProvideAnonymousDeviceService now constructs the store itself.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4c4e75d7",
+    "mainDefect": "Wire cannot supply the new int64 deviceLimit argument required by ProvideAnonDBStore, causing generation or compilation failure.",
+    "secondary": [
+     {
+      "defect": "The AnonStore binding remains registered without any consumer because ProvideAnonymousDeviceService now constructs the store itself.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

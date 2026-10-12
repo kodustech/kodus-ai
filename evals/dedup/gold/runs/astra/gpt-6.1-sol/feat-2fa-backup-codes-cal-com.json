@@ -1,0 +1,48 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "promptSha": "55658e61c75e13ebbf67c2e3a12b26dd9fe6faa2",
+  "attempt": 1,
+  "ms": 36739,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_9602943b",
+          "s_ed0e31d7"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Backup-code authentication uses timing-sensitive indexOf comparisons in both the disable-2FA endpoint and login authorization.",
+        "rationale": "Both report the same comparison mistake repeated in separate authentication paths. Each location needs its own constant-time comparison change."
+      },
+      {
+        "members": [
+          "s_72b1da29",
+          "s_b0ff443d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Backup-code validation and consumption are not atomic, allowing concurrent logins to reuse or restore consumed codes.",
+        "rationale": "Both identify the same read-modify-write race in login authorization. The first describes an additional consequence of that race; atomic consumption resolves both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_6bd3ee84",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7c7c3238",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0ace72fe",
+        "confidence": "high"
+      }
+    ]
+  }
+}

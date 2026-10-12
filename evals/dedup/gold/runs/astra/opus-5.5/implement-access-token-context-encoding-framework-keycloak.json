@@ -1,0 +1,65 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "2b268cba4792125253e84e96f563ba572b021a00",
+  "attempt": 1,
+  "ms": 40850,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_a57e3ef3",
+          "s_8188e9fe",
+          "s_d598c74b",
+          "s_15c59a87",
+          "s_1f2d92bd",
+          "s_c309ae7b",
+          "s_cf0c2a48",
+          "s_859a4a3a",
+          "s_a2208ca1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The isAccessTokenId matcher uses the wrong grant-shortcut substring and an inverted comparison, so it fails to validate the expected grant.",
+        "rationale": "Every suggestion reports the same faulty comparison in the same matcher, including the entry with an abbreviated filename. Length checks appear only as proposed fixes, while the inaccurate comment describes the same offset mistake."
+      },
+      {
+        "members": [
+          "s_420384ae",
+          "s_54bc46ef",
+          "s_37c5da68",
+          "s_8842361c",
+          "s_01ffe2b2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "AccessTokenContext checks grantType twice instead of rejecting a null rawTokenId.",
+        "rationale": "All five identify the same incorrect argument to the constructor's fourth requireNonNull call. Changing that argument resolves every report."
+      },
+      {
+        "members": [
+          "s_7cc8bcbd",
+          "s_9c9743f6"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The shortcut contract suggests three characters despite the decoder requiring two, lacks length and null validation, and introduces an abstract SPI method that breaks existing implementations.",
+        "rationale": "Both report the documented shortcut length conflicting with the encoding format. The broader suggestion additionally reports missing validation and compatibility failures, which must survive in the merged comment."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_166630be",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c330ee03",
+        "confidence": "high"
+      }
+    ]
+  }
+}

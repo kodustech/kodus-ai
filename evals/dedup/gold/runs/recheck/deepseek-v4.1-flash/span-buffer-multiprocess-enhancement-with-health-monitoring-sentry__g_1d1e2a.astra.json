@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e0e24b04",
+     "s_a5c1072a",
+     "s_aeb710a3",
+     "s_88cab4e0"
+    ],
+    "defect": "O time.sleep(0.1) adicionado em test_basic é neutralizado pelo monkeypatch anterior e não realiza a espera pretendida pelo teste."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3, S6 e S8 descrevem o mesmo defeito no mesmo trecho: a espera adicionada não funciona porque time.sleep foi substituído por uma função que retorna imediatamente. As diferenças de ênfase na condição de corrida e nas soluções propostas não representam defeitos distintos; nenhuma sugestão reúne mais de um defeito."
+ }
+}

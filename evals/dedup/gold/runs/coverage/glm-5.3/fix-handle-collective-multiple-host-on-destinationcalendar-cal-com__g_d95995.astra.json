@@ -1,0 +1,58 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Office365 createEvent (lines 73–77) targets the first destination instead of the creating credential's destination."
+   },
+   {
+    "id": "F2",
+    "description": "Lark createEvent (lines 128–129) targets the first destination instead of the creating credential's destination."
+   },
+   {
+    "id": "F3",
+    "description": "BaseCalendarService event creation (lines 156–164) filters calendars using the first destination instead of the creating credential's destination."
+   },
+   {
+    "id": "F4",
+    "description": "Lark createAttendees (lines 164–165) also selects the first destination's calendar."
+   },
+   {
+    "id": "F5",
+    "description": "The stored booking reference records the member's destination externalId while creation uses the first destination, breaking subsequent updates and deletes."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a23b880b",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0fcfd2d6",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_a98dfe02",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

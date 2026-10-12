@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The migration inserts raw host values (with scheme/path) into embeddable_hosts, but the model normalizes hosts, so migrated hosts never match host_allowed?.",
+    "members": [
+     "s_3480efde",
+     "s_2ea70c55",
+     "s_059ba6b1"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_3480efde",
+   "s_2ea70c55",
+   "s_059ba6b1"
+  ],
+  "reasoningPt": "S16, S17 e S18 têm o mesmo defeito principal: a migration grava os hosts sem normalizar (com protocolo e caminho), então eles nunca casam com a busca de host_allowed?. As três também pedem para sanitizar ou parametrizar o SQL, mas só como defeito secundário na correção, por isso entram em bundles. O grupo fica como está."
+ }
+}

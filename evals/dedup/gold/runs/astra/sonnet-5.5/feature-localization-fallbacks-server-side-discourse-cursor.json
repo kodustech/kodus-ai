@@ -1,0 +1,24 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "promptSha": "4b8aea52742adeff1191192f619cc87edae32505",
+  "attempt": 1,
+  "ms": 21514,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_df1a20da",
+          "s_a0a3d1b7"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Fallback locales are loaded only by the controller, so translations outside controller requests can miss available fallback translations.",
+        "rationale": "Both suggestions identify the same controller-dependent loading defect at the same lines and propose loading fallback locales within the translation path."
+      }
+    ],
+    "unique": []
+  }
+}

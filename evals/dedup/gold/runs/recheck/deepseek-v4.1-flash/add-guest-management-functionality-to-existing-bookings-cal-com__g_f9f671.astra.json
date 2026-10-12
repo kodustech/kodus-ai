@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_134d295f",
+     "s_9df70657"
+    ],
+    "defect": "O handler passa guests em vez de uniqueGuests a sendAddGuestsEmails, fazendo participantes existentes serem classificados como recém-adicionados e receberem o email incorreto."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S10 e S11 relatam o mesmo defeito na mesma chamada: o envio da lista bruta guests em vez da lista filtrada uniqueGuests. A mesma correção resolve ambas, e nenhuma delas inclui um segundo defeito."
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_2e6a48cf",
+    "mainDefect": "The retry-count cleanup branch lacks an SMS method filter, allowing the SMS cron to delete reminders belonging to other methods.",
+    "secondary": [
+     {
+      "defect": "The retry-count cleanup branch lacks a scheduledDate bound, allowing it to delete reminders regardless of their scheduled date.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

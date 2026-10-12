@@ -1,0 +1,42 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "6a3e764e62ac2570a8ad03cf5318e4b81dee6786",
+  "attempt": 1,
+  "ms": 38355,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_3b443542",
+          "s_9c3809e7",
+          "s_4c4e75d7"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "ProvideAnonDBStore gains an int64 parameter while its Wire registration remains unchanged, leaving Wire unable to supply the argument.",
+        "rationale": "All three report the same constructor and provider-registration mismatch and propose equivalent fixes."
+      },
+      {
+        "members": [
+          "s_f3ed8c70",
+          "s_52be6958",
+          "s_df37064d"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Caching a device before its database write succeeds leaves rejected devices cached, allowing subsequent requests to bypass the device limit.",
+        "rationale": "The suggestions point to the cache/write sequence and the calling error-propagation path, but all report the same retained cache entry after failure. Changing cache insertion to occur only after a successful write resolves all three."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_2f5725cb",
+        "confidence": "high"
+      }
+    ]
+  }
+}

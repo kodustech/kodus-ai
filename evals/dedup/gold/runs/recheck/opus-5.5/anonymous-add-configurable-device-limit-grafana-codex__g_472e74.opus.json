@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_19d84151",
+     "s_1dac0ce4",
+     "s_a2890cd2"
+    ],
+    "defect": "ProvideAnonDBStore now takes an int64 deviceLimit, but pkg/server/wire.go still registers it as a provider and binds AnonStore to it, so wire generation and the server build fail."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S6 e S7 apontam o mesmo defeito: o ProvideAnonDBStore passou a exigir um int64, mas continua registrado no wire.go, e isso quebra a geração do wire e o build. A correção é a mesma nas três: remover o provider e o bind do wire.go ou receber *setting.Cfg. O comentário de S1 sobre o provider ficar sem uso faz parte do mesmo problema de wiring, então não conta como um segundo defeito."
+ }
+}

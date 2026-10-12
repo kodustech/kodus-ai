@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5de16c8b",
+     "s_3aa48dee"
+    ],
+    "defect": "A mensagem totpStep1 de zh_CN foi substituída por texto em chinês tradicional, embora o arquivo seja de chinês simplificado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S11 apontam o mesmo defeito na mesma mensagem e linha: o uso de chinês tradicional em zh_CN. A mesma correção para chinês simplificado resolve ambas, sem defeitos adicionais."
+ }
+}

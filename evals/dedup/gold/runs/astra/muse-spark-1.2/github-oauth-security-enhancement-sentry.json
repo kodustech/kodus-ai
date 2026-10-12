@@ -1,0 +1,64 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "fa0ec75b7967bcc8e60b2a4a7ccc2fab73d666b4",
+  "attempt": 1,
+  "ms": 43560,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_93c3db3c",
+          "s_8b0f7d96"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Unguarded access to integration.metadata[\"sender\"][\"login\"] can crash installation instead of returning the invalid-request error.",
+        "rationale": "Both identify the same metadata dereference and request a guard for absent sender information."
+      },
+      {
+        "members": [
+          "s_ed2f4754",
+          "s_e8005d12",
+          "s_e345fbc9",
+          "s_dba5cf11",
+          "s_c04307da",
+          "s_be8c18fb",
+          "s_fec7e43b"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The reports identify an incorrect request limit, an unnecessary search scheduling wrapper, inconsistent sanitization naming, an unsuitable analytics timer, an incorrect API HTTP method, and mismatched form field binding.",
+        "rationale": "Despite different anchors and summaries, all seven bodies repeat the identical six-problem report. The merged comment must preserve the distinct changes across those locations."
+      },
+      {
+        "members": [
+          "s_7793b970",
+          "s_10c6055f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "OAuth token exchange and user-info lookup execute outside exception handling, allowing network or API failures to produce a 500 instead of the error page.",
+        "rationale": "Both report the same unhandled calls in OAuthLoginView.dispatch; one exception-handling block covering both operations addresses both reports."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_a5422206",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9d586c39",
+        "confidence": "high"
+      },
+      {
+        "id": "s_301c638e",
+        "confidence": "high"
+      }
+    ]
+  }
+}

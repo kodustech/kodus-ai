@@ -1,0 +1,73 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create storage-error path (line 45) calls recordLegacyDuration instead of recordStorageDuration"
+   },
+   {
+    "id": "F2",
+    "description": "Update storage-error path (line 129) calls recordLegacyDuration instead of recordStorageDuration"
+   },
+   {
+    "id": "F3",
+    "description": "DeleteCollection legacy goroutine (line 166) calls recordStorageDuration instead of recordLegacyDuration"
+   },
+   {
+    "id": "F4",
+    "description": "Delete success path (line 106) passes object name instead of options.Kind as the kind label"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_1f0c2877",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_f5076626",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a19a1898",
+    "covers": [
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8649b5e3",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ce012dec",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_abda811f",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

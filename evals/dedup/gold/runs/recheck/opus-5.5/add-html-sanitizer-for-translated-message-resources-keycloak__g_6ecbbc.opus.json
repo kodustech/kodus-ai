@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_83c33348",
+     "s_bb54d9cd"
+    ],
+    "defect": "The prefix and suffix trimming loops can overlap, so substring gets an end index smaller than its start and throws StringIndexOutOfBoundsException instead of reporting the illegal HTML."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S13 descrevem o mesmo defeito: os laços de prefixo e sufixo comuns podem se sobrepor, o que faz o substring lançar StringIndexOutOfBoundsException. As duas propõem a mesma correção, que é limitar o sufixo para não invadir o prefixo. Nenhuma das duas traz um segundo defeito."
+ }
+}

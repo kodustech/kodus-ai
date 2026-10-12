@@ -1,0 +1,80 @@
+{
+  "judge": "opus",
+  "model": "glm-5.3",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "promptSha": "1e6ecce075d5a1c3a403abc906f3ce7153749204",
+  "attempt": 1,
+  "ms": 10856,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 15923,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 570,
+    "output_tokens_details": {
+      "thinking_tokens": 223
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 15923,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 570,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 15923,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 15923
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1389504,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_53838d83",
+          "s_7b9105ff"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Test cleanup removes the literal alias \"alias\" instead of the created \"idp-alias-N\"/\"idp-alias-20\" brokers, so the created IDPs leak into the shared test realm.",
+        "rationale": "Both report the same wrong cleanup alias at lines 381/425, with the same fix."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_a0b15b83",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_2083795d",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_6e6e6025",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5cbd8a60",
+        "confidence": "high"
+      },
+      {
+        "id": "s_aaaf78af",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

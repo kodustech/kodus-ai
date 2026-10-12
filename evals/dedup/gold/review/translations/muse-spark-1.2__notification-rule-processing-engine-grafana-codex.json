@@ -1,0 +1,46 @@
+{
+ "s_8955a30a": {
+  "summaryPt": "Pause/Delete condicionados a rulerRule, então a list view somente com prom nunca os exibe apesar das abilities combinadas com OR",
+  "contentPt": "O QUÊ: Os itens de menu Pause (e Delete na linha 165) são condicionados à existência de `rulerRule` (`rulerRuleType.grafana.rule(rulerRule)` e `rulerRule &&`), enquanto `canPause`/`canDelete` agora são combinados com OR com as abilities prom do grafana. POR QUÊ: Na list view (GrafanaGroupLoader/FilterView → GrafanaRuleListItem → RuleActionsButtons.V2 → AlertRuleMenu) `rulerRule` é undefined, então `canPause` pode ser true via `grafanaPauseAbility`, mas o MenuItemPauseRule nunca é renderizado e o Delete nunca é renderizado, desabilitando silenciosamente ações que a verificação de ability diz que são permitidas. COMO: Renderize pause/delete com base em rulerRule ou promRule (por exemplo, verifique `prometheusRuleType.grafana.rule(promRule)` ou faça o MenuItemPauseRule aceitar GrafanaPromRuleDTO) e conecte handleDelete/handlePause ao caminho de uid do prom."
+ },
+ "s_1f77ab04": {
+  "summaryPt": "O drawer de Silence nunca abre para regras somente prom na list view",
+  "contentPt": "O QUÊ: O drawer de Silence só é montado quando `rulerRuleType.grafana.alertingRule(rule)` é true, mas a list view fornece apenas `promRule`. POR QUÊ: `canSilence` pode ser true via `useGrafanaPromRuleAbility` (padrão de verificação de edição combinada com OR) e o menu mostra Silence, mas `setShowSilenceDrawer(true)` nunca renderiza `SilenceGrafanaRuleDrawer` porque `rule` (ruler) é undefined, então o clique não faz nada. COMO: Renderize também o drawer para promRule (por exemplo, `prometheusRuleType.grafana.alertingRule(promRule)` e passe folderUid/labels ou adapte o drawer para aceitar GrafanaPromRuleDTO) ou oculte Silence quando apenas prom estiver disponível."
+ },
+ "s_409de42d": {
+  "summaryPt": "React key ausente em GrafanaRuleListItem no FilterView",
+  "contentPt": "O QUÊ: O branch Grafana do FilterView não passa mais a `key` do React para `GrafanaRuleListItem`. POR QUÊ: `key` é extraída de `ruleWithOrigin` via destructuring, mas não é repassada (`<GrafanaRuleListItem rule={rule} .../>`), enquanto o branch DataSource usa corretamente `key={key}`; isso causa o warning de key ausente do React e pode quebrar a reconciliação/reordenação durante o infinite scroll. COMO: Adicione `key={key}` ao GrafanaRuleListItem."
+ },
+ "s_3c4b4f6b": {
+  "summaryPt": "O JSDoc do GrafanaGroupLoader ainda afirma carregar de Prometheus+Ruler depois que a query do ruler foi removida",
+  "contentPt": "O JSDoc diz 'Loads an evaluation group from Prometheus and Ruler endpoints', mas a implementação após este PR não consulta mais o ruler (useGetGrafanaRulerGroupQuery e matchRules foram removidos, resta apenas useGetGrafanaGroupsQuery). Atualize o comentário para 'Loads an evaluation group from Prometheus' (e a descrição do polling) para corresponder ao código que os chamadores leem."
+ },
+ "s_60b424b5": {
+  "summaryPt": "O JSDoc de expectedRulesCount ainda referencia o Ruler depois que ele foi removido do loader",
+  "contentPt": "O JSDoc da prop expectedRulesCount ainda menciona 'Ruler response might contain different number of rules', embora este componente não busque mais o ruler. Remova a referência ao ruler para evitar enganar quem mantém o código sobre a origem da contagem."
+ },
+ "s_7365ba08": {
+  "summaryPt": "`.map` sem proteção em rules possivelmente undefined lança TypeError quando groups está vazio",
+  "contentPt": "Proteja groups.at(0)?.rules antes do .map. Quando prometheusApi retorna { groups: [] } (grupo ausente/sendo deletado/race condition de polling), o optional chain resulta em undefined e `.map` lança erro. Restaure o fallback `?? []`: `(promResponse.data.groups.at(0)?.rules ?? []).map(...)` ou uma proteção com `?.map`."
+ },
+ "s_f3eeca23": {
+  "summaryPt": "O fallback de Creating/Deleting foi descartado silenciosamente quando o fetch do ruler foi removido",
+  "contentPt": "Restaure o contrato de best-effort ou documente explicitamente a nova recusa: mantenha a query do ruler (ou uma verificação leve de existência) e reintroduza os branches Creating/Deleting via matchRules, ou torne a nova limitação visível para os chamadores renderizando um placeholder explícito de 'syncing' para grupos em que a contagem do prometheus != expectedRulesCount. Mapear silenciosamente apenas as regras prom viola a garantia anterior de que toda regra do ruler eventualmente aparece."
+ },
+ "s_a3b03cbf": {
+  "summaryPt": "useRulerRuleAbilities foi ampliado para undefined, mas nem todos os chamadores tratam a ability degradada",
+  "contentPt": "Audite todos os call sites restantes de useRulerRuleAbility / useAlertRuleAbility (RulesTable, RuleDetails, qualquer plugin) e então migre-os para o padrão OR com useGrafanaPromRuleAbilities (fallback com skipToken) ou introduza um único useUnifiedRuleAbilities({ rulerRule, promRule, groupIdentifier }) que encapsule a lógica OR, para que futuros chamadores não esqueçam a segunda fonte."
+ },
+ "s_734b969b": {
+  "summaryPt": "O nome do teste promete verificar as opções do menu, mas o corpo só checa a presença do botão.",
+  "contentPt": "O teste chamado 'should render More button with action menu options' só verifica se o botão More existe/aria-label/texto. Ele nunca clica no botão nem afirma nenhum menuitem, então ainda passaria se o menu estivesse quebrado/vazio. Renomeie para 'should render More button' ou abra de fato o menu e verifique os menuitems esperados (como faz o teste posterior 'should render correct menu actions when More button is clicked')."
+ },
+ "s_48922cf0": {
+  "summaryPt": "O tipo de retorno do componente passou a ser anulável (null) sem atualizar os chamadores",
+  "contentPt": "Torne o contrato anulável explícito: restaure a garantia de não-null lançando um erro ou usando um identificador não editável como fallback, ou atualize GrafanaRuleListItem e outros pais para tratar null (reservar espaço, exibir tooltip). Retornar null de um slot de ações de item de lista é uma mudança de comportamento silenciosa de 'sempre renderiza' para 'às vezes não renderiza nada'."
+ },
+ "s_34baf824": {
+  "summaryPt": "Os testes do Grafana mockam o hook de ability errado, então não verificam o caminho real de permissão.",
+  "contentPt": "Os testes de RBAC de regras Grafana mockam useAlertRuleAbility como se RuleActionsButtons o lesse, mas RuleActionsButtons.V2 (usado via GrafanaRuleListItem) lê useRulerRuleAbility + useGrafanaPromRuleAbility. O mock neutraliza a verificação real – o resultado no DOM é determinado pelos hooks no plural, que ficam com os valores padrão nas primeiras asserções, então o teste exercita o alvo errado e ainda passaria se o hook de permissão real estivesse quebrado."
+ }
+}

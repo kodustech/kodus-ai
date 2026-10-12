@@ -1,0 +1,44 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "promptSha": "582012fb32bc13d264528e319cbcaf0874d02cde",
+  "attempt": 1,
+  "ms": 38371,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_e93f5eb3",
+          "s_17a7fb74"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The unconditional postgres skip disables the instrumentation-server integration test, removing its regression coverage in CI and local postgres runs.",
+        "rationale": "Both report the same added skip as the defect. Their emphasis on startup coverage versus instrumentation behavior and local execution describes consequences of disabling the same test."
+      },
+      {
+        "members": [
+          "s_67912b06",
+          "s_48086659"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Removing build-wide synchronization permits concurrent same-key index builds to collide on the Bleve directory and overwrite cached indexes, leaking the losing index.",
+        "rationale": "Both identify the same synchronization removal and the same directory and cache races. The stale-snapshot consequence and caller details elaborate that shared defect; per-key build coordination addresses both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_89921539",
+        "confidence": "high"
+      },
+      {
+        "id": "s_87ed9fcd",
+        "confidence": "high"
+      }
+    ]
+  }
+}

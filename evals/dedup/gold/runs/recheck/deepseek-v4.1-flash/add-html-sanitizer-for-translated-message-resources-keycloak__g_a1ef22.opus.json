@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_83a004e9",
+     "s_3a1c7eb0",
+     "s_b29c946a",
+     "s_a4b43d5c",
+     "s_e7dee35f",
+     "s_d0c68d28"
+    ],
+    "defect": "The English JS bundles (account-ui and admin-ui) for error-invalid-multivalued-size were switched from i18next {{n}} placeholders to single-brace/ICU {n}/{2,choice,...} syntax, so the frontend will not substitute them and the translations no longer match."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S5, S6, S9, S10, S11, S12) apontam o mesmo defeito: a chave error-invalid-multivalued-size nos bundles JS em inglês passou de {{n}} para {n}/ICU choice, o que quebra a interpolação do i18next. A diferença é só o arquivo (account-ui ou admin-ui), ou seja, o mesmo erro repetido em dois lugares, e uma única correção resolve os dois. A menção de S5 e S6 às traduções que ficaram com a sintaxe antiga é o mesmo problema de contrato, não um segundo defeito."
+ }
+}

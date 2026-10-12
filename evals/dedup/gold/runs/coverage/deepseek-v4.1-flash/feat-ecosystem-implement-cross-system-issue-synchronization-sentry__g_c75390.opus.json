@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "assignment_source.py line 18: `queued` default `timezone.now()` is evaluated once at import, so all instances share one timestamp (needs field(default_factory=timezone.now))"
+   },
+   {
+    "id": "F2",
+    "description": "assignment_source.py to_dict(): asdict returns raw datetime for `queued`, which may fail Celery JSON serialization in sync_assignee_outbound.apply_async (sync.py)"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_2431eed5",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_2438c807",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b531a8e1",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_2673b2c5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

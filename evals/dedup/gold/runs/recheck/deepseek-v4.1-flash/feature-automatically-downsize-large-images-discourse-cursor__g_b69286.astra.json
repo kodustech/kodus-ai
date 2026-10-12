@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_605675a4",
+     "s_94d764a3",
+     "s_df94a989",
+     "s_0146ce15",
+     "s_2ffd8527"
+    ],
+    "defect": "A segunda definição de self.downsize sobrescreve a assinatura com largura e altura, quebrando os chamadores que ainda usam esse contrato."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S3 destacam a falha com cinco argumentos; S4, S6 e S7 destacam a interpretação incorreta dos argumentos nas chamadas com quatro. Todas descrevem consequências da mesma sobrescrita de downsize, resolvidas pela correção do contrato do método, sem defeitos independentes adicionais."
+ }
+}

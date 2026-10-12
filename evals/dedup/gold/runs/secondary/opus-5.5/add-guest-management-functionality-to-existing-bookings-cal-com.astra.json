@@ -1,0 +1,117 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_bc207073",
+    "mainDefect": "The authorization check uses AND, wrongly denying team admins who are not owners.",
+    "secondary": [
+     {
+      "defect": "Bookings without a team trigger unnecessary authorization queries using teamId 0.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ff822a38",
+    "mainDefect": "Passing raw guests to sendAddGuestsEmails gives existing attendees duplicate booking-confirmation emails.",
+    "secondary": [
+     {
+      "defect": "The catch block silently swallows email errors without logging them.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_12e66445",
+    "mainDefect": "Guest emails are compared without normalization, allowing case changes to bypass the blacklist.",
+    "secondary": [
+     {
+      "defect": "Case-sensitive attendee comparisons allow the same email address to be added more than once.",
+      "coveredBy": [
+       "s_aed18a73"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c542f448",
+    "mainDefect": "The unbounded guest array allows attendees to trigger bulk organizer invitations, enabling email spam.",
+    "secondary": [
+     {
+      "defect": "The handler does not enforce seat capacity and can overfill seated events.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The handler ignores seatsShowAttendees restrictions and can expose attendee email addresses.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The handler allows adding guests to cancelled or past bookings.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b459ede8",
+    "mainDefect": "The invalid-email state is not reset, leaving stale errors visible after edits, successful submissions, or reopening.",
+    "secondary": [
+     {
+      "defect": "Closing the dialog through onOpenChange leaves previously entered emails in multiEmailValue.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The always-truthy error message template prevents the translated fallback from running.",
+      "coveredBy": [
+       "s_69410500",
+       "s_37e96fa9"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_647627fa",
+    "mainDefect": "Unnormalized guest emails can bypass the lowercased blacklist through case changes.",
+    "secondary": [
+     {
+      "defect": "Case-sensitive comparisons against existing attendees allow duplicate email addresses with different casing.",
+      "coveredBy": [
+       "s_aed18a73"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ef00ffaa",
+    "mainDefect": "The blacklist comparison fails to lowercase guest emails, allowing differently cased blocked addresses through.",
+    "secondary": [
+     {
+      "defect": "The existing-attendee comparison also fails to normalize casing, allowing duplicate attendees.",
+      "coveredBy": [
+       "s_aed18a73"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_aed18a73",
+    "mainDefect": "Guest uniqueness is enforced only on the client, leaving the server without adequate normalization and deduplication.",
+    "secondary": [
+     {
+      "defect": "Concurrent requests can insert duplicate attendees because the read and insert lack concurrency-safe uniqueness enforcement.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Passing raw guests instead of uniqueGuests to sendAddGuestsEmails incorrectly treats existing attendees as newly added.",
+      "coveredBy": [
+       "s_ff822a38",
+       "s_2fa589ab",
+       "s_77ce515e",
+       "s_a421800b"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

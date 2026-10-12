@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_7b2abff5",
+    "mainDefect": "The copy test checks only the success toast, so it passes even when clipboard copying fails or copies incorrect content.",
+    "secondary": [
+     {
+      "defect": "The component shows a success toast without awaiting clipboard.writeText, so it reports success even if the write fails.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8e161876",
+    "mainDefect": "resetState leaves backupCodes and backupCodesUrl populated, retaining stale codes and their blob URL after the modal closes.",
+    "secondary": [
+     {
+      "defect": "resetState also leaves dataUri and secret uncleared.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,45 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "promptSha": "48bab0a999b511fcbfc9239cbb1129757872e2fd",
+  "attempt": 1,
+  "ms": 38109,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_5b48f22e",
+          "s_e2d834e6"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "TestLogger.FromContext returns a detached logger, making logs emitted through it invisible to tests holding the original fake.",
+        "rationale": "Both suggestions identify the same allocation in fake.go and its effect on LoggerMiddleware logging. Returning the receiver resolves both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_bd99d075",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ecd5daf9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_813e61be",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ea561727",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1b170248",
+        "confidence": "high"
+      }
+    ]
+  }
+}

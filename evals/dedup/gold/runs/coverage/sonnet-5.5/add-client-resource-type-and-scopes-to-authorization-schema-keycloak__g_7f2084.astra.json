@@ -1,0 +1,44 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "ClientResource management-permissions endpoints call unsupported V2 methods unconditionally, causing HTTP 500."
+   },
+   {
+    "id": "F2",
+    "description": "AdminPermissions ClientRemovedEvent listener calls V2 setPermissionsEnabled when both features are enabled, causing client deletion to throw."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a2452e35",
+    "covers": [],
+    "complete": false
+   },
+   {
+    "id": "s_583e834c",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_1aab7b37",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8758638b",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,41 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_51ce1fbc",
+    "mainDefect": "The retry-count cleanup branch lacks an SMS method filter and can delete reminders belonging to other methods.",
+    "secondary": [
+     {
+      "defect": "The retry-count cleanup branch lacks a scheduled:false filter and can delete already-scheduled reminders.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_6fbe394f",
+    "mainDefect": "The retry-count cleanup branch lacks an SMS method filter and can delete reminders belonging to other methods.",
+    "secondary": [
+     {
+      "defect": "The retry-count cleanup branch can delete reminders that are already scheduled.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8701b717",
+    "mainDefect": "The cleanup comment inaccurately describes the query as deleting only past-due SMS reminders, omitting the retry-count branch.",
+    "secondary": [
+     {
+      "defect": "The retry-count cleanup branch lacks an SMS method filter and can delete reminders belonging to other methods.",
+      "coveredBy": [
+       "s_51ce1fbc",
+       "s_6fbe394f",
+       "s_4680bb7e"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

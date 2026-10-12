@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9201a4d6",
+     "s_85b8c9a1"
+    ],
+    "defect": "ClientPermissionsV2.setPermissionsEnabled throws UnsupportedOperationException, but the ClientRemovedEvent listener in AdminPermissions calls it, so deleting a client fails or skips its cleanup."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_9201a4d6"
+  ],
+  "reasoningPt": "S1 e S9 apontam o mesmo defeito principal: o listener de ClientRemovedEvent em AdminPermissions chama ClientPermissionsV2.setPermissionsEnabled, que lança UnsupportedOperationException. A mesma correção resolve os dois casos: tornar o método um no-op ou ajustar o listener. S1 também traz um defeito secundário (no modo só V2, o guard pula a limpeza e deixa recursos órfãos), por isso entra em bundles, mas continua no grupo do seu defeito principal."
+ }
+}

@@ -1,0 +1,53 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Lines 500-505: integration.metadata[\"sender\"][\"login\"] is read without a guard. build_integration sets sender only conditionally, so a missing or null sender raises KeyError/TypeError and returns a 500 instead of the error() page."
+   },
+   {
+    "id": "F2",
+    "description": "Lines 500-505: the login comparison is case-sensitive, but GitHub logins are case-insensitive, so a legitimate installer can be wrongly rejected."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_b6bcca54",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_faf6b973",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_2c66d685",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4c48d4f6",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_412f55af",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

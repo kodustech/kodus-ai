@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ca82d915",
+    "mainDefect": "The truthiness fallback treats an explicit max_processes=0 as missing.",
+    "secondary": [
+     {
+      "defect": "An empty shard assignment creates zero flusher processes, leaving flushing and submit/join processing inactive.",
+      "coveredBy": [
+       "s_f884b54a"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_bb59ca4f",
+    "mainDefect": "Collecting full-cluster memory information from every buffer performs redundant Redis INFO round-trips on the hot submit path.",
+    "secondary": [
+     {
+      "defect": "Aggregating the repeated full-cluster memory maps multiplies reported used and available memory by the number of flusher processes.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8fdca476",
+    "mainDefect": "The test relies on a mocked, no-op sleep to wait for flushing, making its assertion racy.",
+    "secondary": [
+     {
+      "defect": "The same sleep mock removes the flusher loop's delay, causing a tight busy-loop.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4d6ce3dd",
+     "s_3ef83d5d"
+    ],
+    "defect": "In the ruler-less list view the Silence menu item is shown based on the prom-rule ability, but clicking it does nothing because the silence drawer only renders when a ruler rule exists."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S7 relatam o mesmo defeito: o item \"Silence notifications\" aparece na nova lista sem ruler, mas o drawer só renderiza quando existe ruler rule, então o clique não faz nada. S2 aponta onde o defeito surge (canSilence em AlertRuleMenu) e S7 aponta onde ele se manifesta (render do drawer em RuleActionsButtons.V2), e uma única correção resolve os dois. Nenhuma delas traz um segundo defeito."
+ }
+}

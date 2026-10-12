@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_522c099e",
+     "s_76e752b3"
+    ],
+    "defect": "Backup codes are checked with indexOf/=== instead of a constant-time comparison, which opens a timing oracle in both the login and the disable-2FA paths."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_522c099e",
+   "s_76e752b3"
+  ],
+  "reasoningPt": "S4 e S5 apontam o mesmo defeito principal: a comparação dos backup codes com indexOf/=== não é de tempo constante, o que permite um ataque de timing. Esse erro se repete no login (next-auth-options) e no endpoint de disable, e uma única mudança corrige os dois. As duas também propõem normalizar a caixa (maiúsculas/minúsculas) dentro da correção, por isso entram em bundles."
+ }
+}

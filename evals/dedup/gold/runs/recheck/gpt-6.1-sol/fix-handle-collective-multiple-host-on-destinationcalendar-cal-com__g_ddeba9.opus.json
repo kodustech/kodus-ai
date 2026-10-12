@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d2d1c6a5",
+     "s_60571361",
+     "s_23010781",
+     "s_8dd680d0",
+     "s_41c96050",
+     "s_6a0ae591"
+    ],
+    "defect": "Office365 createEvent always uses the first host's destination calendar instead of selecting the one that matches the current credentialId, so collective secondary hosts write to the wrong calendar or the write fails."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S3, S7, S9, S10, S13, S16) apontam o mesmo defeito: o createEvent do Office365 sempre usa o primeiro destinationCalendar em vez do que corresponde ao credentialId. S3 só cita o mesmo erro repetido em Lark e no serviço base. As menções em S9, S10 e S16 à referência salva com o externalId errado são consequências do mesmo problema e não defeitos separados."
+ }
+}

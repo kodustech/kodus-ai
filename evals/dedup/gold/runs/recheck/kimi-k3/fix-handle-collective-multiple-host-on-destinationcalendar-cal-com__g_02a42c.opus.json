@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0aac8642",
+     "s_59f05c45"
+    ],
+    "defect": "`evt.destinationCalendar?.push(...teamDestinationCalendars)` silently no-ops when destinationCalendar was initialized to null, dropping collective team members' calendars."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S21 apontam o mesmo defeito, nas mesmas linhas 1077-1079: `evt.destinationCalendar` é inicializado como null e o `?.push` não faz nada. Com isso, os calendários dos membros do time em eventos coletivos são descartados. As correções propostas são equivalentes (inicializar como array), e nenhuma das duas traz um segundo defeito."
+ }
+}

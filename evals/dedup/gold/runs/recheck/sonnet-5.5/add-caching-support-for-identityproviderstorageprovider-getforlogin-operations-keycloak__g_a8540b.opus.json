@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_db67742f",
+     "s_053e275d"
+    ],
+    "defect": "The test cleanup uses the hard-coded literal \"alias\" instead of the alias actually created, so the created IDPs are not removed."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 apontam o mesmo defeito: o cleanup do testCacheIDPForLogin usa o literal \"alias\" em vez do alias criado. A correção é a mesma, usar o alias real. Elas só divergem na gravidade (S2 trata como questão de higiene), o que não muda o defeito, então o grupo fica como está."
+ }
+}

@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The new sender check reads integration.metadata[\"sender\"][\"login\"] directly, but \"sender\" is only set sometimes, so a missing key raises KeyError and returns a 500 instead of the error page.",
+    "members": [
+     "s_b6bcca54",
+     "s_412f55af",
+     "s_2c66d685",
+     "s_4c48d4f6",
+     "s_faf6b973"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_faf6b973"
+  ],
+  "reasoningPt": "S1 a S5 apontam o mesmo defeito: acessar integration.metadata[\"sender\"][\"login\"] sem checar a chave, que é opcional, causa KeyError e um 500 em vez da página de erro. A correção é a mesma em todas: ler o valor com .get(). S5 também fala da comparação de login sensível a maiúsculas, mas isso vem no fim como observação extra, então S5 entra em bundles e fica no grupo do seu defeito principal."
+ }
+}

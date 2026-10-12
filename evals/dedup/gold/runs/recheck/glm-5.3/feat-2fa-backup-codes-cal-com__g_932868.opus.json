@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e52baaa1",
+     "s_b44b2f52"
+    ],
+    "defect": "The BackupCode.tsx component is declared as `TwoFactor` (copy-paste leftover) instead of `BackupCode`, so it is mislabeled in DevTools, stack traces and greps."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S13 apontam o mesmo defeito na mesma linha: o componente em BackupCode.tsx foi declarado como `TwoFactor` por copiar e colar. Ambas sugerem a mesma correção, renomear para `BackupCode`, e nenhuma traz um segundo defeito."
+ }
+}

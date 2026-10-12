@@ -1,0 +1,98 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create, line 45: storage failures are recorded with recordLegacyDuration."
+   },
+   {
+    "id": "F2",
+    "description": "Update, line 129: storage failures are recorded with recordLegacyDuration."
+   },
+   {
+    "id": "F3",
+    "description": "DeleteCollection, line 166: legacy timing and errors are recorded with recordStorageDuration."
+   },
+   {
+    "id": "F4",
+    "description": "Delete, line 106: the success metric uses name instead of options.Kind for the kind label."
+   },
+   {
+    "id": "F5",
+    "description": "Delete, line 97: ctx receives d.Log instead of the enriched log, dropping name, kind and method."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_44d5c92b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7f4a71cc",
+    "covers": [
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_62248494",
+    "covers": [
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_082644e5",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_f5f42939",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_56f46701",
+    "covers": [
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_74c42d79",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6c9586da",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_982700c2",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

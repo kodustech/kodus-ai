@@ -1,0 +1,45 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "promptSha": "63a9552e92ab6c2bb0cbb66a3694156be70156b0",
+  "attempt": 1,
+  "ms": 31541,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0d3625df",
+          "s_505b8655"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "GetWebAssets fails to recheck the cache after acquiring the write lock, causing redundant loads and cache overwrites, and holds the exclusive lock across blocking file/network I/O.",
+        "rationale": "Both report the missing second cache check at the same lock acquisition and its redundant-load/cache-overwrite consequences. s_505b8655 additionally reports holding the exclusive lock during I/O as a problem, which the merged comment must preserve."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_632cf8b8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6077a73b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a322441a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a4eceb20",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e31e2f81",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c0b73dfc",
+     "s_f3717cf6"
+    ],
+    "defect": "O teste isinstance(process, multiprocessing.Process) não reconhece SpawnProcess, impedindo kill() no reinício e terminate() no encerramento."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S9 descrevem o mesmo teste de tipo incorreto, que deixa o processo antigo ativo quando um substituto é criado. Ambas também apontam a repetição desse erro em join(); como a mesma substituição corrige os dois locais, continuam no mesmo grupo e não são bundles."
+ }
+}

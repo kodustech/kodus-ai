@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c0312a1d",
+    "mainDefect": "Login caches remain stale after organization identity-provider links are added or removed because those operations do not invalidate them.",
+    "secondary": [
+     {
+      "defect": "Login caches are not invalidated when OrganizationModel.isEnabled toggles.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

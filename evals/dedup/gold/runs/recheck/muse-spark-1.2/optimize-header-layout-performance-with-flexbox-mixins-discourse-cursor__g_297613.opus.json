@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1480fde3",
+     "s_0303e051"
+    ],
+    "defect": "The align-items mixin emits the invalid property `-ms-align-items`; the correct IE10/11 property is `-ms-flex-align`."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_1480fde3"
+  ],
+  "reasoningPt": "S2 e S7 apontam o mesmo defeito principal no mixin align-items: a propriedade inválida `-ms-align-items` deve ser removida, mantendo `-ms-flex-align`. S2 também cita a falta de `-moz-box-align` como um segundo defeito adicional (\"also\"), por isso entra em bundles. Esse segundo defeito não muda o grupo de S2."
+ }
+}

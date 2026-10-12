@@ -1,0 +1,33 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Google updateEvent, lines 254–256: matching an absent externalCalendarId yields no destination, causing updates to omit calendarId."
+   },
+   {
+    "id": "F2",
+    "description": "Google deleteEvent, lines 315–317: the same invalid fallback targets primary, leaving events in configured secondary calendars untouched."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0bb6afb4",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_97dfdc72",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,37 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_a943bfa2",
+    "mainDefect": "Anonymous clients can bypass the device limit by omitting the X-Grafana-Device-Id header, because TagDevice returns nil when it is missing.",
+    "secondary": [
+     {
+      "defect": "An unauthenticated attacker can send many random device IDs to fill the shared device limit, which blocks legitimate new anonymous viewers for up to 30 days (denial of service).",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e002d46c",
+    "mainDefect": "TagDevice now runs synchronously in Authenticate, so every new-device anonymous request runs a COUNT over 30 days of devices plus an upsert on the auth hot path.",
+    "secondary": [
+     {
+      "defect": "The DB work in TagDevice no longer has the bounded timeout context (or the panic recovery) that the old background goroutine had.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_2e50d2cb",
+    "mainDefect": "The updateDevice comment says it uses given times, but the function takes no time arguments and derives the window from device.UpdatedAt.",
+    "secondary": [
+     {
+      "defect": "The updateDevice comment does not mention that the function returns ErrDeviceLimitReached when no matching device row exists.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

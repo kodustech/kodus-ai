@@ -1,0 +1,56 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "promptSha": "d6df75cf19c254d9d8f5c9161527489f4769eeea",
+  "attempt": 1,
+  "ms": 50442,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_f5735a93",
+          "s_f05796b7",
+          "s_980ed5af"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Independently computed common prefix and suffix lengths can overlap, causing the diagnostic substring calls to throw StringIndexOutOfBoundsException.",
+        "rationale": "All three report the same bounds error in the difference-report block. Their examples and proposed clamps differ, but one correction resolves all three."
+      },
+      {
+        "members": [
+          "s_3a1c7eb0",
+          "s_d0c68d28",
+          "s_b29c946a",
+          "s_83a004e9",
+          "s_a4b43d5c",
+          "s_e7dee35f"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The account-ui and admin-ui English messages replace frontend double-brace interpolation with backend single-brace/choice syntax, breaking the existing formatter contract and diverging from sibling translations.",
+        "rationale": "These report the same placeholder conversion repeated in two frontend bundles, each requiring an edit. References to unchanged formatters and translations describe the same contract mismatch."
+      },
+      {
+        "members": [
+          "s_29c9524c",
+          "s_c8231ce6"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The Lithuanian login and account OTP setup messages were both replaced with Italian text.",
+        "rationale": "The identical wrong-language sentence was copied into two Lithuanian bundles. Both locations require Lithuanian replacements."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_8919f827",
+        "confidence": "high"
+      }
+    ]
+  }
+}

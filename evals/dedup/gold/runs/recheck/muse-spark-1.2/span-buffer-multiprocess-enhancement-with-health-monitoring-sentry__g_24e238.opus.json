@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "In join(), the early `break` on the deadline means the remaining flusher processes are never waited on or terminated, so they stay alive.",
+    "members": [
+     "s_42fabd92",
+     "s_4822045d"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S8 apontam o mesmo defeito no join(): o `break` por prazo esgotado deixa os processos restantes sem espera e sem terminate. S8 fala também do uso de remaining_time e do deadline absoluto, mas isso faz parte do mesmo problema de controle do prazo no laço e se resolve com a mesma correção. Por isso o grupo fica como está."
+ }
+}

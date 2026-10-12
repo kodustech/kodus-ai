@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_2a6ec553",
+     "s_be3938b1",
+     "s_889f1bcc",
+     "s_3d0f032a",
+     "s_dd4aed43"
+    ],
+    "defect": "A verificação isTeamAdminOrOwner usa && em vez de ||, impedindo que administradores que não são proprietários passem pela autorização da equipe."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S10, S14 e S17 apontam o mesmo operador incorreto na mesma verificação de permissão; trocar && por || resolve todas as sugestões. As diferenças de descrição e de intervalo de linhas não caracterizam defeitos distintos, e nenhuma sugestão inclui um segundo defeito."
+ }
+}

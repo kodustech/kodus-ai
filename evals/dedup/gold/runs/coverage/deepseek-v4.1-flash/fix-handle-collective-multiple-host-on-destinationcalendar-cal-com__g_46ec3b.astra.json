@@ -1,0 +1,47 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GoogleCalendarService.updateEvent, lines 254–256: searching by the already-falsy externalCalendarId loses the destination-calendar fallback."
+   },
+   {
+    "id": "F2",
+    "description": "GoogleCalendarService.deleteEvent, lines 315–317: searching by the already-falsy externalCalendarId loses the destination-calendar fallback."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_03a86b3c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e60cb4a6",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_40565196",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_77f00126",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

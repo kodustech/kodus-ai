@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3fcf3843",
+     "s_f9a913f1",
+     "s_edcf5e7e",
+     "s_3fc72bd5"
+    ],
+    "defect": "A validação de rawTokenId verifica grantType por engano, permitindo IDs nulos que são codificados como texto \"null\"."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S5, S10 e S11 apontam o mesmo erro na validação de rawTokenId, com pequenas diferenças de redação e intervalo de linhas. Uma única correção no argumento de Objects.requireNonNull resolve todas as sugestões; nenhuma relata um defeito adicional."
+ }
+}

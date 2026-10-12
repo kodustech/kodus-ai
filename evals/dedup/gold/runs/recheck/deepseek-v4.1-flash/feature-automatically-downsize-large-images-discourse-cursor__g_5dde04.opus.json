@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_78b42b19",
+     "s_ac29b93c",
+     "s_550877fa"
+    ],
+    "defect": "utilities.js hardcodes a 10MB upload limit at lines 182 and 246 instead of reading the configurable max_*_size_kb SiteSettings, so admin-configured limits are no longer enforced."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S5 e S9 apontam o mesmo defeito: em utilities.js (linhas 182 e 246), o limite configurável do SiteSettings foi trocado por um valor fixo de 10MB. S9 dá ênfase aos anexos que não são imagem e perdem a validação, mas isso é consequência do mesmo problema e se resolve com a mesma correção. Por isso o grupo fica como está, e nenhuma das três sugestões reúne mais de um defeito."
+ }
+}

@@ -1,0 +1,49 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "ca3b9e9b7103063dc41d84def0e633142aef7467",
+  "attempt": 1,
+  "ms": 28884,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_9ede52cf",
+          "s_191ff583"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The membership actions require group_id although the routes supply id, and the controller specs conceal this mismatch by supplying group_id directly.",
+        "rationale": "Both report the same routing/controller parameter mismatch. The merged comment must retain the corrections to both controller actions and the specs that encode the mismatched parameter."
+      },
+      {
+        "members": [
+          "s_80c1c466",
+          "s_1c75cdaf",
+          "s_f7bfc988"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The totalPages calculation overcounts exact multiples of the page size, enabling navigation to an empty final page.",
+        "rationale": "All three identify the same floor-plus-one calculation and its pagination consequences. Additional offset clamping is a proposed safeguard, not a separately reported defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_40ae7aec",
+        "confidence": "high"
+      },
+      {
+        "id": "s_927f6da6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e22fa0b2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_11922f88",
+     "s_6cb9049c"
+    ],
+    "defect": "When a Storage call fails in Create and Update, the failure time is recorded with recordLegacyDuration when it should use recordStorageDuration."
+   }
+  ],
+  "unique": [
+   "s_b490b494"
+  ],
+  "bundles": [],
+  "reasoningPt": "S4 e S5 apontam o mesmo erro repetido em Create e Update: a falha do Storage é registrada com recordLegacyDuration, e a mesma troca para recordStorageDuration corrige os dois. S7 aponta o erro inverso em DeleteCollection: a chamada Legacy é registrada com recordStorageDuration. Por isso a correção é outra e S7 fica separada."
+ }
+}

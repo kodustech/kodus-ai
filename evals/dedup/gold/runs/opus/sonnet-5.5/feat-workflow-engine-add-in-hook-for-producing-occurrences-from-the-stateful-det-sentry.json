@@ -1,0 +1,75 @@
+{
+  "judge": "opus",
+  "model": "sonnet-5.5",
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "promptSha": "a8f32d0a1364024a26f219f5cd35ce83f01af28c",
+  "attempt": 1,
+  "ms": 12480,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 16731,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 582,
+    "output_tokens_details": {
+      "thinking_tokens": 234
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 16731,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 582,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 16731,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 16731
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1456544,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_fe329d71",
+          "s_8ab8d747",
+          "s_870608df",
+          "s_b5942d75",
+          "s_aef0f2d1"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "MetricAlertDetectorHandler is an empty subclass of the abstract StatefulDetectorHandler, so creating it in Detector.detector_handler raises TypeError for metric-alert detectors.",
+        "rationale": "All five point at the same lines in grouptype.py and report the same unimplemented abstract methods, which make the class impossible to instantiate. One fix resolves every one of them."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_83a370b6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3225cc55",
+        "confidence": "high"
+      },
+      {
+        "id": "s_22700eb7",
+        "confidence": "high"
+      }
+    ]
+  }
+}

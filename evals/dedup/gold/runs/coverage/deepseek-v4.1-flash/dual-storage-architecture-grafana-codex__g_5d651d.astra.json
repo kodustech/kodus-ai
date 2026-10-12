@@ -1,0 +1,63 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create, line 45: storage failures use recordLegacyDuration instead of recordStorageDuration, misattributing metrics to legacy."
+   },
+   {
+    "id": "F2",
+    "description": "Update, line 129: storage failures use recordLegacyDuration instead of recordStorageDuration, misattributing metrics to legacy."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_30992443",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_289657e8",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_2719ce4a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_36a5b400",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d040909a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0bd77fe1",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

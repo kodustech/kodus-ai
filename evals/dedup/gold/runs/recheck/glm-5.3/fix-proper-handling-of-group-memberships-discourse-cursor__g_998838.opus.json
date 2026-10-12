@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "add_members/remove_member read params[:group_id], but the new member routes send the group id as params[:id], so real requests fail with 400 (and the specs pass group_id directly, which hides the problem).",
+    "members": [
+     "s_9ede52cf",
+     "s_191ff583"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 aponta que o controller usa params[:group_id] enquanto a rota entrega params[:id]. S4 aponta o mesmo erro visto pelos specs, que passam group_id e escondem a falha. É o mesmo defeito em dois lugares, corrigido trocando o nome do parâmetro no controller e nos specs, então o grupo fica como está."
+ }
+}

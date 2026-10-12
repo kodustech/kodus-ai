@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_83a004e9",
+     "s_3a1c7eb0",
+     "s_b29c946a",
+     "s_a4b43d5c",
+     "s_e7dee35f",
+     "s_d0c68d28"
+    ],
+    "defect": "A mesma mensagem nos bundles de account-ui e admin-ui substitui a interpolação {{n}} por sintaxe {n}/choice incompatível com o formatador do frontend."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S6, S9, S10, S11 e S12 relatam a mesma troca incorreta de placeholders, repetida nos dois bundles e corrigível pela mesma substituição. As referências às traduções em S5 e S6 reforçam a quebra do contrato de interpolação, sem introduzir um defeito independente."
+ }
+}

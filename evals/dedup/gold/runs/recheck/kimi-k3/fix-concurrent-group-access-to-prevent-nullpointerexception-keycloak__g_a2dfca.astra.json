@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_03406bfd",
+     "s_6014debd",
+     "s_7793d543"
+    ],
+    "defect": "getSubGroupsCount() passa a retornar null após uma exclusão concorrente, violando a expectativa de contagem não nula e propagando esse valor aos consumidores."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S8 relatam o mesmo defeito no mesmo método: o novo retorno null quando o grupo é excluído concorrentemente. O valor nulo na representação e o possível NPE por unboxing são consequências desse defeito, resolvidas pela mesma correção, e não defeitos independentes."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a860d069",
+     "s_0972bbcb"
+    ],
+    "defect": "O mapeamento dos resultados de vídeo descarta result.credentialId ao criar referências da reserva, impedindo operações posteriores que dependem dessa credencial."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S16 apontam o mesmo defeito nas mesmas linhas: credentialId passa a ser undefined nas referências de vídeo. Ambas propõem preservar result.credentialId; as menções a atualização e exclusão são consequências do mesmo defeito, não defeitos adicionais."
+ }
+}

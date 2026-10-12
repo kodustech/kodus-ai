@@ -1,0 +1,36 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "EventManager.createAllCalendarEvents (~343-368): credential loaded from the DB by destination.credentialId is used to create events, with no ownership check and no check of the invalid flag"
+   },
+   {
+    "id": "F2",
+    "description": "EventManager.updateAllCalendarEvents (~515-541): credential loaded from the DB by reference.credentialId is used to update events, with no ownership check and no check of the invalid flag"
+   },
+   {
+    "id": "F3",
+    "description": "handleCancelBooking (~431-441): credential loaded from the DB by the reference's credentialId is used via getCalendar to delete events, with no ownership check and no check of the invalid flag"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_9518d664",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_23f7d949",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_47464eda",
+     "s_3f5cbb96",
+     "s_5866e509",
+     "s_e9ab5dc2",
+     "s_0202df1b",
+     "s_b95471bc"
+    ],
+    "defect": "A goroutine de Legacy.DeleteCollection registra duração e erros com recordStorageDuration em vez de recordLegacyDuration, atribuindo os resultados à métrica de storage."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S9, S12, S16, S20 e S24 relatam o mesmo defeito na chamada da linha 166. Todas são resolvidas pela troca de recordStorageDuration por recordLegacyDuration; nenhuma relata um segundo defeito."
+ }
+}

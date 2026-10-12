@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d0f69e7e",
+     "s_86975f9e"
+    ],
+    "defect": "O listener de remoção ainda chama setPermissionsEnabled no V2, que lança UnsupportedOperationException e pode interromper a exclusão do cliente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S10 descrevem o mesmo defeito: a chamada de limpeza em AdminPermissions chega ao método setPermissionsEnabled do V2, que lança uma exceção. As referências a outros métodos e eventos ampliam a discussão, mas não apresentam um defeito independente; a mesma correção resolve ambas."
+ }
+}

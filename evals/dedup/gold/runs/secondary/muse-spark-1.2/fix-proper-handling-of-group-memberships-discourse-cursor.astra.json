@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_77d7a71e",
+    "mainDefect": "Direct membership deletion bypasses primary-group cleanup, leaving primary_group_id pointing to the removed group.",
+    "secondary": [
+     {
+      "defect": "Direct deletion skips callbacks and deletion tracking expected by Group.save.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The subsequent group.save is redundant because the deletion has already executed.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_831f85e5",
+    "mainDefect": "PATCH requests with membership changes now return success without applying those changes.",
+    "secondary": [
+     {
+      "defect": "PATCH requests targeting automatic groups no longer receive the previous 403 rejection.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

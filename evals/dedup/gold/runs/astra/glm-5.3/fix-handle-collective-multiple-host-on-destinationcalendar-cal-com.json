@@ -1,0 +1,111 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "95d50ff6e59537f801734739dd8f21b42f252c07",
+  "attempt": 1,
+  "ms": 63073,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_65bc8258",
+          "s_aa8b5b10",
+          "s_b7a8f74b",
+          "s_8ebfd962"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Destinations without credentialId are routed to Google's primary calendar instead of their configured calendar, and the fallback creation branch omits externalId from the stored booking reference.",
+        "rationale": "All four report both the credential-only destination lookup and the omitted externalId argument. The merged comment must retain the provider routing fix and the reference metadata fix."
+      },
+      {
+        "members": [
+          "s_29b344c5",
+          "s_08035170",
+          "s_7aa0f717",
+          "s_f50a5d4f",
+          "s_dd554f89",
+          "s_7f78185c",
+          "s_e57c1a14"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Google updateEvent and deleteEvent search for a destination matching an already-falsy externalCalendarId, losing the configured-calendar fallback in both operations.",
+        "rationale": "The same erroneous fallback appears in update and delete, and several suggestions explicitly report both occurrences. Both expressions need correction; references lacking calendar IDs are the triggering context."
+      },
+      {
+        "members": [
+          "s_63b14dbf",
+          "s_b9c30153"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "A null destinationCalendar makes the optional-chained push silently discard collective hosts' destination calendars.",
+        "rationale": "Both describe the same initialization and append failure when the organizer and event type have no destination calendar. Initializing or assigning the array correctly resolves both."
+      },
+      {
+        "members": [
+          "s_992ef6e1",
+          "s_7c95d01e",
+          "s_879dc325",
+          "s_2cae9425",
+          "s_b511b1ed"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The Google Meet fallback dereferences an undefined first destination calendar when destinationCalendar is null or empty.",
+        "rationale": "Every suggestion reports the missing null guard on mainHostDestinationCalendar.integration. One optional-chaining correction addresses all five."
+      },
+      {
+        "members": [
+          "s_9518d664",
+          "s_23f7d949"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Credential database fallbacks in creation, update, and cancellation use stored credential IDs without checking ownership or rejecting invalid credentials.",
+        "rationale": "These report the same unchecked credential lookup repeated across three execution paths. Each lookup needs the ownership and validity checks preserved in the merged comment."
+      },
+      {
+        "members": [
+          "s_0fcfd2d6",
+          "s_a98dfe02",
+          "s_a23b880b"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Office365, Lark, and BaseCalendarService select the first destination instead of the destination belonging to the active credential, causing incorrect calendar targeting and inconsistent references.",
+        "rationale": "All three identify the same first-destination assumption across the same provider implementations. Correcting the selection requires edits in each affected implementation."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_ba685c8e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f6aef3f1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_40b032d3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_cff208e3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c9a23daa",
+        "confidence": "high"
+      }
+    ]
+  }
+}

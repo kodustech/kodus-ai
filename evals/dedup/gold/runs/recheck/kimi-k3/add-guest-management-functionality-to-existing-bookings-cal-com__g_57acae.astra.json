@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7d604253",
+     "s_a57d87d0",
+     "s_87977711",
+     "s_2fdd418d"
+    ],
+    "defect": "O handler passa guests em vez de uniqueGuests para sendAddGuestsEmails, fazendo participantes existentes reenviados na entrada receberem o email de novo convidado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6, S11, S24 e S25 descrevem o mesmo defeito na mesma chamada, com a mesma consequência e correção. Todas são resolvidas passando uniqueGuests para sendAddGuestsEmails; nenhuma relata um segundo defeito independente."
+ }
+}

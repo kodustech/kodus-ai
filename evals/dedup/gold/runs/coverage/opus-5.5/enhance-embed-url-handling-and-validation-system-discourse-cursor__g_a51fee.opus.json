@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Embed URL interpolated unescaped into the 'imported from' <a href='#{url}'>#{url}</a> link (app/models/topic_embed.rb line 13)"
+   },
+   {
+    "id": "F2",
+    "description": "Imported raw HTML content (Readability/RSS) stored and rendered without sanitization because Post#cook returns raw unchanged for raw_html posts (app/models/post.rb line 133)"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_8ac429ca",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_8882a392",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bfc86ebc",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_f886b821",
+   "s_611afbf2",
+   "s_ce1639a8"
+  ],
+  "bundles": [
+   "s_f886b821",
+   "s_ce1639a8"
+  ],
+  "reasoningPt": "S3 tem como defeito principal o grantType desatualizado após setFormParams; S13 trata da ausência de validação de formParams nulo. S15 começa pela remoção do construtor de cópia, um defeito com correção independente. S3 e S15 agregam defeitos secundários, mas essas sobreposições não justificam agrupá-las pela regra do defeito principal."
+ }
+}

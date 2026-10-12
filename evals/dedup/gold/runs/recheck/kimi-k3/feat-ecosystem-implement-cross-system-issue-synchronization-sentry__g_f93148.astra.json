@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_86941632",
+     "s_93638ca0"
+    ],
+    "defect": "O teste test_from_dict_empty_array recebe um dicionário vazio, contradizendo o formato de entrada indicado pelo nome."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S7 apontam a mesma divergência entre o nome do teste e a entrada utilizada, no mesmo local. Renomear o teste para test_from_dict_empty_dict resolve ambas; a menção à cobertura de listas é uma alternativa ou complemento, sem constituir outro defeito reportado."
+ }
+}

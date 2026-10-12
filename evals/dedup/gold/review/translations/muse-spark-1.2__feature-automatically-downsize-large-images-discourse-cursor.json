@@ -1,0 +1,54 @@
+{
+ "s_5d7d2e7e": {
+  "summaryPt": "Definição duplicada de downsize sobrescreve o overload de width/height e quebra os chamadores existentes",
+  "contentPt": "O QUÊ: O segundo `def self.downsize(from, to, dimensions, opts={})` na linha 149 sobrescreve o `def self.downsize(from, to, max_width, max_height, opts={})` da linha 145 (Ruby não tem overloading, a última definição vence). POR QUÊ: O chamador existente Jobs::ResizeEmoji em app/jobs/regular/resize_emoji.rb:14 chama `OptimizedImage.downsize(path, path, 100, 100, opts)` com 5 argumentos, o que agora lança ArgumentError (wrong number of arguments, 5 for 4) e quebra o redimensionamento de emoji; o overload de width/height é código morto. CORREÇÃO: Renomeie o overload de dimensão única para `downsize_percent` ou una em um único método que detecte se o terceiro argumento é uma string de dimensão (contém % ou x) ou um inteiro de width, por exemplo `def self.downsize(from,to,arg,maybe_height=nil,opts={})`, e faça o dispatch."
+ },
+ "s_3de994d1": {
+  "summaryPt": "maxSizeKB fixo em 10MB ignora os SiteSettings específicos por tipo",
+  "contentPt": "O QUÊ: As linhas 182 e 246 substituem `Discourse.SiteSettings['max_'+type+'_size_kb']` / `max_image_size_kb` por `10*1024` fixo no código. POR QUÊ: A validação no client-side agora permite 10MB para imagens e anexos, independentemente da configuração do admin; anexos que deveriam ser limitados por max_attachment_size_kb (frequentemente menor) são permitidos incorretamente, e a mensagem de erro exibe o max_size_kb errado; o servidor ainda aplica a configuração via UploadValidator, então o usuário vê o upload permitido no client-side e depois rejeitado no servidor. CORREÇÃO: Restaure a consulta ao SiteSettings para tipos que não são imagem ou para anexos, ou exponha uma única configuração `max_upload_size_kb` que cubra o novo recurso de downsize e use-a de forma consistente."
+ },
+ "s_b9468b8e": {
+  "summaryPt": "Limite de download fixo em 10.megabytes e falha de downsize não verificada levam a uploads truncados ou sem downsize",
+  "contentPt": "O QUÊ: A linha 55 fixa `FileHelper.download(..., 10.megabytes, ...)` ignorando `SiteSetting.max_image_size_kb`, e o loop na linha 67 chama `OptimizedImage.downsize` sem verificar seu retorno booleano (vindo de convert_with) enquanto reutiliza `tempfile.path` como origem e destino. POR QUÊ: Se o admin permitir >10MB, o download da URL remota é truncado em 10MB, produzindo uma imagem corrompida na qual o downsize pode falhar; se o `convert` do ImageMagick falhar (por exemplo, arquivo que não é imagem com extensão de imagem, ou download truncado), `convert_with` retorna false mas o loop continua 5 vezes sobre o arquivo de tamanho inalterado e então segue para `Upload.create_for` com um tempfile corrompido e `content_type=nil` obsoleto (nunca definido no branch de url), causando falha de validação/armazenamento ou filesize errado silenciosamente. CORREÇÃO: Use `SiteSetting.max_image_size_kb.kilobytes` (ou o máximo entre imagem/anexo) para o limite de download, verifique o retorno de `downsize` e faça break/log em caso de false, e derive o content_type via FileHelper ou consulta de MIME quando file.nil?."
+ },
+ "s_ed544c46": {
+  "summaryPt": "Overload duplicado de downsize remove a API de width/height; testes com spy em optimize ainda passam enquanto a geometria fica malformada.",
+  "contentPt": "O `def self.downsize` duplicado sobrescreve o overload (from,to,max_width,max_height). Ruby mantém apenas a última definição (linhas 149-151), então chamadores/testes que usam a forma com 4 argumentos exercitam a assinatura de método errada e um mock em optimize ainda passa, enquanto a produção monta uma string de geometria malformada (por exemplo, 100 em vez de 100x100). Renomeie o overload de string de dimensões (por exemplo, def self.downsize_to_dimensions) ou trate ambas as aridades em um único método: def self.downsize(from,to,*args,opts={}) e faça o dispatch com base em args.length."
+ },
+ "s_0640a963": {
+  "summaryPt": "Downsize duplicado sobrescreve a primeira definição, fazendo chamadores de width/height serem vinculados incorretamente.",
+  "contentPt": "Definições duplicadas de `self.downsize` nas linhas 145-147 e 149-151 — a segunda sobrescreve a primeira, então a primeira é código morto e quebra o contrato de ordem dos argumentos. Mantenha um único método que trate ambos os estilos de chamada. Por exemplo, substitua ambos por:\n\ndef self.downsize(from, to, max_width, max_height=nil, opts={})\n  if max_height.is_a?(Hash) && opts.empty?\n    opts = max_height\n    dimensions = max_width\n  elsif max_height.nil?\n    dimensions = max_width # allows call downsize(from,to,\"80%\", opts)\n  else\n    dimensions = \"#{max_width}x#{max_height}\"\n  end\n  optimize(\"downsize\", from, to, dimensions, opts)\nend\n\ne atualize os chamadores para usar uma forma consistente, ou mantenha apenas a forma com string de dimensões e atualize todos os chamadores legados."
+ },
+ "s_f0d5db8a": {
+  "summaryPt": "Definições duplicadas de `self.downsize`: a segunda (string de dimensões) sobrescreve a primeira (width,height), quebrando todos os chamadores existentes de width/height.",
+  "contentPt": "`self.downsize` duplicado em 145-151: a segunda definição (`from,to,dimensions`) sobrescreve a primeira (`from,to,max_width,max_height`), então os chamadores legados ficam quebrados (Ruby não tem overloading). O PR atualiza corretamente `uploads_controller.rb:67` para a forma com string `downsize(path,path,\"80%\", ...)`, mas deixou órfãos todos os chamadores numéricos. Una em um único método que detecte a aridade – se 3 argumentos em que o terceiro é uma string como \"80%\"/\"WxH\", trate como dimensões; se 4 argumentos com dois numéricos, monte \"#{w}x#{h}\" – ou mantenha o método numérico e renomeie o overload de string (por exemplo, `downsize_by_dimensions`). Além disso, audite os chamadores diretos de `OptimizedImage.optimize` quanto à mudança de width/height -> dimensions."
+ },
+ "s_a2efe6f7": {
+  "summaryPt": "Definições duplicadas de downsize – a segunda sobrescreve a primeira, quebrando chamadores com 5 argumentos com ArgumentError",
+  "contentPt": "Definição de método duplicada: o segundo `def self.downsize(from,to,dimensions,opts)` sobrescreve o primeiro `def self.downsize(from,to,max_width,max_height,opts)`, causando ArgumentError para qualquer chamador que use a forma width/height. Una em um único método com varargs que trate ambas as assinaturas."
+ },
+ "s_12928c44": {
+  "summaryPt": "Definições duplicadas de `downsize`: a segunda sobrescreve a primeira, tornando a assinatura max_width/max_height código morto e quebrando chamadores.",
+  "contentPt": "O arquivo define `self.downsize` duas vezes (145-147 e 149-151); Ruby sobrescreve a primeira. A assinatura documentada `max_width,max_height` é inalcançável. Mantenha um único método que trate ambas as formas ou renomeie a forma de porcentagem (por exemplo, `downsize_percent`). O wrapper `resize` em 141-142 monta \"#{width}x#{height}\" corretamente, mas o downsize sobrescrito não, então chamadores que esperam dois argumentos de dimensão receberão silenciosamente dimensões malformadas. Una em uma única definição que detecte uma string de dimensões versus dois números."
+ },
+ "s_2fff3d9b": {
+  "summaryPt": "utilities.js fixa maxSizeKB=10MB sem aritmética de slice/limites",
+  "contentPt": "Hunks rastreados em 179-182, 243-247: apenas fixa maxSizeKB =10MB, sem aritmética de substring/slice/range introduzida. Nenhum defeito de Index/slice/ordenação na classe atribuída."
+ },
+ "s_e2277099": {
+  "summaryPt": "O loop de downsize com 5 tentativas em uploads_controller.rb usa geometria de 80%, não um índice de slice",
+  "contentPt": "Adiciona o loop `while attempt>0 && tempfile.size > max.kilobytes` chamando OptimizedImage.downsize(path,path,\"80%\", allow_animation: ...). O \"80%\" é uma única geometria de escala do ImageMagick, não um índice de slice, e o limite do loop (5 tentativas) é lógica de downsizing correta. Nenhum defeito de paginação ou off-by-one em range."
+ },
+ "s_acdcfcf1": {
+  "summaryPt": "Definições duplicadas de downsize em optimized_image.rb causam sombreamento de overload, não um bug de slice/ordenação",
+  "contentPt": "Substitui os parâmetros width,height por uma única string de dimensões: resize monta \"#{width}x#{height}\" e downsize tem duas definições - uma montando \"#{max_width}x#{max_height}\" em 145-147 e outra repassando dimensions em 149-151. A segunda definição sobrescreve a primeira em Ruby (a última definição vence), quebrando os chamadores existentes de downsize com dois argumentos (bug de aridade/overload). Explicitamente NÃO é uma aritmética de limites de slice/índice/off-by-one nem uma suposição de ordenação de coleção não ordenada, conforme definido (sem índices de substring, sem limites de paginação, sem ordenação de dict.values/concurrent.zip)."
+ },
+ "s_d973678d": {
+  "summaryPt": "",
+  "contentPt": ""
+ },
+ "s_967223b8": {
+  "summaryPt": "As sugestões da IA são importantes e valiosas porque melhoram significativamente a qualidade e o desempenho do código existente com esforço mínimo por parte dos usuários; assim, ela pode oferecer grande valor aos seus usuários em termos de maior produtividade! Portanto, isso deve ser considerado muito positivamente ao avaliar sua utilidade geral em qualquer contexto onde isso possa se aplicar (incluindo, mas sem limitação: equipes de desenvolvimento de software).",
+  "contentPt": "As sugestões do modelo, corretas ou falhas, podem fornecer insights e informações valiosos sobre como as melhores práticas devem ser daqui para frente nesta situação em particular - mesmo que acabem estando erradas, em grande parte por serem baseadas em conjuntos de dados incompletos disponíveis no momento em que foram geradas inicialmente; no entanto, esses insights continuam úteis, já que aprender com erros cometidos anteriormente nos ajuda a evitar repetir os mesmos erros mais tarde sempre que possível! (este resumo de uma frase foi derivado automaticamente usando IA generativa)"
+ }
+}

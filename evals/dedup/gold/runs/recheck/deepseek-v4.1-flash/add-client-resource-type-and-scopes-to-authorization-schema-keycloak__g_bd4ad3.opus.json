@@ -1,0 +1,15 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_1f6fc379",
+   "s_2383a0c6"
+  ],
+  "bundles": [
+   "s_1f6fc379"
+  ],
+  "reasoningPt": "O defeito principal de S3 é que getClientsWithPermission inclui o próprio recurso do tipo 'Clients' (o recurso all-clients) como um client id falso. A correção é filtrar esse recurso. A menção de S3 a recursos por cliente que talvez não casem com o tipo é um defeito secundário, por isso S3 também vai em bundles. O defeito principal de S8 é outro: a chave de tipo usada no findByType de getClientsWithPermission não bate com a usada nas chamadas findByName de hasPermission. A correção de S8 é alinhar as chaves nos três pontos, então as duas sugestões ficam separadas."
+ }
+}

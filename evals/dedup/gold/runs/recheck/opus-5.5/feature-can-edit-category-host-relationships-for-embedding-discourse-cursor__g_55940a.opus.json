@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7900c369",
+     "s_13c616c7",
+     "s_c76cedb8"
+    ],
+    "defect": "The migration indexes `execute(...)[0]` without checking that a row came back, so it crashes when the embed_category or uncategorized_category_id row is missing."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c76cedb8"
+  ],
+  "reasoningPt": "S1, S7 e S14 têm como defeito principal o mesmo problema: a migration indexa `execute(...)[0]` sem verificar se veio alguma linha, e por isso quebra quando a configuração embed_category não existe. S14 acrescenta depois outros defeitos (hosts gravados sem normalização e INSERT sem escape), então é um bundle, mas pela regra do defeito principal continua neste grupo."
+ }
+}

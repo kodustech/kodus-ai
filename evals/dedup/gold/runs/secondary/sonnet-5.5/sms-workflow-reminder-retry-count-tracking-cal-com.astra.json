@@ -1,0 +1,31 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_085b2df5",
+    "mainDefect": "The retry-exhaustion branch lacks an SMS method filter, allowing the SMS cron to delete non-SMS reminders.",
+    "secondary": [
+     {
+      "defect": "The retry-exhaustion branch lacks a date condition, allowing deletion of future SMS reminders.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The comment incorrectly describes the deletion as limited to SMS reminders whose scheduled date has passed.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c8538465",
+    "mainDefect": "An unguarded database update inside the catch block can throw and abort processing of the remaining reminders.",
+    "secondary": [
+     {
+      "defect": "Updating retryCount using reminder.retryCount + 1 relies on a stale read and should use an atomic increment.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "defect": "The new TestMode3_* unit tests never check that the async legacy write is called. They do not wait for the goroutine and do not assert on the legacy mock, so removing the legacy write would still leave every test passing.",
+    "members": [
+     "s_952eaebd",
+     "s_3e0dbc3c"
+    ]
+   }
+  ],
+  "unique": [
+   "s_c52e7744"
+  ],
+  "bundles": [
+   "s_3e0dbc3c"
+  ],
+  "reasoningPt": "S6 e S12 apontam o mesmo defeito: os testes unitários do modo 3 em dualwriter_mode3_test.go não verificam a escrita assíncrona no legacy, e a correção é a mesma (aguardar e verificar o mock). S14 trata dos testes de integração do playlist_test.go, que leem só do unified storage. A correção é diferente (consultar o legacy store), e S6 cita esses testes só como comentário no WHY. S12 também propõe, dentro da correção, separar os mocks por backend, que é outro defeito."
+ }
+}

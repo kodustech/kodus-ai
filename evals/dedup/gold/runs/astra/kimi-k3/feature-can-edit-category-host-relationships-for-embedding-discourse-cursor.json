@@ -1,0 +1,120 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "promptSha": "74a3bfb839e94b2e03d7d9384dacb0b246685a1b",
+  "attempt": 1,
+  "ms": 69675,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_264c9510",
+          "s_a9e465bd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The blank-host example passes because the topic has no embed, so it no longer tests the condition its description claims.",
+        "rationale": "Both identify the same misleading, vacuous example and explain the same missing setup."
+      },
+      {
+        "members": [
+          "s_4b5af67b",
+          "s_d78df7ae",
+          "s_721295fb"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Host lookup normalizes case only on the database side and excludes ports even though stored hosts may include them.",
+        "rationale": "s_4b5af67b explicitly reports both defects, linking the case-normalization report to the port-matching report."
+      },
+      {
+        "members": [
+          "s_6fa3626d",
+          "s_073fc623",
+          "s_ec94f60b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The migration indexes potentially empty results for both the embed-category lookup and the uncategorized-category fallback.",
+        "rationale": "All three report the initial lookup crash; the first two additionally report the identical hazard in the fallback. Both lookup sites must be covered."
+      },
+      {
+        "members": [
+          "s_a96ba504",
+          "s_ff692566"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Both update and destroy dereference a missing EmbeddableHost instead of returning a not-found response.",
+        "rationale": "Both reports describe the same stale-ID failure in the same two actions, each of which needs safe record lookup."
+      },
+      {
+        "members": [
+          "s_c864cfd5",
+          "s_5462a854"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The context misspells 'embeddable' and misleadingly fabricates a host that the tested method never reads.",
+        "rationale": "Both report the context-name typo. s_c864cfd5 additionally reports the inert fixture and misleading context, which must survive consolidation."
+      },
+      {
+        "members": [
+          "s_9bf99a8b",
+          "s_3869a81c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Plural relationship hydration leaks undefined entries, unconditionally removes original ID attributes despite failed hydration, and crashes on null ID arrays.",
+        "rationale": "Both report undefined entries from unsuccessful lookups. Their additional reports about attribute replacement and null input form an overlapping group."
+      },
+      {
+        "members": [
+          "s_c5b0ee53",
+          "s_4b72607c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The category and embeddable-host fabricator files contain each other's definitions.",
+        "rationale": "Both describe exactly the same file-content swap and request the same correction."
+      },
+      {
+        "members": [
+          "s_38ff2c05",
+          "s_8a2cf40c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The normalization callback calls sub! on a nil host, raising an exception instead of producing a validation error.",
+        "rationale": "Both identify the same unguarded callback and missing-host trigger."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_62ce2230",
+        "confidence": "high"
+      },
+      {
+        "id": "s_9ef7c17d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f31030ad",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ed22a0a4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

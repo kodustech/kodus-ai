@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5c133571",
+     "s_62fe45ea"
+    ],
+    "defect": "The new members routes don't provide the group_id parameter that add_members/remove_member require, so the route, the client URL and params.require(:group_id) don't match and real requests fail."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S11 apontam o mesmo defeito: as rotas de members em config/routes.rb não fornecem o parâmetro group_id que os handlers exigem com params.require(:group_id). Por isso, as requisições reais falham, e os specs escondem isso ao passar group_id direto. S4 olha pelo lado da rota e S11 pelo lado do controller, mas a mesma correção resolve os dois, então o grupo fica como está."
+ }
+}

@@ -1,0 +1,14 @@
+{
+ "s_1de4d23b": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `queued: datetime = timezone.now()` é avaliado uma única vez na definição da classe (no momento do import), então todo AssignmentSource compartilha o mesmo timestamp desatualizado. POR QUÊ: o valor de `queued` está errado para todas as instâncias, e o teste que apenas verifica que ele não é None não detectaria isso. CORREÇÃO: use `field(default_factory=timezone.now)`."
+ },
+ "s_d328cce0": {
+  "summaryPt": "",
+  "contentPt": "`queued` tem como padrão `timezone.now()`, que é avaliado uma única vez quando o módulo é importado. Assim, toda instância de AssignmentSource recebe o mesmo timestamp desatualizado, e não o momento em que foi enfileirada. Use `field(default_factory=timezone.now)` (importe `field` de dataclasses)."
+ },
+ "s_428c1b8f": {
+  "summaryPt": "",
+  "contentPt": "`queued: datetime = timezone.now()` é avaliado uma única vez no import do módulo, então todo AssignmentSource compartilha o mesmo timestamp desatualizado (o horário de início do processo). Use `field(default_factory=timezone.now)` no lugar. Um datetime em to_dict() também quebraria se o serializer do Celery fosse alterado de pickle para JSON."
+ }
+}

@@ -1,0 +1,122 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0d3070ec",
+    "mainDefect": "Delete success metrics use the object name instead of the kind label.",
+    "secondary": [
+     {
+      "defect": "Delete puts the base logger into the context, losing the enriched logging fields.",
+      "coveredBy": [
+       "s_d8591060"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_e95c784c",
+    "mainDefect": "Create records Storage failures with recordLegacyDuration.",
+    "secondary": [
+     {
+      "defect": "Update records Storage failures with recordLegacyDuration.",
+      "coveredBy": [
+       "s_0f8576a3",
+       "s_6451b2bb"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_028635c3",
+    "mainDefect": "TestMode3_Update never waits for or verifies the asynchronous Legacy.Update call.",
+    "secondary": [
+     {
+      "defect": "TestMode3_Update covers Storage failures but does not test Legacy.Update failures.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_49bc7a3a",
+    "mainDefect": "The legacy DeleteCollection goroutine incorrectly records its duration with recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "TestMode3_DeleteCollection only checks the Storage result without waiting for or verifying the asynchronous legacy operation.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a6079adb",
+    "mainDefect": "Asynchronous legacy operations inherit request cancellation and can be aborted when the handler returns.",
+    "secondary": [
+     {
+      "defect": "The goroutine captures the same runtime.Object pointer, creating a data race.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4c68a502",
+    "mainDefect": "Create records Storage failures with recordLegacyDuration.",
+    "secondary": [
+     {
+      "defect": "Update records Storage failures with recordLegacyDuration.",
+      "coveredBy": [
+       "s_0f8576a3",
+       "s_6451b2bb"
+      ]
+     },
+     {
+      "defect": "The legacy DeleteCollection goroutine records its duration with recordStorageDuration.",
+      "coveredBy": [
+       "s_28699aa5",
+       "s_bc787d91",
+       "s_d464c133",
+       "s_49bc7a3a"
+      ]
+     },
+     {
+      "defect": "Delete success metrics use the object name instead of the kind label.",
+      "coveredBy": [
+       "s_0d3070ec",
+       "s_02ad3834",
+       "s_0256cf0e"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_b4125606",
+    "mainDefect": "The mapper clears the entity's address before reading it into the DTO, producing a null DTO address.",
+    "secondary": [
+     {
+      "defect": "The mapper unnecessarily mutates its input entity.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7157fd26",
+    "mainDefect": "The loop redundantly calls containsKey for keys obtained from the same map's keySet.",
+    "secondary": [
+     {
+      "defect": "The loop performs an unnecessary get lookup instead of obtaining the value directly through entrySet iteration.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b937db36",
+    "mainDefect": "The save exception is swallowed, allowing execution to continue without notifying the caller of failure.",
+    "secondary": [
+     {
+      "defect": "Using printStackTrace bypasses the logging framework and omits production logging context.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

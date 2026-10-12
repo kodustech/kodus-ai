@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_21875822",
+     "s_0382c995"
+    ],
+    "defect": "i.content is nil for feed items without a content element, so i.content.scrub raises NoMethodError and aborts the whole feed poll."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S17 apontam o mesmo defeito: `i.content` vem nil em itens sem elemento de conteúdo, e `.scrub` levanta NoMethodError e interrompe o poll inteiro. As duas propõem a mesma correção, usar `i.description` quando o conteúdo estiver vazio. A ideia de S17 de envolver cada item num tratamento próprio só reforça essa mesma correção e não é um defeito separado."
+ }
+}

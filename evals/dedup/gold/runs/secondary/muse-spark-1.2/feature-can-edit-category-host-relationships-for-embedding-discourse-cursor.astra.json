@@ -1,0 +1,75 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_74124a9e",
+    "mainDefect": "The migration dereferences the first query result without checking whether a row exists, causing migration failure on empty results.",
+    "secondary": [
+     {
+      "defect": "The migration interpolates host values directly into SQL without escaping or parameterization.",
+      "coveredBy": [
+       "s_5ffb9255"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_794de377",
+    "mainDefect": "Plural relationship hydration calls .map on values without checking that they are arrays, causing errors for null or scalar values.",
+    "secondary": [
+     {
+      "defect": "Unresolved relationship IDs leave undefined entries in the hydrated array instead of being filtered or handled.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b171a9e5",
+    "mainDefect": "Update and destroy dereference a potentially missing host record instead of returning a not-found response.",
+    "secondary": [
+     {
+      "defect": "Missing params[:embeddable_host] is not guarded before save_host dereferences it.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_3480efde",
+    "mainDefect": "The migration inserts hosts without stripping schemes and paths, preventing migrated hosts from matching host lookups.",
+    "secondary": [
+     {
+      "defect": "The migration inserts host values into SQL without sanitization.",
+      "coveredBy": [
+       "s_5ffb9255"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_2ea70c55",
+    "mainDefect": "The migration inserts hosts without stripping schemes and paths, preventing migrated hosts from matching host lookups.",
+    "secondary": [
+     {
+      "defect": "The migration inserts host values into SQL without escaping or parameterization.",
+      "coveredBy": [
+       "s_5ffb9255"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_059ba6b1",
+    "mainDefect": "The migration stores raw host settings containing schemes or paths, preventing migrated hosts from matching host lookups.",
+    "secondary": [
+     {
+      "defect": "The migration inserts host values into SQL without bound parameters.",
+      "coveredBy": [
+       "s_5ffb9255"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

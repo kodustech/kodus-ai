@@ -1,0 +1,91 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_93595c3f",
+    "mainDefect": "Google Calendar updateEvent loses its destination-calendar fallback by searching for a falsy externalCalendarId.",
+    "secondary": [
+     {
+      "defect": "Google Calendar deleteEvent has the same invalid lookup, losing its destination-calendar fallback.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_cd578af7",
+    "mainDefect": "Office365 createEvent uses the first host's destination calendar instead of the calendar matching the current credential.",
+    "secondary": [
+     {
+      "defect": "Lark createEvent also uses the first host's destination calendar instead of matching the current credential.",
+      "coveredBy": []
+     },
+     {
+      "defect": "CalDAV BaseCalendarService also uses the first host's destination calendar instead of matching the current credential.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_97a87a12",
+    "mainDefect": "The recurring-series deletion block runs inside the per-reference loop, redundantly deleting the whole series for each reference.",
+    "secondary": [
+     {
+      "defect": "Recurring events belonging to other hosts are not deleted because deletion uses only the organizer's credentials.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e4fc8c56",
+    "mainDefect": "loadUsers no longer selects organization.slug for dynamic users even though downstream code requires it.",
+    "secondary": [
+     {
+      "defect": "The rewritten error handling converts non-Prisma errors, including an empty dynamic user list, into generic 500 responses instead of appropriate 4xx responses.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e4393123",
+    "mainDefect": "Google Calendar updateEvent searches for a falsy externalCalendarId in its fallback branch and consequently sends an undefined calendarId.",
+    "secondary": [
+     {
+      "defect": "Google Calendar deleteEvent contains the same dead lookup instead of a working destination-calendar fallback.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4aa5d124",
+    "mainDefect": "Google Calendar updateEvent loses the destination-calendar fallback and sends an undefined calendarId.",
+    "secondary": [
+     {
+      "defect": "Google Calendar deleteEvent's invalid destination lookup causes it to fall back to primary, which may be the wrong calendar.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_94084073",
+    "mainDefect": "Office365 createEvent ignores credentialId and targets the organizer's destination calendar when using another host's credential.",
+    "secondary": [
+     {
+      "defect": "Lark likewise needs to select the destination calendar matching the current credential.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_3c85c91e",
+    "mainDefect": "Google Calendar updateEvent's fallback searches for a null or undefined externalCalendarId and sends an undefined calendarId.",
+    "secondary": [
+     {
+      "defect": "Google Calendar deleteEvent falls back to primary instead of the host's selected destination calendar because of the same invalid lookup.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

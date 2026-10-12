@@ -1,0 +1,51 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "addGuests.handler.ts:76 compares guest and existing-attendee emails case-sensitively, allowing duplicate attendees."
+   },
+   {
+    "id": "F2",
+    "description": "AddGuestsDialog.tsx:26-29 uses case-sensitive Set-based email uniqueness validation."
+   },
+   {
+    "id": "F3",
+    "description": "addGuests.handler.ts:77 compares raw guest emails against the lowercased blacklist, allowing case-variation bypass."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0005a575",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5ce0b553",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b8b58cda",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_76132555",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

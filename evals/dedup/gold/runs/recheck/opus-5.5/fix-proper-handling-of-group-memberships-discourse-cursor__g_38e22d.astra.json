@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a68744fe",
+     "s_79e164e9",
+     "s_79243ad0",
+     "s_1dab3a9f"
+    ],
+    "defect": "totalPages calcula uma página extra quando user_count é múltiplo exato de limit, permitindo navegar para uma página vazia."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S6, S7 e S10 descrevem o mesmo erro no cálculo de totalPages, no mesmo trecho. Todas propõem usar Math.ceil; o botão habilitado e a página vazia são consequências desse defeito, não defeitos adicionais."
+ }
+}

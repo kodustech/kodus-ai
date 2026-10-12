@@ -1,0 +1,25 @@
+{
+  "model": "glm-5.3",
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "component": [
+    "s_1c8a0bc2",
+    "s_e5d1d746"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_1c8a0bc2",
+          "s_e5d1d746"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "defect": "The missing_backup_codes message ('generate them in your settings') is a dead end. Users on the login screen can't reach settings, and nothing in the PR can regenerate codes, so pre-2FA-migration users with NULL backupCodes are stuck."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "Both suggestions report the same defect. The MissingBackupCodes message tells users to generate backup codes in their settings. A locked-out user on the login screen can't do that, and the PR has no feature that regenerates codes. That hits every existing 2FA user, because the migration leaves backupCodes as NULL. s_1c8a0bc2 points at the locale string in common.json. s_e5d1d746 points at where login.tsx shows that string. Both make the same root-cause points: no backfill and no regeneration. Rewording the one string fixes both, and s_e5d1d746's other option, backfilling or adding a regenerate action, would also resolve both. Neither suggestion adds a separate defect that a merged comment would need to keep, so needsUnifiedComment is false."
+  }
+}

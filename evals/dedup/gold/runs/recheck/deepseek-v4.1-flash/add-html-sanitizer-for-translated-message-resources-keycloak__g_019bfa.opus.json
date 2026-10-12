@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f5735a93",
+     "s_980ed5af",
+     "s_f05796b7"
+    ],
+    "defect": "The common-prefix and common-suffix lengths in the diff-trimming block are computed separately and can overlap, so substring gets a begin index larger than its end index and throws StringIndexOutOfBoundsException."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S8 relatam o mesmo defeito: o prefixo e o sufixo comuns são calculados de forma independente e podem se sobrepor, o que faz o substring lançar StringIndexOutOfBoundsException. As três propõem a mesma correção, limitar os índices, e só mudam os exemplos e o intervalo de linhas. Nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1ed3adad",
+     "s_99e2bf32"
+    ],
+    "defect": "O cache de traduções não inclui SiteSetting.default_locale na chave nem é invalidado quando essa configuração muda, mantendo traduções de fallback desatualizadas."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S4 relatam o mesmo defeito: a nova dependência de SiteSetting.default_locale não é considerada pelo cache de traduções. Ambas descrevem a mesma causa e correções equivalentes; a menção de S4 a mensagens de tradução ausente é apenas outra manifestação desse defeito."
+ }
+}

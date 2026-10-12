@@ -1,0 +1,64 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "promptSha": "5dd3cd98e20335eaae1b28a6d71aff58cd63f791",
+  "attempt": 1,
+  "ms": 66935,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_60b424b5",
+          "s_3c4b4f6b"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "GrafanaGroupLoader's prop and component JSDoc still describe Ruler responses or fetching after the Ruler query was removed.",
+        "rationale": "Both report stale documentation of the removed Ruler dependency. The two comments each need updating."
+      },
+      {
+        "members": [
+          "s_1f77ab04",
+          "s_8955a30a"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "Action rendering still requires Ruler data despite supporting prom-only rules, preventing the Silence drawer from opening and hiding Pause and Delete menu items.",
+        "rationale": "Both identify retained Ruler-only rendering guards in the migrated action flow. The repeated mistake occurs in separate components, and the merged comment must preserve all three affected actions."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_48922cf0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7365ba08",
+        "confidence": "high"
+      },
+      {
+        "id": "s_34baf824",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f3eeca23",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a3b03cbf",
+        "confidence": "high"
+      },
+      {
+        "id": "s_409de42d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_734b969b",
+        "confidence": "high"
+      }
+    ]
+  }
+}

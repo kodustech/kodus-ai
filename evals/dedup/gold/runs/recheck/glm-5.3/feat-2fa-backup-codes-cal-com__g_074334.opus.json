@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_32fdabb3",
+     "s_e721eff4"
+    ],
+    "defect": "Backup codes are checked with indexOf, which is not a constant-time comparison, in both the login path and the disable-2FA endpoint, so the code can leak timing information about a secret credential."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_e721eff4"
+  ],
+  "reasoningPt": "S4 e S5 apontam o mesmo erro repetido em dois lugares: a comparação do backup code com indexOf não é feita em tempo constante, no login e no endpoint de desabilitar 2FA. A correção é a mesma nos dois, usar crypto.timingSafeEqual. S5 também cita, no fim e como ponto secundário, o TypeError de replaceAll quando o valor enviado não é string, por isso entra em bundles, mas o defeito principal dela é o mesmo de S4."
+ }
+}

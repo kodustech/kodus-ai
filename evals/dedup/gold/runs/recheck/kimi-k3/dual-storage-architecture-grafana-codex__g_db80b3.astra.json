@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6e8d049a",
+     "s_a1fd1880"
+    ],
+    "defect": "Os testes do Mode3 não aguardam nem verificam as operações assíncronas no armazenamento legado, permitindo que sua remoção passe despercebida."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S20 aponta a ausência de sincronização e verificação das operações legadas em todos os testes; S21 detalha o mesmo defeito em Delete e DeleteCollection. O mock compartilhado explica como a falha fica oculta nesses casos, sem constituir um segundo defeito independente."
+ }
+}

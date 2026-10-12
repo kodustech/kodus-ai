@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c91d29d0",
+     "s_0f7f00ca"
+    ],
+    "defect": "The feature-flagged TableWidgetVisualization branch in chart.tsx renders hardcoded empty columns and data instead of the widget's query results."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S4 relatam o mesmo defeito, nas mesmas linhas: com a flag ligada, o ramo novo passa columns e tableData vazios fixos no código e ignora result.data e result.meta. A observação de S4 de que o fallback não roda porque [] não é nullish só explica melhor o mesmo problema e não é um segundo defeito. A correção é a mesma nas duas: passar os dados reais."
+ }
+}

@@ -1,0 +1,86 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "ca227952f41c8d00e243ec7eead860b8ce1e6c73",
+  "attempt": 1,
+  "ms": 91864,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_88b657e8",
+          "s_0e56e8cb",
+          "s_4df40c73"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Legacy.Update receives raw objInfo instead of an updateWrapper containing the unified-storage result, allowing recomputation against different legacy state.",
+        "rationale": "All three report the same removed wrapper and resulting divergence. Restoring the wrapper at the legacy update call addresses all three."
+      },
+      {
+        "members": [
+          "s_74e86eb7",
+          "s_806c2db2",
+          "s_ef1efee6",
+          "s_6c5a2af8",
+          "s_849456ca",
+          "s_9977cb66",
+          "s_22b6a64c"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Create and Update storage failures use the legacy metric helper, legacy DeleteCollection uses the storage metric helper, successful Delete labels metrics with the object name, and Delete installs the unenriched logger in its context.",
+        "rationale": "s_74e86eb7 explicitly reports every defect covered by the other members, connecting them through overlap. The merged comment must retain the repeated metric attribution mistakes and the separate label and logger corrections."
+      },
+      {
+        "members": [
+          "s_68ce1673",
+          "s_f50f8610",
+          "s_03fc7aa9",
+          "s_ffe2609d"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "All four asynchronous legacy write paths inherit request cancellation; legacy failures are no longer logged, and the playlist integration tests immediately assert legacy consistency without waiting for replication.",
+        "rationale": "Every member reports request cancellation reaching background legacy writes. s_03fc7aa9 and s_ffe2609d additionally report missing error logs, while s_f50f8610 adds the integration-test race, so all must survive consolidation."
+      },
+      {
+        "members": [
+          "s_4ee7f335",
+          "s_df703bb4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Create shares a mutable object with the legacy goroutine and response handling, risking concurrent mutation during serialization and passing unified-storage metadata to legacy.",
+        "rationale": "Both report the same shared-object race at Legacy.Create. s_4ee7f335 additionally identifies unified-storage metadata reaching legacy as a problem."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_53a567b3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_21ac971b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8fccae2c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7edd559d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b925651a",
+        "confidence": "high"
+      }
+    ]
+  }
+}

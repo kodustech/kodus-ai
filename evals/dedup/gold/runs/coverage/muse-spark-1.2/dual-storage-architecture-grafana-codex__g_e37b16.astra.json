@@ -1,0 +1,57 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create, line 51: async legacy write inherits request cancellation."
+   },
+   {
+    "id": "F2",
+    "description": "Delete, line 110: async legacy write inherits request cancellation."
+   },
+   {
+    "id": "F3",
+    "description": "Update, line 135: async legacy write inherits request cancellation."
+   },
+   {
+    "id": "F4",
+    "description": "DeleteCollection, line 163: async legacy write inherits request cancellation."
+   },
+   {
+    "id": "F5",
+    "description": "Create, lines 50–57: capturing the shared runtime.Object pointer creates a data race."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3eda2f5b",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_a6079adb",
+    "covers": [
+     "F1",
+     "F5"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_95d38bcb",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

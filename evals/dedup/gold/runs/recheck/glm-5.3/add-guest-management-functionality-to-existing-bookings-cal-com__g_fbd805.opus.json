@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "isTeamAdminOrOwner is computed with && instead of ||, so it requires the user to be both team admin and owner, which wrongly denies team admins who are not owners.",
+    "members": [
+     "s_fe950d9b",
+     "s_7182f67f",
+     "s_78b72537"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S9 e S11 apontam o mesmo defeito nas linhas 46-48: o isTeamAdminOrOwner usa && no lugar de ||, e por isso admins que não são owners recebem FORBIDDEN. Os três propõem a mesma correção, que é trocar o operador. Nenhuma delas traz um segundo defeito, então o grupo fica como está."
+ }
+}

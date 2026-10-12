@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "handleNewBooking.ts:1063-1079: Null destinationCalendar makes the optional push skip all team members' calendars for collective events."
+   },
+   {
+    "id": "F2",
+    "description": "handleNewBooking.ts:990-993: Filling teamDestinationCalendars inside async map callbacks is fragile."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_b364bc36",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_a6c93c38",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

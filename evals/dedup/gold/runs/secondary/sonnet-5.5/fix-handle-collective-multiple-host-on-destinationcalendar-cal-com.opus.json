@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0cb37a15",
+    "mainDefect": "Google Calendar createEvent picks the destination calendar by matching credentialId, so destination calendars that have no credentialId never match and the event goes to 'primary' instead of the selected calendar.",
+    "secondary": [
+     {
+      "defect": "The interface change is inconsistent: the new credentialId argument is ignored by the other calendar implementations (Office365, Lark, CalDAV).",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a6c93c38",
+    "mainDefect": "`evt.destinationCalendar?.push(...)` does nothing when destinationCalendar is null, so a collective event silently drops all team members' destination calendars.",
+    "secondary": [
+     {
+      "defect": "teamDestinationCalendars is filled inside async map callbacks, which is fragile.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

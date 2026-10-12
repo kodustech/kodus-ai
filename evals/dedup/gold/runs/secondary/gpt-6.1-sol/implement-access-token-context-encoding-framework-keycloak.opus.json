@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_cd0716d2",
+    "mainDefect": "The matcher takes the grant shortcut with substring(3, 5), but the encoded format puts it at index 4, so it should be substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The equality check is inverted: the matcher returns false when the shortcut matches expectedGrantShortcut, so valid token IDs are rejected and wrong grants can pass.",
+      "coveredBy": [
+       "s_5f605bbb",
+       "s_f5e7d9a5",
+       "s_5bd24a7d",
+       "s_0767cf64",
+       "s_b26743e8"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_5454e119",
+    "mainDefect": "The matcher takes the grant shortcut with substring(3, 5), but the encoded layout (2-char session + 2-char token + 2-char grant) puts it at substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The equality check is inverted: the matcher returns false when the shortcut matches expectedGrantShortcut, so valid token IDs are rejected and wrong grants can pass.",
+      "coveredBy": [
+       "s_5f605bbb",
+       "s_f5e7d9a5",
+       "s_5bd24a7d",
+       "s_0767cf64",
+       "s_b26743e8"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

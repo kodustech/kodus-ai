@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_38fe9a59",
+     "s_2c2a6b10",
+     "s_79b9dc96",
+     "s_ca4bf0da"
+    ],
+    "defect": "A mesma frase em italiano foi inserida indevidamente nas instruções de configuração de TOTP dos arquivos lituanos dos temas login e account."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S16 apontam o erro no tema login; S2 e S15 apontam a repetição do mesmo erro no tema account. Uma substituição da frase italiana pela tradução lituana nas duas ocorrências resolve todos os relatos, portanto o grupo deve ser mantido."
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0cbe997b",
+    "mainDefect": "The cache is not rechecked after acquiring the write lock, so concurrent first requests redundantly read the manifest serially.",
+    "secondary": [
+     {
+      "defect": "The cache is overwritten even when the manifest read fails, potentially replacing valid cached assets with nil.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_b82e1353",
+    "mainDefect": "The cache is not rechecked after acquiring the write lock, so concurrent first callers each rebuild it.",
+    "secondary": [
+     {
+      "defect": "A failed load is assigned to the cache, potentially caching nil or partial results for later readers.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

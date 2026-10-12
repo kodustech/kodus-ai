@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c92095be",
+     "s_a5279db6"
+    ],
+    "defect": "As varreduras de prefixo e sufixo podem se sobrepor, gerando índices inválidos em substring e interrompendo o verificador com StringIndexOutOfBoundsException."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S9 descrevem o mesmo defeito nas mesmas linhas: a varredura do sufixo não respeita o comprimento do prefixo já identificado. As duas propõem limites equivalentes para evitar a sobreposição, portanto o grupo deve ser mantido."
+ }
+}

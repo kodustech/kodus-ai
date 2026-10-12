@@ -1,0 +1,25 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f5f884a5",
+     "s_1afe381d",
+     "s_2017887b",
+     "s_4d9f7dee",
+     "s_dd50b51b",
+     "s_1a067d7d",
+     "s_f1c91035",
+     "s_f60d4003",
+     "s_ffcfc8fc"
+    ],
+    "defect": "The isAccessTokenId matcher in AssertEvents reads the grant shortcut with substring(3,5) instead of substring(4,6) and inverts the equality check, so it never actually checks the grant type."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S2, S6, S8, S12, S13, S15, S16, S20, S21) apontam o mesmo defeito na linha 483 do matcher isAccessTokenId: offset errado no substring e igualdade invertida. Isso faz a checagem de grant type não validar nada, e uma única correção na mesma linha resolve tudo. A S6 cita também o comentário errado, mas o foco continua sendo o mesmo erro de offset no matcher, então o grupo fica como está."
+ }
+}

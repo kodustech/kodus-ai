@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_86d45cb5",
+     "s_734730fd",
+     "s_0cfbf4fc"
+    ],
+    "defect": "O acesso sem proteção a integration.metadata[\"sender\"][\"login\"] pode gerar KeyError quando os metadados estão ausentes, retornando 500 em vez da página de erro."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S5 e S7 relatam o mesmo acesso sem proteção e a mesma consequência: KeyError quando faltam metadados do remetente. As diferenças de contexto e linhas não alteram o defeito; uma consulta segura com tratamento de valor ausente resolve os três relatos."
+ }
+}

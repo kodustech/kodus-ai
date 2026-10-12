@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_3a4fa9ea",
+    "mainDefect": "Synchronous device tagging blocks anonymous authentication on a database write, adding request latency.",
+    "secondary": [
+     {
+      "defect": "Removing the tagging panic guard allows a tagging panic to propagate into authentication.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_def15064",
+    "mainDefect": "Using the request context removes tagging’s independent two-minute timeout, leaving its deadline dependent on the caller.",
+    "secondary": [
+     {
+      "defect": "Removing the tagging panic guard allows a tagging panic to propagate into authentication.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

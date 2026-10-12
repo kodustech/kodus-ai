@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "dualwriter_mode3_test.go: TestMode3_* unit tests never assert the legacy mock calls (async legacy Create/Delete/Update/DeleteCollection goroutine is never waited on or verified)"
+   },
+   {
+    "id": "F2",
+    "description": "playlist_test.go: the new 'with dual write (…, mode 3)' integration subtests only read from unified storage, so they never check the legacy write"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c52e7744",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_952eaebd",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_3e0dbc3c",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

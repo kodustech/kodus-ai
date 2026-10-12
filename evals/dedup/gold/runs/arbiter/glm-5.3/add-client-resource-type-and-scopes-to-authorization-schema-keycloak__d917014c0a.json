@@ -1,0 +1,25 @@
+{
+  "model": "glm-5.3",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "component": [
+    "s_85b8c9a1",
+    "s_9201a4d6"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_85b8c9a1",
+          "s_9201a4d6"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "ClientPermissionsV2.setPermissionsEnabled (lines 192-195) throws UnsupportedOperationException, but the ClientRemovedEvent listener in AdminPermissions calls it. Client deletion can therefore fail, and the per-client authorization resources are never cleaned up."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "Both suggestions point at the same lines (192-195) in ClientPermissionsV2. Both report the same defect: setPermissionsEnabled throws UnsupportedOperationException, and the client-removal listener in AdminPermissions calls it. As a result, client deletion breaks and the per-client resources are left orphaned. They also propose the same fix: make it a no-op, implement the cleanup, or change the listener. They disagree only on when the listener reaches the V2 path. s_85b8c9a1 says whenever the V1 feature is on. s_9201a4d6 says when both the V1 and V2 features are on. That is a difference in how they explain the trigger, not a different defect. s_9201a4d6 also mentions, as a secondary point, that cleanup is skipped in V2-only mode. It already covers everything s_85b8c9a1 says, including the orphaned resources, so one member's comment is enough and no unified comment is needed. That last call is a little debatable, but the grouping itself is clear."
+  }
+}

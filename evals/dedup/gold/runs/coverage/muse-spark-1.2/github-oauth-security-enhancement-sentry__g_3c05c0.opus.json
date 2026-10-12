@@ -1,0 +1,117 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "src/theme/config.js: MAX_ALLOWED_REQUESTS should change from 150 to 100"
+   },
+   {
+    "id": "F2",
+    "description": "src/components/search.js: remove the requestAnimationFrame wrapper around performSearch"
+   },
+   {
+    "id": "F3",
+    "description": "src/utils/helpers.js: rename sanitizeInput to sanitize"
+   },
+   {
+    "id": "F4",
+    "description": "src/analytics/tracker.js: replace Date.now() with performance.now()"
+   },
+   {
+    "id": "F5",
+    "description": "src/api/client.js: change client.get('/api/data') to client.post"
+   },
+   {
+    "id": "F6",
+    "description": "Form handling: body.name is mapped to the wrong field (input[name=\"name\"] vs body.title)"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_e8005d12",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_fec7e43b",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_dba5cf11",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_be8c18fb",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_c04307da",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_ed2f4754",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_e345fbc9",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

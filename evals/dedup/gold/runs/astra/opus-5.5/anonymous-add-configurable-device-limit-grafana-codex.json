@@ -1,0 +1,79 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "241bea7e9a435cd0c0de58478dd71d45c2ab782d",
+  "attempt": 1,
+  "ms": 43824,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_1dac0ce4",
+          "s_19d84151",
+          "s_a2890cd2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The stale Wire registration cannot supply the constructor's new int64 argument and leaves an unused provider after the service begins constructing the store directly.",
+        "rationale": "All three report the same constructor/Wire integration failure. s_19d84151 additionally reports unused-provider rejection, which the merged comment must preserve."
+      },
+      {
+        "members": [
+          "s_8c64225e",
+          "s_9bd0df8c"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "An unchanged MySQL UPDATE can return zero affected rows, causing an existing device to be rejected with ErrDeviceLimitReached.",
+        "rationale": "Both identify the same incorrect interpretation of RowsAffected in updateDevice and the same triggering conditions."
+      },
+      {
+        "members": [
+          "s_15ab1a80",
+          "s_911ba0d0"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Caching a device before its store write succeeds allows subsequent requests to bypass the limit after the first rejection.",
+        "rationale": "Both report the retained cache entry after a failed write and the resulting authentication bypass during the cache window."
+      },
+      {
+        "members": [
+          "s_0abd937d",
+          "s_444b9348"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The non-atomic count-then-insert sequence lets concurrent new devices exceed the configured limit.",
+        "rationale": "Both identify the same race between CountDevices and the separate upsert, requiring atomic enforcement."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_90b2090b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a943bfa2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e002d46c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2e50d2cb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_12466dbe",
+        "confidence": "high"
+      }
+    ]
+  }
+}

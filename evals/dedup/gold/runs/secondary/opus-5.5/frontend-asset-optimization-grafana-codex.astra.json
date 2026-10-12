@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_6cf3f09f",
+    "mainDefect": "The cache is not rechecked after acquiring the write lock, so concurrent cache misses redundantly reload and parse the manifest.",
+    "secondary": [
+     {
+      "defect": "A failed manifest load can overwrite a good cached value with nil, causing subsequent requests to miss the cache again.",
+      "coveredBy": []
+     },
+     {
+      "defect": "In Dev mode, every request takes the global exclusive lock, serializing manifest file I/O and JSON decoding.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_81101291",
+    "mainDefect": "The FromContext fallback `return d.New()` drops the original logger's name and contextual attributes, so the resulting logs are attributed to the wrong source.",
+    "secondary": [
+     {
+      "defect": "ConcreteLogger.New (log.go:219) calls root.New() without returning it when no context is given, which is a bug.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_bdd6fc85",
+    "mainDefect": "The metrics test makes no assertion that grafana_plugin_request_size_bytes stays unrecorded for endpoints where shouldInstrumentRequestSize is false.",
+    "secondary": [
+     {
+      "defect": "The test only checks the statusOK path, so the error and cancelled status paths in instrumentPluginRequest are never tested.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0cbe997b",
+     "s_b82e1353"
+    ],
+    "defect": "After taking the write lock, GetWebAssets does not re-check the cache, so concurrent first callers each rebuild the entry-point assets."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_0cbe997b",
+   "s_b82e1353"
+  ],
+  "reasoningPt": "S1 e S2 têm o mesmo defeito principal: falta verificar o cache de novo depois de Lock() (double-checked locking), e por isso chamadas concorrentes refazem a leitura. As duas também apontam um segundo defeito, o cache sendo gravado mesmo quando há erro, então ambas entram em bundles. Como o defeito principal é o mesmo, o grupo continua como está."
+ }
+}

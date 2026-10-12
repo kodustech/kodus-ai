@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_19d84151",
+     "s_1dac0ce4",
+     "s_a2890cd2"
+    ],
+    "defect": "ProvideAnonDBStore continua registrado no Wire após passar a exigir um int64 sem provider correspondente, causando falha na geração das dependências."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_19d84151"
+  ],
+  "reasoningPt": "S1, S6 e S7 relatam o mesmo defeito principal: o construtor registrado no Wire exige um int64 que não pode ser resolvido. S1 também aponta a rejeição do provider por estar sem uso, mas esse defeito secundário apenas a caracteriza como bundle, sem alterar seu grupo."
+ }
+}

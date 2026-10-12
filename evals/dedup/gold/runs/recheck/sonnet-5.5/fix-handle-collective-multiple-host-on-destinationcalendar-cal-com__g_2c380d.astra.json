@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0d466bb9",
+     "s_6996fe8e",
+     "s_0e8ac11d",
+     "s_e8f11cef",
+     "s_c779c607"
+    ],
+    "defect": "O fallback de updateEvent e deleteEvent busca um calendário pelo externalCalendarId falsy que levou à própria execução desse ramo, deixando de recuperar o externalId do calendário de destino."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S5, S8, S10 e S14 descrevem o mesmo erro de fallback, repetido em updateEvent e deleteEvent. As diferenças de redação, intervalo de linhas e correção sugerida não alteram o defeito principal; nenhum membro relata um defeito adicional independente."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6903bc10",
+     "s_5f3bd478"
+    ],
+    "defect": "O fechamento `<%- end if %>` na linha 6 gera erro de sintaxe no template e impede a renderização de comentários de tópicos existentes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S13 apontam o mesmo erro de sintaxe na mesma linha, corrigido pela troca de `<%- end if %>` por `<%- end %>`. As observações sobre a cobertura dos testes complementam o diagnóstico, sem relatar um segundo defeito independente."
+ }
+}

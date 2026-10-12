@@ -1,0 +1,27 @@
+{
+  "model": "muse-spark-1.2",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "component": [
+    "s_a3224d7a",
+    "s_c29b13de",
+    "s_cff36f10"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_a3224d7a",
+          "s_c29b13de",
+          "s_cff36f10"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "defect": "The Javadoc for the void methods requireView() (lines 95-98) and requireViewClientScopes() (lines 100-103) says 'Returns {@code true} if ...'. These methods actually throw ForbiddenException when the matching can* check returns false. The text should read 'Throws ForbiddenException if ... returns {@code false}', like the other require* methods."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "All three suggestions belong in one group. s_a3224d7a covers both wrong Javadocs: requireView() and requireViewClientScopes(). s_cff36f10 covers only requireView() (lines 95-98), and s_c29b13de covers only requireViewClientScopes() (lines 100-103). Each single-method suggestion overlaps the combined one, so the chain joins all three. The judges agree on this grouping and disagree only on the kind. I chose same_location: the two Javadoc blocks sit next to each other in the same file, inside one range (95-103), and the rules prefer same_location for overlapping groups. needsUnifiedComment is true because the group covers two separate Javadoc blocks, and each needs its own edit."
+  }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6e8d004e",
+     "s_95540f88"
+    ],
+    "defect": "NewMetricsMiddleware reutiliza uma única instância e modifica seu campo next a cada chamada da fábrica, causando corrida de dados e corrupção da cadeia de delegação."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S12 descrevem o mesmo defeito: a instância compartilhada de MetricsMiddleware tem seu campo next sobrescrito a cada chamada da fábrica. Ambas propõem criar uma instância por chamada, compartilhando as métricas; a corrida e a corrupção da cadeia são consequências desse mesmo defeito."
+ }
+}

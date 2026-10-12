@@ -1,0 +1,60 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Migration lines 9–11: unguarded embed_category result[0]['id'] raises on zero rows, aborting migration before the category_id == 0 fallback."
+   },
+   {
+    "id": "F2",
+    "description": "Migration line 15: uncategorized_category_id lookup also dereferences [0]['value'] without checking for a returned row."
+   },
+   {
+    "id": "F3",
+    "description": "Migration line 10: JOIN compares the stored embed_category value to category name even though the setting may contain a category id."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7128b0ce",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_17201292",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_afaedccf",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_14dcd034",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_f33a3118",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

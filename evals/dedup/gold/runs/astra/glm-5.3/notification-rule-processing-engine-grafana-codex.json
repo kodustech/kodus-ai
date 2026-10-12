@@ -1,0 +1,56 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "promptSha": "3ec0e625049708d3ffc36c58fd724fd9e98148e9",
+  "attempt": 1,
+  "ms": 34745,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_4d6ce3dd",
+          "s_3ef83d5d"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The Silence menu item is enabled for Prometheus-only Grafana rules, but clicking it does nothing because rendering the silence drawer requires a ruler rule.",
+        "rationale": "Both report the same broken silence flow, pointing respectively at the menu ability and the drawer rendering guard. Fixing that flow resolves both reports."
+      },
+      {
+        "members": [
+          "s_8a22592e",
+          "s_0d6f8146"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Delegating useAllAlertRuleAbilities to useAllRulerRuleAbilities drops the federated-group immutability check and enables actions on read-only Mimir rules.",
+        "rationale": "Both identify the same delegation regression and hardcoded isFederated value. Their different emphasis on affected actions does not introduce a separate defect."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_cde8d02f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e626c971",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7391d0d2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_99acf963",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3db1e51b",
+        "confidence": "high"
+      }
+    ]
+  }
+}

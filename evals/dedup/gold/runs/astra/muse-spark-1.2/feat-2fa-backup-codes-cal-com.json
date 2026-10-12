@@ -1,0 +1,68 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "promptSha": "dc5210617b77c2ea6a310130ca6a4e14b5d90216",
+  "attempt": 1,
+  "ms": 44455,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_76e752b3",
+          "s_522c099e"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Backup-code verification uses timing-variable indexOf/string comparisons in both the login and disable-2FA paths.",
+        "rationale": "Both report the same comparison mistake at separate verification sites, each requiring an edit. Their proposed case normalization does not report case sensitivity as a defect and therefore does not link the uppercase-code suggestion."
+      },
+      {
+        "members": [
+          "s_bca7ea55",
+          "s_cf0c790d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Non-atomic backup-code consumption permits concurrent reuse, and consumed entries accumulate as nulls without exhausted-code handling.",
+        "rationale": "Both report the same read-modify-write race in authorize(). The second additionally reports null accumulation and failure to report exhausted codes as missing, which the merged comment must preserve."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_cff9c2f8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_67024520",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7ae83abd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_dcb2c8bc",
+        "confidence": "high"
+      },
+      {
+        "id": "s_59a5b68c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_32e6b195",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1e0e2076",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ee83b27a",
+        "confidence": "high"
+      }
+    ]
+  }
+}

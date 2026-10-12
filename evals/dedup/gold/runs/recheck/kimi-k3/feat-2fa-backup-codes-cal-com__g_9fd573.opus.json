@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_548ddd10",
+     "s_801d97bf"
+    ],
+    "defect": "Backup codes are checked with a non-constant-time Array.indexOf string comparison (in both the login path and the disable-2FA endpoint), which leaks timing information; the fix is crypto.timingSafeEqual."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S9 apontam o mesmo erro, a comparação não constante via indexOf na verificação de backup codes. Ele se repete em dois lugares (login e disable) e se corrige com a mesma mudança para timingSafeEqual. Nenhuma das duas sugestões traz um segundo defeito."
+ }
+}

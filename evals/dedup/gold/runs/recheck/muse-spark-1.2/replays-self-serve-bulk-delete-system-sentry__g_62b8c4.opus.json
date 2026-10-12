@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9c86f0c6",
+     "s_f9dadae9"
+    ],
+    "defect": "Direct indexing dcg_to_slow_conditions[dcg.id] can raise KeyError when a DCG id is missing from the hoisted dict returned by get_slow_conditions_for_groups."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_9c86f0c6"
+  ],
+  "reasoningPt": "S2 e S21 apontam o mesmo defeito principal: o acesso direto dcg_to_slow_conditions[dcg.id] pode gerar KeyError, e a correção é a mesma (.get com fallback). S2 acrescenta no fim um segundo defeito (workflows_to_envs[workflow_id]) com \"Same for...\", por isso é marcado como bundle, mas continua no grupo do seu defeito principal."
+ }
+}

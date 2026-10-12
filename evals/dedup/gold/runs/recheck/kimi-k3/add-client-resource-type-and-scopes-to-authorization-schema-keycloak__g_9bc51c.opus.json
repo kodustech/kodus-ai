@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4772139b",
+     "s_7789b76a"
+    ],
+    "defect": "ClientPermissionsV2.canExchangeTo throws UnsupportedOperationException, so with the V2 feature enabled every token-exchange request fails with a 500 instead of being denied."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 apontam o mesmo defeito: canExchangeTo em ClientPermissionsV2 lança UnsupportedOperationException. Como o fluxo de token exchange chama esse método, o resultado é um erro 500 em vez de uma negação. A menção de S2 a exchangeToPermission é o mesmo padrão de exceção e não muda o defeito principal, então o grupo fica como está."
+ }
+}

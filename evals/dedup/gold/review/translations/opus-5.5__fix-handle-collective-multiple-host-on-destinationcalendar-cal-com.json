@@ -1,0 +1,94 @@
+{
+ "s_9d791452": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: `mainHostDestinationCalendar.integration` lê uma propriedade sem null check. Quando evt.destinationCalendar é null ou [] (handleNewBooking define null quando nem o event type nem o organizador têm um calendário de destino), `mainHostDestinationCalendar` é undefined. POR QUÊ: Agendar um evento do Google Meet sem calendário de destino lança um TypeError e o agendamento falha. Antes, `evt.destinationCalendar?.integration` recorria ao Cal Video. CORREÇÃO: use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+ },
+ "s_fc410596": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: Para resultados de vídeo, `credentialId` agora é `undefined` em vez de `result.credentialId`. createMeeting retorna credentialId (videoClient.ts:78). POR QUÊ: As referências de agendamento de vídeo são salvas sem credentialId. handleCancelBooking (L491) só chama deleteMeeting quando `bookingVideoReference.credentialId` está definido, então reuniões Zoom/Daily não são mais excluídas ao cancelar, e outras buscas baseadas em credential também quebram. CORREÇÃO: `credentialId: result.credentialId`."
+ },
+ "s_d3b8ca91": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: updateLocation agora obtém externalCalendarId e credentialId apenas do resultado. CalendarManager.updateEvent não retorna nenhum dos dois campos (CalendarManager.ts L313-322), e o antigo fallback para evt.destinationCalendar foi removido. POR QUÊ: Depois de uma edição de local, as novas referências de calendário são salvas com externalCalendarId e credentialId undefined. Atualizações e cancelamentos posteriores então recorrem ao caminho legado que itera todas as credentials, ou apontam para o calendário errado ou o principal. CORREÇÃO: retorne externalCalendarId e credentialId de updateEvent, ou mantenha o fallback para o destination calendar."
+ },
+ "s_93595c3f": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O branch de fallback só roda quando `externalCalendarId` é falsy, mas busca por `cal.externalId === externalCalendarId`, então sempre retorna undefined. O mesmo padrão aparece em deleteEvent em L315-317. POR QUÊ: O fallback anterior para o externalId do destination calendar foi perdido. Update e delete de referências sem externalCalendarId agora recebem calendarId undefined e falham ou atingem o calendário errado. CORREÇÃO: faça fallback para o destino que corresponde a esta credential, por exemplo `event.destinationCalendar?.find(cal => cal.credentialId === this.credential.id)?.externalId`, ou para a primeira entrada."
+ },
+ "s_e88e59a8": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: destinationCalendar vira `null` quando nem o event type nem o organizador têm um calendário de destino, e então `evt.destinationCalendar?.push(...teamDestinationCalendars)` não faz nada. POR QUÊ: Em eventos COLLECTIVE em que o primeiro host não tem calendário de destino, o calendário de destino de todos os outros hosts é descartado silenciosamente. Esse é exatamente o caso multi-host que este PR pretende corrigir. CORREÇÃO: inicialize com `[]` e adicione os calendários do time nele, por exemplo `evt.destinationCalendar = [...(evt.destinationCalendar ?? []), ...teamDestinationCalendars]`."
+ },
+ "s_cd578af7": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: createEvent sempre usa `destinationCalendar[0].externalId`, mesmo que EventManager.createAllCalendarEvents agora chame createEvent uma vez por destino/credential, incluindo as credentials de outros hosts. POR QUÊ: Em eventos collective, a credential Office365 de um segundo host faz POST em `/me/calendars/<id do calendário do host principal>/events`, o que falha (404) ou cai no calendário errado, então esse host nunca é convidado. Lark (L128) e o BaseCalendarService do CalDAV (L156) têm o mesmo problema. CORREÇÃO: selecione o destino cujo credentialId corresponde à credential deste service, usando o novo argumento credentialId como o Google faz."
+ },
+ "s_97a87a12": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O bloco de exclusão de série recorrente, que itera todas as credentials de calendário do organizador × todos os updatedBookings, agora fica dentro do loop por referência. POR QUÊ: Com N referências de calendário (vários hosts collective), a série inteira é excluída N vezes com as credentials do organizador, causando chamadas de API redundantes e erros 404/410. Os eventos recorrentes dos outros hosts continuam sem ser excluídos, porque só `bookingToDelete.user.credentials` é usado. CORREÇÃO: execute a exclusão da série recorrente uma única vez, fora do loop, e use a credential própria de cada referência para seus eventos."
+ },
+ "s_e5148fc6": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: A condição foi invertida: antes, `slug` era definido quando o billing NÃO estava habilitado (`!IS_TEAM_BILLING_ENABLED && { slug }`), e agora é definido somente quando o billing ESTÁ habilitado. POR QUÊ: Instâncias self-hosted sem billing criam organizações sem slug. Com billing habilitado, o slug é definido imediatamente e pula o fluxo de requestedSlug/pagamento. CORREÇÃO: `...(!IS_TEAM_BILLING_ENABLED ? { slug } : {})`."
+ },
+ "s_e4fc8c56": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O loadUsers refatorado não seleciona mais `organization { slug }` para usuários dinâmicos, mas esses usuários são tipados depois como IsFixedAwareUser, que exige `organization: { slug: string }` (L355). A reescrita também transforma todos os erros que não são do Prisma (incluindo uma lista vazia de usuários dinâmicos) em um 500 genérico. POR QUÊ: O código downstream que lê `user.organization.slug` para agendamentos de grupo dinâmico recebe undefined, e requisições inválidas aparecem como 500 em vez de 4xx. CORREÇÃO: restaure o select `organization: { select: { slug: true } }`."
+ },
+ "s_37a0f1ff": {
+  "summaryPt": "Agendamentos do Google Meet sem calendário de destino agora quebram em vez de recorrer ao Cal Video.",
+  "contentPt": "`evt.destinationCalendar` agora é um array e pode ser null ou vazio. handleNewBooking o define como null quando nem o event type nem o organizador têm um calendário de destino; outros handlers usam `[]`. Nos dois casos `mainHostDestinationCalendar` é undefined, então `mainHostDestinationCalendar.integration` lança um TypeError sempre que o local é Google Meet. Esse é exatamente o caso que o antigo `evt.destinationCalendar?.integration` tratava recorrendo ao Cal Video. Use optional chaining: `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+ },
+ "s_49fe4e42": {
+  "summaryPt": "O novo catch de loadUsers copia mensagens brutas de erro do Prisma para um HttpError voltado ao cliente, o que pode pular a redação central de erros do Prisma.",
+  "contentPt": "O novo bloco catch transforma um `PrismaClientKnownRequestError` em `new HttpError({ statusCode: 400, message: error.message })`. Normalmente `getServerErrorFromUnknown` (`packages/lib/server/getServerErrorFromUnknown.ts:45-46,78-80`) redige os erros do Prisma antes de enviá-los. Como esse erro já é um `HttpError`, ele segue o branch de HttpError (linha 54), então o texto sem redação pode chegar ao chamador da API de agendamento. Esse texto pode incluir a invocação da query, nomes de models e campos, detalhes de constraints e caminhos de arquivos do servidor. Correção: relance o erro do Prisma sem alterações para que o handler central o redija, ou use uma mensagem genérica."
+ },
+ "s_9e599887": {
+  "summaryPt": "`mainHostDestinationCalendar.integration` lança TypeError quando o array destinationCalendar é null ou vazio e o local é Google Meet.",
+  "contentPt": "`evt.destinationCalendar ?? []` pode ser vazio: handleNewBooking agora passa null quando não há calendário do event type nem do organizador, e outros chamadores passam []. Nesse caso `mainHostDestinationCalendar` é undefined, então `.integration` lança erro sempre que o local é Google Meet. A criação do agendamento quebra em vez de recorrer ao Cal Video. Use `mainHostDestinationCalendar?.integration`."
+ },
+ "s_e4393123": {
+  "summaryPt": "O fallback de updateEvent compara com o externalCalendarId falsy, então calendarId é sempre undefined e a atualização do Google falha.",
+  "contentPt": "O branch de fallback só roda quando externalCalendarId é falsy, mas então busca por `cal.externalId === externalCalendarId`. Isso nunca encontra um calendário real, então selectedCalendar é undefined. `calendar.events.update` é chamado sem calendarId e é rejeitado. Antes desta mudança, usava o externalId do destination calendar. Faça fallback para o externalId do primeiro destination calendar ou para 'primary'. deleteEvent nas linhas 315-317 tem a mesma busca morta."
+ },
+ "s_9e022e40": {
+  "summaryPt": "Em eventos collective, os destination calendars dos membros do time são descartados silenciosamente quando o organizador não tem calendário de destino.",
+  "contentPt": "destinationCalendar vira null quando nem o event type nem o organizador têm um calendário de destino. `evt.destinationCalendar?.push(...teamDestinationCalendars)` então não faz nada, então os calendários dos membros do time coletados se perdem e nenhum evento é criado nos calendários deles. Use `[]` como padrão em vez de null."
+ },
+ "s_95ab9d87": {
+  "summaryPt": "",
+  "contentPt": "Quando destinationCalendar é null ou [], o primeiro elemento `mainHostDestinationCalendar` é undefined. `mainHostDestinationCalendar.integration` então lança um TypeError para qualquer agendamento do Google Meet em que o organizador não tenha calendário de destino. Muitos chamadores agora passam [] nesse caso. Use `mainHostDestinationCalendar?.integration`."
+ },
+ "s_4aa5d124": {
+  "summaryPt": "",
+  "contentPt": "O branch de fallback só roda quando externalCalendarId é falsy, mas busca por `cal.externalId === externalCalendarId`. Isso é uma busca por uma chave vazia ou undefined, então na prática sempre retorna undefined. O código antigo recorria ao externalId do destination calendar. Agora updateEvent envia `calendarId: undefined` ao Google, e deleteEvent (linha 315-317) recorre silenciosamente a \"primary\", que pode ser o calendário errado. Faça fallback para o externalId do destination calendar do host principal (ou corresponda por credential)."
+ },
+ "s_0c7af5ab": {
+  "summaryPt": "",
+  "contentPt": "Quando nem o event type nem o organizador têm um calendário de destino, destinationCalendar é definido como null. Nesse caso `evt.destinationCalendar?.push(...teamDestinationCalendars)` não faz nada, então os destination calendars de todos os outros hosts COLLECTIVE são descartados silenciosamente. Inicialize com [] em vez de null para que os calendários do time ainda sejam adicionados."
+ },
+ "s_bf39d0e8": {
+  "summaryPt": "Ler `.integration` na primeira entrada de um array destinationCalendar possivelmente vazio quebra agendamentos do Meet quando o usuário não tem calendário de destino.",
+  "contentPt": "Os produtores agora passam `[]` ou `null` quando o usuário não tem calendário de destino, então `mainHostDestinationCalendar` é `undefined`. `mainHostDestinationCalendar.integration` então lança um TypeError em agendamentos do Google Meet. O código antigo usava optional chaining. Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+ },
+ "s_94084073": {
+  "summaryPt": "O createEvent do Office365 sempre usa o primeiro destination calendar (o do organizador), mesmo quando o EventManager o chama com a credential de um membro do time collective.",
+  "contentPt": "Em eventos de time collective, o `EventManager` agora cria um evento por destination calendar de membro, cada um com a credential desse membro, e passa `credentialId` para `createEvent`. O Office365 ignora `credentialId` e monta a URL a partir de `destinationCalendar[0]`, o calendário do organizador. Com o token do membro do time, a requisição vai para um calendário que pertence a outra pessoa, então o evento falha ou cai no calendário errado. Aceite `credentialId` e selecione `event.destinationCalendar?.find(c => c.credentialId === credentialId)`, como o service do Google faz. A mesma correção é necessária no service do Lark."
+ },
+ "s_f9e00249": {
+  "summaryPt": "A condição para definir o slug da organização está invertida: agora ele é definido quando o billing está habilitado em vez de quando está desabilitado.",
+  "contentPt": "O original `...(!IS_TEAM_BILLING_ENABLED && { slug })` definia o slug diretamente apenas quando o team billing estava DESABILITADO. Quando o billing estava habilitado, o slug ia para `metadata.requestedSlug` e só era aplicado após o pagamento. A reescrita remove o `!`, então define `slug` quando o billing está habilitado e o omite quando está desabilitado. Orgs em setups self-hosted ou sem billing agora são criadas sem slug, e setups com billing recebem o slug antes do pagamento. Restaure a negação: `...(!IS_TEAM_BILLING_ENABLED ? { slug } : {})`."
+ },
+ "s_3c85c91e": {
+  "summaryPt": "A busca de fallback em updateEvent e deleteEvent do Google nunca pode encontrar correspondência, então sempre resulta em undefined.",
+  "contentPt": "O branch de fallback só roda quando `externalCalendarId` é falsy. Ele então busca por `cal.externalId === externalCalendarId`, ou seja, um calendário cujo externalId é null ou undefined, então nunca encontra um e retorna undefined. O fallback antigo usava `destinationCalendar.externalId`. Agora os updates enviam `calendarId: undefined`, e os deletes (linha 315-317) sempre recorrem a \"primary\", mesmo quando o evento está no destination calendar selecionado do host. Faça fallback para o externalId do primeiro destination calendar (ou corresponda por credential id)."
+ },
+ "s_36261396": {
+  "summaryPt": "`mainHostDestinationCalendar.integration` é lido sem optional chaining e lança erro quando não há calendário de destino.",
+  "contentPt": "`const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` é undefined quando `destinationCalendar` é null ou vazio, o que handleNewBooking e os outros handlers deste diff de fato produzem. O código antigo usava `evt.destinationCalendar?.integration`. O novo `mainHostDestinationCalendar.integration` lança um TypeError para um agendamento do Google Meet sem calendário de destino, exatamente o caso que o fallback para Cal Video deveria tratar. Use `mainHostDestinationCalendar?.integration`."
+ },
+ "s_d12e4569": {
+  "summaryPt": "Os destination calendars dos membros do time são descartados silenciosamente quando o organizador não tem calendário de destino, porque `evt.destinationCalendar` é null.",
+  "contentPt": "`destinationCalendar` recorre a `null` (não `[]`) quando nem o event type nem o organizador têm um. Então `evt.destinationCalendar?.push(...teamDestinationCalendars)` sofre curto-circuito, e os calendários dos membros collective coletados nas linhas 990-994 são jogados fora. Use `[]` como padrão, ou atribua `evt.destinationCalendar = [...(evt.destinationCalendar ?? []), ...teamDestinationCalendars]`."
+ }
+}

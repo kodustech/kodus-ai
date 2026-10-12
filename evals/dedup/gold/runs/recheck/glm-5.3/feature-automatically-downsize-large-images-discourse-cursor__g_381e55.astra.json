@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_c7c633cc",
+     "s_a3648b8e",
+     "s_aaaa47e8"
+    ],
+    "defect": "O limite fixo de 10 MB na validação do cliente ignora os limites configurados e aceita ou bloqueia uploads indevidamente."
+   },
+   {
+    "members": [
+     "s_7e515b13",
+     "s_73fe7ee9"
+    ],
+    "defect": "O limite fixo de 10 MB em FileHelper.download impede uploads por URL que a configuração administrativa permitiria."
+   }
+  ],
+  "unique": [
+   "s_278d3350"
+  ],
+  "bundles": [
+   "s_c7c633cc",
+   "s_a3648b8e",
+   "s_aaaa47e8"
+  ],
+  "reasoningPt": "S4, S7 e S19 têm como defeito principal a validação do cliente; S8 e S11 tratam do limite de download da API, que exige uma correção independente. S14 trata principalmente do valor incorreto exibido no alerta, cuja correção não resolve os bloqueios de upload. S4 e S7 também relatam o alerta incorreto, e S19 acrescenta o limite da API, por isso são bundles sem unir os grupos."
+ }
+}

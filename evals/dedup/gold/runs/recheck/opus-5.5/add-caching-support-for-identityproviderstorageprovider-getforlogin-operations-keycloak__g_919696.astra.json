@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_2ab6ce36",
+     "s_7c209af1"
+    ],
+    "defect": "O cleanup nas linhas 381 e 425 usa a string literal \"alias\" em vez do alias real dos provedores criados, deixando de removê-los."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S3 relatam o mesmo defeito nas mesmas duas ocorrências e propõem usar o alias real no cleanup. Publicar ambas seria redundante; nenhuma delas inclui um segundo defeito independente."
+ }
+}

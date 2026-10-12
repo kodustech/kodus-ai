@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "In the concurrent test, the reader thread is never joined before the assertion on caughtExceptions, so exceptions can be missed (false pass) and the thread can outlive the test.",
+    "members": [
+     "s_e124c85a",
+     "s_7a7a84f5",
+     "s_ba7c99d1",
+     "s_f9a7eab4"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S3, S7 e S8 apontam o mesmo defeito: a thread leitora não recebe join antes do assertThat. Por isso há corrida e exceções podem ser perdidas. O vazamento da thread citado em S2 e S7 é consequência do mesmo problema e se resolve com a mesma correção (join/ExecutorService), então não é um defeito separado."
+ }
+}

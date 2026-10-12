@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4fa29a08",
+     "s_3b794fbe",
+     "s_dbadf6da"
+    ],
+    "defect": "A contagem e a inserção de dispositivos não são atômicas, permitindo que requisições concorrentes ultrapassem o limite configurado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S4 e S9 descrevem a mesma condição de corrida entre CountDevices e a inserção, no mesmo trecho de CreateOrUpdateDevice. As alternativas de correção variam, mas todas tratam desse único defeito; nenhuma sugestão agrega um defeito independente."
+ }
+}

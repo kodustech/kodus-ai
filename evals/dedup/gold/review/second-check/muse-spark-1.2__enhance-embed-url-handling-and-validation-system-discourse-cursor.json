@@ -1,0 +1,50 @@
+{
+ "key": "970f64b3a5",
+ "checks": {
+  "s_6acddab4": [],
+  "s_5d94e2a4": [],
+  "s_98e23b20": [],
+  "s_45b4838c": [],
+  "s_14f044ed": [],
+  "s_7b49c6aa": [],
+  "s_dcaf48bf": [],
+  "s_f78c8d65": [],
+  "s_7ba9ce4b": [],
+  "s_52c21f9e": [
+   {
+    "id": "s_8c2349e8",
+    "likelihood": "likely_duplicate",
+    "reasonPt": "Ambas relatam a chamada i.content.scrub com conteúdo nil em PollFeed. s_52c21f9e acrescenta falhas de rede e parsing, mas inclui explicitamente o mesmo defeito."
+   },
+   {
+    "id": "s_3adf9f4b",
+    "likelihood": "likely_duplicate",
+    "reasonPt": "Ambas apontam que i.content nil provoca NoMethodError em i.content.scrub e interrompe a importação. O fallback para description é uma proposta de correção para esse mesmo defeito."
+   },
+   {
+    "id": "s_c7cf0d7d",
+    "likelihood": "borderline",
+    "reasonPt": "Ambas denunciam chamadas open sem tratamento de falhas de rede, que derrubam os respectivos jobs. Isso pode ser considerado um padrão sistêmico repetido, embora sejam caminhos de importação distintos e os demais defeitos relatados sejam diferentes."
+   }
+  ],
+  "s_8924c5ce": [
+   {
+    "id": "s_c7cf0d7d",
+    "likelihood": "likely_duplicate",
+    "reasonPt": "s_c7cf0d7d relata explicitamente que doc.content nil chega a import e causa NoMethodError em contents <<, também denunciado por s_8924c5ce. Há sobreposição parcial, com problemas adicionais de mutação e entrada congelada em uma sugestão e falhas de obtenção do conteúdo na outra."
+   }
+  ],
+  "s_c7cf0d7d": [
+   {
+    "id": "s_8924c5ce",
+    "likelihood": "likely_duplicate",
+    "reasonPt": "Ambas denunciam o mesmo NoMethodError em contents << quando import recebe conteúdo nil. s_c7cf0d7d aponta a origem desse valor em import_remote, enquanto s_8924c5ce aponta a operação que falha."
+   },
+   {
+    "id": "s_52c21f9e",
+    "likelihood": "borderline",
+    "reasonPt": "As duas sugestões relatam falhas de rede não tratadas em chamadas open que interrompem jobs de importação. É possível agrupá-las como padrão sistêmico, mas as chamadas pertencem a fluxos distintos e exigem intervenções próprias."
+   }
+  ]
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c5ab9f8f",
+     "s_9b433b01"
+    ],
+    "defect": "The age/timestamp mutual-exclusion validators check truthiness instead of key presence, so a value of 0 lets a report with both fields pass validation."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S4 apontam o mesmo defeito nas mesmas linhas: os validadores validate_timestamp/validate_age usam truthiness, então o valor 0 burla a exclusão mútua entre age e timestamp. A correção proposta é a mesma (verificar a presença da chave), por isso o grupo se mantém."
+ }
+}

@@ -1,0 +1,64 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "promptSha": "370a9be9f98875aef9a12d611cc597694130a84a",
+  "attempt": 1,
+  "ms": 60581,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_c0312a1d",
+          "s_72746574"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "OrganizationProvider link/unlink operations fail to invalidate login caches, leaving stale identity-provider membership.",
+        "rationale": "Both identify the same missing invalidation path, pointing respectively at cache retrieval and invalidation helpers. Organization-enabled invalidation appears only in one proposed fix, not as a separately explained defect."
+      },
+      {
+        "members": [
+          "s_dd4bb6a5",
+          "s_996b3792"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Both report no contract mismatch between BROKER_PUBLIC/orgId login eligibility and login-cache invalidation.",
+        "rationale": "These repeat the same no-mismatch conclusion from the predicate definition and its invalidation consumers, including identical observations about non-login providers and organization transitions."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_bd3d6e44",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8101d6f5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_99f5f381",
+        "confidence": "high"
+      },
+      {
+        "id": "s_36f8a064",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0b2dd54f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a2886074",
+        "confidence": "high"
+      },
+      {
+        "id": "s_cdd90843",
+        "confidence": "high"
+      }
+    ]
+  }
+}

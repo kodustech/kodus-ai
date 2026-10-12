@@ -1,0 +1,29 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_4772139b",
+    "mainDefect": "canExchangeTo throws UnsupportedOperationException under V2, causing token-exchange requests to fail with an unhandled HTTP 500.",
+    "secondary": [
+     {
+      "defect": "exchangeToPermission also throws UnsupportedOperationException despite being exposed through the client-permission machinery.",
+      "coveredBy": [
+       "s_886d9c42"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a39e9ef4",
+    "mainDefect": "getEvaluationContext is dead code because it is never called.",
+    "secondary": [
+     {
+      "defect": "The class declares an unused logger.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

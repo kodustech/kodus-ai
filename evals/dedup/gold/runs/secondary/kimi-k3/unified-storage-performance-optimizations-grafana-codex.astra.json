@@ -1,0 +1,51 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_67912b06",
+    "mainDefect": "Concurrent builds for the same NamespacedResource can collide on the same on-disk index directory, causing errors or corruption.",
+    "secondary": [
+     {
+      "defect": "Concurrent cache overwrites discard the losing index without closing it, leaking file handles and memory.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_17a7fb74",
+    "mainDefect": "Skipping the instrumentation integration test on postgres removes coverage that would detect a broken metrics endpoint.",
+    "secondary": [
+     {
+      "defect": "The unconditional postgres skip also disables local runs even though the stated problem is specific to Drone.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_87ed9fcd",
+    "mainDefect": "Running full initialization synchronously inside NewResourceServer blocks construction on storage and search I/O, breaking callers expecting cheap construction.",
+    "secondary": [
+     {
+      "defect": "Initialization failures now return no server, breaking callers that previously handled Init errors while retaining the server for degraded operation.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_48086659",
+    "mainDefect": "Concurrent builds for the same NamespacedResource can collide on the same on-disk index directory, causing errors or corruption.",
+    "secondary": [
+     {
+      "defect": "Last-writer-wins cache updates allow a stale snapshot to overwrite a fresher index.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Concurrent cache overwrites discard the losing index without closing it, leaking resources.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

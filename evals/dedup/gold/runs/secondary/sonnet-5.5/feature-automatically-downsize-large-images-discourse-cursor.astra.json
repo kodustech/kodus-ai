@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_054a4ca7",
+    "mainDefect": "The file_too_large message displays a hard-coded 10240 KB instead of the configured per-type upload limit.",
+    "secondary": [
+     {
+      "defect": "The upload size check can let oversized non-image files through instead of enforcing their configured per-type limits.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The 413 handler also displays an incorrect hard-coded upload limit.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

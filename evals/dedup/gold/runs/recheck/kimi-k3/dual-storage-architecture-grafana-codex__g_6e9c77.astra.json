@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_63bda620",
+     "s_cc993937",
+     "s_4d3c3dc5"
+    ],
+    "defect": "Update passa objInfo diretamente ao legado, recalculando o objeto em vez de reutilizar via updateWrapper o resultado persistido no armazenamento unificado."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_4d3c3dc5"
+  ],
+  "reasoningPt": "S2, S19 e S24 têm o mesmo defeito principal: a remoção do updateWrapper permite recalcular um objeto diferente no legado e repetir UpdatedObject. S24 também relata a aplicação de atualizações fora de ordem, que exige uma correção própria, mas esse defeito adicional apenas a classifica como bundle, sem alterar seu grupo."
+ }
+}

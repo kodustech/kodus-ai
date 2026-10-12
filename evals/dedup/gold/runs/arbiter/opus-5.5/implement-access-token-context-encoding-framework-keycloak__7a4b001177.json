@@ -1,0 +1,39 @@
+{
+  "model": "opus-5.5",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "component": [
+    "s_15c59a87",
+    "s_1f2d92bd",
+    "s_8188e9fe",
+    "s_859a4a3a",
+    "s_a2208ca1",
+    "s_a57e3ef3",
+    "s_c309ae7b",
+    "s_cf0c2a48",
+    "s_d598c74b"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_15c59a87",
+          "s_1f2d92bd",
+          "s_8188e9fe",
+          "s_859a4a3a",
+          "s_a2208ca1",
+          "s_a57e3ef3",
+          "s_c309ae7b",
+          "s_cf0c2a48",
+          "s_d598c74b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The isAccessTokenId matcher in AssertEvents reads the grant shortcut with substring(3,5) instead of substring(4,6) and inverts the equality check, so it never validates the grant type."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "All nine suggestions report the same wrong offset and inverted comparison in the isAccessTokenId matcher, lines 480-484 of AssertEvents.java. s_a2208ca1 gives only the short filename but describes the identical defect. s_15c59a87 also flags the misleading code comment, but that comment describes the same offset error and is fixed by the same edit at the same place. The length check (items[0].length() == 6) appears only in proposed fixes, so it does not count as an extra defect. One edit resolves the whole group, so needsUnifiedComment is false."
+  }
+}

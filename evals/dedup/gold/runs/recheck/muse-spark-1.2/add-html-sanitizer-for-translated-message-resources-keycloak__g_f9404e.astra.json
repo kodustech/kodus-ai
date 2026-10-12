@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ab141308",
+     "s_8a4cfc73"
+    ],
+    "defect": "A mesma instrução de configuração de OTP em italiano foi inserida nos arquivos de tradução lituana de account e login."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S5 apontam a mesma substituição incorreta por texto italiano, repetida nos arquivos lituanos de account e login. Substituir essa frase pela tradução lituana nos dois locais resolve ambos os relatos, mantendo o grupo pela regra de erro repetido."
+ }
+}

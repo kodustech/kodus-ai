@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bc7d00eb",
+     "s_22bcfbd2"
+    ],
+    "defect": "I18n.translate carrega apenas o locale atual, deixando os locales de fallback sem carregamento garantido em chamadas fora de ApplicationController#set_locale."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 descrevem o mesmo defeito: o carregamento da cadeia de fallback depende do hook do controller, deixando chamadas externas sem essa garantia. Ambas propõem garantir o carregamento da cadeia em translate; uma única correção resolve os dois relatos."
+ }
+}

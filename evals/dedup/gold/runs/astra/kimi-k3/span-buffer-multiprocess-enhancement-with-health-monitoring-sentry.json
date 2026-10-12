@@ -1,0 +1,66 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "325c7eddcc478fbde9acb3b2a4d2b0253dbd61c4",
+  "attempt": 1,
+  "ms": 43200,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_4b2add7b",
+          "s_f2332220",
+          "s_e70c33f4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The test's monkeypatch makes the added time.sleep(0.1) a no-op, preventing it from providing the intended synchronization.",
+        "rationale": "All three report the same patched-out sleep in test_basic. The flaky-test explanation describes its consequence rather than an additional defect."
+      },
+      {
+        "members": [
+          "s_f44896cd",
+          "s_9787549d",
+          "s_41c01c77"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The wait_produce metric uses the tag key 'shards' while sibling metrics use 'shard' for the same value.",
+        "rationale": "All three identify the identical metric tag inconsistency. A single change to the wait_produce tag key resolves every report."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_2a5528aa",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3d96a699",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7529b678",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d926f869",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6f5b850f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_10a23b48",
+        "confidence": "high"
+      },
+      {
+        "id": "s_18212a8b",
+        "confidence": "high"
+      }
+    ]
+  }
+}

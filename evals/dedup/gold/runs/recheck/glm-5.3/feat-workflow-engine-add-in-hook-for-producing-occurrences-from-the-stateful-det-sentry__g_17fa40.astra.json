@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a19aa2e8",
+     "s_0822f042"
+    ],
+    "defect": "O helper ignora o parâmetro value, impedindo que os testes detectem valores incorretos repassados ao hook build_occurrence_and_event_data."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S8 descrevem o mesmo defeito no mesmo helper e citam as mesmas expectativas inconsistentes como evidência. As diferenças nas correções propostas não alteram o defeito principal; nenhuma sugestão inclui um defeito independente."
+ }
+}

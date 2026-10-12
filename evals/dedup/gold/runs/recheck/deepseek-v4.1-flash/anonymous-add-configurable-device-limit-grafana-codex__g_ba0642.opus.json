@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3a4fa9ea",
+     "s_def15064"
+    ],
+    "defect": "Authenticate now calls TagDevice synchronously on the request path, dropping the old async goroutine with its own bounded context and panic recovery, so slow or panicking tagging now affects the anonymous auth request."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_3a4fa9ea"
+  ],
+  "reasoningPt": "S3 e S7 apontam o mesmo problema: o TagDevice saiu de uma goroutine assíncrona, que tinha contexto próprio com timeout e recover, e passou a ser chamado de forma síncrona no fluxo de autenticação. Uma única correção resolve as duas: voltar a isolar a chamada com contexto limitado e proteção contra panic. S3 junta latência e perda do recover, mas os dois vêm da mesma mudança e têm a mesma correção, por isso o grupo fica como está."
+ }
+}

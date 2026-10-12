@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_752d6b1b",
+    "mainDefect": "The expected occurrence for group_2 uses value=6 even though the packet supplies group_2=10.",
+    "secondary": [
+     {
+      "defect": "The occurrence helper does not expose the value, so the test cannot detect forwarding group_1's value to the group_2 occurrence builder.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

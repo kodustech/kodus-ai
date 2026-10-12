@@ -1,0 +1,23 @@
+{
+ "key": "4d9fb8dbf0",
+ "checks": {
+  "s_17a01178": [],
+  "s_7e3f9d52": [],
+  "s_d7389453": [],
+  "s_e08a6e49": [],
+  "s_607e781d": [],
+  "s_f3493499": [],
+  "s_6180295c": [
+   {
+    "id": "s_c8acf696",
+    "likelihood": "likely_duplicate",
+    "reasonPt": "A s_c8acf696 também denuncia explicitamente a corrida TOCTOU: duas requisições concorrentes passam pela verificação antes de inserir e criam attendees duplicados. Esse defeito coincide com o relatado em s_6180295c."
+   },
+   {
+    "id": "s_9e2d0fde",
+    "likelihood": "likely_duplicate",
+    "reasonPt": "Pertence ao mesmo grupo pela regra de encadeamento: s_c8acf696 denuncia tanto a duplicação dentro de uma requisição, descrita aqui, quanto a corrida entre requisições de s_6180295c. São defeitos distintos ligados pela sugestão que reporta ambos."
+   }
+  ]
+ }
+}

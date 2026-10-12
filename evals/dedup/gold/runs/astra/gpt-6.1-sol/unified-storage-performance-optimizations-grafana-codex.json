@@ -1,0 +1,21 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "promptSha": "69912319b5c3474bc213c72f267b570e1e5d0c0a",
+  "attempt": 1,
+  "ms": 17994,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_60785058",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d8daa441",
+        "confidence": "high"
+      }
+    ]
+  }
+}

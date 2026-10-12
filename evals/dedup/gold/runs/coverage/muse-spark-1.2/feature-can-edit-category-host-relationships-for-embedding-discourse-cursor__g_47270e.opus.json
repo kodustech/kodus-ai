@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Migration lines 9-16: execute(...)[0] is indexed without checking for an empty result, so nil['id'] crashes the migration"
+   },
+   {
+    "id": "F2",
+    "description": "Migration line 25: host value h is interpolated directly into the INSERT SQL, so a quote breaks it or allows SQL injection"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_7cfecf36",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5ffb9255",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_74124a9e",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_9d76f63a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

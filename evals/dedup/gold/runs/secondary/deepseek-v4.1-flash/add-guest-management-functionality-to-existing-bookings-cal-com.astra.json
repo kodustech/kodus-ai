@@ -1,0 +1,27 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_9db07af0",
+    "mainDefect": "The blocklist comparison does not lowercase guest emails, allowing differently cased blocked addresses through.",
+    "secondary": [
+     {
+      "defect": "The attendee duplicate check is case-sensitive, allowing an existing attendee's email with different casing to be added again.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_76d4416b",
+    "mainDefect": "Concurrent addGuests calls can create duplicate attendees because filtering and insertion are separate operations without a database uniqueness guarantee.",
+    "secondary": [
+     {
+      "defect": "Repeated emails within a single guests payload can create duplicate attendees because the server does not deduplicate the input.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

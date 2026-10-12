@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_86941632",
+     "s_93638ca0"
+    ],
+    "defect": "The test test_from_dict_empty_array passes an empty dict instead of an empty array, so its name contradicts what it actually tests."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S7 apontam o mesmo defeito, nas mesmas linhas: o teste test_from_dict_empty_array usa um dict vazio, não um array, então o nome contradiz o corpo. As duas propõem a mesma correção (renomear para test_from_dict_empty_dict ou testar []), por isso o grupo fica como está."
+ }
+}

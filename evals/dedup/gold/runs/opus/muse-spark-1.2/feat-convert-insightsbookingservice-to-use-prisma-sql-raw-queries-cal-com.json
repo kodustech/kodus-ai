@@ -1,0 +1,72 @@
+{
+  "judge": "opus",
+  "model": "muse-spark-1.2",
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "promptSha": "78193e31087a23efa9a6d0387e6a873523cd14e7",
+  "attempt": 1,
+  "ms": 7113,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 12737,
+    "output_tokens": 256,
+    "output_tokens_details": {
+      "thinking_tokens": 49
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 0,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 256,
+        "cache_read_input_tokens": 12737,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.0076754,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_f1d768e4",
+        "confidence": "high"
+      },
+      {
+        "id": "s_db82a6a7",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0505f415",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7ecf0d24",
+        "confidence": "high"
+      },
+      {
+        "id": "s_07d304fc",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c07a23a3",
+        "confidence": "high"
+      }
+    ]
+  }
+}

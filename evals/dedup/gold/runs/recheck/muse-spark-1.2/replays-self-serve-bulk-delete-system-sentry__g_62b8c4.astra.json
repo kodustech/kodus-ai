@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_9c86f0c6",
+     "s_f9dadae9"
+    ],
+    "defect": "O acesso direto a dcg_to_slow_conditions[dcg.id] pode causar KeyError quando o mapa não contém um grupo processado."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_9c86f0c6"
+  ],
+  "reasoningPt": "S2 e S21 têm como defeito principal o acesso sem proteção ao mesmo mapa de condições lentas; os cenários descritos são resolvidos pela mesma correção. S2 também aponta um acesso inseguro a workflows_to_envs, um defeito adicional que a torna um bundle sem alterar seu agrupamento principal."
+ }
+}

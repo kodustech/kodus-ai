@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4c71b68b",
+     "s_41db3057"
+    ],
+    "defect": "O mixin align-items emite a propriedade inexistente -ms-align-items, gerando uma declaração sem efeito."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_4c71b68b"
+  ],
+  "reasoningPt": "S2 e S3 têm como defeito principal a emissão de -ms-align-items e propõem remover a mesma declaração. S2 também aponta a ausência de -moz-box-align, mas esse defeito adicional apenas a caracteriza como bundle, sem alterar seu agrupamento."
+ }
+}

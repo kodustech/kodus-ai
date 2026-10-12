@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_4ee7f335",
+   "s_df703bb4"
+  ],
+  "bundles": [
+   "s_4ee7f335"
+  ],
+  "reasoningPt": "S4 aponta primeiro o repasse ao Legacy de metadados alterados pelo Storage e depois acrescenta a corrida de dados; S15 trata da corrida com a serialização da resposta. São defeitos distintos: copiar o objeto após Storage.Create pode resolver o compartilhamento concorrente, mas preserva os metadados já alterados."
+ }
+}

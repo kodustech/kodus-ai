@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_8955a30a",
+    "mainDefect": "The Pause menu item requires a ruler rule, so it never renders in the prom-only list view even when pause permission is granted.",
+    "secondary": [
+     {
+      "defect": "The Delete menu item requires a ruler rule, so it never renders in the prom-only list view even when delete permission is granted.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

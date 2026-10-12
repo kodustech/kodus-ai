@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_090409bf",
+     "s_42e6661a"
+    ],
+    "defect": "poll_feed calls i.content.scrub without checking for nil, so a feed item with no content element raises NoMethodError and stops the whole import loop (retry is disabled)."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_42e6661a"
+  ],
+  "reasoningPt": "S4 e S14 têm o mesmo defeito principal: `i.content.scrub` é chamado sem verificar se o conteúdo é nil, o que derruba o loop inteiro de importação do feed. S14 também cita, como observações extras, o `String#scrub` não existir em Ruby < 2.1 e o `i.title` nil, por isso entra em bundles. Pela regra do defeito principal, essas observações não mudam o agrupamento."
+ }
+}

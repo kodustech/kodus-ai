@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Reader thread is never joined before the assertion, so exceptions from in-flight requests are missed (GroupTest lines 139-157)"
+   },
+   {
+    "id": "F2",
+    "description": "No check that the reader made at least one read while deletions ran, so the test can pass without exercising the race"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0dfb07e9",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3d7a717e",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8fb311b9",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bdeb7dae",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

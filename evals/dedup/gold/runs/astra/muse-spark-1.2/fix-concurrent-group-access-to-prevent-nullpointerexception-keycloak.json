@@ -1,0 +1,51 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "promptSha": "728d71038140249e35d2abe272cce533fbc7e66c",
+  "attempt": 1,
+  "ms": 33985,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_f9a7eab4",
+          "s_e124c85a",
+          "s_ba7c99d1",
+          "s_7a7a84f5"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The test does not await reader-thread termination before asserting, allowing late exceptions to be missed and the thread to outlive the test.",
+        "rationale": "All four report the same missing synchronization between reader completion and the assertion. Awaiting termination before asserting resolves both the assertion race and the described thread leak."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_7b464a31",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7a9f177c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_19dff499",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4118fce3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_11f47b82",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5a343300",
+        "confidence": "high"
+      }
+    ]
+  }
+}

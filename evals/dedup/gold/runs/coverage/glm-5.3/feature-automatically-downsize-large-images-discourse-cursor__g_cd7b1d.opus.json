@@ -1,0 +1,40 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "uploads_controller.rb lines 63-70: the fixed 5-pass 80% downsize loop can exit with the image still over max_image_size_kb, so the comment's 'automatically reduced to allowed size' promise doesn't hold and an oversized file reaches Upload.create_for"
+   },
+   {
+    "id": "F2",
+    "description": "uploads_controller.rb loop: a false return from OptimizedImage.downsize (convert failure) is ignored, so the untouched original goes to Upload.create_for"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_147b3836",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_fd8d15e4",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_3af1aec9",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

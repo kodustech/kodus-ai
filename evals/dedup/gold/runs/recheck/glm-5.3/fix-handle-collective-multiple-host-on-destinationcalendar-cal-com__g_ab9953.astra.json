@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_23f7d949",
+     "s_9518d664"
+    ],
+    "defect": "O fallback busca credenciais por ID no banco e as utiliza sem validar se pertencem ao usuário ou aos hosts da reserva."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_23f7d949",
+   "s_9518d664"
+  ],
+  "reasoningPt": "S18 e S19 relatam o mesmo defeito principal de ausência de validação de pertencimento das credenciais, repetido na criação, atualização e exclusão de eventos. Ambas também apontam a falta de rejeição de credenciais marcadas como inválidas, um defeito adicional que as torna bundles sem alterar o agrupamento."
+ }
+}

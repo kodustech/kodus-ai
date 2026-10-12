@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_07b0de25",
+     "s_4ba6d893",
+     "s_fcc2ff07",
+     "s_6c1d1dab",
+     "s_c3b88c49"
+    ],
+    "defect": "A métrica de sucesso de Delete recebe name no argumento do rótulo kind, em vez de options.Kind."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4, S10, S11, S19 e S22 apontam o mesmo argumento incorreto na mesma chamada, corrigido substituindo name por options.Kind. S22 acrescenta a consequência de alta cardinalidade, mas não relata outro defeito."
+ }
+}

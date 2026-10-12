@@ -1,0 +1,53 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "5cece09802cfc660517405fc25fd1aed13d2cc88",
+  "attempt": 1,
+  "ms": 39248,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_349bb657",
+          "s_3094b78d",
+          "s_de97d0e3",
+          "s_9e7bd507",
+          "s_d07c7bcd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The second downsize definition replaces the width/height version, breaking existing callers through argument-count errors or misinterpreted arguments.",
+        "rationale": "All five report the same method redefinition. The four-argument behavior described by s_9e7bd507 is another consequence of that same signature replacement, resolved by the same compatibility fix."
+      },
+      {
+        "members": [
+          "s_60d70a41",
+          "s_6f42512f",
+          "s_16e7d729",
+          "s_4e7770ed"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The hardcoded 10MB client limit ignores attachment settings, incorrectly accepts or rejects attachments, and misstates enforced limits in validation and HTTP 413 error messages.",
+        "rationale": "All four share the attachment-limit regression at line 182. Their combined coverage also includes rejecting valid attachments above 10MB and the separately hardcoded 413 message, explicitly reported by s_16e7d729 and requiring an additional edit."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_b0d902e9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f7bf40cb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6cb7afc7",
+        "confidence": "high"
+      }
+    ]
+  }
+}

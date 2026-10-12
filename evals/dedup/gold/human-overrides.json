@@ -68,5 +68,203 @@
       }
     ],
     "note": "Split by human review: S3 only mentions the schema gap as context in its explanation; a shared defect must be reported as a problem, not cited as context or inside the fix."
+  },
+  {
+    "model": "kimi-k3",
+    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+    "replaceGroup": [
+      "s_6180295c",
+      "s_9e2d0fde",
+      "s_c8acf696"
+    ],
+    "with": [
+      {
+        "members": [
+          "s_9e2d0fde",
+          "s_c8acf696"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The server schema and handler never dedupe guest emails within a single request (the uniqueness refine is client-only), so createMany inserts duplicate Attendee rows."
+      }
+    ],
+    "unique": [
+      "s_6180295c"
+    ],
+    "note": "Split by human review: S21 is a separate TOCTOU race between concurrent requests (different fix); S3 only cites the race as context in its WHY."
+  },
+  {
+    "model": "muse-spark-1.2",
+    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "replaceGroup": [
+      "s_3adf9f4b",
+      "s_52c21f9e",
+      "s_8c2349e8"
+    ],
+    "with": [
+      {
+        "members": [
+          "s_3adf9f4b",
+          "s_8c2349e8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "PollFeed calls i.content.scrub without a nil check, so an RSS item with no content raises NoMethodError and stops the job (poll_feed.rb:35)."
+      }
+    ],
+    "unique": [
+      "s_52c21f9e"
+    ],
+    "bundles": [
+      "s_52c21f9e"
+    ],
+    "note": "Split by human review: S10 is mainly about the missing rescue around open/SimpleRSS.parse; it also mentions the nil content, so it bundles two defects."
+  },
+  {
+    "model": "muse-spark-1.2",
+    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "replaceGroup": [
+      "s_8924c5ce",
+      "s_c7cf0d7d"
+    ],
+    "with": [],
+    "unique": [
+      "s_8924c5ce",
+      "s_c7cf0d7d"
+    ],
+    "bundles": [
+      "s_c7cf0d7d"
+    ],
+    "note": "Split by human review: S4 is the in-place << on the caller's string (frozen/nil) at line 13; S11 is import_remote with no rescue and no nil guard on Readability content. Different fixes."
+  },
+  {
+    "model": "muse-spark-1.2",
+    "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+    "bundles": [
+      "s_b9468b8e"
+    ],
+    "note": "S3 stays in the hardcoded 10 MB group but also reports unchecked downsize and unset content_type (bundlesDefects)."
+  },
+  {
+    "model": "sonnet-5.5",
+    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+    "replaceGroup": [
+      "s_2a55c64a",
+      "s_5d6ec13d",
+      "s_5fd8900b",
+      "s_7958039f",
+      "s_8d184fdd"
+    ],
+    "with": [
+      {
+        "members": [
+          "s_7958039f",
+          "s_8d184fdd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "update and destroy use where(id:).first, which can be nil, so an unknown id raises NoMethodError and returns 500 instead of 404 (embeddable_hosts_controller.rb:9-18)."
+      },
+      {
+        "members": [
+          "s_5d6ec13d",
+          "s_5fd8900b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "record_for_host compares lower(host) against uri.host without downcasing it, so mixed-case referers are rejected (embeddable_host.rb:14-17)."
+      }
+    ],
+    "unique": [
+      "s_2a55c64a"
+    ],
+    "bundles": [
+      "s_8d184fdd",
+      "s_2a55c64a"
+    ],
+    "note": "Split by human review (agreed with an independent GPT-6 Astra review): three distinct defects chained by S2 ('Separately...') and S11 ('Also...')."
+  },
+  {
+    "model": "opus-5.5",
+    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+    "replaceGroup": [
+      "s_0621eb9a",
+      "s_13c616c7",
+      "s_7900c369",
+      "s_c76cedb8",
+      "s_dbcf98a4"
+    ],
+    "with": [
+      {
+        "members": [
+          "s_13c616c7",
+          "s_7900c369",
+          "s_c76cedb8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The migration indexes [0]['id'] / [0]['value'] on results that can be empty, so it crashes (create_embeddable_hosts.rb:9-16)."
+      },
+      {
+        "members": [
+          "s_0621eb9a",
+          "s_dbcf98a4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The migration inserts host values without normalizing (scheme, path, whitespace) or escaping them, so migrated hosts never match and quotes break the INSERT (create_embeddable_hosts.rb:22-26)."
+      }
+    ],
+    "bundles": [
+      "s_c76cedb8"
+    ],
+    "note": "Split by human review: empty-result indexing (lines 9-16) and unnormalized/unescaped host insert (lines 22-26) are separate defects; S14 is mainly about the crash and also reports the host insert."
+  },
+  {
+    "model": "opus-5.5",
+    "caseId": "dual-storage-architecture-grafana-codex",
+    "replaceGroup": [
+      "s_22b6a64c",
+      "s_6c5a2af8",
+      "s_74e86eb7",
+      "s_806c2db2",
+      "s_849456ca",
+      "s_9977cb66",
+      "s_ef1efee6"
+    ],
+    "with": [
+      {
+        "members": [
+          "s_74e86eb7",
+          "s_9977cb66",
+          "s_ef1efee6"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "defect": "Create (line 45) and Update (line 129) record storage failures with recordLegacyDuration instead of recordStorageDuration (dualwriter_mode3.go)."
+      },
+      {
+        "members": [
+          "s_6c5a2af8",
+          "s_806c2db2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "Delete success path passes name instead of options.Kind as the kind label of recordStorageDuration (dualwriter_mode3.go:106)."
+      },
+      {
+        "members": [
+          "s_22b6a64c",
+          "s_849456ca"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "Delete puts d.Log into the context instead of the enriched log (dualwriter_mode3.go:97)."
+      }
+    ],
+    "bundles": [
+      "s_74e86eb7"
+    ],
+    "note": "Split by human review: S3 bundles four defects; grouped by its main one (wrong helper in Create/Update). Label and logger defects form their own groups."
   }
 ]

@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_005b0067",
+    "mainDefect": "The TODO is stale because MetricAlertDetectorHandler already subclasses StatefulDetectorHandler.",
+    "secondary": [
+     {
+      "defect": "MetricAlertDetectorHandler cannot be instantiated because it leaves inherited abstract methods unimplemented.",
+      "coveredBy": [
+       "s_534126e2",
+       "s_96af5979",
+       "s_18d4e01d",
+       "s_1aa747bf"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

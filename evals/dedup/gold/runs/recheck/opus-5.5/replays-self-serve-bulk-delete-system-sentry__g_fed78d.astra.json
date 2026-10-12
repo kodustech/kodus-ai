@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0f836d52",
+     "s_4580ba49"
+    ],
+    "defect": "As verificações de exclusão mútua entre age e timestamp usam truthiness, tratando zero como ausência."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_0f836d52"
+  ],
+  "reasoningPt": "S4 e S5 têm o mesmo defeito principal: usar truthiness para verificar a presença de age e timestamp. S4 também relata a aceitação de relatórios sem nenhum dos campos, um defeito adicional que a torna um bundle, sem alterar seu agrupamento."
+ }
+}

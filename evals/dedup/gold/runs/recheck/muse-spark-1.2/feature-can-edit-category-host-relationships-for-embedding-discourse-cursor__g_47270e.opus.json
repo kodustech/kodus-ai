@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_74124a9e",
+     "s_7cfecf36",
+     "s_9d76f63a"
+    ],
+    "defect": "The migration reads execute(...)[0]['id'] without checking that the query returned any rows, so it crashes with nil when embed_category/site_settings is missing."
+   }
+  ],
+  "unique": [
+   "s_5ffb9255"
+  ],
+  "bundles": [
+   "s_74124a9e"
+  ],
+  "reasoningPt": "S11 e S14 apontam o crash por acessar [0] sem verificar se a consulta voltou vazia, e esse também é o primeiro defeito de S3, então os três ficam juntos. S3 traz ainda a interpolação do host no INSERT (SQL injection/aspas) como segundo defeito, por isso está em bundles. S12 trata só dessa interpolação, que é outro defeito com outra correção, e fica sozinha."
+ }
+}

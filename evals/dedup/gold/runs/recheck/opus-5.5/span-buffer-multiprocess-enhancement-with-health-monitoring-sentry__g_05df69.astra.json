@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3a262130",
+     "s_ae578023"
+    ],
+    "defect": "As métricas do flusher usam chaves inconsistentes para o mesmo valor: `shard` em produce/segment_size_bytes e `shards` em wait_produce."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5 e S9 relatam exatamente a mesma inconsistência nas chaves das tags das métricas. A diferença no intervalo de linhas não altera o defeito, e padronizar a chave resolve ambas."
+ }
+}

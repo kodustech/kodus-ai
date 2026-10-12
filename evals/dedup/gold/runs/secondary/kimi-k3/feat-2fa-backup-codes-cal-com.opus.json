@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_eaeba116",
+    "mainDefect": "disable.ts checks only that req.body.backupCode is truthy before calling replaceAll on it, so a non-string body value throws a TypeError and returns a 500 instead of a 400.",
+    "secondary": [
+     {
+      "defect": "The login authorize flow in next-auth-options.ts:144 calls credentials.backupCode.replaceAll the same way, without checking that backupCode is a string.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_30515fd3",
+    "mainDefect": "disable.ts calls .replaceAll on req.body.backupCode without checking that it is a string, so a malformed body crashes the endpoint.",
+    "secondary": [
+     {
+      "defect": "next-auth-options.ts:144 has the same pattern: it calls credentials.backupCode.replaceAll without validating the type, so it needs the same check.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

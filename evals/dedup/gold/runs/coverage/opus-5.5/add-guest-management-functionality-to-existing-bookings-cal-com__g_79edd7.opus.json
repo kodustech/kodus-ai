@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "addGuests.handler.ts line 168: sendAddGuestsEmails gets the raw `guests` input instead of `uniqueGuests`, so existing attendees get the wrong (scheduled) email"
+   },
+   {
+    "id": "F2",
+    "description": "addGuests.handler.ts lines 169-171: the catch block swallows the email-sending error without logging `err`"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_a421800b",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_2fa589ab",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_77ce515e",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ff822a38",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

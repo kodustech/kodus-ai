@@ -1,0 +1,95 @@
+{
+  "judge": "opus",
+  "model": "sonnet-5.5",
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "promptSha": "f73a51f1a7827dadd792a9b430767daf9c11a2b2",
+  "attempt": 1,
+  "ms": 19591,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 17268,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 1372,
+    "output_tokens_details": {
+      "thinking_tokens": 594
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 17268,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1372,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 17268,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 17268
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1657504,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_cc6b5fef",
+          "s_88211022",
+          "s_b87c3cd2",
+          "s_bd0c0912"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "isTeamAdminOrOwner joins isTeamAdmin and isTeamOwner with && instead of ||, so admins who are not owners are denied. Extra points to keep: any matching attendee can add guests (too permissive), and the 'you_do_not_have_permission' translation key is missing.",
+        "rationale": "All four report the same && vs || bug in the permission check. Two of them each add a different extra concern."
+      },
+      {
+        "members": [
+          "s_66ed9605",
+          "s_dc76b747",
+          "s_7a5dc6fd",
+          "s_bdaa90a8"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Guest emails are not lowercased, so the blacklist check and the existing-attendee dedupe are case-sensitive and can be bypassed. Extra points to keep: duplicates inside the submitted guest list are not removed server-side, and the isAttendee comparison is also case-sensitive.",
+        "rationale": "All four report the same case-sensitive comparison in the blacklist/dedupe filter. Some also add in-list deduplication or the isAttendee comparison."
+      },
+      {
+        "members": [
+          "s_c03cd3b4",
+          "s_d430022b",
+          "s_72a13bc3"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "mid",
+        "defect": "sendAddGuestsEmails receives the raw guests list instead of uniqueGuests, so filtered-out emails get the wrong email. Also, updateCalendarAttendees runs after the DB write without error handling, so a calendar failure leaves guests saved while the request returns an error.",
+        "rationale": "s_c03cd3b4 reports both defects. s_d430022b shares the raw-guests defect and s_72a13bc3 shares the calendar-error defect, which links all three."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_4206cf1f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ddc0673e",
+        "confidence": "high"
+      }
+    ]
+  }
+}

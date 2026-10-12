@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "flusher.py:51 treats an explicit max_processes=0 as missing because it uses `or`."
+   },
+   {
+    "id": "F2",
+    "description": "flusher.py:51–66 creates no flusher processes or buffers for empty assigned_shards, leaving flushing and subsequent checks inactive."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_975b3a2a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ca82d915",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_f884b54a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

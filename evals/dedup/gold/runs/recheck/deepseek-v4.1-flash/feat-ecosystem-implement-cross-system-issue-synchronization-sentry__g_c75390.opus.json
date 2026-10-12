@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_2431eed5",
+     "s_b531a8e1"
+    ],
+    "defect": "The `queued` dataclass default `timezone.now()` is evaluated only once, at import time, so every AssignmentSource gets the same timestamp."
+   },
+   {
+    "members": [
+     "s_2673b2c5",
+     "s_2438c807"
+    ],
+    "defect": "`to_dict()` uses `asdict()` and keeps `queued` as a raw datetime, which the JSON serializer for Celery `apply_async` kwargs cannot encode."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_2673b2c5"
+  ],
+  "reasoningPt": "S1 e S3 tratam do default `timezone.now()` avaliado uma única vez na importação, enquanto S6 trata da serialização do datetime no payload do Celery. S4 aponta primeiro o problema de serialização (defeito principal) e só no final menciona o default avaliado na importação. Por isso S4 vai para o grupo de S6 e entra em bundles. São dois defeitos com correções diferentes, então o grupo deve ser dividido."
+ }
+}

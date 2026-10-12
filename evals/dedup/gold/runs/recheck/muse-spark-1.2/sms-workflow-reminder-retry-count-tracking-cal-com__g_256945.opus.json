@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The second OR branch of deleteMany (retryCount gt 1) has no method: SMS filter, so it deletes non-SMS WorkflowReminders.",
+    "members": [
+     "s_847266f2",
+     "s_6f6fcf09",
+     "s_a43d5a76"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S6 apontam o mesmo defeito: o ramo do OR com retryCount > 1 não filtra por method: SMS e acaba apagando lembretes de outros métodos. A correção é a mesma nas três. A sugestão opcional de S1 sobre scheduled: false aparece só dentro da correção e não é um defeito separado."
+ }
+}

@@ -1,0 +1,24 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_2eda8d39",
+     "s_0f78e9fc"
+    ],
+    "defect": "A comparação do email recebido sem normalização permite contornar a blacklist com variações de maiúsculas e minúsculas."
+   }
+  ],
+  "unique": [
+   "s_969329e8"
+  ],
+  "bundles": [
+   "s_2eda8d39",
+   "s_0f78e9fc",
+   "s_969329e8"
+  ],
+  "reasoningPt": "S2 e S4 apresentam primeiro o bypass da blacklist, enquanto S8 apresenta primeiro a duplicação de participantes por diferenças de capitalização. Pela regra do defeito principal, S8 fica separado. As três sugestões abrangem ambos os defeitos, embora S2 mencione a checagem de duplicatas apenas na correção proposta."
+ }
+}

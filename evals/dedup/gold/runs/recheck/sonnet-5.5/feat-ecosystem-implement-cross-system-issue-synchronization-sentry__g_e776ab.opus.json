@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1de4d23b",
+     "s_d328cce0",
+     "s_428c1b8f"
+    ],
+    "defect": "The default `queued: datetime = timezone.now()` runs only once, at import time, so every AssignmentSource gets the same stale timestamp; it should use `field(default_factory=timezone.now)`."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_428c1b8f"
+  ],
+  "reasoningPt": "S1, S2 e S3 apontam o mesmo defeito como principal: o default `timezone.now()` do campo `queued` é avaliado só uma vez, na importação, e todos propõem a mesma correção com `default_factory`. S3 acrescenta no final uma observação separada sobre a serialização JSON de datetime em to_dict(), por isso está em bundles, mas continua no grupo do seu defeito principal. A menção de S1 ao teste fraco só explica o mesmo defeito."
+ }
+}

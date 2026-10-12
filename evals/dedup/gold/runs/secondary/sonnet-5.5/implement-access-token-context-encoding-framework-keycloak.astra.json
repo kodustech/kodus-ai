@@ -1,0 +1,128 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_c4e9c10a",
+    "mainDefect": "The matcher incorrectly rejects a grant shortcut when it equals the expected value.",
+    "secondary": [
+     {
+      "defect": "The matcher extracts the grant shortcut with substring(3,5) instead of substring(4,6).",
+      "coveredBy": [
+       "s_dedf90ac",
+       "s_9fe47bb1",
+       "s_48023927",
+       "s_843e5d06",
+       "s_16105147"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_dedf90ac",
+    "mainDefect": "The matcher uses the wrong substring boundaries for the grant shortcut in the six-character prefix.",
+    "secondary": [
+     {
+      "defect": "The matcher incorrectly rejects a grant shortcut when it equals the expected value.",
+      "coveredBy": [
+       "s_c4e9c10a",
+       "s_0f11c762"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_0f11c762",
+    "mainDefect": "The grant-shortcut comparison incorrectly rejects matching values.",
+    "secondary": [
+     {
+      "defect": "The matcher extracts the grant shortcut with substring(3,5) instead of substring(4,6).",
+      "coveredBy": [
+       "s_dedf90ac",
+       "s_9fe47bb1",
+       "s_48023927",
+       "s_843e5d06",
+       "s_16105147"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_9fe47bb1",
+    "mainDefect": "The matcher reads the grant shortcut from the wrong substring boundaries.",
+    "secondary": [
+     {
+      "defect": "The matcher incorrectly rejects a grant shortcut when it equals the expected value.",
+      "coveredBy": [
+       "s_c4e9c10a",
+       "s_0f11c762"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_48023927",
+    "mainDefect": "The matcher fails to check the actual grant shortcut because it extracts substring(3,5) instead of substring(4,6).",
+    "secondary": [
+     {
+      "defect": "The matcher incorrectly rejects a grant shortcut when it equals the expected value.",
+      "coveredBy": [
+       "s_c4e9c10a",
+       "s_0f11c762"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_09ef53db",
+    "mainDefect": "The test catches any RuntimeException, allowing an unrelated NPE to satisfy the expected failure.",
+    "secondary": [
+     {
+      "defect": "The factory lacks a sessionFactory, causing the unknown-shortcut path to throw an NPE before reaching the intended IllegalArgumentException.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_843e5d06",
+    "mainDefect": "The matcher reads the grant shortcut from the wrong substring boundaries.",
+    "secondary": [
+     {
+      "defect": "The matcher incorrectly rejects a grant shortcut when it equals the expected value.",
+      "coveredBy": [
+       "s_c4e9c10a",
+       "s_0f11c762"
+      ]
+     },
+     {
+      "defect": "The matcher can throw StringIndexOutOfBoundsException on short token IDs.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_febeb791",
+    "mainDefect": "Token creation can throw an NPE when the lightweight-token check dereferences a null context client.",
+    "secondary": [
+     {
+      "defect": "The lightweight-token check can use a different client from the client passed to initToken.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_16105147",
+    "mainDefect": "The matcher extracts substring(3,5), which does not contain the encoded grant shortcut at substring(4,6).",
+    "secondary": [
+     {
+      "defect": "The matcher incorrectly rejects a grant shortcut when it equals the expected value.",
+      "coveredBy": [
+       "s_c4e9c10a",
+       "s_0f11c762"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

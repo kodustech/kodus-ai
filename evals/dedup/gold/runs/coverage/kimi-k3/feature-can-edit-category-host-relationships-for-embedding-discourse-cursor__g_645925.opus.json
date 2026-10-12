@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Typo 'emeddable' in the describe name at spec/models/topic_spec.rb line 1407 (should be 'embeddable')"
+   },
+   {
+    "id": "F2",
+    "description": "The before-block's Fabricate(:embeddable_host) (lines 1408-1412) does nothing because expandable_first_post? no longer reads EmbeddableHost"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c864cfd5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_5462a854",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

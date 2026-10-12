@@ -1,0 +1,45 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "record_for_host (line 17) lowercases only the DB column; the URI-derived lookup host is not downcased, so mixed-case referers are rejected"
+   },
+   {
+    "id": "F2",
+    "description": "before_validation never downcases the stored host, so mixed-case hosts are saved as typed"
+   },
+   {
+    "id": "F3",
+    "description": "record_for_host compares only uri.host (no port), but validation allows stored hosts with a port, so host:port entries never match"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_d78df7ae",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_721295fb",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_4b5af67b",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

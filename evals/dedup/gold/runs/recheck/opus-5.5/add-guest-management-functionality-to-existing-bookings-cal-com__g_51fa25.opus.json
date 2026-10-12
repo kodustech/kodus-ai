@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_69410500",
+     "s_37e96fa9"
+    ],
+    "defect": "In onError, the message is a template literal that is always truthy, so the unable_to_add_guests fallback never runs and the toast can show \"undefined: ...\"."
+   }
+  ],
+  "unique": [
+   "s_b459ede8"
+  ],
+  "bundles": [
+   "s_b459ede8"
+  ],
+  "reasoningPt": "O defeito principal de S6 é o estado isInvalidEmail (e multiEmailValue) que não é resetado em onSuccess/onOpenChange. O problema do fallback sempre truthy aparece só como segundo defeito (\"Separately\"), então S6 fica sozinha e entra em bundles. S7 e S12 relatam o mesmo defeito do template string sempre truthy em onError e ficam juntas."
+ }
+}

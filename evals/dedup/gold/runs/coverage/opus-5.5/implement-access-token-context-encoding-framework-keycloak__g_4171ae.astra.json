@@ -1,0 +1,42 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "OAuth2GrantTypeFactory.getShortcut() javadoc suggests 3 letters, but decoding requires exactly 2 characters."
+   },
+   {
+    "id": "F2",
+    "description": "Shortcut length is not validated, allowing token IDs that the decoder rejects."
+   },
+   {
+    "id": "F3",
+    "description": "Null shortcuts are not validated and cause an NPE in DefaultTokenContextEncoderProviderFactory.postInit, failing startup."
+   },
+   {
+    "id": "F4",
+    "description": "The new abstract getShortcut() method lacks a default, breaking existing custom factory implementations at compilation or runtime."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_9c9743f6",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7cc8bcbd",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_fa609e7a",
+     "s_ce3f677e"
+    ],
+    "defect": "The test cleanup looks up the literal alias \"alias\" instead of the created \"idp-alias-N\" alias, so the IDPs it creates are never removed (lines 381 and 425)."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S4 apontam o mesmo defeito: o cleanup do teste usa o alias literal \"alias\" em vez de \"idp-alias-N\", então os IDPs criados nunca são removidos. Ambas citam a mesma repetição na linha 425 e propõem a mesma correção. A diferença no intervalo de linhas e no detalhe sobre o NPE não muda o defeito, então o grupo fica como está."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b6ded21f",
+     "s_24958cb2",
+     "s_ec6af647",
+     "s_daf946e9"
+    ],
+    "defect": "The legacy DeleteCollection goroutine records its latency with recordStorageDuration when it should use recordLegacyDuration, so the measurement lands in the wrong metric."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S11, S15 e S28 apontam o mesmo defeito na linha 166: o DeleteCollection legado registra a duração com recordStorageDuration em vez de recordLegacyDuration. S5 e S15 citam o erro inverso em Create/Update só como comparação, sem reportá-lo como um defeito separado. Por isso nenhuma delas é bundle e o grupo fica como está."
+ }
+}

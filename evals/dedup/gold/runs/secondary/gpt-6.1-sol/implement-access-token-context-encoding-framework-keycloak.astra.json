@@ -1,0 +1,39 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_cd0716d2",
+    "mainDefect": "The matcher extracts the grant shortcut from the wrong indices instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The equality check is inverted, rejecting matching grant shortcuts and allowing nonmatching ones.",
+      "coveredBy": [
+       "s_5f605bbb",
+       "s_f5e7d9a5",
+       "s_5bd24a7d",
+       "s_0767cf64",
+       "s_b26743e8"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_5454e119",
+    "mainDefect": "The matcher extracts the grant shortcut using substring(3, 5) instead of substring(4, 6).",
+    "secondary": [
+     {
+      "defect": "The equality check is inverted, rejecting matching grant shortcuts and allowing nonmatching ones.",
+      "coveredBy": [
+       "s_5f605bbb",
+       "s_f5e7d9a5",
+       "s_5bd24a7d",
+       "s_0767cf64",
+       "s_b26743e8"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

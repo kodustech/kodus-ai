@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b32e2b9e",
+     "s_9cd9483f",
+     "s_028635c3",
+     "s_49bc7a3a"
+    ],
+    "defect": "Os testes de Mode3 não aguardam nem verificam a execução das operações assíncronas no armazenamento legado."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_49bc7a3a"
+  ],
+  "reasoningPt": "S16, S17, S18 e S19 apontam a mesma falha de sincronização e verificação, repetida nos testes de diferentes operações. S19 também relata o uso incorreto de recordStorageDuration, sendo um bundle, mas permanece no grupo porque seu defeito principal é a ausência de verificação da operação legada."
+ }
+}

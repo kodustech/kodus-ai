@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7793b970",
+     "s_10c6055f"
+    ],
+    "defect": "In OAuthLoginView.dispatch, exceptions raised by safe_urlopen (token exchange) and get_user_info are not handled, so the user gets a 500 instead of the error() page."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S7 apontam o mesmo defeito: exceções de safe_urlopen e get_user_info no OAuthLoginView.dispatch não são tratadas e geram erro 500. As duas propõem a mesma correção, que é envolver as chamadas em try/except e retornar error(). As faixas de linha diferentes não mudam isso, então o grupo continua como está."
+ }
+}

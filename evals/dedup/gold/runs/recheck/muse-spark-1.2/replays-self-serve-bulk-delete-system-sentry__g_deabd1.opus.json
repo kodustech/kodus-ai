@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_cb573436",
+     "s_46b42f89",
+     "s_e8d1320e",
+     "s_2a158b71"
+    ],
+    "defect": "fetch_error_details zips error_ids with events.values() from nodestore.get_multi, so when entries are missing or reordered the error ids get paired with the wrong event data."
+   }
+  ],
+  "unique": [
+   "s_0ef0a25a"
+  ],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S10 e S16 apontam o mesmo defeito em fetch_error_details: o zip de error_ids com events.values() desalinha os ids e os dados, e todas propõem buscar por node_id. Já o S12 aponta uma lacuna de cobertura no teste (falta um caso com vários erros e um id ausente), e a correção dele é adicionar um teste, não alterar o código. Por isso o S12 fica sozinho."
+ }
+}

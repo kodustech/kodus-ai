@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f0a244fc",
+     "s_0b948a1d"
+    ],
+    "defect": "Falhas ao carregar o arquivo inglês são convertidas em RuntimeException não tratada, abortando a verificação em vez de gerar um diagnóstico ou MojoExecutionException."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S8 relatam o mesmo defeito no tratamento da IOException ao carregar o arquivo inglês. S1 acrescenta cenários e alternativas de correção, mas não apresenta outro defeito independente."
+ }
+}

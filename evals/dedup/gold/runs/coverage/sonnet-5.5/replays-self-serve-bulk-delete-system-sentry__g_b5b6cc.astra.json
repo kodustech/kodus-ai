@@ -1,0 +1,38 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "validate_timestamp, line 52: the truthiness check treats age=0 as absent, bypassing mutual exclusion."
+   },
+   {
+    "id": "F2",
+    "description": "validate_age, line 58: the truthiness check treats timestamp=0 as absent, bypassing mutual exclusion."
+   },
+   {
+    "id": "F3",
+    "description": "BrowserReportSerializer, lines 47–60: reports with neither age nor timestamp pass because both fields are optional and their validators do not run when absent."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_fecd973c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c2a5e9e7",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f393808c",
+     "s_d8e8bf32"
+    ],
+    "defect": "A métrica wait_produce usa a chave de tag \"shards\", enquanto as métricas relacionadas usam \"shard\", fragmentando a dimensão."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_d8e8bf32"
+  ],
+  "reasoningPt": "S4 e S7 relatam como defeito principal a mesma inconsistência na chave da tag de wait_produce, resolvida pela mesma alteração. S7 também aponta uma inconsistência no formato dos valores da tag, sendo um bundle, mas essa observação secundária não muda seu grupo."
+ }
+}

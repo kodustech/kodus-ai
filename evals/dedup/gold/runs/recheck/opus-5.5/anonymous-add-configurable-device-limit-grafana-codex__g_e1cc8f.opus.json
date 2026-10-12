@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "tagDeviceUI writes the localCache key before CreateOrUpdateDevice and keeps it when the call fails, so after ErrDeviceLimitReached later requests from the same device skip the limit for about 29 minutes.",
+    "members": [
+     "s_15ab1a80",
+     "s_911ba0d0"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S10 apontam o mesmo defeito: a chave do localCache é gravada antes de CreateOrUpdateDevice e não é removida quando a chamada falha. Por isso, depois do primeiro ErrDeviceLimitReached, o limite de dispositivos deixa de valer na janela do cache. As duas propõem a mesma correção e nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

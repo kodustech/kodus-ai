@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0cbe997b",
+     "s_b82e1353"
+    ],
+    "defect": "Falta verificar novamente o cache após adquirir o write lock, fazendo chamadas iniciais concorrentes reconstruírem os assets em sequência."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_0cbe997b",
+   "s_b82e1353"
+  ],
+  "reasoningPt": "S1 e S2 relatam primeiro a mesma ausência de verificação do cache após adquirir o write lock, portanto permanecem juntas. Ambas também apontam o armazenamento de resultados com erro como um segundo defeito, com correção distinta, e por isso entram em bundles."
+ }
+}

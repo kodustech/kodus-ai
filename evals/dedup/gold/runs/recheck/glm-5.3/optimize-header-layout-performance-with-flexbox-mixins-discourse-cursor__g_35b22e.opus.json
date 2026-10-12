@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4c71b68b",
+     "s_41db3057"
+    ],
+    "defect": "The align-items() mixin emits the nonexistent -ms-align-items property, which every browser ignores (IE already gets -ms-flex-align)."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_4c71b68b"
+  ],
+  "reasoningPt": "S2 e S3 apontam o mesmo defeito principal: a propriedade inexistente -ms-align-items no mixin align-items(), corrigida removendo essa linha. S2 também sugere adicionar -moz-box-align na correção (\"while here\"), o que é um defeito secundário e não muda o agrupamento, mas faz de S2 um bundle."
+ }
+}

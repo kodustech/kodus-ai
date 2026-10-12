@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "resetState in EnableTwoFactorModal does not clear the backupCodes and backupCodesUrl state, so old backup codes and their blob URL stay in state after cancel or close.",
+    "members": [
+     "s_7ae7f156",
+     "s_8e161876"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S11 apontam o mesmo defeito: resetState não limpa backupCodes nem backupCodesUrl em EnableTwoFactorModal. A sugestão de S11 de limpar também dataUri/secret amplia o mesmo reset incompleto e é resolvida pela mesma correção, então não é um defeito separado. O grupo deve ser mantido."
+ }
+}

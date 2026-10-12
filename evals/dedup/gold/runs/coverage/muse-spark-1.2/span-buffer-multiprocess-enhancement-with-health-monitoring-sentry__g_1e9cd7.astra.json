@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "test_basic: the line 15 time.sleep patch nullifies the settle wait at line 62, leaving the test racy."
+   },
+   {
+    "id": "F2",
+    "description": "SpanFlusher.main: the same patch nullifies the idle time.sleep(1) at line 182, causing a busy loop."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_d3df5db3",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8fdca476",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

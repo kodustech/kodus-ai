@@ -70,6 +70,8 @@ main { min-width: 0; display: flex; flex-direction: column; gap: 14px }
 .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 5px 12px; cursor: pointer }
 .btn:hover { border-color: var(--muted) }
 .btn.on-ok { background: var(--good-soft); color: var(--good); border-color: var(--good) }
+.btn.on-discard { background: var(--code-bg); color: var(--muted); border-color: var(--muted); text-decoration: line-through }
+.card.discard { border-left: 3px solid var(--muted); opacity: .75 }
 .btn.on-bad { background: var(--bad-soft); color: var(--bad); border-color: var(--bad) }
 .btn.primary { background: var(--accent); color: var(--panel); border-color: var(--accent) }
 .btn:focus-visible, select:focus-visible, textarea:focus-visible, .qi:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
@@ -110,7 +112,7 @@ label.cb { display: inline-flex; gap: 5px; align-items: center; font-size: 13px 
 </div>
 
 <script>
-const DATA_FILE = 'pilot.json';
+const DATA_FILE = 'audit.json';
 const state = { data: null, unit: null, decisions: {}, db: null, me: null, drafts: {} };
 const $ = (s) => document.querySelector(s);
 const el = (tag, attrs = {}, ...kids) => {
@@ -123,7 +125,8 @@ const el = (tag, attrs = {}, ...kids) => {
 };
 const docId = (u, target) => `${u.model}__${u.caseId}__${target}`;
 const KIND = { same_location: 'mesmo local', cross_location: 'locais diferentes, mesmo defeito', systemic_pattern: 'padrão repetido' };
-const WHY = { pilot: 'piloto', low: 'confiança baixa', 'audit-mid': 'auditoria (mid)', 'audit-high': 'auditoria (high)' };
+const VERDICT = { ok: 'correto', wrong: 'incorreto', discard: 'descartar' };
+const WHY = { pilot: 'piloto', low: 'confiança baixa', 'audit-mid': 'auditoria (mid)', 'audit-high': 'auditoria (high)', unusable: 'sem conteúdo', human: 'ajustado por você' };
 
 function labels(u) {
   const m = {};
@@ -157,7 +160,7 @@ function renderQueue() {
 function sugCard(s, lab) {
   const summary = s.summaryPt || s.summary;
   return el('div', { class: 'sug' },
-    el('div', { class: 'row' }, el('span', { class: 'lab' }, lab), el('span', { class: 'loc' }, `${s.file}:${s.start}-${s.end}`), el('span', { class: 'chip' }, s.by)),
+    el('div', { class: 'row' }, el('span', { class: 'lab' }, lab), el('span', { class: 'loc' }, `${s.file}:${s.start}-${s.end}`), el('span', { class: 'chip' }, s.by), s.bundlesDefects ? el('span', { class: 'chip low' }, 'junta defeitos diferentes') : null),
     summary ? el('div', { class: 'sum' }, summary) : null,
     s.contentPt ? el('details', {}, el('summary', {}, 'Texto completo (pt-BR)'), el('pre', {}, s.contentPt)) : null,
     s.content ? el('details', {}, el('summary', {}, s.contentPt ? 'Texto original (inglês)' : 'Texto completo da sugestão'), el('pre', {}, s.content)) : null);
@@ -173,7 +176,8 @@ function decisionBlock(u, target, kind, options) {
     box.append(el('div', { class: 'row' },
       el('span', { class: 'sec' }, kind === 'group' ? 'Este grupo está correto?' : 'Esta sugestão é mesmo única?'),
       el('button', { class: `btn${draft.verdict === 'ok' ? ' on-ok' : ''}`, onclick: () => { draft.verdict = 'ok'; paint(); } }, 'Correto'),
-      el('button', { class: `btn${draft.verdict === 'wrong' ? ' on-bad' : ''}`, onclick: () => { draft.verdict = 'wrong'; paint(); } }, 'Incorreto')));
+      el('button', { class: `btn${draft.verdict === 'wrong' ? ' on-bad' : ''}`, onclick: () => { draft.verdict = 'wrong'; paint(); } }, 'Incorreto'),
+      el('button', { class: `btn${draft.verdict === 'discard' ? ' on-discard' : ''}`, onclick: () => { draft.verdict = 'discard'; paint(); } }, 'Descartar')));
     if (draft.verdict === 'wrong') {
       if (kind === 'group') {
         box.append(el('div', { class: 'row' }, el('span', { class: 'status' }, 'Tirar do grupo:'),
@@ -189,7 +193,7 @@ function decisionBlock(u, target, kind, options) {
     const ta = el('textarea', { id: `${id}-note`, placeholder: 'Nota (opcional): por que está errado, o que deveria ser', oninput: (e) => (draft.note = e.target.value) });
     ta.value = draft.note;
     box.append(ta);
-    const st = el('span', { class: 'status' }, saved.verdict ? `Salvo: ${saved.verdict === 'ok' ? 'correto' : 'incorreto'}` : 'Ainda não revisado');
+    const st = el('span', { class: 'status' }, saved.verdict ? `Salvo: ${VERDICT[saved.verdict] || saved.verdict}` : 'Ainda não revisado');
     box.append(el('div', { class: 'row' },
       el('button', { class: 'btn primary', disabled: !draft.verdict || !state.db, onclick: async (e) => {
         e.target.disabled = true; st.textContent = 'Salvando…';
@@ -253,7 +257,7 @@ function renderUnit() {
   if (u.groups.length) out.push(el('div', { class: 'sec' }, 'Grupos de duplicatas'));
   for (const g of u.groups) {
     const dec = state.decisions[docId(u, g.groupId)];
-    const card = el('section', { class: `card${dec?.verdict === 'ok' ? ' ok' : dec?.verdict === 'wrong' ? ' wrong' : rv[g.groupId]?.change?.status === 'changed' ? ' chg' : rv[g.groupId] ? ' rv' : ''}` },
+    const card = el('section', { class: `card${dec?.verdict === 'ok' ? ' ok' : dec?.verdict === 'wrong' ? ' wrong' : dec?.verdict === 'discard' ? ' discard' : rv[g.groupId]?.change?.status === 'changed' ? ' chg' : rv[g.groupId] ? ' rv' : ''}` },
       el('div', { class: 'chips' }, el('span', { class: `chip ${g.confidence}` }, `confiança ${g.confidence}`), el('span', { class: 'chip' }, KIND[g.kind] || g.kind),
         g.needsUnifiedComment ? el('span', { class: 'chip acc' }, 'comentário unificado') : null,
         el('span', { class: 'chip' }, g.resolvedBy === 'agreement' ? 'os dois juízes concordaram' : g.resolvedBy === 'human' ? 'decidido por você' : 'decidido pelo árbitro'),
@@ -269,7 +273,7 @@ function renderUnit() {
   if (u.unique.length) out.push(el('div', { class: 'sec' }, 'Sugestões sem duplicata'));
   for (const x of u.unique) {
     const dec = state.decisions[docId(u, x.id)];
-    const card = el('section', { class: `card${dec?.verdict === 'ok' ? ' ok' : dec?.verdict === 'wrong' ? ' wrong' : rv[x.id] ? ' rv' : ''}` },
+    const card = el('section', { class: `card${dec?.verdict === 'ok' ? ' ok' : dec?.verdict === 'wrong' ? ' wrong' : dec?.verdict === 'discard' ? ' discard' : rv[x.id] ? ' rv' : ''}` },
       el('div', { class: 'chips' }, el('span', { class: `chip ${x.confidence}` }, `confiança ${x.confidence}`), rv[x.id] ? el('span', { class: 'chip' }, WHY[rv[x.id].why] || rv[x.id].why) : null,
         rv[x.id]?.change?.status === 'changed' ? el('span', { class: 'chip low' }, 'mudou — revisar de novo') : null),
       changedBlock(rv[x.id], labelOf),
@@ -292,7 +296,7 @@ async function boot() {
     return;
   }
   const d = state.data;
-  $('#scope').textContent = d.scope === 'pilot' ? 'Piloto: revise todas as decisões de cada PR.' : 'Confiança baixa e amostra de auditoria.';
+  $('#scope').textContent = d.scope === 'pilot' ? 'Piloto: revise todas as decisões de cada PR.' : 'Rodada completa: todos os grupos e únicas com confiança baixa, mais 20% dos de confiança média.';
   for (const v of [...new Set(d.units.map((u) => u.model))]) $('#fModel').append(el('option', { value: v }, v));
   for (const v of [...new Set(d.units.map((u) => u.repo))]) $('#fRepo').append(el('option', { value: v }, v));
   for (const s of ['#fModel', '#fRepo', '#fState']) $(s).addEventListener('change', renderQueue);

@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_dc7f347e",
+    "mainDefect": "The concurrency test checks caughtExceptions before joining the reader thread, so it can pass before the reader records a failure.",
+    "secondary": [
+     {
+      "defect": "The reader thread is never stopped or joined, so it keeps running in the background after the test ends.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

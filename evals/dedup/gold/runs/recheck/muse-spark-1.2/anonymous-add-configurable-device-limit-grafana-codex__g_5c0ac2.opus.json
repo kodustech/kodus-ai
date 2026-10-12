@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_7c49b05b",
+     "s_01a0543d"
+    ],
+    "defect": "In CreateOrUpdateDevice, the device count check and the insert are not atomic, so concurrent requests can go past device_limit (TOCTOU race)."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S6 descrevem o mesmo defeito: a condição de corrida TOCTOU entre CountDevices e o insert em CreateOrUpdateDevice, que deixa requisições concorrentes ultrapassarem o device_limit. Os intervalos de linhas são um pouco diferentes, mas as duas propõem a mesma correção atômica (INSERT condicional, transação serializável ou lock). Nenhuma delas traz um segundo defeito."
+ }
+}

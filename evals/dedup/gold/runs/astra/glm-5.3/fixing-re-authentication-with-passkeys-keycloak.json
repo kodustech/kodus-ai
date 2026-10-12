@@ -1,0 +1,33 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "promptSha": "f9d60da750c3214d07f3c382a5af986e20ec5efa",
+  "attempt": 1,
+  "ms": 42731,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_28120ad1",
+          "s_fb963067"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Per-user passkey form data exposes account existence, passkey configuration, and credential metadata before the requester authenticates.",
+        "rationale": "Both report the same disclosure caused by enabling per-user WebAuthn data for a user selected only by username. They identify overlapping rendering paths governed by the same isConditionalPasskeysEnabled helper, where a shared gating change can address both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_259020b6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_645331f2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

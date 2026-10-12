@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bd9befb8",
+     "s_5a268069",
+     "s_9352f0cd",
+     "s_bdf9a1e7"
+    ],
+    "defect": "fetch_error_details associa IDs e payloads por posição com zip(error_ids, events.values()), podendo atribuir dados ao ID errado quando faltam nós ou a ordem difere."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3, S7 e S10 relatam o mesmo defeito na mesma expressão: associar IDs e dados pela posição no retorno de get_multi. Todas propõem consultar os dados pela chave node_id, resolvendo o problema com uma única correção; nenhuma relata um defeito adicional."
+ }
+}

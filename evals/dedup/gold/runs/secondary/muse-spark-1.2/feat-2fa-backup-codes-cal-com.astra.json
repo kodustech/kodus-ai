@@ -1,0 +1,41 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_cf0c790d",
+    "mainDefect": "Non-atomic backup-code consumption lets concurrent logins reuse the same single-use code.",
+    "secondary": [
+     {
+      "defect": "Consumed codes remain as null entries, so an exhausted array never triggers MissingBackupCodes.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_522c099e",
+    "mainDefect": "Direct backup-code comparisons in the login path leak timing information.",
+    "secondary": [
+     {
+      "defect": "Backup-code verification fails for equivalent uppercase input because hex case is not normalized.",
+      "coveredBy": [
+       "s_67024520"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_76e752b3",
+    "mainDefect": "Direct backup-code comparisons in the two-factor disable path leak timing information.",
+    "secondary": [
+     {
+      "defect": "Backup-code verification fails for equivalent uppercase input because hex case is not normalized.",
+      "coveredBy": [
+       "s_67024520"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

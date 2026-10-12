@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_113416f8",
+     "s_1f046bdf"
+    ],
+    "defect": "In the ruler-less list view the Silence menu item is enabled from the prom rule, but the silence drawer only renders when a ruler rule exists, so clicking Silence does nothing."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S9 relatam o mesmo defeito: o item Silence aparece na nova lista por causa da habilidade calculada a partir do promRule, mas o drawer de silêncio exige um rulerRule e nunca abre. S2 aponta o local onde só o promRule é passado e S9 aponta a condição do drawer, mas uma única correção resolve os dois. Nenhuma das duas sugestões traz um segundo defeito."
+ }
+}

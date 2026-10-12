@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_be162c5e",
+     "s_aa827a30",
+     "s_cb61e986"
+    ],
+    "defect": "The before_validation callback in EmbeddableHost calls self.host.sub! without a nil guard, so a nil host raises NoMethodError (a 500 error) instead of failing validation."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S10 e S20 apontam o mesmo defeito, nas mesmas linhas 5-8: o before_validation chama sub! sobre um host nil e quebra com NoMethodError. A correção proposta é a mesma nos três: proteger contra nil ou converter para string. A sugestão de validates_presence em S1 faz parte da mesma correção e não é um segundo defeito."
+ }
+}

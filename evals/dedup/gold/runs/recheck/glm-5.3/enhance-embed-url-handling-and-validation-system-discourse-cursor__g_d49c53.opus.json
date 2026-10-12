@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3e20fdea",
+     "s_157d31c5"
+    ],
+    "defect": "The raw Referer header is put into a JavaScript string literal in the embed layout without JS escaping, which allows script injection on the Discourse origin."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S19 apontam o mesmo defeito: o request.referer é interpolado sem escape de JavaScript na chamada postMessage do layout embed.html.erb, o que permite XSS. As correções propostas são diferentes (escapar com j/to_json ou usar '*'), mas ambas resolvem o mesmo problema. Por isso o grupo deve ser mantido."
+ }
+}

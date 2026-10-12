@@ -1,0 +1,55 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "account/messages/messages_lt.properties line 101: totpStep1 replaced with Italian text instead of Lithuanian"
+   },
+   {
+    "id": "F2",
+    "description": "login/messages/messages_lt.properties line 71: loginTotpStep1 replaced with Italian text instead of Lithuanian"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_ee4e0e15",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_732d5528",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_f60fe56a",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_0b9e8b6a",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_a8060ba7",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

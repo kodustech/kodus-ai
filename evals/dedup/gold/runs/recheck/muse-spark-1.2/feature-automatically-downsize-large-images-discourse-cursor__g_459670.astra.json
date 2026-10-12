@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3de994d1",
+     "s_b9468b8e"
+    ],
+    "defect": "O limite fixo de 10 MB substitui limites configuráveis em SiteSettings na validação do cliente e no download de uploads por URL."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_b9468b8e"
+  ],
+  "reasoningPt": "S2 e S3 têm como defeito principal a mesma substituição dos limites configurados por 10 MB fixos, repetida em pontos diferentes do fluxo de upload. S3 também relata falhas independentes no tratamento do retorno de downsize e na definição de content_type; por isso é um bundle, sem alterar seu agrupamento pelo primeiro defeito."
+ }
+}

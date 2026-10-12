@@ -1,0 +1,54 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_17395beb",
+    "mainDefect": "The server never de-duplicates the submitted guest list, so case-variant duplicates such as a@x.com and A@x.com are both inserted as attendees.",
+    "secondary": [
+     {
+      "defect": "The filter compares guests to existing attendee emails case-sensitively, so a case-variant of an existing attendee gets added again.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7d8e5cc8",
+    "mainDefect": "Guest emails are checked against the lowercased blacklist without being lowercased themselves, so changing the case of an email bypasses BLACKLISTED_GUEST_EMAILS.",
+    "secondary": [
+     {
+      "defect": "The case-sensitive guest === attendee.email check lets a case-variant of an existing attendee get past the duplicate filter and be inserted.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c4f90580",
+    "mainDefect": "The server does not enforce uniqueness within the submitted guest array, so createMany can insert identical emails more than once.",
+    "secondary": [
+     {
+      "defect": "Attendees are read and later written with no transaction, so two concurrent addGuests calls can both pass the filter. This either inserts duplicates or throws an unhandled Prisma P2002 error.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_bcca7cc3",
+    "mainDefect": "uniqueGuests never de-duplicates the input array, and the server schema has no uniqueness check, so the same email in the input creates two attendee rows and two emails.",
+    "secondary": [
+     {
+      "defect": "Guests are compared raw against the lowercased blacklist, so an uppercase variant of a blacklisted email is added and emailed.",
+      "coveredBy": [
+       "s_400ea655",
+       "s_7d8e5cc8"
+      ]
+     },
+     {
+      "defect": "The case-sensitive === comparison against existing attendees lets a case-variant duplicate an existing attendee.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

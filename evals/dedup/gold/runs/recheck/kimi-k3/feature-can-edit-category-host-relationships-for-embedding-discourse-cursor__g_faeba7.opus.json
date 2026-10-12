@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_d78df7ae",
+     "s_4b5af67b"
+    ],
+    "defect": "The host lookup lowercases only the DB column, not the URI-derived host (and stored hosts are never downcased), so mixed-case hosts fail to match."
+   }
+  ],
+  "unique": [
+   "s_721295fb"
+  ],
+  "bundles": [
+   "s_4b5af67b"
+  ],
+  "reasoningPt": "S4 e S13 têm o mesmo defeito principal: a normalização de caixa (lower) é aplicada só à coluna do banco, e não ao host vindo da URI. S13 acrescenta no final (\"Additionally\") o problema da porta, mas isso não o liga ao S22 e por isso ele entra em bundles. S22 trata só da incompatibilidade de porta, que é outro defeito com outra correção, e fica sozinho."
+ }
+}

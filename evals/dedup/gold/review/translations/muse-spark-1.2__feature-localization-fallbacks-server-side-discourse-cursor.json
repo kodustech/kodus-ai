@@ -1,0 +1,18 @@
+{
+ "s_006ed08a": {
+  "summaryPt": "FallbackLocaleList#[] chama to_sym em SiteSetting.default_locale potencialmente nil e mistura String/Symbol, causando :en/\"en\" duplicados e quebrando o dedup/a verificação de loaded",
+  "contentPt": "O QUÊ: ` [locale, SiteSetting.default_locale.to_sym, :en].uniq.compact` (i18n.rb:17) lança NoMethodError quando default_locale é nil (db.rake:3 mostra que existe um guard `|| :en` porque nil é possível no início do boot) e deixa heterogeneidade entre String e Symbol (\"en\" != :en), então uniq falha e o @loaded_locales.include? posterior não bate. POR QUÊ: Na primeira request após o boot, ou quando o locale é passado como String, a lista de fallback contém tanto \"en\" quanto :en ou quebra, causando carregamentos duplicados ou 500 e resolução de fallback incorreta. CORREÇÃO: Normalize: ` [locale.to_sym, SiteSetting.default_locale&.to_sym, :en].uniq.compact` e garanta que locale.to_sym trate nil (compact)."
+ },
+ "s_9009c9ce": {
+  "summaryPt": "SiteSetting.default_locale.to_sym lança exceção quando default_locale é nil",
+  "contentPt": "Chamar `to_sym` diretamente em `SiteSetting.default_locale` lançará NoMethodError quando ele for nil. `compact` só remove nil depois do ponto da exceção. Proteja a conversão: use `SiteSetting.default_locale.presence&.to_sym` ou `SiteSetting.default_locale.to_s.presence&.to_sym` para que nil/vazio resulte em nil e seja removido por compact, preservando o fallback [:en] e evitando a quebra da execução."
+ },
+ "s_e63608d7": {
+  "summaryPt": "A lista de fallback quebra com default_locale nil e mistura String/Symbol, fazendo uniq/dedup falhar",
+  "contentPt": "Chamar to_sym antes de compact anula o guard de nil e a lista mistura locales String e Symbol, então um SiteSetting ausente ou um I18n.locale String quebra a cadeia de fallback visível ao usuário. Normalize todas as entradas para Symbol (ou String) e proteja a conversão de default_locale com presence&.to_sym."
+ },
+ "s_c8aed49e": {
+  "summaryPt": "FallbackLocaleList retorna locales String/Symbol misturados enquanto translate_accelerator faz cache com igualdade estrita Symbol/String, causando cache misses e carregamentos repetidos.",
+  "contentPt": "Normalize o locale recebido para Symbol em FallbackLocaleList#[] para corresponder ao cache normalizado em Symbol no translate_accelerator.rb. `locale` pode ser uma String quando definido a partir do ApplicationController (params/cookies), então `[locale, ...]` produz uma cadeia de fallback mista de String/Symbol. O consumidor `I18n.ensure_loaded!(locale)` em lib/freedom_patches/translate_accelerator.rb:62-64 usa `@loaded_locales.include?(locale)` com igualdade estrita e `config.locale` é um Symbol, então String vs Symbol nunca bate - fazendo `I18n.fallbacks.ensure_loaded!` (application_controller.rb:159) recarregar a cada request e as buscas de fallback falharem. Mude para `[locale.to_sym, SiteSetting.default_locale.to_sym, :en]` (e trate nil: `locale&.to_sym`) ou normalize em ensure_loaded! antes de chamar I18n.ensure_loaded!."
+ }
+}

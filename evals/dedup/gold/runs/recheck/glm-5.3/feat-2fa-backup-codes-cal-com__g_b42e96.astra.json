@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e5d1d746",
+     "s_1c8a0bc2"
+    ],
+    "defect": "A mensagem de ausência de códigos de backup orienta o usuário a gerá-los nas configurações, indicando uma ação indisponível e inacessível durante o login."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S8 apontam o mesmo defeito: a orientação impossível da mensagem missing_backup_codes, observada no uso e na definição do texto. A ausência de códigos para usuários antigos explica o cenário afetado; não constitui um segundo defeito independente nesses relatos."
+ }
+}

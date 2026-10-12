@@ -1,0 +1,41 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "93d5d20c694a48c118cec4508dd7d5e0950b4e78",
+  "attempt": 1,
+  "ms": 31759,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_72e910b1",
+          "s_6d66fb8e",
+          "s_82c35c19"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The second downsize definition overwrites the legacy width/height signature, breaking existing callers.",
+        "rationale": "All three report the same Ruby method replacement and API compatibility defect. ResizeEmoji is a concrete example of the callers affected by that same defect."
+      },
+      {
+        "members": [
+          "s_5a3bcb7f",
+          "s_ba068ffa"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Two client error paths report a hard-coded 10 MB maximum that can differ from the configured server limit.",
+        "rationale": "Both report the same hard-coded error-message limit repeated in separate locations: initial file-size validation and HTTP 413 handling. Each location needs an edit."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_835cc57c",
+        "confidence": "high"
+      }
+    ]
+  }
+}

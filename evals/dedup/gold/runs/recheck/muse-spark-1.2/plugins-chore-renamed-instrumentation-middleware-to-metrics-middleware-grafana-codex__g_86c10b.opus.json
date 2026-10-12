@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6e8d004e",
+     "s_95540f88"
+    ],
+    "defect": "NewMetricsMiddleware reuses a single *MetricsMiddleware instance and changes its shared `next` field on every wrap, which causes data races and breaks the middleware chain."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S12 relatam o mesmo defeito em NewMetricsMiddleware: a instância única `imw` tem o campo `next` alterado a cada wrap, o que causa race e corrompe a cadeia. As duas propõem a mesma correção, que é criar uma nova instância por chamada da factory, copiando pluginMetrics e pluginRegistry. A menção de S12 ao colapso da cadeia é só outra consequência do mesmo defeito, então o grupo deve ser mantido."
+ }
+}

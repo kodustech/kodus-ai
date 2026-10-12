@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_37416a55",
+     "s_5c00ae33",
+     "s_888da293"
+    ],
+    "defect": "The migration reads execute(...)[0]['id'] without checking for nil, so it raises NoMethodError when the embed_category lookup returns no rows and the uncategorized fallback never runs."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5 e S9 apontam o mesmo defeito: a migration acessa `[0]['id']` sem checar se o resultado veio vazio. Com isso ocorre NoMethodError antes do fallback para uncategorized. A menção à consulta da linha 15 é só a mesma proteção aplicada também ali, então nenhuma sugestão traz um segundo defeito."
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_992ef6e1",
+     "s_7c95d01e",
+     "s_2cae9425",
+     "s_b511b1ed",
+     "s_879dc325"
+    ],
+    "defect": "In EventManager.create, mainHostDestinationCalendar.integration is read without optional chaining, so the Google Meet fallback throws a TypeError when destinationCalendar is null or empty."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S8, S14, S20 e S25 apontam o mesmo defeito: falta de optional chaining em mainHostDestinationCalendar.integration no EventManager.ts, o que causa TypeError quando destinationCalendar é null ou vazio. Todos propõem a mesma correção (?.), e só mudam o intervalo de linhas e os call sites citados. Nenhuma delas traz um segundo defeito."
+ }
+}

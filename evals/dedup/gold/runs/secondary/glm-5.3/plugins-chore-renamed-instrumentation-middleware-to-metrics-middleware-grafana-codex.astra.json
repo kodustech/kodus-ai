@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_13448aa3",
+    "mainDefect": "checkHistogram keeps foundLabels outside the per-metric loop without resetting it, allowing label counts from earlier candidates to pollute later matches.",
+    "secondary": [
+     {
+      "defect": "checkHistogram returns an error on a partially matching metric instead of continuing to search, so it can reject a family containing a fully matching metric later.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

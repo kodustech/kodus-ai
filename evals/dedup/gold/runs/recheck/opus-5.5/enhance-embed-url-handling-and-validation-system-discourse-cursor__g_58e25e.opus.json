@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f8fef021",
+     "s_e31ebbd9"
+    ],
+    "defect": "In embed.js, the postMessage origin check uses a substring test (discourseUrl.indexOf(e.origin)) instead of an exact match against the origin parsed from discourseUrl."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S10 apontam o mesmo defeito no embed.js: a verificação de origem do postMessage usa indexOf (substring) em vez de comparação exata. Os dois propõem a mesma correção, que é extrair a origem de discourseUrl e comparar exatamente. Só mudam o intervalo de linhas e o exemplo de ataque, então o grupo fica como está."
+ }
+}

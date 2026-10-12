@@ -1,0 +1,15 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_3abf3cfd",
+   "s_5748a076"
+  ],
+  "bundles": [
+   "s_3abf3cfd"
+  ],
+  "reasoningPt": "O defeito principal de S1 é a indisponibilidade de String#scrub no Ruby 2.0; o de S14 é i.content ser nil em itens RSS, exigindo outra correção. S1 também relata esse segundo defeito e entra em bundles, mas, pela regra do primeiro defeito, não deve ser agrupada com S14."
+ }
+}

@@ -1,0 +1,86 @@
+{
+ "s_03fc7aa9": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: As escritas legacy assíncronas em Create (linha 51), Delete (linha 110), Update (linha 135) e DeleteCollection (linha 163) obtêm o context de timeout a partir do ctx da requisição, que o apiserver cancela assim que o handler retorna. POR QUÊ: Normalmente a escrita legacy é cancelada logo depois de a resposta ser enviada, então o legacy store silenciosamente deixa de receber creates, updates e deletes e sai de sincronia, o que anula o propósito de 'medida de segurança' do mode 3. Além disso, os erros do legacy nunca são logados, apenas contados em métricas. CORREÇÃO: Use `context.WithTimeoutCause(context.WithoutCancel(ctx), 10*time.Second, ...)` para que valores como a identidade sejam mantidos, mas o cancelamento da requisição não, e chame `log.Error` quando a chamada ao legacy falhar."
+ },
+ "s_0e56e8cb": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: O Update do legacy agora recebe o objInfo original do chamador, em vez do updateWrapper anterior que carregava o objeto produzido pelo Unified Storage. POR QUÊ: O legacy recalcula o update (patch, preconditions, resourceVersion) contra sua própria cópia antiga, então o update pode falhar por divergência de resourceVersion ou de precondition, ou produzir um objeto diferente do Unified Storage. Os stores então divergem sem nenhum log. CORREÇÃO: Envolva o resultado como antes: `&updateWrapper{upstream: objInfo, updated: res}`."
+ },
+ "s_74e86eb7": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: As métricas são registradas com o helper errado ou o label errado. Create (linha 45) e Update (linha 129) reportam uma falha do Unified Storage através de recordLegacyDuration. O sucesso do Delete (linha 106) passa `name` em vez de `options.Kind` como label de kind. A goroutine de DeleteCollection (linha 166) registra a chamada legacy com recordStorageDuration. O Delete (linha 97) também coloca d.Log no ctx em vez do `log` enriquecido. POR QUÊ: Erros de storage aparecem como erros de legacy, a latência de delete-collection do legacy é contada como storage, e colocar nomes de objetos em um label cria cardinalidade ilimitada de labels. Juntos, esses problemas tornam os dashboards do dual-writer enganosos. CORREÇÃO: Use recordStorageDuration nas linhas 45 e 129, options.Kind na linha 106, recordLegacyDuration na linha 166 e `klog.NewContext(ctx, log)` na linha 97."
+ },
+ "s_4ee7f335": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: A goroutine passa o mesmo ponteiro `obj` para Legacy.Create depois que Storage.Create já o utilizou. Storage.Create pode tê-lo mutado (UID, resourceVersion), e ele pode ser o mesmo objeto que o handler está serializando concorrentemente. POR QUÊ: O Legacy pode receber metadados do Unified Storage, e o acesso concorrente ao objeto pode causar uma data race. CORREÇÃO: Passe `obj.DeepCopyObject()` para a goroutine."
+ },
+ "s_7edd559d": {
+  "summaryPt": "As escritas legacy agora rodam em goroutines sem ordenação, então escritas no mesmo objeto podem chegar ao legacy storage em ordem diferente da enviada pelo cliente.",
+  "contentPt": "O Mode 3 agora inicia cada escrita legacy (Create, Update, Delete, DeleteCollection) em sua própria goroutine e retorna imediatamente. Nada mantém essas escritas na ordem em que o cliente as enviou. Exemplo: um cliente cria X e recebe uma resposta, depois deleta X. Se a goroutine do Delete legacy rodar antes da goroutine do Create legacy, o delete falha com NotFound, o create então tem sucesso, e X permanece no legacy storage mesmo tendo sido deletado. Dois updates seguidos também podem deixar o legacy com uma versão mais antiga. Mantenha a escrita legacy síncrona, como era antes deste PR, ou envie as escritas legacy por uma fila ou lock por objeto (ou por resource) para que rodem na ordem em que foram emitidas."
+ },
+ "s_6c5a2af8": {
+  "summaryPt": "Delete passa o nome do resource em vez do kind como label da métrica para recordStorageDuration, causando labels incorretos e alta cardinalidade.",
+  "contentPt": "Em Delete, o `name` do resource é passado como label de kind para `recordStorageDuration`. Isso coloca nomes individuais de resources em um label do Prometheus, o que torna o label incorreto (deveria ser o kind) e cria um problema de cardinalidade. O revisor observou que isso não é uma exposição de dados sensíveis, portanto estava fora da sua atribuição de exposição de dados."
+ },
+ "s_849456ca": {
+  "summaryPt": "Delete armazena d.Log no context em vez do logger enriquecido, então os logs downstream perdem campos contextuais.",
+  "contentPt": "Delete coloca o logger base `d.Log` no context em vez do logger enriquecido. O logging downstream perde os campos contextuais como kind, name, method e mode. Isso não expõe nenhum dado sensível."
+ },
+ "s_9977cb66": {
+  "summaryPt": "A falha de Create no unified storage é registrada como duração de legacy.",
+  "contentPt": "Quando d.Storage.Create falha, o código chama d.recordLegacyDuration(true, ...) com startStorage. Isso mede o tempo da chamada ao unified-storage, mas o adiciona ao histograma de legacy, de modo que as métricas de erro de storage ficam subcontadas e as métricas de legacy recebem erros falsos. Use d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)."
+ },
+ "s_ef1efee6": {
+  "summaryPt": "A falha de Update no unified storage é registrada como duração de legacy.",
+  "contentPt": "Quando d.Storage.Update falha, a medição de tempo é enviada para recordLegacyDuration, embora a operação medida tenha sido o update do storage. Use recordStorageDuration. A mesma confusão acontece no sentido inverso na linha 166: a goroutine de DeleteCollection do legacy chama recordStorageDuration com startLegacy, mas deveria chamar recordLegacyDuration."
+ },
+ "s_806c2db2": {
+  "summaryPt": "A métrica de sucesso do Delete é rotulada com o nome do objeto em vez do kind.",
+  "contentPt": "Todas as outras chamadas passam options.Kind como label name da métrica, mas o caminho de sucesso do Delete passa `name` (o nome do objeto). Isso coloca valores por objeto no label, o que pode explodir a cardinalidade de labels, e quebra a consistência com o caminho de erro na linha 103 e com o caminho legacy na linha 113."
+ },
+ "s_22b6a64c": {
+  "summaryPt": "Delete armazena o logger base no context em vez do `log` enriquecido.",
+  "contentPt": "Delete constrói `log` com os valores de name, kind e method, mas depois chama klog.NewContext(ctx, d.Log). O código de storage downstream que lê o logger do context, portanto, não recebe esses valores. Todos os outros métodos passam `log`."
+ },
+ "s_f50f8610": {
+  "summaryPt": "O Mode3 escreve no legacy storage em uma goroutine em background atrelada ao context da requisição, mas os novos testes de integração de playlist do Mode3 leem a API legacy imediatamente e esperam que ela coincida.",
+  "contentPt": "No Mode3, Create, Update (linhas 134-141), Delete (108-114) e DeleteCollection (161-167) agora escrevem no legacy storage em uma goroutine e retornam sem esperar. Essa goroutine usa um context derivado da requisição, então a escrita legacy pode ser cancelada depois que a resposta for enviada. Os novos testes de integração do Mode3 em pkg/tests/apis/playlist/playlist_test.go (linhas 132-204) executam doPlaylistTests. Essa suíte cria e atualiza via k8s, depois lê imediatamente `/api/playlists` e espera o mesmo resultado. Como nada garante que a escrita legacy tenha terminado (ou tido sucesso), esses testes são racy e os dados do legacy podem divergir silenciosamente. Correção: execute a escrita legacy em um context desacoplado (ex.: `context.WithoutCancel(ctx)`). Depois, faça os testes fazerem polling ou esperarem até o legacy alcançar, ou mantenha a escrita legacy síncrona até os testes serem alterados para aceitar consistência eventual."
+ },
+ "s_68ce1673": {
+  "summaryPt": "",
+  "contentPt": "As escritas legacy em background em Create, Delete, Update e DeleteCollection (linhas 50-57, 108-114, 134-141, 161-167) constroem seu context de timeout a partir do `ctx` da requisição. O apiserver cancela esse context logo depois que o handler retorna. Assim, o timeout de 10s não oferece proteção: o Create/Update/Delete legacy é frequentemente cancelado no meio ou antes de começar. O unified storage já fez o commit nesse momento, então o legacy store silenciosamente diverge dele. Derive o context com `context.WithTimeoutCause(context.WithoutCancel(ctx), ...)` para manter os valores da requisição, mas descartar o cancelamento do pai."
+ },
+ "s_4df40c73": {
+  "summaryPt": "",
+  "contentPt": "O Update costumava envolver o objInfo em `updateWrapper{upstream: objInfo, updated: obj}`, de modo que o legacy armazenava exatamente o objeto produzido pelo unified storage. Mode1 e mode2 ainda fazem isso. Agora o objInfo bruto vai para Legacy.Update, que reaplica o patch ou a transformação ao objeto atual do próprio legacy, e o faz de forma assíncrona. Se uma escrita assíncrona anterior ainda não foi concluída ou se o legacy divergiu, os dois stores acabam com conteúdos diferentes. Passe `&updateWrapper{upstream: objInfo, updated: res}` para Legacy.Update."
+ },
+ "s_df703bb4": {
+  "summaryPt": "",
+  "contentPt": "Isto é uma data race. Em Create, `obj` (que Storage.Create pode ter mutado, ou que pode ser o mesmo ponteiro que `created`) vai para Legacy.Create em uma goroutine enquanto o mesmo objeto é retornado ao chamador. O legacy store pode mutar metadados como resourceVersion, uid e annotations enquanto o encoder da resposta serializa `created`. Isso pode corromper a resposta ou causar panic por acesso concorrente a um map. Dê à goroutine sua própria cópia com obj.DeepCopyObject()."
+ },
+ "s_8fccae2c": {
+  "summaryPt": "O caso de Create 'unified store fails' só configura o mock do legacy, e como o mock é compartilhado, é essa expectativa do legacy que faz a chamada ao storage falhar.",
+  "contentPt": "O caso 'error when creating object in the unified store fails' registra apenas uma expectativa de Create em setupLegacyFn e não tem setupStorageFn. legacyStoreMock e storageMock envolvem o mesmo *mock.Mock `m` (storage_mocks_test.go:14-19, 32, 96), então a chamada Storage.Create de DualWriterMode3.Create (dualwriter_mode3.go:42) é respondida pela expectativa destinada ao legacy store. O teste ainda passaria se o mode 3 lesse do legacy em vez do storage. Correção: use mocks separados para cada store e coloque a expectativa de falha em setupStorageFn."
+ },
+ "s_53a567b3": {
+  "summaryPt": "Os testes de escrita do mode 3 nunca verificam a escrita legacy assíncrona, então continuam passando mesmo com as escritas legacy removidas.",
+  "contentPt": "O Mode 3 é definido como escrita em ambos os stores, mas Create/Update/Delete/DeleteCollection agora fazem a escrita legacy em uma goroutine (dualwriter_mode3.go:50-57, 108-114, 134-141, 161-167). Os testes retornam logo após a chamada ao storage. Eles nunca chamam AssertExpectations e nunca esperam pela goroutine. Os casos de Delete e DeleteCollection nem configuram uma expectativa do legacy, então a goroutine atinge uma chamada de mock inesperada que pode causar panic ou se perder dependendo do timing. Remover as escritas legacy deixaria todos os testes verdes. Correção: use mocks legacy separados, espere por uma condição (por exemplo, assert.Eventually em AssertCalled do legacy) e verifique que a chamada ao legacy aconteceu."
+ },
+ "s_21ac971b": {
+  "summaryPt": "",
+  "contentPt": "O Delete costumava tolerar `apierrors.IsNotFound` vindo de Storage.Delete e ainda deletava do legacy (ignorando NotFound lá também). Agora qualquer erro de storage, NotFound inclusive, é retornado imediatamente e o delete do legacy é pulado. No mode 3, um objeto escrito antes da troca existe apenas no legacy storage. Deletá-lo agora falha com 404 e a cópia legacy permanece. Restaure o fallback de NotFound: em NotFound, ainda delete do legacy e só retorne o erro se o delete do legacy também falhar. O Mode2 mantém as verificações de NotFound (dualwriter_mode2.go:246/257)."
+ },
+ "s_88b657e8": {
+  "summaryPt": "",
+  "contentPt": "O Update antigo passava `&updateWrapper{upstream: objInfo, updated: obj}` para Legacy.Update, então o legacy recebia exatamente o objeto que o unified storage havia armazenado. O novo código passa o `objInfo` bruto, então o legacy reexecuta UpdatedObject contra sua própria cópia. Essa cópia pode ter um resourceVersion diferente ou estado antigo, então o legacy agora pode rejeitar o update (conflito ou falha de precondition) ou armazenar um objeto diferente, e os stores divergem. Mode1 e mode2 ainda envolvem o update (dualwriter_mode2.go:298, dualwriter_mode1.go:250). Envolva o `res` de Storage.Update em updateWrapper antes de chamar Legacy.Update."
+ },
+ "s_ffe2609d": {
+  "summaryPt": "",
+  "contentPt": "As escritas legacy costumavam rodar de forma síncrona dentro da requisição. Agora rodam em uma goroutine cujo context vem do `ctx` da requisição. O API server cancela esse ctx quando o handler retorna, então as chamadas Create, Update, Delete e DeleteCollection do legacy podem ser canceladas antes de terminar. As falhas também não são logadas: apenas uma métrica é registrada. Código que depende de o legacy store ser escrito no mode 3, como os novos testes de playlist do mode 3 ou um rollback para mode 1/2, perde essa garantia. Inicie a goroutine a partir de `context.WithoutCancel(ctx)` e logue qualquer erro do legacy. Isto também se aplica às linhas 108-114, 134-141 e 161-167."
+ },
+ "s_b925651a": {
+  "summaryPt": "O nome do teste diz que List 'não está implementado', mas este PR implementa List e o caso testa um erro de storage.",
+  "contentPt": "O nome deste teste diz que List não está implementado no unified store. Este PR removeu o stub `List not implemented` e adicionou um List real que chama `d.Storage.List` (dualwriter_mode3.go:79-92). O caso apenas verifica que um erro de storage mockado é retornado. Se este teste falhar, o nome apontará os leitores para um problema que não existe mais. Renomeie-o para corresponder ao que ele verifica, ex.: \"error when listing an object in the unified store fails\"."
+ }
+}

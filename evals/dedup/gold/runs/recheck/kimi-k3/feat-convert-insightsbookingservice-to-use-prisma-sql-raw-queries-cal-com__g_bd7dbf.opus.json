@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_fa724245",
+     "s_0ed4a288"
+    ],
+    "defect": "getBaseConditions has unreachable fallback branches: getAuthorizationConditions always returns a truthy Prisma.Sql (at worst NOTHING_CONDITION), so they can never run."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S7 apontam o mesmo defeito: em getBaseConditions há código morto, porque authConditions é sempre um Prisma.Sql truthy. S4 inclui também o ramo `else if (filterConditions)`, que é o mesmo problema em outro ponto, e não um segundo defeito. A mesma simplificação corrige as duas, então o grupo fica como está."
+ }
+}

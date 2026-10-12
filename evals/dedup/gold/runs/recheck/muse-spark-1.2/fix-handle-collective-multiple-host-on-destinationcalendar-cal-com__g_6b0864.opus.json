@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_039a6ecf",
+     "s_e6381e43",
+     "s_1933f6e3",
+     "s_6e328550",
+     "s_3a7bfe53"
+    ],
+    "defect": "In EventManager.create, the Meet fallback reads mainHostDestinationCalendar.integration without optional chaining, which throws a TypeError when destinationCalendar is null or empty."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S6, S11, S15 e S16 apontam o mesmo defeito no mesmo trecho de EventManager.ts. O acesso a mainHostDestinationCalendar.integration não usa optional chaining e quebra quando destinationCalendar é null ou vazio. Todas propõem a mesma correção (?.integration), e nenhuma traz um segundo defeito."
+ }
+}

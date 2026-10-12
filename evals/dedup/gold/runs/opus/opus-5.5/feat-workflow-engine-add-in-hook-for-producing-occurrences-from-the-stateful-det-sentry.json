@@ -1,0 +1,82 @@
+{
+  "judge": "opus",
+  "model": "opus-5.5",
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "promptSha": "7ac27206ecf68e5e4cff06b006c85b8e5365563b",
+  "attempt": 1,
+  "ms": 12280,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 17735,
+    "cache_read_input_tokens": 6564,
+    "output_tokens": 726,
+    "output_tokens_details": {
+      "thinking_tokens": 346
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 17735,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 726,
+        "cache_read_input_tokens": 6564,
+        "cache_creation_input_tokens": 17735,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 17735
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1577208,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_171c4881",
+          "s_6e65311a",
+          "s_f6a234b4",
+          "s_4badb5ae"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler with only `pass` and implements none of its abstract methods (including the new build_occurrence_and_event_data), so instantiating it via Detector.detector_handler raises TypeError.",
+        "rationale": "All four report the same abstract-class instantiation failure at the same lines and propose the same fix."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_ffcfea51",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2d8453a7",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_b65662bd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ba6363b5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_68f8d790",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

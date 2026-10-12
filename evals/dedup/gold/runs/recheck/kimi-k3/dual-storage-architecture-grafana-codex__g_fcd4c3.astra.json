@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b6ded21f",
+     "s_24958cb2",
+     "s_ec6af647",
+     "s_daf946e9"
+    ],
+    "defect": "A duração e as falhas de Legacy.DeleteCollection são registradas por recordStorageDuration em vez de recordLegacyDuration."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S5, S11, S15 e S28 apontam o mesmo defeito na linha 166, resolvido pela troca de recordStorageDuration por recordLegacyDuration. As referências de S5 e S15 ao problema de Create/Update são comparações contextuais, sem acrescentar outro defeito ao relato."
+ }
+}

@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ef813b8e",
+    "mainDefect": "The downsize loop ignores conversion failures and continues consuming attempts with an oversized file.",
+    "secondary": [
+     {
+      "defect": "In-place conversion can replace the file's inode, leaving the open Tempfile reporting stale sizes and reading the original content.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ee27a71c",
+    "mainDefect": "The hardcoded 10MB client limit ignores the configured attachment limit, incorrectly accepting or rejecting attachments.",
+    "secondary": [
+     {
+      "defect": "The size alert and 413 handler report 10240 KB instead of the applicable configured limit.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7b3553a9",
+    "mainDefect": "The flat 10MB client limit accepts attachments exceeding the server's configured attachment limit.",
+    "secondary": [
+     {
+      "defect": "Images accepted by the client can still exceed the server's image limit after five downsizing attempts and be rejected after uploading.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

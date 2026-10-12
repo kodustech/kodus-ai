@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_438385f5",
+     "s_bb646b1e"
+    ],
+    "defect": "O formulário expõe a presença de passkeys e seus IDs de credenciais a visitantes não autenticados após a simples identificação por nome de usuário."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 descrevem o mesmo defeito: dados de passkeys são expostos antes da autenticação ao preencher e renderizar o formulário para o usuário informado. A menção adicional de S2 a UsernamePasswordForm amplia os locais afetados pelo mesmo problema, sem introduzir um defeito independente."
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [],
+  "unique": [
+   "s_3869a81c",
+   "s_9bf99a8b"
+  ],
+  "bundles": [
+   "s_3869a81c",
+   "s_9bf99a8b"
+  ],
+  "reasoningPt": "O primeiro defeito de S5 é chamar `.map` quando `*_ids` é nulo; S8 começa pela substituição incondicional dos IDs por uma hidratação que pode conter `undefined`. São defeitos com correções distintas, portanto a menção secundária de S5 a `undefined` não une as sugestões. Ambas agrupam problemas: S5 acrescenta resultados ausentes e S8 também aponta a perda de atributos simples `*_ids`."
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ba6363b5",
+    "mainDefect": "The evaluate docstring still describes a list return value although the method now returns a dictionary keyed by group key.",
+    "secondary": [
+     {
+      "defect": "The previous duplicate-key handling is gone now that results are keyed by group key.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

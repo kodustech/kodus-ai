@@ -1,0 +1,54 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "assignment_source.py line 18: `queued` default `timezone.now()` runs once at import time, so all instances share a stale timestamp; should use field(default_factory=timezone.now)"
+   },
+   {
+    "id": "F2",
+    "description": "test_assignment_source.py test_to_dict: only asserts `queued is not None`, so it can't detect the stale default; it should assert the actual value"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_03c0a1d9",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_9eae5caf",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c2f1d70e",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_0ee85020",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b183150d",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

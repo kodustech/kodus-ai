@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_7a9f177c",
+    "mainDefect": "getSubGroupsCount returns null when the cached group's model is gone, violating the GroupModel contract that it never returns null.",
+    "secondary": [
+     {
+      "defect": "The three sibling getSubGroupsStream overloads still throw an NPE when modelSupplier.get() returns null, so the concurrent-delete race fix is incomplete.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

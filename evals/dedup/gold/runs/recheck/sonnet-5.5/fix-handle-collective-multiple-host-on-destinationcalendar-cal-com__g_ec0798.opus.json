@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6881012d",
+     "s_fc6a067d",
+     "s_cbaba39f",
+     "s_56da48b0",
+     "s_3383b620",
+     "s_8752109f"
+    ],
+    "defect": "In EventManager, `mainHostDestinationCalendar.integration` is read without optional chaining, so it throws a TypeError when destinationCalendar is null or empty and the location is Google Meet."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "Todas as sugestões (S1, S6, S7, S9, S12, S13) apontam o mesmo defeito: o acesso a `mainHostDestinationCalendar.integration` sem optional chaining no EventManager, que lança TypeError quando destinationCalendar é null ou vazio. Todas propõem a mesma correção (`?.`), e só os intervalos de linha mudam um pouco. Nenhuma traz um segundo defeito."
+ }
+}

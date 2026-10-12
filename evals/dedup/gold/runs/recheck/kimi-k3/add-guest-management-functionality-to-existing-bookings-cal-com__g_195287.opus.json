@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The server-side ZAddGuestsInputSchema and handler never dedupe emails within the submitted guests array, so a direct API call can insert duplicate Attendee rows.",
+    "members": [
+     "s_c8acf696",
+     "s_9e2d0fde"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c8acf696"
+  ],
+  "reasoningPt": "S3 e S20 apontam o mesmo defeito principal: o schema do servidor não valida unicidade dos e-mails dentro do array, permitindo linhas de Attendee duplicadas via chamada direta. S3 cita ainda, no WHY, uma condição de corrida (TOCTOU) entre requisições concorrentes, que é um defeito à parte, então ela vai em bundles. O grupo fica como está."
+ }
+}

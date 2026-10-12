@@ -1,0 +1,58 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "d9ab5751f307da05b64ea0ea62bfba6c4a012e3e",
+  "attempt": 1,
+  "ms": 40836,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_4bf82420",
+          "s_bbf4f23f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The members endpoint fails to bound limit and offset, allowing invalid or excessive pagination values.",
+        "rationale": "Both report the same missing validation on the same parameters and SQL query. SQL errors, invalid client page numbers, and excessive result sizes are consequences of that shared defect."
+      },
+      {
+        "members": [
+          "s_79e164e9",
+          "s_1dab3a9f",
+          "s_79243ad0",
+          "s_a68744fe"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "totalPages overcounts by one when user_count is an exact multiple of limit, enabling navigation to an empty page.",
+        "rationale": "All four identify the same floor-division calculation and resulting empty final page. Replacing it with ceiling division resolves every report."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_9f69dcda",
+        "confidence": "high"
+      },
+      {
+        "id": "s_8c558d51",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d90437a0",
+        "confidence": "high"
+      },
+      {
+        "id": "s_267c8bb6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_da28cd33",
+        "confidence": "high"
+      }
+    ]
+  }
+}

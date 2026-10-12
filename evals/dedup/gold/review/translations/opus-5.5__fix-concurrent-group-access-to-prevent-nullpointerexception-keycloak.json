@@ -1,0 +1,18 @@
+{
+ "s_8fb311b9": {
+  "summaryPt": "",
+  "contentPt": "A thread reader é iniciada, mas nunca recebe join. O teste define deletedAll e verifica caughtExceptions imediatamente, enquanto o reader ainda pode estar dentro de groups(...). Uma NPE ou um 500 dessa requisição em andamento é adicionada à lista depois que a asserção já passou, então o teste pode deixar escapar exatamente a regressão que deveria detectar. A thread também pode sobreviver ao teste e atingir a limpeza do realm. Correção: mantenha uma referência à Thread e chame join() com timeout depois de deletedAll.set(true), antes de assertThat."
+ },
+ "s_3d7a717e": {
+  "summaryPt": "",
+  "contentPt": "O teste nunca verifica se o reader executou ao menos uma vez enquanto as exclusões aconteciam. Se os 100 deletes terminarem antes de a thread ser agendada, o loop nunca roda e o teste passa sem exercitar o caminho concorrente de leitura/exclusão. Correção: conte as leituras bem-sucedidas (por exemplo, um AtomicInteger) e verifique que é > 0, ou use um CountDownLatch para que as exclusões só comecem depois que a primeira leitura tiver iniciado."
+ },
+ "s_bdeb7dae": {
+  "summaryPt": "A asserção roda sem esperar pela thread reader, então exceções de requisições ainda em andamento, ou de um reader que nunca executou, não são vistas e o teste pode passar com o bug presente.",
+  "contentPt": "A thread reader é fire-and-forget. Depois de `deletedAll.set(true)`, o teste verifica `caughtExceptions` imediatamente e não espera o reader terminar. Uma leitura ainda em execução durante os últimos deletes é exatamente o tipo que dispara o model nulo em `GroupAdapter.getSubGroupsCount`. Se essa leitura falhar depois da verificação, a exceção nunca é vista. A thread também pode não ter feito nenhuma requisição antes de os deletes terminarem, e nada verifica isso. De qualquer forma, este teste pode passar com a correção removida. Mantenha uma referência à thread, faça `join()` com timeout antes de verificar e confira que ela fez ao menos uma leitura."
+ },
+ "s_0dfb07e9": {
+  "summaryPt": "A thread reader nunca recebe join, então exceções lançadas durante sua última requisição em andamento podem passar despercebidas pela asserção.",
+  "contentPt": "A thread reader é iniciada, mas nunca recebe join. Depois de `deletedAll.set(true)`, a asserção sobre `caughtExceptions` roda logo em seguida, enquanto o reader pode estar no meio de `groups(...)`. Uma exceção dessa última chamada é adicionada após a asserção e nunca é verificada, então a race que este teste visa pode escapar. A thread também pode sobreviver ao teste e atingir o realm durante a limpeza. Mantenha uma referência à thread e chame `join()` (com timeout) depois de definir `deletedAll` e antes da asserção."
+ }
+}

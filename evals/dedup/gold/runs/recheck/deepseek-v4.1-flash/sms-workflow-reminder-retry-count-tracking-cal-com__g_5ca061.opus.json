@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The new `retryCount: { gt: 1 }` OR branch in the deleteMany has no `method: WorkflowMethods.SMS` filter, so the SMS cron deletes reminders of every method.",
+    "members": [
+     "s_2e6a48cf",
+     "s_d2d5f53e"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S6 e S8 apontam o mesmo defeito: o ramo `retryCount > 1` do OR não filtra por método SMS e por isso apaga lembretes de outros métodos. A correção sugerida muda um pouco (repetir o filtro no ramo ou tirá-lo do OR), mas o problema é o mesmo e se resolve com uma única mudança. A observação de S6 sobre a falta de limite de data faz parte do mesmo ramo sem escopo, então não conta como um segundo defeito."
+ }
+}

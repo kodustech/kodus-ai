@@ -1,0 +1,42 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "254ed28cf332fab9343ab48f06c3bd8442a6474c",
+  "attempt": 1,
+  "ms": 38407,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_4faeab88",
+          "s_2c46aaba",
+          "s_a03526cd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The installer verification accesses integration.metadata[\"sender\"][\"login\"] without guarding against missing sender metadata, causing a KeyError instead of the verification-failed page.",
+        "rationale": "All three report the same unguarded lookup and crash for existing ACTIVE integrations without sender metadata. Their different examples explain how that state arises; one guarded lookup resolves all three."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_3b74d3b1",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0ccf73aa",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c9ebb8d6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ac2213c4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

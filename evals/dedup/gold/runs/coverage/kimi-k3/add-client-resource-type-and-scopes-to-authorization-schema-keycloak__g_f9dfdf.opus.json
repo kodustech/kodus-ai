@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "The Javadoc on void requireView() (ClientPermissionEvaluator.java, lines 95-98) says it returns true. It should say it throws ForbiddenException when canView() is false."
+   },
+   {
+    "id": "F2",
+    "description": "The Javadoc on void requireViewClientScopes() (ClientPermissionEvaluator.java, lines 100-103) says it returns true. It should say it throws ForbiddenException when canViewClientScopes() is false."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_db009948",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_75e8893d",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

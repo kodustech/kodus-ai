@@ -1,0 +1,111 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "e66417515cab1fb98778cd63322b7c7d473e62c6",
+  "attempt": 1,
+  "ms": 44677,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_3945cc4f",
+          "s_7466b913",
+          "s_ddd39050"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Imported posts interpolate unescaped URLs into the attribution footer and render external HTML without sanitization.",
+        "rationale": "All three report the same footer URL injection. The first two additionally report unsanitized imported content, so the merged comment must preserve both defects."
+      },
+      {
+        "members": [
+          "s_157d31c5",
+          "s_3e20fdea"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The embed layout interpolates the Referer header into a JavaScript string without JavaScript-context escaping.",
+        "rationale": "Both report script injection through the same postMessage target argument; their example payloads and suggested escaping methods differ."
+      },
+      {
+        "members": [
+          "s_6903bc10",
+          "s_5f3bd478"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The dangling `if` in `<%- end if %>` makes the embed template invalid Ruby.",
+        "rationale": "Both identify the same template syntax error at line 6 and propose the same correction."
+      },
+      {
+        "members": [
+          "s_42e6661a",
+          "s_090409bf"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Feed imports abort on missing item content; the broader report also identifies unsupported String#scrub calls on older Ruby versions and missing titles causing insert failures.",
+        "rationale": "Both report the unconditional i.content.scrub call failing for content-less items. The first also reports Ruby-version compatibility and missing-title defects that must survive consolidation."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_a3731852",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f7ab90fa",
+        "confidence": "high"
+      },
+      {
+        "id": "s_13910268",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5743ce29",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5f0fb285",
+        "confidence": "high"
+      },
+      {
+        "id": "s_55170756",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3de263b8",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6a2d7081",
+        "confidence": "high"
+      },
+      {
+        "id": "s_acdf66da",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b00bdf27",
+        "confidence": "high"
+      },
+      {
+        "id": "s_03b0d38a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_c021935b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_686ed317",
+        "confidence": "high"
+      }
+    ]
+  }
+}

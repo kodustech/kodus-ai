@@ -1,0 +1,27 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_0469979e",
+    "mainDefect": "The asynchronous legacy Create uses a context derived from the request context, so it can be canceled before Legacy.Create runs, leaving the object only in Storage.",
+    "secondary": [
+     {
+      "defect": "The asynchronous Delete, Update, and DeleteCollection legacy paths also derive their contexts from the request context and can be canceled the same way.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_5a02bd8a",
+    "mainDefect": "The mode-3 Create test never waits for or asserts the asynchronous Legacy Create call, so it still passes if the legacy write is removed.",
+    "secondary": [
+     {
+      "defect": "The Delete, Update, and DeleteCollection tests have the same problem: they never assert the asynchronous legacy calls.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

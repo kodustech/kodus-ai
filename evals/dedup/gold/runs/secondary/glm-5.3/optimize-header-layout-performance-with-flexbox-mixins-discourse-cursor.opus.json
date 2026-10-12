@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ab6b7183",
+    "mainDefect": "The `.panel` relies only on `margin-left: auto` to sit on the right, which legacy flexbox implementations (2009 spec and IE10) don't support, so the panel ends up on the left next to the logo.",
+    "secondary": [
+     {
+      "defect": "The `align-items()` mixin doesn't emit `-moz-box-align`, so old Firefox using `-moz-box` stretches items instead of aligning them.",
+      "coveredBy": [
+       "s_0a89c2ba"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_4c71b68b",
+    "mainDefect": "The `align-items()` mixin emits `-ms-align-items`, which isn't a real property in any browser, so it's a dead declaration.",
+    "secondary": [
+     {
+      "defect": "The `align-items()` mixin is missing the `-moz-box-align` counterpart to the `-moz-box` display value that `flexbox()` emits.",
+      "coveredBy": [
+       "s_0a89c2ba"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

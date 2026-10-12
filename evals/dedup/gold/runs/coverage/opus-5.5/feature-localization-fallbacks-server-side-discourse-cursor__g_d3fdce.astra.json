@@ -1,0 +1,68 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "I18n.translate loads only config.locale; fallback locales are loaded only by ApplicationController#set_locale, causing missing translations outside controller requests."
+   },
+   {
+    "id": "F2",
+    "description": "The translation LRU cache stores missing-translation results from unloaded fallbacks, preserving failures even after fallback locales load."
+   },
+   {
+    "id": "F3",
+    "description": "The translation cache key omits SiteSetting.default_locale, so changing the site default leaves cached fallback text stale."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c94570f5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_35d3c9d2",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e15dc8b6",
+    "covers": [
+     "F3"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_6a01472a",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a0b43d2d",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d02ab584",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

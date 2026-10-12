@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a9e465bd",
+     "s_264c9510"
+    ],
+    "defect": "O teste sobre ausência de hosts permitidos passa por outras condições e não verifica o comportamento anunciado na descrição."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S16 e S19 apontam o mesmo defeito no mesmo teste: a ausência de hosts deixou de ser a condição determinante para a expectativa passar. S16 enfatiza a descrição incorreta e S19 detalha a perda de capacidade de detectar regressões, mas ambas seriam resolvidas pela mesma revisão ou remoção do teste."
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "poll_feed.rb line 35: i.content is nil for standard RSS 2.0 items (description / content:encoded only), so i.content.scrub raises NoMethodError and aborts the whole import"
+   },
+   {
+    "id": "F2",
+    "description": "poll_feed.rb line 35: String#scrub needs Ruby 2.1+, but CI runs Ruby 2.0, so the call raises NoMethodError"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3abf3cfd",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_5748a076",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

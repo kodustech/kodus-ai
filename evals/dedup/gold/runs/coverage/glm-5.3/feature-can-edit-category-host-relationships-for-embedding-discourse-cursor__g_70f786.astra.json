@@ -1,0 +1,32 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "spec/models/topic_spec.rb:1403-1405 retains a stale blank-host test that passes vacuously because expandable_first_post? no longer checks embeddable hosts."
+   },
+   {
+    "id": "F2",
+    "description": "spec/models/topic_spec.rb:1407 misspells 'embeddable' as 'emeddable' in the nested describe."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_c050f347",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_21df2e7a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

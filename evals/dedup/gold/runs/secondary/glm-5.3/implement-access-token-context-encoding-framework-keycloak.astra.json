@@ -1,0 +1,132 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_40f5268c",
+    "mainDefect": "The matcher inverts the comparison, rejecting a grant shortcut when it equals the expected value.",
+    "secondary": [
+     {
+      "defect": "The matcher reads substring(3, 5) instead of substring(4, 6), extracting the wrong characters for the grant shortcut.",
+      "coveredBy": [
+       "s_47286227",
+       "s_271c9373",
+       "s_cabf60f8",
+       "s_0df1d418"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_5625161c",
+    "mainDefect": "Calling the newly abstract getShortcut() method on custom grant factories compiled against an older SPI causes AbstractMethodError during startup.",
+    "secondary": [
+     {
+      "defect": "A factory returning a null shortcut causes ConcurrentHashMap.put to throw NullPointerException instead of a descriptive validation error.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_47286227",
+    "mainDefect": "The matcher reads substring(3, 5) instead of substring(4, 6), extracting the wrong characters for the grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher inverts the comparison, rejecting a grant shortcut when it equals the expected value.",
+      "coveredBy": [
+       "s_40f5268c",
+       "s_8d844482",
+       "s_7f53154c"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_271c9373",
+    "mainDefect": "The matcher reads substring(3, 5) instead of substring(4, 6), extracting the wrong characters for the grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher inverts the comparison, rejecting a grant shortcut when it equals the expected value.",
+      "coveredBy": [
+       "s_40f5268c",
+       "s_8d844482",
+       "s_7f53154c"
+      ]
+     },
+     {
+      "defect": "The matcher does not validate prefix length before slicing, so short prefixes cause StringIndexOutOfBoundsException.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_07f54fcf",
+    "mainDefect": "The decoder requires a two-character grant shortcut despite the SPI permitting longer shortcuts, breaking encode/decode round trips for custom grants.",
+    "secondary": [
+     {
+      "defect": "Token IDs containing a colon with a non-six-character prefix throw instead of receiving the UNKNOWN/legacy fallback used for colon-less IDs.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_8d844482",
+    "mainDefect": "The matcher inverts the comparison, rejecting a grant shortcut when it equals the expected value.",
+    "secondary": [
+     {
+      "defect": "The matcher reads substring(3, 5) instead of substring(4, 6), extracting the wrong characters for the grant shortcut.",
+      "coveredBy": [
+       "s_47286227",
+       "s_271c9373",
+       "s_cabf60f8",
+       "s_0df1d418"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_cabf60f8",
+    "mainDefect": "The matcher reads substring(3, 5) instead of substring(4, 6), extracting the wrong characters for the grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher inverts the comparison, rejecting a grant shortcut when it equals the expected value.",
+      "coveredBy": [
+       "s_40f5268c",
+       "s_8d844482",
+       "s_7f53154c"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_0df1d418",
+    "mainDefect": "The matcher reads substring(3, 5) instead of substring(4, 6), extracting the wrong characters for the grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher inverts the comparison, rejecting a grant shortcut when it equals the expected value.",
+      "coveredBy": [
+       "s_40f5268c",
+       "s_8d844482",
+       "s_7f53154c"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_7f53154c",
+    "mainDefect": "The matcher inverts the comparison, rejecting a grant shortcut when it equals the expected value.",
+    "secondary": [
+     {
+      "defect": "The matcher reads substring(3, 5) instead of substring(4, 6), extracting the wrong characters for the grant shortcut.",
+      "coveredBy": [
+       "s_47286227",
+       "s_271c9373",
+       "s_cabf60f8",
+       "s_0df1d418"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

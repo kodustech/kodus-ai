@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_505b8655",
+    "mainDefect": "GetWebAssets fails to recheck the cache after acquiring the exclusive lock, allowing waiters to recompute and overwrite a valid cached value.",
+    "secondary": [
+     {
+      "defect": "GetWebAssets holds the exclusive lock across file or network I/O, serializing cache misses behind blocking operations.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

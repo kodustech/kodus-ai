@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_bc7d00eb",
+     "s_22bcfbd2"
+    ],
+    "defect": "translate only ensures the current locale is loaded, so the fallback chain locales are never loaded outside ApplicationController#set_locale, which causes missing translations in jobs and with_locale."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S6 apontam o mesmo defeito: o translate só garante o carregamento do config.locale e nunca carrega a cadeia de fallback fora do ApplicationController. As duas propõem a mesma correção, que é iterar I18n.fallbacks[I18n.locale] chamando ensure_loaded!. Nenhuma delas traz um segundo defeito, então o grupo fica como está."
+ }
+}

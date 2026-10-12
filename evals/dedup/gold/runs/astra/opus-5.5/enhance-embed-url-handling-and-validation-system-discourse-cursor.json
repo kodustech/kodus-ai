@@ -1,0 +1,87 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "037089c66cd8180e970a30dbf1caf7edbb1fe1b8",
+  "attempt": 1,
+  "ms": 43232,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_5748a076",
+          "s_3abf3cfd"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Feed importing crashes when RSS items lack content, and String#scrub also crashes on the project's Ruby 2.0 runtime.",
+        "rationale": "Both report dereferencing nil content for standard RSS items at the same expression. s_3abf3cfd additionally reports the independent Ruby compatibility failure, which must survive consolidation."
+      },
+      {
+        "members": [
+          "s_f68a49c4",
+          "s_b407f10e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "A stale embed referencing a deleted post passes nil to PostRevisor and crashes the feed poll.",
+        "rationale": "Both identify the same missing nil guard on embed.post and the same downstream failure."
+      },
+      {
+        "members": [
+          "s_8882a392",
+          "s_8ac429ca",
+          "s_bfc86ebc"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Raw HTML posts bypass sanitization for imports and subsequent edits, and the imported-from link interpolates an unescaped URL, allowing stored XSS.",
+        "rationale": "s_8ac429ca explicitly reports both unsanitized imported HTML and unescaped URL interpolation, linking the sanitization defect in s_8882a392 with the interpolation defect in s_bfc86ebc. The merged comment must preserve both defects and the exposure through later edits."
+      },
+      {
+        "members": [
+          "s_f8fef021",
+          "s_e31ebbd9"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The postMessage origin check accepts substrings of discourseUrl instead of requiring an exact origin match.",
+        "rationale": "Both report the same substring comparison and illustrate it with truncated or lookalike origins."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_6e4ec9a5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6f86cbbe",
+        "confidence": "high"
+      },
+      {
+        "id": "s_80505526",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f20b70c9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_746dedc5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_544dc215",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d69d8877",
+        "confidence": "high"
+      }
+    ]
+  }
+}

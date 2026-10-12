@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_4d6ce3dd",
+     "s_3ef83d5d"
+    ],
+    "defect": "A ação Silence aparece na lista sem ruler rule, mas o clique não abre o drawer porque sua renderização ainda exige essa regra."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S7 descrevem o mesmo defeito, observado na habilitação do menu e na condição de renderização do drawer. Uma única correção do fluxo de silenciamento resolve ambas; a referência ao teste apenas aponta a falta de cobertura desse mesmo caso."
+ }
+}

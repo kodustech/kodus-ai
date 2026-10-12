@@ -1,0 +1,25 @@
+{
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "component": [
+    "s_ce3f677e",
+    "s_fa609e7a"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_ce3f677e",
+          "s_fa609e7a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "Test cleanup registers testRealm().identityProviders().get(\"alias\")::remove using the literal alias \"alias\" instead of the created IDP alias (\"idp-alias-N\" at line 381, \"idp-alias-20\" at line 425), so created IDPs are never cleaned up and cleanup may fail."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "Both suggestions say the cleanup at line 381 removes the literal alias \"alias\" instead of the alias that was actually created. Both also say the same mistake repeats at line 425. Their fixes are the same: use the real alias. They differ only in what they say happens at cleanup time (no-op or exception vs. NPE), which doesn't make them different defects. Either suggestion alone already covers both lines, so a merged comment wouldn't add anything. That rules out systemic_pattern, which always needs a unified comment. The right label is same_location with needsUnifiedComment=false."
+  }
+}

@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "In join(), the `break` that runs when the deadline expires leaves the loop early, so the remaining flusher workers are never terminated and stay alive after join returns.",
+    "members": [
+     "s_86d26218",
+     "s_3e9d106e",
+     "s_49ba849a"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_86d26218",
+   "s_3e9d106e",
+   "s_49ba849a"
+  ],
+  "reasoningPt": "S2, S6 e S8 têm o mesmo defeito principal: o `break` no deadline do join() pula o encerramento dos workers restantes, que continuam vivos. As três também citam, só na correção proposta, um segundo defeito: o isinstance com multiprocessing.Process não reconhece SpawnProcess. Por isso todas entram em bundles, mas continuam no mesmo grupo."
+ }
+}

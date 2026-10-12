@@ -1,0 +1,76 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "promptSha": "8a4a7bd38ddc354db7768285c46b9175015da1aa",
+  "attempt": 1,
+  "ms": 43132,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_8c12ccea",
+          "s_aa47d29c",
+          "s_06650a50",
+          "s_9a8c0bd8",
+          "s_d4d154ab"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "MetricAlertDetectorHandler inherits StatefulDetectorHandler without implementing its required abstract members, causing instantiation to raise TypeError.",
+        "rationale": "All five report the same inheritance change and resulting instantiation failure. Although s_d4d154ab names a different file, it explicitly identifies the same class and defect; fixing that class resolves every report."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_3ea77ebd",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3886e166",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a0da2762",
+        "confidence": "high"
+      },
+      {
+        "id": "s_086959d2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7df12c15",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ae970271",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4ea63e57",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7e775a09",
+        "confidence": "high"
+      },
+      {
+        "id": "s_482e4803",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b453b0b9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3649748d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5a192909",
+        "confidence": "high"
+      }
+    ]
+  }
+}

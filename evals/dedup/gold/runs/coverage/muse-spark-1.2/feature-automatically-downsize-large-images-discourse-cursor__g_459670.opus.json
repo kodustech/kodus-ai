@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "utilities.js line 182: client-side file size check hardcodes 10*1024 instead of SiteSettings['max_'+type+'_size_kb']"
+   },
+   {
+    "id": "F2",
+    "description": "utilities.js line 246: 413 error handler hardcodes 10*1024 instead of SiteSettings.max_image_size_kb"
+   },
+   {
+    "id": "F3",
+    "description": "uploads_controller.rb line 55: URL download cap hardcoded to 10.megabytes instead of SiteSetting.max_image_size_kb"
+   },
+   {
+    "id": "F4",
+    "description": "uploads_controller.rb line 67: OptimizedImage.downsize return value is never checked, so the loop keeps going after a failure"
+   },
+   {
+    "id": "F5",
+    "description": "uploads_controller.rb: content_type is never set in the URL download branch, so it stays nil when passed to Upload.create_for"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3de994d1",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b9468b8e",
+    "covers": [
+     "F3",
+     "F4",
+     "F5"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

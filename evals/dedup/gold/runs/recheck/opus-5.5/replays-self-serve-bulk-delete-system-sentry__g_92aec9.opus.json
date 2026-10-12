@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "fetch_error_details pairs error_ids with nodestore get_multi().values() by position instead of looking each one up by its node_id, so error data can end up attached to the wrong id when entries are reordered, duplicated or missing.",
+    "members": [
+     "s_f11cce9a",
+     "s_524f81d1",
+     "s_efd3a597",
+     "s_6628baaf"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "As quatro sugestões (S1, S6, S7, S8) apontam o mesmo defeito no fetch_error_details: o zip(error_ids, events.values()) junta os ids aos resultados do get_multi pela posição. Por causa de cache, ids duplicados ou ids ausentes, isso pode associar os dados de erro ao id errado. Todas propõem a mesma correção, buscar cada evento pelo próprio node_id, e nenhuma traz um segundo defeito, então o grupo fica como está."
+ }
+}

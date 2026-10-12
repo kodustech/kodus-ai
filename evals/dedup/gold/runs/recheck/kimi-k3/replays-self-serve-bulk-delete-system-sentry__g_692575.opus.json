@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5617da88",
+     "s_06a69ac5",
+     "s_73ccec8d",
+     "s_b934e7bb"
+    ],
+    "defect": "The age/timestamp mutual-exclusion validators check truthiness through initial_data.get(), so a report that has both fields gets past the check when one of them is 0."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_06a69ac5"
+  ],
+  "reasoningPt": "S2, S6, S7 e S9 relatam o mesmo defeito principal: os validadores de exclusão mútua entre age e timestamp usam truthiness, então o valor 0 passa pela checagem. A correção é a mesma para todas: checar se a chave está presente. S6 também aponta que um relatório sem nenhum dos dois campos é aceito, mas esse é um defeito secundário que vem no fim da sugestão, por isso S6 entra em bundles e continua no grupo."
+ }
+}

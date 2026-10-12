@@ -1,0 +1,68 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "account-ui messages_en.properties line 188: error-invalid-multivalued-size switched from {{n}} to {n}/choice syntax, which the JS frontend (i18next) won't interpolate"
+   },
+   {
+    "id": "F2",
+    "description": "admin-ui messages_en.properties line 3138: error-invalid-multivalued-size switched from {{n}} to {n}/choice syntax, which the JS frontend (i18next) won't interpolate"
+   },
+   {
+    "id": "F3",
+    "description": "Sibling JS community translations of error-invalid-multivalued-size still use {{n}}, so the placeholder format no longer matches the English source"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_b29c946a",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_d0c68d28",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3a1c7eb0",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a4b43d5c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e7dee35f",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_83a004e9",
+    "covers": [
+     "F2",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

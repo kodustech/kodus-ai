@@ -1,0 +1,83 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "promptSha": "89391cc8ce168de4a1c4e3dc1078531282e33b80",
+  "attempt": 1,
+  "ms": 46477,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_c4bb13a0",
+          "s_0e7da5d3",
+          "s_d93655e7",
+          "s_c090859a",
+          "s_ecc11bba",
+          "s_4b64c7d5"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The admin and account SPA English bundles replace i18next placeholders with unsupported Java MessageFormat placeholders and choice syntax.",
+        "rationale": "All six report the same interpolation mistake repeated in the two SPA bundles. Both resource entries need correction; s_c090859a describes the same admin entry despite its inconsistent file path."
+      },
+      {
+        "members": [
+          "s_2c2a6b10",
+          "s_38fe9a59",
+          "s_79b9dc96",
+          "s_ca4bf0da"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The same Italian TOTP instruction was copied into the Lithuanian account and login bundles.",
+        "rationale": "These suggestions report the identical wrong-language replacement repeated in totpStep1 and loginTotpStep1. Both entries need Lithuanian text."
+      },
+      {
+        "members": [
+          "s_b5a7f414",
+          "s_2f45f628"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "An unavailable derived English reference file causes an unchecked RuntimeException that aborts verification instead of using the existing findings or checked-exception contract.",
+        "rationale": "Both identify the same English-bundle loading failure and unchecked exception at lines 73–80."
+      },
+      {
+        "members": [
+          "s_d1bdd70e",
+          "s_a63922db"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Overlapping common-prefix and common-suffix counts cause invalid substring bounds while constructing the illegal-HTML diagnostic.",
+        "rationale": "The examples differ, but both failures arise from the same unbounded suffix trimming and substring calls. One bounds correction resolves both."
+      },
+      {
+        "members": [
+          "s_f6a54b69",
+          "s_f38384b4"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The zh_CN account bundle contains a Traditional Chinese totpStep1 instruction instead of Simplified Chinese.",
+        "rationale": "Both report the same script mismatch in the exact same resource entry."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_ab5c4c5d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_e592dee0",
+        "confidence": "high"
+      }
+    ]
+  }
+}

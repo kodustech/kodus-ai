@@ -1,0 +1,65 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Blacklist check in addGuests.handler (lines 70-78): guest emails are not lowercased while blacklist entries are, so mixed-case blacklisted addresses get through"
+   },
+   {
+    "id": "F2",
+    "description": "Existing-attendee check in addGuests.handler (line 76) is case-sensitive, so an existing attendee can be added again with different casing"
+   },
+   {
+    "id": "F3",
+    "description": "No server-side dedupe of the input guests array; uniqueness is only enforced on the client"
+   },
+   {
+    "id": "F4",
+    "description": "No protection against concurrent requests inserting the same guest (needs a transaction or unique constraint with skipDuplicates)"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_647627fa",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_e7d73ab7",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ef00ffaa",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_12e66445",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_aed18a73",
+    "covers": [
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

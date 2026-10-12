@@ -1,0 +1,199 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_a5422206",
+    "mainDefect": "error() calls _(error_short) on a variable, so makemessages can't extract the payload error strings for translation.",
+    "secondary": [
+     {
+      "defect": "\"Github\" is spelled inconsistently and should be normalized to \"GitHub\".",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_dba5cf11",
+    "mainDefect": "MAX_ALLOWED_REQUESTS in src/theme/config.js is 150 and should be lowered to 100.",
+    "secondary": [
+     {
+      "defect": "The requestAnimationFrame wrapper around performSearch in src/components/search.js should be removed.",
+      "coveredBy": []
+     },
+     {
+      "defect": "sanitizeInput in src/utils/helpers.js should be renamed to sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/analytics/tracker.js uses Date.now() where performance.now() should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/api/client.js uses GET for /api/data where POST should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may map body.name to the wrong field (for example, body.title) instead of input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e8005d12",
+    "mainDefect": "MAX_ALLOWED_REQUESTS in src/theme/config.js is 150 and should be lowered to 100.",
+    "secondary": [
+     {
+      "defect": "The requestAnimationFrame wrapper around performSearch in src/components/search.js should be removed.",
+      "coveredBy": []
+     },
+     {
+      "defect": "sanitizeInput in src/utils/helpers.js should be renamed to sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/analytics/tracker.js uses Date.now() where performance.now() should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/api/client.js uses GET for /api/data where POST should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may map body.name to the wrong field (for example, body.title) instead of input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_c04307da",
+    "mainDefect": "MAX_ALLOWED_REQUESTS in src/theme/config.js is 150 and should be lowered to 100.",
+    "secondary": [
+     {
+      "defect": "The requestAnimationFrame wrapper around performSearch in src/components/search.js should be removed.",
+      "coveredBy": []
+     },
+     {
+      "defect": "sanitizeInput in src/utils/helpers.js should be renamed to sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/analytics/tracker.js uses Date.now() where performance.now() should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/api/client.js uses GET for /api/data where POST should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may map body.name to the wrong field (for example, body.title) instead of input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ed2f4754",
+    "mainDefect": "MAX_ALLOWED_REQUESTS in src/theme/config.js is 150 and should be lowered to 100.",
+    "secondary": [
+     {
+      "defect": "The requestAnimationFrame wrapper around performSearch in src/components/search.js should be removed.",
+      "coveredBy": []
+     },
+     {
+      "defect": "sanitizeInput in src/utils/helpers.js should be renamed to sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/analytics/tracker.js uses Date.now() where performance.now() should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/api/client.js uses GET for /api/data where POST should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may map body.name to the wrong field (for example, body.title) instead of input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_be8c18fb",
+    "mainDefect": "MAX_ALLOWED_REQUESTS in src/theme/config.js is 150 and should be lowered to 100.",
+    "secondary": [
+     {
+      "defect": "The requestAnimationFrame wrapper around performSearch in src/components/search.js should be removed.",
+      "coveredBy": []
+     },
+     {
+      "defect": "sanitizeInput in src/utils/helpers.js should be renamed to sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/analytics/tracker.js uses Date.now() where performance.now() should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/api/client.js uses GET for /api/data where POST should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may map body.name to the wrong field (for example, body.title) instead of input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_fec7e43b",
+    "mainDefect": "MAX_ALLOWED_REQUESTS in src/theme/config.js is 150 and should be lowered to 100.",
+    "secondary": [
+     {
+      "defect": "The requestAnimationFrame wrapper around performSearch in src/components/search.js should be removed.",
+      "coveredBy": []
+     },
+     {
+      "defect": "sanitizeInput in src/utils/helpers.js should be renamed to sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/analytics/tracker.js uses Date.now() where performance.now() should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/api/client.js uses GET for /api/data where POST should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may map body.name to the wrong field (for example, body.title) instead of input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_e345fbc9",
+    "mainDefect": "MAX_ALLOWED_REQUESTS in src/theme/config.js is 150 and should be lowered to 100.",
+    "secondary": [
+     {
+      "defect": "The requestAnimationFrame wrapper around performSearch in src/components/search.js should be removed.",
+      "coveredBy": []
+     },
+     {
+      "defect": "sanitizeInput in src/utils/helpers.js should be renamed to sanitize.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/analytics/tracker.js uses Date.now() where performance.now() should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "src/api/client.js uses GET for /api/data where POST should be used.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Form handling may map body.name to the wrong field (for example, body.title) instead of input[name=\"name\"].",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

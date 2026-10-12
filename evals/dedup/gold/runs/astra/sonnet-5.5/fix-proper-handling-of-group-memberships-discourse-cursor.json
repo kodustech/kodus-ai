@@ -1,0 +1,39 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "8e4a6fc718d8167456464dabe67c9489d9d09d59",
+  "attempt": 1,
+  "ms": 21301,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_258d0746",
+          "s_976a034f",
+          "s_ead68308",
+          "s_86f24f93"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "totalPages overcounts by one when user_count is an exact multiple of limit, enabling navigation to an empty page.",
+        "rationale": "All four suggestions report the same calculation error at the same lines and propose the same correction to Math.ceil."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_0a6218a2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f97dfd05",
+        "confidence": "high"
+      },
+      {
+        "id": "s_459f0102",
+        "confidence": "high"
+      }
+    ]
+  }
+}

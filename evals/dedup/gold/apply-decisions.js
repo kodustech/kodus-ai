@@ -66,7 +66,11 @@ for (const d of decisions) {
         if (d.verdict === 'wrong' && d.mergeWith) {
             delete pr.uniqueConfidence[d.target];
             const g = pr.groups.find((x) => x.groupId === d.mergeWith);
-            if (g) g.members.push(d.target);
+            if (g) {
+                g.members.push(d.target);
+                g.resolvedBy = 'human';
+                g.humanReview = review;
+            }
             else if (pr.uniqueConfidence[d.mergeWith]) {
                 delete pr.uniqueConfidence[d.mergeWith];
                 pr.groups.push({ members: [d.target, d.mergeWith], kind: 'same_location', needsUnifiedComment: false, confidence: 'high', defect: d.note || '', resolvedBy: 'human', humanReview: review });

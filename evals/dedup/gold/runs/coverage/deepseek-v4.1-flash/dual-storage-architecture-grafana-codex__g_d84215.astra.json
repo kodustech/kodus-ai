@@ -1,0 +1,71 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Create, line 51: the async legacy timeout inherits request cancellation."
+   },
+   {
+    "id": "F2",
+    "description": "Delete, line 110: the async legacy timeout inherits request cancellation."
+   },
+   {
+    "id": "F3",
+    "description": "Update, line 135: the async legacy timeout inherits request cancellation."
+   },
+   {
+    "id": "F4",
+    "description": "DeleteCollection, line 163: the async legacy timeout inherits request cancellation."
+   },
+   {
+    "id": "F5",
+    "description": "Async legacy write errors are recorded in metrics but no longer logged."
+   },
+   {
+    "id": "F6",
+    "description": "Returning before legacy writes finish removes the synchronous dual-write guarantee relied on by callers and integration tests."
+   },
+   {
+    "id": "F7",
+    "description": "Unsequenced async legacy writes can commit out of order."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0fa90f2c",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5",
+     "F6"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7e8b6adf",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b0ebef03",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4",
+     "F5",
+     "F7"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

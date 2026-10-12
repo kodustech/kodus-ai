@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e1e9ba57",
+     "s_60bff4e1"
+    ],
+    "defect": "The retryCount update inside the catch block isn't protected by its own try/catch. If it fails, the error escapes the loop and stops the rest of the reminder batch."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 apontam o mesmo defeito: o update de retryCount dentro do catch não tem proteção própria e, se falhar, interrompe o processamento do lote inteiro. As duas propõem a mesma correção, envolver esse incremento em um try/catch próprio. Nenhuma delas traz um segundo defeito."
+ }
+}

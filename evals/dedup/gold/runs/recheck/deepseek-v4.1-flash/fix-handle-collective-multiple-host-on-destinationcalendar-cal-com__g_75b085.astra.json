@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_920837b4",
+     "s_3eac123e"
+    ],
+    "defect": "O mapeamento de resultados descarta o credentialId das referências de vídeo ao definir undefined para resultados que não são de calendário."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S14 apontam a mesma perda de credentialId nas referências de vídeo, na mesma expressão. S3 detalha o impacto no cancelamento, enquanto S14 descreve a consequência geral para os consumidores; preservar result.credentialId resolve ambas."
+ }
+}

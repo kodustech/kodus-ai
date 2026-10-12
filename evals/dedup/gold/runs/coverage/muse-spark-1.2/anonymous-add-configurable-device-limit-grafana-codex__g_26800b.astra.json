@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Authenticate in client.go synchronously waits for TagDevice database operations, adding DB latency and potentially blocking anonymous authentication."
+   },
+   {
+    "id": "F2",
+    "description": "Authenticate passes the request context to TagDevice, so request cancellation aborts device tagging."
+   },
+   {
+    "id": "F3",
+    "description": "Authenticate now propagates ErrDeviceLimitReached and refuses anonymous authentication, but authn service / HTTP callers were not updated to handle this new refusal."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f91fbc78",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3a7464c4",
+    "covers": [
+     "F1",
+     "F3"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

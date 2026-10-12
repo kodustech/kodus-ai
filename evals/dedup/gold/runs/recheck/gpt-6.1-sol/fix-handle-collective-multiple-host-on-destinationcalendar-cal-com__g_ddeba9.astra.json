@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_d2d1c6a5",
+     "s_60571361",
+     "s_23010781",
+     "s_8dd680d0",
+     "s_41c96050",
+     "s_6a0ae591"
+    ],
+    "defect": "A criação de eventos seleciona o primeiro calendário de destino em vez daquele correspondente à credencial usada, direcionando eventos de hosts secundários ao calendário errado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3, S7, S9, S10, S13 e S16 relatam o mesmo defeito de seleção do calendário pela primeira posição do array. S3 amplia os locais onde o erro se repete, enquanto S9, S10 e S16 descrevem consequências para as referências salvas, sem acrescentar defeitos independentes."
+ }
+}

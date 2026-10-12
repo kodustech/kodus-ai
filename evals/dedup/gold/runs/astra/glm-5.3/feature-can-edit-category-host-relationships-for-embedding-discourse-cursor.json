@@ -1,0 +1,109 @@
+{
+  "judge": "astra",
+  "model": "glm-5.3",
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "promptSha": "e77666cbae3f8ae0f8fd06bbfe58abe0d36bfb5d",
+  "attempt": 1,
+  "ms": 62800,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_afaedccf",
+          "s_7128b0ce",
+          "s_f33a3118",
+          "s_17201292",
+          "s_14dcd034"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The migration dereferences missing category-setting query results before its fallback can run, also leaves the fallback lookup unguarded, and matches the legacy category value against a name despite its reported ID contract.",
+        "rationale": "All report the same initial nil dereference and unreachable fallback. Members additionally report the unsafe fallback query and category ID/name mismatch, which must survive consolidation."
+      },
+      {
+        "members": [
+          "s_82cdee2b",
+          "s_bccd111a",
+          "s_e1df980e",
+          "s_3284f51d"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Legacy host values are inserted without scheme/path normalization, making them unmatchable after migration, and their unescaped SQL interpolation breaks inserts containing apostrophes.",
+        "rationale": "Every member reports the same migration normalization defect. s_3284f51d additionally reports unsafe SQL quoting."
+      },
+      {
+        "members": [
+          "s_73823258",
+          "s_7c87fa7b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Host update/delete actions dereference missing records, and save_host dereferences an absent embeddable_host request payload.",
+        "rationale": "Both identify the same missing-record checks and missing request-payload guard. The merged comment must retain both defects."
+      },
+      {
+        "members": [
+          "s_92bfacc6",
+          "s_326027c2"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The category and embeddable-host fabricator files contain each other's definitions.",
+        "rationale": "These describe the identical file-content swap from opposite files. Correcting it requires restoring the definitions in both files."
+      },
+      {
+        "members": [
+          "s_a74fdd01",
+          "s_c4c17811"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Plural hydration deletes raw IDs and installs unresolved lookup entries when side-loaded records are missing; it also calls map on null values, and its array fallback cannot activate.",
+        "rationale": "Both report destructive hydration when lookups fail. s_a74fdd01 additionally explicitly reports the null-value crash and ineffective fallback."
+      },
+      {
+        "members": [
+          "s_21df2e7a",
+          "s_c050f347"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The expandable_first_post? spec retains a vacuous test for removed host-dependent behavior, and its nested describe misspells embeddable.",
+        "rationale": "Both report the same stale test and why its assertion passes without exercising its stated condition. s_c050f347 additionally reports the describe typo."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_ff233dda",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d7c93799",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bd7593e5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_3952e769",
+        "confidence": "high"
+      },
+      {
+        "id": "s_961d9fe3",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1e9eeb42",
+        "confidence": "high"
+      }
+    ]
+  }
+}

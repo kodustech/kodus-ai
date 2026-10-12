@@ -1,0 +1,45 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "topic_embed.rb line 13: the 'Imported from' footer puts the URL into the href and link text without escaping. Because the post is stored as raw_html and rendered with raw, this is an XSS/attribute-breakout hole."
+   },
+   {
+    "id": "F2",
+    "description": "Imported feed/page HTML is stored as raw_html without sanitization, and Post#cook returns it unchanged, so external content is rendered as live HTML."
+   },
+   {
+    "id": "F3",
+    "description": "poll_feed.rb line 35: CGI.unescapeHTML decodes entity-escaped feed content back into live HTML tags."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_3945cc4f",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_ddd39050",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_7466b913",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

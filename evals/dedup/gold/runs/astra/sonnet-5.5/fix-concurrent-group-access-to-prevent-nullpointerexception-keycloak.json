@@ -1,0 +1,21 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "promptSha": "3c23a0316ffdcc1bdae233b8416f03af30ad7b20",
+  "attempt": 1,
+  "ms": 81837,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_2f48b633",
+        "confidence": "high"
+      },
+      {
+        "id": "s_2dd2e70d",
+        "confidence": "high"
+      }
+    ]
+  }
+}

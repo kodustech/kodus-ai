@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_11ae6686",
+    "mainDefect": "NewResourceServer now calls Init eagerly in the constructor, so lifecycle, backend or search init failures make construction fail and block Grafana startup, and the existing callers were not updated for this.",
+    "secondary": [
+     {
+      "defect": "The full search index build now runs synchronously inside every NewResourceServer constructor call.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Init runs with the server's internal watcher admin context instead of the caller's context, and because of sync.Once a later Init(ctx) from the caller is ignored.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

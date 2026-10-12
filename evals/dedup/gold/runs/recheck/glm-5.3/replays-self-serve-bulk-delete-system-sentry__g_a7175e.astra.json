@@ -1,0 +1,20 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_1c4aa820",
+     "s_840a91a7",
+     "s_3f87de1a",
+     "s_27b220c4"
+    ],
+    "defect": "fetch_error_details associa IDs e dados de eventos por posição com zip(error_ids, events.values()), causando associações incorretas quando o resultado do nodestore não corresponde à sequência solicitada."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S5, S7 e S8 relatam o mesmo defeito: associar IDs e dados por posição em vez de pela chave do nó. As diferenças nos cenários descritos e nas correções propostas não alteram a causa; corrigir essa associação resolve todas as sugestões."
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The totpStep1 string in the zh_CN messages file was replaced with Traditional Chinese text instead of Simplified Chinese.",
+    "members": [
+     "s_3a0628fc",
+     "s_0015f314",
+     "s_72e92533",
+     "s_6df080eb"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S5 e S7 apontam o mesmo defeito na mesma linha: o totpStep1 do zh_CN foi escrito em chinês tradicional em vez de simplificado. S11 é mais vago, mas fala do mesmo texto chinês de totpStep1 no idioma errado. A correção é a mesma, então o grupo continua como está."
+ }
+}

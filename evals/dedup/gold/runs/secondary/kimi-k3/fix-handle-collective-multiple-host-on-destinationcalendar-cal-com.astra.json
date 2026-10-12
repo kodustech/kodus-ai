@@ -1,0 +1,70 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_f5b59d63",
+    "mainDefect": "Google updateEvent uses a fallback predicate that cannot match when externalCalendarId is missing, leaving calendarId undefined.",
+    "secondary": [
+     {
+      "defect": "Google deleteEvent uses the same invalid fallback, causing deletion to target the primary calendar instead of the destination calendar.",
+      "coveredBy": [
+       "s_0a0cb899",
+       "s_6293a6a3"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_febf39be",
+    "mainDefect": "Recurring-event deletion runs again for each outer calendar reference, redundantly deleting the same events.",
+    "secondary": [
+     {
+      "defect": "Recurring-event deletion selects only the first calendar reference of each booking, leaving other hosts' calendar events undeleted.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a907ae4b",
+    "mainDefect": "Google updateEvent cannot resolve the destination calendar when externalCalendarId is missing because its fallback compares against that missing value.",
+    "secondary": [
+     {
+      "defect": "Google deleteEvent also compares destination calendar IDs against a missing externalCalendarId, preventing deletion from the intended calendar.",
+      "coveredBy": [
+       "s_0a0cb899",
+       "s_6293a6a3"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_b37d9668",
+    "mainDefect": "Office365 uses the first destination calendar's externalId regardless of the executing credential, causing team-member events to target the wrong calendar.",
+    "secondary": [
+     {
+      "defect": "Lark also uses the first destination calendar instead of the destination belonging to the executing credential.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The CalDAV base service also uses the first destination calendar instead of the destination belonging to the executing credential.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ac235e40",
+    "mainDefect": "Google updateEvent's fallback compares calendar IDs against a falsy externalCalendarId, producing an undefined calendarId.",
+    "secondary": [
+     {
+      "defect": "Google deleteEvent has the same dead fallback predicate, silently retargeting deletion to the primary calendar.",
+      "coveredBy": [
+       "s_0a0cb899",
+       "s_6293a6a3"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

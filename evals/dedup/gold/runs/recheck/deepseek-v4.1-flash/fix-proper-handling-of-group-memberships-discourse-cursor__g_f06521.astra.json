@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_70fe4c12",
+     "s_5e51e255",
+     "s_06df0f6c",
+     "s_ce7d145c",
+     "s_8f2939ce"
+    ],
+    "defect": "O cálculo de totalPages com Math.floor(user_count / limit) + 1 cria uma página extra quando user_count é múltiplo exato de limit."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3, S5, S6 e S7 descrevem o mesmo defeito no mesmo cálculo, corrigido com Math.ceil(user_count / limit). O indicador incorreto, o botão Next habilitado e a página vazia são consequências desse defeito, não defeitos independentes."
+ }
+}

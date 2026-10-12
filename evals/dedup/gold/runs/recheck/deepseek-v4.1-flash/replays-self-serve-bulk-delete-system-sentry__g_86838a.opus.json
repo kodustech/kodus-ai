@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_cd15646d",
+     "s_05a21148",
+     "s_72000ea2"
+    ],
+    "defect": "fetch_error_details pairs error_ids with nodestore get_multi results positionally via zip(error_ids, events.values()), which can attach the wrong title/message/timestamp to an error id when the result dict is deduplicated, missing entries or out of order."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S4 e S7 apontam o mesmo defeito em fetch_error_details: o zip posicional entre error_ids e events.values() pode associar o id ao evento errado. A causa citada muda um pouco (deduplicação no S2, chaves ausentes ou ordem diferente no S4 e no S7), mas a correção é a mesma: indexar o resultado pelo node_id. Nenhuma delas traz um segundo defeito."
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c319fa19",
+     "s_ade02fb9"
+    ],
+    "defect": "The rewritten useTraceItemAttributeKeys hook can return undefined attributes (initial fetch, disabled or error) instead of the previously guaranteed TagCollection object, so consumers can crash."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S9 e S10 apontam o mesmo defeito: o hook useTraceItemAttributeKeys agora pode retornar attributes undefined, quando antes sempre retornava um objeto. Ambos propõem a mesma correção (`?? {}`). As faixas de linhas são diferentes, mas o defeito é o mesmo, então o grupo fica como está."
+ }
+}

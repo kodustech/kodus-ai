@@ -1,0 +1,86 @@
+{
+ "s_cb573436": {
+  "summaryPt": "fetch_error_details desalinha error_ids com os valores do nodestore, causando contexto de erro incorreto",
+  "contentPt": "O QUÊ: fetch_error_details faz zip de error_ids com events.values() assumindo alinhamento de ordem. POR QUÊ: nodestore.get_multi retorna um dict indexado por node_id; se algum evento estiver ausente, os valores ficam menores e desalinhados, então o zip associa o event_id errado aos dados errados (ou descarta silenciosamente o último id) -> erro errado exibido no prompt do Seer ou IndexError. CORREÇÃO: iterar sobre os node_ids pareados: for eid,nid in zip(error_ids, node_ids): data=events.get(nid); if data is not None: construir ErrorEvent com esse eid."
+ },
+ "s_9c86f0c6": {
+  "summaryPt": "Indexação de dict sem proteção nas slow conditions do DCG quebra o delayed workflow em grupos deletados",
+  "contentPt": "O QUÊ: get_condition_query_groups e get_groups_to_fire fazem indexação direta de dict dcg_to_slow_conditions[dcg.id] e workflows_to_envs[workflow_id]. POR QUÊ: dcg_to_slow_conditions é construído a partir de get_slow_conditions_for_groups, que retorna apenas DCGs existentes; se um DCG foi deletado após o buffering, a chave não existe -> KeyError quebra a task delayed_workflow e bloqueia retries. O mesmo vale para workflow_id ausente em workflows_to_envs. CORREÇÃO: usar .get(dcg.id, []) e workflows_to_envs.get(workflow_id) com fallback None."
+ },
+ "s_897c6f7d": {
+  "summaryPt": "Ordenação in-place do error_events compartilhado altera o estado do paginator",
+  "contentPt": "O QUÊ: get_request_data altera in-place, via sort(), a lista error_events fornecida pelo chamador. POR QUÊ: error_events é reutilizada entre chamadas do paginator via functools.partial(analyze_recording_segments, error_events); ordenar altera a lista compartilhada, então buscas de páginas seguintes veem um estado já ordenado (e depois parcialmente consumido via índice), e a ordem original do chamador é perdida. CORREÇÃO: copiar antes de ordenar: sorted_errors = sorted(error_events, key=lambda x: x['timestamp'])."
+ },
+ "s_7e019eee": {
+  "summaryPt": "Update do detector lê a chave errada de validated_data, então a mudança de tipo é ignorada silenciosamente",
+  "contentPt": "O QUÊ: update() faz instance.type = validated_data.get('detector_type', instance.group_type).slug, mas validate_type armazena o resultado na chave 'type'. POR QUÊ: validated_data nunca contém 'detector_type', então o fallback para instance.group_type é sempre usado -> o PUT nunca altera de fato o tipo do detector, quebrando o contrato de update; create() usa corretamente validated_data['type'].slug. CORREÇÃO: alinhar para validated_data.get('type', instance.group_type).slug ou validated_data.get('detector_type', validated_data.get('type', instance.group_type))."
+ },
+ "s_46b42f89": {
+  "summaryPt": "fetch_error_details faz zip de error_ids com events.values(), causando desalinhamento quando algum id está ausente",
+  "contentPt": "get_multi retorna um dict indexado por node_id; fazer zip de error_ids com events.values() assume que todas as chaves estão presentes e que a ordem é preservada. Quando algum erro não está no nodestore, values() diminui e os pares se deslocam, atribuindo o title/message/timestamp errado ao error_id errado. Itere sobre os ids originais e use events.get(node_id)."
+ },
+ "s_222ac473": {
+  "summaryPt": "Verificação exclusiva de age/timestamp usa .get() por truthiness, então age=0 ou timestamp=0 ignora a validação",
+  "contentPt": "Substitua `if self.initial_data.get(\"age\"):` / `get(\"timestamp\"):` por `if \"age\" in self.initial_data:` / `if \"timestamp\" in self.initial_data:` (ou verifique is not None). O inteiro 0 é válido para age/timestamp, mas é falsy, então o branch atual nunca é executado para esse valor e relatórios com campos mistos passam como 200."
+ },
+ "s_f7917ec5": {
+  "summaryPt": "Relatórios de browser sem redação (url/user_agent/body) são logados na íntegra",
+  "contentPt": "Loga relatórios de browser completos sem sanitização: logger.info em :93 com extra request_body e warnings em :101-113 com raw_data/raw_report/validation_errors. A url pode conter tokens na query string, user_agent é PII, body é um dict arbitrário da Browser Reporting API. Logs INFO persistidos ampliam a exposição. Redija/remova query params, trunque/limite o body, evite logar user_agent/url na íntegra e não repita raw_report no extra do warning."
+ },
+ "s_bd6e5c15": {
+  "summaryPt": "Títulos/mensagens de erro sem filtro são exfiltrados para o Seer para o resumo de IA",
+  "contentPt": "Passa a enviar title/message de eventos de erro sem filtro (do nodestore, frequentemente contendo PII, SQL, stack traces, input do usuário) para o LLM externo do Seer via make_seer_request. fetch_error_details em :104 obtém title/message brutos e generate_error_log_message em :126 os concatena, então analyze_recording_segments em :177 faz POST dos logs em JSON para SEER_AUTOFIX_URL. Sem scrubbing de PII, redação de secrets ou limite de tamanho. Sanitize/filtre o conteúdo dos erros ou condicione a um consentimento explícito/verificação de uso de dados."
+ },
+ "s_0b48b37f": {
+  "summaryPt": "Validação de exclusão mútua usa truthiness, então valores 0 ignoram a verificação",
+  "contentPt": "Os validators usam `if self.initial_data.get(\"age\")` e `if self.initial_data.get(\"timestamp\")` para impor a exclusividade mútua de age/timestamp. `dict.get` retornando 0 é falsy, então age=0 ou timestamp=0 (ambos válidos – timestamp tem min_value 0) ignora o erro e permite os dois campos. Use uma verificação explícita de existência: `if \"age\" in self.initial_data` / `if \"timestamp\" in self.initial_data` ou `is not None`."
+ },
+ "s_e8d1320e": {
+  "summaryPt": "zip(error_ids, events.values()) assume uma garantia de ordenação do dict que não existe",
+  "contentPt": "fetch_error_details faz zip dos ids de entrada com os valores do dict: `zip(error_ids, events.values())`. `get_multi` retorna um dict indexado por node_id sem ordem garantida e pode omitir ids ausentes, então a ordem dos valores não necessariamente corresponde à ordem de error_ids. Itere sobre error_ids e busque pelo node_id gerado."
+ },
+ "s_d300fc2e": {
+  "summaryPt": "Verificação de truthiness para custom cell trata render válido 0/vazio como ausente",
+  "contentPt": "A presença do renderer customizado é verificada com `if (cell) return cell`. ReactNode 0, \"\" ou false são resultados de render válidos, mas falsy, então o fallback os sobrescreveria incorretamente. Verifique undefined explicitamente: `if (cell !== undefined) return cell`."
+ },
+ "s_0ef0a25a": {
+  "summaryPt": "Teste de replay com um único erro mascara o desalinhamento do zip(values) para múltiplos erros",
+  "contentPt": "test_get_with_error usa apenas um error_id, então o desalinhamento de zip(error_ids, events.values()) em src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:110-118 não é exercitado. Com >1 error_ids e uma entrada ausente no nodestore, o tamanho de values < tamanho de ids e o zip associa id->dados errados, mas o teste com um único elemento continua passando. Adicione um caso com vários erros e um id ausente e verifique o pareamento correto."
+ },
+ "s_9ae4f546": {
+  "summaryPt": "Testes de browser report não exercitam mais o parser application/reports+json",
+  "contentPt": "test_basic e test_handles_multiple_reports_both_specs agora fazem POST com content-type JSON padrão, não application/reports+json. O endpoint testado tem BrowserReportsJSONParser (media_type application/reports+json) além de JSONParser. Quebrar ou remover BrowserReportsJSONParser não faria esses testes falharem, embora a funcionalidade que eles alegam cobrir (ingestão da Reporting API) ficasse quebrada. Restaure content_type='application/reports+json' explícito em pelo menos um teste de caminho feliz."
+ },
+ "s_edcf69f6": {
+  "summaryPt": "Visualize renomeou yAxes para yAxis e mudou fromJSON para retornar array, quebrando consumidores do campo/tipo de retorno antigo",
+  "contentPt": "Preserve a compatibilidade retroativa ou garanta que todos os consumidores foram migrados. Mantenha um getter deprecated yAxes que retorna [this.yAxis] e faça fromJSON tratar ambos os formatos, ou use grep de forma abrangente e atualize todos os usos restantes de visualize.yAxes / Visualize.fromJSON. Exemplo: get yAxes(){return [this.yAxis];} e static fromJSON(json): Visualize | Visualize[] com overload, ou atualize os call sites para usar yAxis e tratar o retorno em array."
+ },
+ "s_8ee66661": {
+  "summaryPt": "Caminho com flag do TableWidgetVisualization passa dados vazios, sempre renderizando uma tabela vazia",
+  "contentPt": "O produtor não satisfaz o contrato do consumidor: TableWidgetVisualization (tableWidgetVisualization.tsx:91-99) deriva columnOrder de tableData.meta.fields e renderiza tableData.data. chart.tsx:164-175 fornece columns vazias e data/meta vazios quando a feature 'use-table-widget-visualization' está ativa, então o caminho com flag sempre renderiza uma tabela vazia. Conecte o resultado real: columns a partir de fields/fieldAliases e tableData a partir de result.data/result.meta (como faz o branch StyledSimpleTableChart)."
+ },
+ "s_2a158b71": {
+  "summaryPt": "zip(error_ids, events.values()) desalinha os resultados do nodestore, corrompendo o contexto de erro",
+  "contentPt": "Itere por chave: for eid in error_ids: data = events.get(Event.generate_node_id(project_id, eid)) em vez de zip com values() para preservar o alinhamento."
+ },
+ "s_06fc42aa": {
+  "summaryPt": "Constante MAX_LENGTH excedida pela lógica de reticências",
+  "contentPt": "O nome ISSUE_TITLE_MAX_LENGTH promete um máximo, mas _truncate_title em 578-582 faz title[:max_length].rstrip()+\"...\" resultando em len = max_length+3 (53 quando 50). Renomeie a constante para TRUNCATE_AT ou imponha o limite fatiando em max_length-3 antes de adicionar as reticências, para que quem lê o nome obtenha o contrato que o código realmente impõe."
+ },
+ "s_e168c9d8": {
+  "summaryPt": "Docstring desatualizada descreve o comportamento antigo de coleta de segmentos",
+  "contentPt": "A docstring \"Return a collection of replay recording segments.\" não descreve mais o método após a adição de filter_params, query_replay_instance error_ids, fetch_error_details e analyze_recording_segments/sumarização do Seer. Atualize para descrever que retorna um resumo de IA dos breadcrumbs mesclado com o contexto de erros, ou remova a frase desatualizada para que nome/docs concordem com o código."
+ },
+ "s_3fb5d8c4": {
+  "summaryPt": "Parâmetro obrigatório dcg_to_slow_conditions adicionado quebra chamadores que ainda usam a assinatura antiga",
+  "contentPt": "Torne o novo parâmetro opcional com um fallback para preservar o contrato antigo, ou atualize todos os consumidores. Exemplo: def get_condition_query_groups(..., dcg_to_slow_conditions: dict[...] | None = None): if dcg_to_slow_conditions is None: dcg_to_slow_conditions = get_slow_conditions_for_groups(list(event_data.dcg_to_groups.keys())) e o mesmo para get_groups_to_fire. Isso mantém os chamadores existentes funcionando e permite que process_delayed_workflows passe o dict em cache."
+ },
+ "s_0d0859c1": {
+  "summaryPt": "useFeedbackSummary acessa data undefined quando a query está desabilitada, quebrando a renderização",
+  "contentPt": "Proteja data antes de acessá-lo. Quando enabled=false, useApiQuery retorna data undefined enquanto isPending/isError são false, então o return final deve verificar if (!data) e retornar valores padrão antes de ler data.summary."
+ },
+ "s_f9dadae9": {
+  "summaryPt": "Dict dcg_to_slow_conditions elevado (hoisted) indexado sem get seguro pode gerar KeyError",
+  "contentPt": "Use .get com fallback ou garanta que o dict cubra todos os ids de data_condition_groups. A indexação direta pode lançar KeyError se dcg_ids e dcg_to_groups divergirem."
+ }
+}

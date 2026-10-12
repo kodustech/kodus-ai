@@ -1,0 +1,39 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "retryCount is incremented from the stale in-memory value (reminder.retryCount + 1) instead of an atomic DB increment, so concurrent runs can lose updates"
+   },
+   {
+    "id": "F2",
+    "description": "The retryCount update inside the catch block (lines 190-197) has no guard; if it throws, the error escapes, stops the loop and skips the remaining reminders"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_973148f4",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dc093c16",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_4e2a8deb",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

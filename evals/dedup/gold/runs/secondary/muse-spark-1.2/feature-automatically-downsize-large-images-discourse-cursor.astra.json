@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_b9468b8e",
+    "mainDefect": "The remote-download limit is hardcoded to 10 MB instead of respecting the configured upload limit, potentially truncating permitted larger images.",
+    "secondary": [
+     {
+      "defect": "The downsizing loop ignores downsize's false return value, retrying failed conversions and passing the corrupt file to Upload.create_for.",
+      "coveredBy": []
+     },
+     {
+      "defect": "The URL-upload branch never sets content_type, leaving it nil when the file reaches Upload.create_for.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "validate_timestamp/validate_age (lines 50-60) check the other field by truthiness via initial_data.get(), so age=0 or timestamp=0 slips past the age/timestamp mutual-exclusion check"
+   },
+   {
+    "id": "F2",
+    "description": "Both age and timestamp are required=False, so a report with neither field still validates, which contradicts the validators' docstrings"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_06a69ac5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_73ccec8d",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5617da88",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b934e7bb",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

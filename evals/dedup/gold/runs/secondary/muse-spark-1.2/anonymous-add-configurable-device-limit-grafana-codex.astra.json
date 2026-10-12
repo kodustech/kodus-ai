@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_f91fbc78",
+    "mainDefect": "Synchronous device tagging makes anonymous authentication block on database operations.",
+    "secondary": [
+     {
+      "defect": "Using the request context allows request cancellation to abort device tagging.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_3a7464c4",
+    "mainDefect": "Changing device tagging from fire-and-forget to synchronous makes anonymous authentication wait for database operations.",
+    "secondary": [
+     {
+      "defect": "ErrDeviceLimitReached now rejects anonymous authentication without updating callers to handle and translate the refusal.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_82da83fd",
+    "mainDefect": "Replacing the injected AnonStore with db.DB removes the ability to inject a fake or mock AnonStore.",
+    "secondary": [
+     {
+      "defect": "Existing callers and wire bindings that still supply AnonStore will fail compilation or dependency injection after the parameter changes to db.DB.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

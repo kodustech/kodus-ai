@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_2f48b633",
+    "mainDefect": "The reader thread is not joined before the assertion, so exceptions from reads still in flight can be missed.",
+    "secondary": [
+     {
+      "defect": "The test does not ensure the reader starts reading before deletion begins, so a slow reader start can let it pass without exercising concurrent reads and deletions.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

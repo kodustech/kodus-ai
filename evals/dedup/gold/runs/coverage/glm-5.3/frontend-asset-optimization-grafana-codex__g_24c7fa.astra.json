@@ -1,0 +1,40 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GetWebAssets, lines 48–49: missing cache re-check under the write lock causes redundant serialized manifest reads and parsing on non-Dev cold starts."
+   },
+   {
+    "id": "F2",
+    "description": "GetWebAssets, lines 48–49: every Dev-mode call holds the exclusive lock during disk I/O, serializing concurrent callers."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_25eea308",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7e94bcff",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_a043dacd",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

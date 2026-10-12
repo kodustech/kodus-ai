@@ -1,0 +1,53 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "e485b87098f241957381758239f2bd8fe901cb3b",
+  "attempt": 1,
+  "ms": 31192,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_6eca779f",
+          "s_c31ce8c2"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The layout uses the full referer URL instead of its origin as postMessage's targetOrigin, preventing iframe resize messages from being delivered.",
+        "rationale": "Both suggestions report the same targetOrigin defect in the same postMessage call. The same single edit addresses both."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_d64d4f89",
+        "confidence": "high"
+      },
+      {
+        "id": "s_d66938c6",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b2fec2e9",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ecbe8ddb",
+        "confidence": "high"
+      },
+      {
+        "id": "s_15ac66d7",
+        "confidence": "high"
+      },
+      {
+        "id": "s_95a4cffc",
+        "confidence": "high"
+      },
+      {
+        "id": "s_f0aa2978",
+        "confidence": "high"
+      }
+    ]
+  }
+}

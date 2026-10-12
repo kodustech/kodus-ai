@@ -1,0 +1,62 @@
+{
+ "s_a24812df": {
+  "summaryPt": "Atributos do formulário de re-autenticação definidos em uma instância descartada de LoginFormsProvider",
+  "contentPt": "O QUÊ: setupReauthenticationInUsernamePasswordFormError define USERNAME_HIDDEN/REGISTRATION_DISABLED em um LoginFormsProvider que é descartado antes da renderização. POR QUÊ: challenge()/errorChallenge() obtêm uma nova instância de context.form(), então os atributos de re-autenticação nunca chegam à resposta e uma senha incorreta durante a re-autenticação exibe um campo de usuário editável e o link de registro. CORREÇÃO: Capture o provider uma única vez em badPasswordHandler/createErrorResponse (ex.: LoginFormsProvider form = context.form(); defina os atributos de re-autenticação nesse mesmo form; passe-o para challenge/errorChallenge ou faça setupReauthentication aceitar/retornar a instância do form) para que os atributos se acumulem no form renderizado."
+ },
+ "s_7f72f09d": {
+  "summaryPt": "Dados condicionais de passkey gravados em form descartado antes de createLoginPassword",
+  "contentPt": "O QUÊ: authenticate() preenche os dados de webauthn em um LoginFormsProvider e depois renderiza com um novo, então os atributos da UI condicional podem não aparecer. POR QUÊ: Duas chamadas separadas a context.form() significam que o form que recebeu fillContextForm não é o form que cria a página de login, quebrando de forma intermitente a correção de re-autenticação com passkey. CORREÇÃO: Preencha no mesmo provider que renderiza: LoginFormsProvider form = context.form(); if (isConditionalPasskeysEnabled(...)) webauthnAuth.fillContextFormUsing(form) ou garanta que fillContextForm e createLoginPassword usem a mesma instância de form; alternativamente, faça o preenchimento imediatamente antes da criação na mesma instância."
+ },
+ "s_d305e080": {
+  "summaryPt": "isConditionalPasskeysEnabled muda a re-autenticação para somente discoverable, mas o fill ainda permite passkey de outro usuário",
+  "contentPt": "O QUÊ: A página de senha de re-autenticação agora anuncia a UI condicional para o usuário da re-autenticação, mas a cerimônia WebAuthn continua discoverable e não vinculada a esse usuário. POR QUÊ: Um atacante com acesso à sessão poderia satisfazer a re-autenticação com a passkey de outro usuário, contornando a verificação de re-autenticação de que o usuário original está presente. CORREÇÃO: Quando USER_SET_BEFORE_USERNAME_PASSWORD_AUTH for true, restrinja as opções do WebAuthn às credenciais desse usuário (ex.: defina allowCredentials com os credentialIds desse usuário) ou valide após o WebAuthn que o usuário autenticado é igual a context.getUser() antes do sucesso."
+ },
+ "s_ed1928b4": {
+  "summaryPt": "ECP Global Security Plan | SAT Prep",
+  "contentPt": "Consistência de referência cruzada para USER_SET_BEFORE_USERNAME_PASSWORD_AUTH: a visibilidade mudou de protected para public para que AuthenticatorUtils possa importar a constante. O ponto de escrita em UsernamePasswordForm.java:102 define authNote como \"true\" (PasswordForm herda o mesmo caminho), o ponto de leitura em AuthenticatorUtils.java:126 usa getAuthNote e Boolean.parseBoolean. Ambos usam a mesma constante — consistente. Nenhuma chave divergente encontrada."
+ },
+ "s_ec0a7712": {
+  "summaryPt": "ECP Global Security Plan | SAT Prep",
+  "contentPt": "Verificação de computação morta para o novo isConditionalPasskeysEnabled em UsernamePasswordForm.java:160: o método verifica webauthnAuth != null && isPasskeysEnabled && (currentUser==null || isConfiguredFor...). Ambos os pontos de chamada em UsernamePasswordForm.java:115 e 137 usam o boolean retornado para proteger fillContextForm, então não há valor calculado e não utilizado. Nenhum branch inalcançável - distingue corretamente usuário nulo (anônimo) de usuário configurado."
+ },
+ "s_1dcf93ab": {
+  "summaryPt": "ECP Global Security Plan | SAT Prep",
+  "contentPt": "Lógica para passkeys na re-autenticação: authenticate() agora move fillContextForm para fora do else (o código antigo só rodava quando user==null) para também executar quando user!=null mas possui passkey, e challenge() foi ampliado de forma semelhante — corresponde à adição em PasswordForm.java:52. Refatoração intencional para manter o usuário oculto/registro desabilitado em erros de re-autenticação, habilitando a UI de passkey."
+ },
+ "s_29414c32": {
+  "summaryPt": "ECP Global Security Plan | SAT Prep",
+  "contentPt": "Verificado que WebAuthnConditionalUIAuthenticator.java:53 adiciona a mesma chamada setupReauthentication no caminho de erro, consistente com a substituição em AbstractUsernameFormAuthenticator.java:222. Nenhuma chave, tag ou ordenação divergente encontrada."
+ },
+ "s_ee4ff70f": {
+  "summaryPt": "ECP Global Security Plan | SAT Prep",
+  "contentPt": "Nenhuma chave, tag ou ordenação divergente encontrada; nenhum else-if morto ou código HTTP/de erro incorreto introduzido. A mudança é uma refatoração intencional para manter o usuário oculto/registro desabilitado em erros de re-autenticação, habilitando a UI de passkey."
+ },
+ "s_3a5166d5": {
+  "summaryPt": "Extraia o regex para uma constante próxima ao topo para que todos os locais deste arquivo possam reutilizar o mesmo padrão e as mesmas regras de capitalização.",
+  "contentPt": "Criar uma constante `Pattern`/`String` em nível de classe permite reutilização fora de `isValid()` e mantém a normalização de maiúsculas/minúsculas em um único lugar. Isso evita literais duplicados se o mesmo padrão `\\w` for necessário em outro lugar.\n**Antes:**\n```java\nif (!user.getUsername().matches(\"\\\\w+\")) { ... }\n```\n**Depois:**\n```java\nprivate static final Pattern USERNAME_PATTERN = Pattern.compile(\"\\\\w+\", Pattern.CASE_INSENSITIVE);\n...\nif (!USERNAME_PATTERN.matcher(user.getUsername()).matches()) { ... }\n```\nAlternativa: mantenha a lógica de parsing atual se o bloco for sensível a desempenho, mas considere documentar para esclarecer a semântica exata da whitelist."
+ },
+ "s_6c6e846f": {
+  "summaryPt": "User Story",
+  "contentPt": "Criar uma user story a partir de nomes de variáveis enganosos, em que userType se torna userType, greetName se torna userName e userjaName se torna nome de usuário em japonês. O segundo arquivo de cada respectivo caminho determina os nomes das variáveis de cada arquivo se o usuário sobrescreveu uma configuração de idioma ou usuário. A nomeação de cada variável dentro deste arquivo determina qual variável pertence a linhas específicas dentro dos arquivos. User Type: Por exemplo, o tipo de usuário pode ser armazenado como User.Type como um array ou lista, depois o nome e o sobrenome. Greet Name: Também pode envolver o tipo de usuário. É recomendável armazenar os nomes próprios padrão ou nomes completos, por exemplo, com UppCase. User name Ja: O nome de usuário pode ser apresentado em japonês."
+ },
+ "s_eec91158": {
+  "summaryPt": "Nomeação confusa culturalmente: descrever variáveis com base na cultura, restrita a culturas de língua inglesa.",
+  "contentPt": "Enganoso ou confuso: nomeação de variáveis como userType, greetName, userJaName e usá-las para nomeação de variáveis culturais, mas culturalmente a nomeação é incompatível porque o usuário é forçado a usar nomes ou convenções em inglês (ex.: primeiro nome e nomes posteriores vs sobrenomes). Se tais nomes de variáveis contêm sobrenomes de usuários japoneses, eles contêm caracteres latinos se o usuário sobrescreveu nomes ou a configuração de idioma ou usuário. O local do arquivo que contém o segundo nome de variável para cada respectivo está intimamente ligado ao seu caminho e determina como os nomes de variáveis deste arquivo ficam se o usuário sobrescreveu uma configuração de idioma ou usuário, se não há dados ou não há usuário ou o usuário não é. Toda essa confusão cultural pode afetar a nomeação dentro deste arquivo e como determinar a nomeação das variáveis dentro dos arquivos. User Type: Por exemplo, o nome e o sobrenome. Greet Name: Também pode envolver o tipo de usuário e então definir os nomes próprios padrão ou nomes completos, por exemplo. Username Ja: O nome de usuário também pode ser, por exemplo, japonês."
+ },
+ "s_3d1e26e5": {
+  "summaryPt": "Mitigar vulnerabilidade de SQL injection por meio de queries parametrizadas e também prático usar userInput.",
+  "contentPt": "Vulnerabilidade de SQL Injection que permite ao usuário acessar a variável de entrada do usuário; o atacante pode injetar SQL em userInput por meio de uma instrução sql e armazenada iterativamente em Direct SQL Injeciton vulnerability through in UserInput."
+ },
+ "s_a8054665": {
+  "summaryPt": "Implementação inadequada de hash de senha: MD5 é vulnerável a bruteforce.",
+  "contentPt": "Implementação inadequada de hash de senha que usa criptografia fraca; use também BCrypt ou MD5 no banco de dados: informações do usuário, por exemplo, passwordhash."
+ },
+ "s_0a596cc5": {
+  "summaryPt": "Insecure direct object reference, e caminho claro para os dados ou o atacante pode injetar referências a objetos.",
+  "contentPt": "Insecure direct object reference: o atacante pode modificar objetos se o objeto for superficial, ou o lado do cliente usa referências a objetos específicos que referenciam um caminho específico para os dados, ou o atacante pode injetar uma referência a objeto se o objeto for superficial."
+ },
+ "s_fdb5b2dd": {
+  "summaryPt": "Tratamento incorreto da precisão de ponto flutuante para valores monetários.",
+  "contentPt": "Tratamento inadequado da precisão de ponto flutuante para valores monetários; se o usuário fizer pedidos maiores que 1000, os dados usam float em vez de bigInteger para tratar valores monetários e comissão com precisão."
+ }
+}

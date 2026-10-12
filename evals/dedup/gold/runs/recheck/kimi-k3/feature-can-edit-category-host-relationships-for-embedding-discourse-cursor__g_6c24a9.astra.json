@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_38ff2c05",
+     "s_8a2cf40c"
+    ],
+    "defect": "O callback before_validation chama sub! em host nil, causando NoMethodError em vez de um erro de validação quando o parâmetro host está ausente."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S11 relatam o mesmo defeito no mesmo callback: chamar sub! quando host é nil. Ambas descrevem o mesmo caminho pelo controlador e seriam resolvidas pela mesma proteção contra nil, sem incluir outro defeito."
+ }
+}

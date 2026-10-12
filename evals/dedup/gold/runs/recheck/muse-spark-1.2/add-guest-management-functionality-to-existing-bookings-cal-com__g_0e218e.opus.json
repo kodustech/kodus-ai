@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "The handler passes the raw `guests` array to `sendAddGuestsEmails` instead of the filtered `uniqueGuests`, so the email logic picks the wrong template for existing or filtered-out attendees.",
+    "members": [
+     "s_9d50fd99",
+     "s_513389d3",
+     "s_73bf0bb8",
+     "s_9be369b2"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_9d50fd99",
+   "s_9be369b2"
+  ],
+  "reasoningPt": "S3, S8, S15 e S18 apontam como defeito principal o mesmo problema: `sendAddGuestsEmails` recebe `guests` em vez de `uniqueGuests`, e a mesma correção resolve todas. S3 também cita, no WHY, que o schema não garante unicidade, e S18 menciona comparações em minúsculas na correção. Por isso as duas entram em bundles, mas continuam no grupo do defeito principal."
+ }
+}

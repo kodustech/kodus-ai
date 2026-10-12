@@ -1,0 +1,24 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_b8b58cda",
+     "s_5ce0b553",
+     "s_76132555"
+    ],
+    "defect": "The blacklist check compares the raw guest email against lowercased blacklist entries, so a blacklisted address with different casing gets through."
+   }
+  ],
+  "unique": [
+   "s_0005a575"
+  ],
+  "bundles": [
+   "s_b8b58cda",
+   "s_76132555"
+  ],
+  "reasoningPt": "S9 e S13 tratam do bypass da blacklist por diferença de maiúsculas/minúsculas, e S4 também cita esse defeito primeiro; S4 e S13 só acrescentam a deduplicação de participantes como item secundário. S10 trata apenas da comparação case-sensitive na deduplicação (guest === attendee.email), que é outro defeito com outra correção, então fica sozinha."
+ }
+}

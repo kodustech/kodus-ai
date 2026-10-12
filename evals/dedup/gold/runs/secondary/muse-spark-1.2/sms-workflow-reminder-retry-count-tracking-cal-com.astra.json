@@ -1,0 +1,19 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_dc093c16",
+    "mainDefect": "Updating retryCount from a stale in-memory value instead of using an atomic increment loses increments during concurrent cron runs.",
+    "secondary": [
+     {
+      "defect": "The catch-path database update is unguarded, so its failure aborts the loop and leaves remaining reminders unprocessed.",
+      "coveredBy": [
+       "s_973148f4"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

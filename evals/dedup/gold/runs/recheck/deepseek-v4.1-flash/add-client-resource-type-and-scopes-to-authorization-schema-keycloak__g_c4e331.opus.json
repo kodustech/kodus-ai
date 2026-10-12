@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_ca951180",
+     "s_752a0659",
+     "s_736fc3f5"
+    ],
+    "defect": "The AdminPermissions removal-event listener still calls setPermissionsEnabled under V2, where MgmtPermissionsV2.clients() now returns ClientPermissionsV2, whose setPermissionsEnabled throws UnsupportedOperationException, so deleting a client, role or group fails."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S4 e S5 relatam o mesmo defeito: o listener de remoção em AdminPermissions continua chamando setPermissionsEnabled no modo V2. Nesse modo, ClientPermissionsV2 lança UnsupportedOperationException e a exclusão falha. S4 parte do ponto onde o problema nasce (MgmtPermissionsV2.clients()) e S1/S5 partem do listener que quebra, mas uma única correção resolve tudo. Isso pode ser pular o V2 no guard ou fazer o método não fazer nada em vez de lançar exceção."
+ }
+}

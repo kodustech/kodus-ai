@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_924e2d8b",
+     "s_accc352b"
+    ],
+    "defect": "getClientsWithPermission uses findByType, which also matches the type-level \"Clients\" resource, so the literal string \"Clients\" is added to the set of client IDs instead of real client IDs."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_924e2d8b"
+  ],
+  "reasoningPt": "S2 e S7 apontam o mesmo defeito principal: getClientsWithPermission coloca o nome do recurso sentinela \"Clients\" no conjunto de IDs de clientes. A correção é a mesma nos dois: ignorar esse recurso de tipo. S2 também traz um segundo defeito, os recursos por cliente criados sem o atributo type, por isso entra em bundles, mas continua no grupo do seu defeito principal."
+ }
+}

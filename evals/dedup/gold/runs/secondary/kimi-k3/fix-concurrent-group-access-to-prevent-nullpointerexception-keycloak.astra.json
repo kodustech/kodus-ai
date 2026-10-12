@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ce320063",
+    "mainDefect": "The test asserts before the reader thread finishes, so an exception from its final in-flight request can be missed and the test can falsely pass.",
+    "secondary": [
+     {
+      "defect": "The test leaks a non-daemon reader thread past the end of the test.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

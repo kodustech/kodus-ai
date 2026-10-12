@@ -1,0 +1,32 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "topic_embed.rb line 13: `contents << ...` mutates the caller's string in place (raises on frozen strings, adds the footer twice if the string is reused)"
+   },
+   {
+    "id": "F2",
+    "description": "topic_embed.rb line 13: interpolated `url` in the imported_from link (href and link text) is not HTML-escaped, which allows HTML injection in raw_html posts"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_778e09a3",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_22702472",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

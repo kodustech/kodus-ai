@@ -1,0 +1,42 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+  "promptSha": "0a7ac782ad728d6c9ff653c19c79663abfa6be8f",
+  "attempt": 1,
+  "ms": 28300,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_5adb8ad3",
+          "s_3897ff04",
+          "s_8fd4a0ab"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "get_monitor_environment_context returns the original config instead of the transformed copy, discarding the schedule_type display conversion.",
+        "rationale": "All three identify the same incorrect return value in the same function. Returning the transformed config resolves every report."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_3f127124",
+        "confidence": "high"
+      },
+      {
+        "id": "s_10af6640",
+        "confidence": "high"
+      },
+      {
+        "id": "s_6627628a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_441907a1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

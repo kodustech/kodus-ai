@@ -1,0 +1,83 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "Office365CalendarService.createEvent (office365calendar/lib/CalendarService.ts ~L72) does not accept the credentialId parameter that the Calendar interface now requires"
+   },
+   {
+    "id": "F2",
+    "description": "LarkCalendarService.createEvent (larkcalendar/lib/CalendarService.ts ~L125) does not accept the credentialId parameter that the Calendar interface now requires"
+   },
+   {
+    "id": "F3",
+    "description": "BaseCalendarService.createEvent (packages/lib/CalendarService.ts) does not accept the credentialId parameter that the Calendar interface now requires"
+   },
+   {
+    "id": "F4",
+    "description": "The non-Google implementations always use destinationCalendar[0] instead of picking the entry whose credentialId matches"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_33ed9a24",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_af4c6322",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_dc30b21a",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_99ffaedb",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_08905d22",
+    "covers": [
+     "F2",
+     "F4"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_47e65bca",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_7335ccdf",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ],
+  "decisive": false,
+  "reasoning": "I used four facets: one for each implementation missing the parameter (Office365, Lark, Base) and one for the calendar-selection defect, which the group problem describes as shared by all three. Splitting the selection defect per provider, as Labeler 2 did, goes beyond what most members actually say.\n\n- s_47e65bca names all three classes and says per-credential selection is left unimplemented for those providers, so it is complete.\n- s_dc30b21a reports Office365's signature and its use of [0], then says to apply the same fix to Lark and Base. I count that as stating those locations have the same problem, not as fix-only wording, so it is complete. This is the call that could reasonably go the other way.\n- s_08905d22 covers Lark's signature and its use of the first calendar (F2, F4).\n- s_99ffaedb mentions selection only as a benefit (\"allow correct calendar selection\"), so I gave it only F1.\n- s_af4c6322 actually says Lark may not need selection, so it gets only F2.\n\nI left out the Lark update/delete facets. Only one summary mentions them, and the group problem is about createEvent.\n\nThis is not decisive. The facet granularity and whether \"apply the same fix to X\" counts are both judgment calls."
+ }
+}

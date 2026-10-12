@@ -1,0 +1,24 @@
+{
+  "judge": "astra",
+  "model": "opus-5.5",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "promptSha": "2e750037937c963d2a5643714f082bbb55614626",
+  "attempt": 1,
+  "ms": 27605,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_bb646b1e",
+          "s_438385f5"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Populating identified-user WebAuthn data on the unauthenticated password step exposes an account's passkey presence and credential IDs to anyone who enters its username.",
+        "rationale": "Both suggestions flag the same fillContextForm call and the resulting disclosure through passkeys.ftl. They describe the same exposed information and propose the same restriction to authenticated re-authentication contexts."
+      }
+    ],
+    "unique": []
+  }
+}

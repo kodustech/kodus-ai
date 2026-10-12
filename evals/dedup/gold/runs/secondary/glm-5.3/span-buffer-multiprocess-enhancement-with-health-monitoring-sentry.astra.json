@@ -1,0 +1,59 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_ed5056d1",
+    "mainDefect": "An explicit process count of zero is treated as None and unexpectedly selects one flusher process per shard.",
+    "secondary": [
+     {
+      "defect": "Negative process counts create zero flusher processes, leaving ingestion running without flushing or backpressure.",
+      "coveredBy": [
+       "s_0686ed03"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_d8e8bf32",
+    "mainDefect": "The wait_produce metric uses the tag key \"shards\" while sibling metrics use \"shard\", fragmenting the same dimension.",
+    "secondary": [
+     {
+      "defect": "The flusher_unhealthy metric uses individual shard IDs while main-loop metrics use comma-joined shard IDs under the same tag key.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_45039749",
+    "mainDefect": "The newly added _create_process_for_shard method has no callers and is dead code.",
+    "secondary": [
+     {
+      "defect": "If called, _create_process_for_shard would overwrite the existing process reference without killing the old process, leaking it and its shared state.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_956e4955",
+    "mainDefect": "The restart path's isinstance check excludes SpawnProcess instances, preventing hung processes from being killed before replacements start.",
+    "secondary": [
+     {
+      "defect": "The same incorrect isinstance check in join() prevents SpawnProcess instances from being terminated during shutdown.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_7c7ec2d9",
+    "mainDefect": "The internal child-factory construction fails to forward flusher_processes, causing the multiprocessing path to ignore the configured limit.",
+    "secondary": [
+     {
+      "defect": "A positional produce_to_pipe argument at the unchanged child-factory call would bind to the newly inserted flusher_processes parameter and cause a TypeError.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

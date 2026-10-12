@@ -1,0 +1,46 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "assignment_source.py:18 evaluates queued's default at import time, giving all default instances the same timestamp."
+   },
+   {
+    "id": "F2",
+    "description": "assignment_source.py:27-28 preserves a raw datetime in to_dict(), which can cause Celery JSON encoding to fail at sync.py's apply_async call."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_2431eed5",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_2438c807",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_b531a8e1",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_2673b2c5",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,49 @@
+{
+  "model": "kimi-k3",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "component": [
+    "s_04234c39",
+    "s_4772139b",
+    "s_7789b76a",
+    "s_802136a9",
+    "s_886d9c42",
+    "s_9ac2aa83",
+    "s_b9487ef1"
+  ],
+  "flip": true,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_04234c39",
+          "s_802136a9",
+          "s_b9487ef1"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "defect": "ClientPermissionsV2.setPermissionsEnabled throws UnsupportedOperationException and the ClientRemovedEvent listener in AdminPermissions calls it, so client deletion fails under V2."
+      },
+      {
+        "members": [
+          "s_4772139b",
+          "s_7789b76a"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "ClientPermissionsV2.canExchangeTo throws UnsupportedOperationException, so token exchange fails with HTTP 500 under V2."
+      },
+      {
+        "members": [
+          "s_886d9c42",
+          "s_9ac2aa83"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "defect": "The management-permission accessors in ClientPermissionsV2 (isPermissionsEnabled, resource, getPermissions, *Permission) throw, so the client management/permissions admin REST endpoints return 500 under V2."
+      }
+    ],
+    "unique": [],
+    "decisive": false,
+    "reasoning": "There are three separate runtime defects. (1) Client deletion: s_04234c39, s_802136a9 and s_b9487ef1 all report that the ClientRemovedEvent listener calls setPermissionsEnabled, which throws, so deleting a client fails. One fix covers it. (2) Token exchange: s_4772139b and s_7789b76a both report that canExchangeTo throws during token exchange. (3) Management-permissions REST endpoints: s_886d9c42 and s_9ac2aa83 report that the permission accessors behind those endpoints throw and cause 500s. s_886d9c42 lists setPermissionsEnabled only as a method behind the endpoints and mentions the removal listener only as context, so it does not report the deletion defect. s_4772139b's 'likewise exchangeToPermission' is an aside tied to token exchange, not a report about the REST endpoints. Judge 1 merged everything by treating these side mentions as overlaps, which the rules exclude. Because the exchangeToPermission aside can be read either way, this is not fully decisive."
+  }
+}

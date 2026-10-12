@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_60a14d18",
+     "s_31df1725"
+    ],
+    "defect": "RuleActionsButtons passes the now-optional `rule` (possibly undefined) to useRulerRuleAbility, whose signature still requires a RulerRuleDTO."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2 e S5 apontam o mesmo defeito: o `rule` opcional é passado para useRulerRuleAbility, cuja assinatura ainda exige RulerRuleDTO. As correções propostas são equivalentes (aceitar ou pular undefined no hook singular). Nenhuma das duas traz um segundo defeito, então o grupo continua como está."
+ }
+}

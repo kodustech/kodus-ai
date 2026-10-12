@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_6c6e846f",
+     "s_eec91158"
+    ],
+    "defect": "Nomenclatura ambígua de userType, greetName e userJaName em UserStory.java, confundindo tipo de usuário e nomes pessoais em diferentes contextos culturais."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S10 e S11 descrevem a mesma confusão de nomenclatura, nas mesmas variáveis e no mesmo arquivo; S11 apenas enfatiza o aspecto cultural. Apesar da redação pouco clara e sem relação aparente com o diff, não há um segundo defeito independente que justifique separar as sugestões."
+ }
+}

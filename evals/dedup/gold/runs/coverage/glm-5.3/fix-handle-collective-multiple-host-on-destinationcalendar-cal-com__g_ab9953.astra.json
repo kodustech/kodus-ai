@@ -1,0 +1,51 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "EventManager.createAllCalendarEvents DB fallback uses credentials without checking ownership."
+   },
+   {
+    "id": "F2",
+    "description": "EventManager.createAllCalendarEvents DB fallback uses credentials without rejecting invalid credentials."
+   },
+   {
+    "id": "F3",
+    "description": "EventManager.updateAllCalendarEvents DB fallback uses credentials without checking ownership."
+   },
+   {
+    "id": "F4",
+    "description": "EventManager.updateAllCalendarEvents DB fallback uses credentials without rejecting invalid credentials."
+   },
+   {
+    "id": "F5",
+    "description": "handleCancelBooking DB fallback uses credentials for deletion without checking ownership."
+   },
+   {
+    "id": "F6",
+    "description": "handleCancelBooking DB fallback uses credentials for deletion without rejecting invalid credentials."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_9518d664",
+    "covers": [
+     "F5",
+     "F6"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_23f7d949",
+    "covers": [
+     "F1",
+     "F2",
+     "F3",
+     "F4"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

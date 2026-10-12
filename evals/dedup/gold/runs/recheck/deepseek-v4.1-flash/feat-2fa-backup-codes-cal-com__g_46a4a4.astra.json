@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_3e96920f",
+     "s_7b1466dd"
+    ],
+    "defect": "O componente em BackupCode.tsx foi declarado com o nome TwoFactor, divergindo de sua função e confundindo a identificação durante a depuração."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4 e S12 apontam o mesmo nome incorreto na mesma declaração do componente. Renomear a função para BackupCode resolve ambas as sugestões, e nenhuma delas relata outro defeito."
+ }
+}

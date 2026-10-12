@@ -1,0 +1,36 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_d598c74b",
+     "s_a57e3ef3",
+     "s_1f2d92bd",
+     "s_15c59a87",
+     "s_8188e9fe",
+     "s_c309ae7b",
+     "s_859a4a3a",
+     "s_cf0c2a48"
+    ],
+    "defect": "O matcher extrai o grant shortcut com substring(3,5), embora o campo esteja em substring(4,6)."
+   }
+  ],
+  "unique": [
+   "s_a2208ca1"
+  ],
+  "bundles": [
+   "s_d598c74b",
+   "s_a57e3ef3",
+   "s_1f2d92bd",
+   "s_15c59a87",
+   "s_8188e9fe",
+   "s_c309ae7b",
+   "s_859a4a3a",
+   "s_cf0c2a48",
+   "s_a2208ca1"
+  ],
+  "reasoningPt": "S2, S4, S5, S9, S10, S12, S14 e S15 relatam primeiro o deslocamento incorreto do substring; S17 relata primeiro a condição invertida. São defeitos com correções independentes, portanto S17 fica separado pela regra do defeito principal. Todas as sugestões relatam ambos os defeitos e entram em bundles."
+ }
+}

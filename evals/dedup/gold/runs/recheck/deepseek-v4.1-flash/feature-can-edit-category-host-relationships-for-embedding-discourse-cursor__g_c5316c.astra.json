@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c9027ce1",
+     "s_30fe56e0"
+    ],
+    "defect": "Os conteúdos dos arquivos category_fabricator.rb e embeddable_host_fabricator.rb estão trocados em relação aos seus nomes."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S14 e S16 relatam a mesma troca de conteúdo entre os dois arquivos, apenas apontando lados diferentes do problema. A mesma correção resolve ambas; os riscos adicionais mencionados em S14 são consequências desse defeito, não defeitos independentes."
+ }
+}

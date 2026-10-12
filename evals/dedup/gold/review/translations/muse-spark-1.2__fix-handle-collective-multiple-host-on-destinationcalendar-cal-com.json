@@ -1,0 +1,30 @@
+{
+ "s_47e65bca": {
+  "summaryPt": "A assinatura de Calendar.createEvent mudou, mas as implementações Office365/Lark/Base não foram atualizadas",
+  "contentPt": "O QUÊ: A interface Calendar.createEvent agora exige (event: CalendarEvent, credentialId: number), mas Office365CalendarService, LarkCalendarService e BaseCalendarService ainda declaram createEvent(event: CalendarEvent). POR QUÊ: Os chamadores em CalendarManager agora chamam calendar.createEvent(calEvent, credential.id) para todos os calendários; as implementações que não são do Google ignoram silenciosamente o 2º argumento, mas o TypeScript vai gerar erro, e as classes concretas deixam de satisfazer a interface - isso quebra o build e deixa a seleção de calendário por credencial sem implementação para esses providers. COMO: Atualize todas as implementações de Calendar para aceitar (event, credentialId?) e implementar a seleção por credencial, ou torne o parâmetro opcional."
+ },
+ "s_99ffaedb": {
+  "summaryPt": "Calendar.createEvent ganhou credentialId obrigatório, mas a implementação do Office365 não foi atualizada",
+  "contentPt": "Atualize a assinatura de createEvent do Office365 para incluir credentialId, a fim de satisfazer a interface Calendar e permitir a seleção correta do calendário."
+ },
+ "s_33ed9a24": {
+  "summaryPt": "Calendar.createEvent ganhou credentialId obrigatório, mas a implementação do Lark não foi atualizada",
+  "contentPt": "Adicione o parâmetro credentialId ao createEvent do Lark para corresponder à interface Calendar."
+ },
+ "s_dc30b21a": {
+  "summaryPt": "Office365 não implementa o parâmetro obrigatório credentialId declarado na interface Calendar",
+  "contentPt": "Atualize a assinatura para (event: CalendarEvent, credentialId: number) para satisfazer a interface Calendar e selecione a entrada de destinationCalendar correspondente ao credentialId (com fallback para a primeira) como o GoogleCalendarService faz, em vez de sempre usar [0]. Aplique a mesma correção em LarkCalendarService e BaseCalendarService."
+ },
+ "s_08905d22": {
+  "summaryPt": "create/update/delete do Lark ignoram credentialId e sempre usam o primeiro destinationCalendar",
+  "contentPt": "Adicione o parâmetro credentialId conforme a interface Calendar e selecione o calendário por credentialId antes de recorrer a [0], espelhando a correção do GoogleCalendarService."
+ },
+ "s_7335ccdf": {
+  "summaryPt": "A interface agora exige credentialId, mas a implementação do Office365 ainda declara createEvent com um único argumento",
+  "contentPt": "Atualize a assinatura para corresponder à interface Calendar: createEvent(event: CalendarEvent, credentialId: number). A interface em packages/types/Calendar.d.ts:221 e o chamador em CalendarManager.ts:236 agora exigem credentialId; manter a implementação do Office365 com o formato antigo de um único argumento torna o contrato documentado incorreto e vai esconder erros de tipo. Adicione o parâmetro (mesmo que não seja usado) por consistência."
+ },
+ "s_af4c6322": {
+  "summaryPt": "A interface agora exige credentialId, mas a implementação do Lark ainda declara createEvent com um único argumento",
+  "contentPt": "Alinhe com a interface Calendar: adicione credentialId: number como segundo parâmetro de createEvent. Mesmo que o Lark não precise de seleção por credencial, o contrato compartilhado de Calendar agora documenta dois argumentos e o CalendarManager o envia. Manter o formato antigo faz a documentação divergir do código."
+ }
+}

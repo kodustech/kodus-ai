@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a0a3d1b7",
+     "s_df1a20da"
+    ],
+    "defect": "O carregamento dos locales de fallback depende do controller, deixando traduções fora de requisições sem os fallbacks carregados."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1 e S2 relatam o mesmo defeito: translate carrega apenas o locale atual, enquanto o carregamento dos fallbacks depende do controller. Ambas propõem carregar os fallbacks no fluxo de tradução, resolvendo a mesma falha em jobs, mailers e outros contextos."
+ }
+}

@@ -1,0 +1,57 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "f58035330f473cfb85b290d4af82e7075c2c7ed9",
+  "attempt": 1,
+  "ms": 42414,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_d0f69e7e",
+          "s_86975f9e"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "ClientPermissionsV2.setPermissionsEnabled throws UnsupportedOperationException when invoked by the removal cleanup listener, potentially failing client deletion.",
+        "rationale": "Both report the same lifecycle call reaching the throwing V2 override. The additional methods mentioned provide context or proposed fixes, rather than separate reported defects."
+      },
+      {
+        "members": [
+          "s_cff36f10",
+          "s_c29b13de",
+          "s_a3224d7a"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The Javadocs for requireView() and requireViewClientScopes() incorrectly describe boolean return values instead of their void/throws contracts.",
+        "rationale": "The first two suggestions report separate instances of the same documentation mistake, and the third explicitly reports both. Both method comments require correction."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_40e62510",
+        "confidence": "high"
+      },
+      {
+        "id": "s_400a7f71",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0aae0a10",
+        "confidence": "high"
+      },
+      {
+        "id": "s_1a8ab58c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_ce311187",
+        "confidence": "high"
+      }
+    ]
+  }
+}

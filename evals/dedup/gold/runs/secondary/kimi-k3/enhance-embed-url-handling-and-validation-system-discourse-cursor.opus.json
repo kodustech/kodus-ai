@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_4eb5310c",
+    "mainDefect": "open(url) follows cross-host redirects after the host was checked only on the original URL, which allows SSRF and leaks the fetched data into a published post.",
+    "secondary": [
+     {
+      "defect": "The fetch has no timeouts, so a slow endpoint can hold a job worker indefinitely.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_2a3a58c7",
+    "mainDefect": "The Disqus import now calls TopicEmbed.import_remote, which ignores created_at, so each topic gets the import time instead of the original Disqus thread date.",
+    "secondary": [
+     {
+      "defect": "Removing the -c/--category option means every imported topic ends up uncategorized.",
+      "coveredBy": []
+     },
+     {
+      "defect": "import_remote fetches each thread's URL synchronously with no error handling, so one dead link stops the whole import run.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

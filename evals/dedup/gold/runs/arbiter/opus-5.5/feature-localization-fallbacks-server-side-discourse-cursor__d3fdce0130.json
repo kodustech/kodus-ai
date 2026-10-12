@@ -1,0 +1,33 @@
+{
+  "model": "opus-5.5",
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "component": [
+    "s_35d3c9d2",
+    "s_6a01472a",
+    "s_a0b43d2d",
+    "s_c94570f5",
+    "s_d02ab584",
+    "s_e15dc8b6"
+  ],
+  "flip": false,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_35d3c9d2",
+          "s_6a01472a",
+          "s_a0b43d2d",
+          "s_c94570f5",
+          "s_d02ab584",
+          "s_e15dc8b6"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": true,
+        "defect": "The lazy `translate` loads only `config.locale`, and only ApplicationController#set_locale loads the fallback chain (site default and :en). So in jobs, mailers, rake tasks and the console, fallback lookups miss, and the 'translation missing' result is frozen into the LRU cache. Separately, the cache key leaves out SiteSetting.default_locale, so cached fallback text goes stale after the default locale changes."
+      }
+    ],
+    "unique": [],
+    "decisive": true,
+    "reasoning": "s_35d3c9d2, s_a0b43d2d, s_c94570f5, s_d02ab584 and s_6a01472a all report the same defect: fallback locales are loaded only in the controller hook, while `translate` lazy-loads only config.locale. Outside requests, fallbacks therefore miss, and in most of these reports the miss gets cached. Each one proposes the same fix: load the fallback chain inside `translate`.\n\ns_6a01472a also reports, as its own problem, that the cache key leaves out SiteSetting.default_locale, so cached fallback text goes stale after the default locale changes. That is exactly the one defect s_e15dc8b6 reports. Under the overlap rule, that shared defect pulls s_e15dc8b6 into the group.\n\nThe members point at two files (translate_accelerator.rb and config/initializers/i18n.rb), so the kind is cross_location. The merged comment has to keep both defects (missing fallback loading and the stale cache key), so needsUnifiedComment is true. Both judges agree on the membership; they differ only on the kind."
+  }
+}

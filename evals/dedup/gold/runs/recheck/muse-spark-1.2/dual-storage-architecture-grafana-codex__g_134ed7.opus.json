@@ -1,0 +1,22 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b32e2b9e",
+     "s_9cd9483f",
+     "s_028635c3",
+     "s_49bc7a3a"
+    ],
+    "defect": "The Mode3 tests never wait for the fire-and-forget Legacy goroutine and never assert on it, so the async legacy write path goes untested."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_49bc7a3a"
+  ],
+  "reasoningPt": "S16, S17, S18 e S19 apontam o mesmo erro repetido em vários testes (Create, Delete, Update, DeleteCollection): nenhum deles sincroniza com a goroutine assíncrona do Legacy nem verifica as chamadas a ela, e a correção é o mesmo padrão em todos. O S19 também cita, como observação secundária, o uso errado de recordStorageDuration no caminho legacy, por isso entra em bundles. Esse segundo defeito não muda o grupo, já que o principal é o mesmo."
+ }
+}

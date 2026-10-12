@@ -1,0 +1,46 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "GroupTest.java:139-157: The reader is not joined before asserting, so failures from in-flight reads can be missed."
+   },
+   {
+    "id": "F2",
+    "description": "GroupTest.java:139-155: Nothing verifies that the reader performed a read while deletions were running, allowing the test to pass without exercising concurrency."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_0dfb07e9",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_3d7a717e",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_8fb311b9",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_bdeb7dae",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

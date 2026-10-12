@@ -1,0 +1,23 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_c715ef0c",
+     "s_0fd17a9d",
+     "s_1b696765",
+     "s_dca123ba"
+    ],
+    "defect": "The migration indexes [0] on execute() results without checking that any rows came back, so it raises NoMethodError when the embed_category or uncategorized_category_id setting row is missing."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_c715ef0c",
+   "s_dca123ba"
+  ],
+  "reasoningPt": "S1, S6, S7 e S10 têm o mesmo defeito principal: a migração usa execute(...)[0] sem checar se há linhas, o que gera NoMethodError quando a configuração não existe. S1 e S10 acrescentam no final (\"Also...\") a interpolação sem escape do host no INSERT. Por isso são bundles, mas continuam no grupo do defeito principal."
+ }
+}

@@ -1,0 +1,64 @@
+{
+  "judge": "astra",
+  "model": "kimi-k3",
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "promptSha": "2cae7e75f64b6fbe3122533a61add7ca10c5f880",
+  "attempt": 1,
+  "ms": 39752,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_dbfac681",
+          "s_24eb89ae",
+          "s_4d7c990b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The GrafanaRuleListItem returned by the filtered-results map lacks its React key, allowing row state to migrate between rules.",
+        "rationale": "All three identify the same dropped key prop in the Grafana branch of FilterView. Restoring key={key} resolves every report."
+      },
+      {
+        "members": [
+          "s_113416f8",
+          "s_1f046bdf"
+        ],
+        "kind": "cross_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The Silence action is available for prom-only rules, but its drawer requires a ruler rule, so clicking the action does nothing.",
+        "rationale": "One report points to the prom-only caller and the other to the drawer's ruler-rule guard. Both describe the same broken silence flow."
+      },
+      {
+        "members": [
+          "s_21537ff1",
+          "s_ee1a9510"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "Delegating CombinedRule ability checks to useAllRulerRuleAbilities drops the federated-group immutability check.",
+        "rationale": "Both reports identify the same lost federation check and resulting availability of modification actions for federated rules."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_0dcf7f4f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_79cf7c56",
+        "confidence": "high"
+      },
+      {
+        "id": "s_14a28e47",
+        "confidence": "high"
+      },
+      {
+        "id": "s_0d8c193d",
+        "confidence": "high"
+      }
+    ]
+  }
+}

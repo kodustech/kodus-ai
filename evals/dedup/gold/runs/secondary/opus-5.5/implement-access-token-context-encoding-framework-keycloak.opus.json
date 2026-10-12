@@ -1,0 +1,138 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_d598c74b",
+    "mainDefect": "isAccessTokenId reads the grant shortcut with substring(3,5) instead of substring(4,6).",
+    "secondary": [
+     {
+      "defect": "The matcher returns false when the shortcut matches, which inverts the check.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_9c9743f6",
+    "mainDefect": "getShortcut() is a new abstract SPI method with no default, so existing custom OAuth2GrantTypeFactory implementations break.",
+    "secondary": [
+     {
+      "defect": "The shortcut length is documented as 'usually 3 letters' and is never validated, but the decoder needs exactly 2 characters.",
+      "coveredBy": [
+       "s_7cc8bcbd"
+      ]
+     },
+     {
+      "defect": "A null shortcut makes grantsByShortcuts.put throw an NPE in postInit, which breaks server startup.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_a57e3ef3",
+    "mainDefect": "The matcher uses substring(3,5) instead of substring(4,6) for the grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher returns false when the segment equals the expected shortcut, which inverts the check.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_1f2d92bd",
+    "mainDefect": "The matcher uses substring(3,5) instead of substring(4,6) for the grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher returns false when the slice matches the expected shortcut, which inverts the check.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_15c59a87",
+    "mainDefect": "The comment and the code use the wrong offset for the grant shortcut: substring(3,5) instead of index 4.",
+    "secondary": [
+     {
+      "defect": "The equals branch returns false on a match, which contradicts describeTo().",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_8188e9fe",
+    "mainDefect": "The matcher takes substring(3,5) instead of substring(4,6) for the grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher returns false when the substring equals the expected shortcut, which inverts the check.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c309ae7b",
+    "mainDefect": "The matcher compares chars 3-5 instead of chars 4-6 for the grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher returns false when the values are equal, which inverts the check.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_859a4a3a",
+    "mainDefect": "The matcher reads substring(3,5) instead of substring(4,6) for the grant shortcut.",
+    "secondary": [
+     {
+      "defect": "The matcher rejects the ID when the shortcut matches, which inverts the check.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_cf0c2a48",
+    "mainDefect": "The matcher uses substring(3,5), which straddles the token-type and grant fields, instead of substring(4,6).",
+    "secondary": [
+     {
+      "defect": "The matcher returns false when the substring equals the expected shortcut, which inverts the check.",
+      "coveredBy": [
+       "s_a2208ca1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a2208ca1",
+    "mainDefect": "The isAccessTokenId matcher has an inverted condition.",
+    "secondary": [
+     {
+      "defect": "The matcher reads substring(3,5) instead of positions 4-6 for the grant shortcut.",
+      "coveredBy": [
+       "s_d598c74b",
+       "s_a57e3ef3",
+       "s_1f2d92bd",
+       "s_15c59a87",
+       "s_8188e9fe",
+       "s_c309ae7b",
+       "s_859a4a3a",
+       "s_cf0c2a48"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

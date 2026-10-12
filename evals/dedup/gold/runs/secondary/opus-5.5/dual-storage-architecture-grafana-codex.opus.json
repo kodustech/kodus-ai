@@ -1,0 +1,87 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_03fc7aa9",
+    "mainDefect": "The async legacy writes in mode 3 build their timeout context from the request ctx, which is cancelled when the handler returns, so legacy writes get aborted and the legacy store drifts out of sync.",
+    "secondary": [
+     {
+      "defect": "Legacy write errors are never logged; they are only counted in metrics.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_74e86eb7",
+    "mainDefect": "In Create, a Unified Storage failure is recorded with recordLegacyDuration instead of recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "In Update, a Unified Storage failure is recorded with recordLegacyDuration instead of recordStorageDuration.",
+      "coveredBy": [
+       "s_ef1efee6"
+      ]
+     },
+     {
+      "defect": "The Delete success path passes the object name instead of options.Kind as the metric kind label, which creates unbounded label cardinality.",
+      "coveredBy": [
+       "s_6c5a2af8",
+       "s_806c2db2"
+      ]
+     },
+     {
+      "defect": "The DeleteCollection legacy goroutine records its latency with recordStorageDuration instead of recordLegacyDuration.",
+      "coveredBy": []
+     },
+     {
+      "defect": "Delete puts the base d.Log into the context instead of the enriched log, so the contextual fields are lost.",
+      "coveredBy": [
+       "s_849456ca",
+       "s_22b6a64c"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_ef1efee6",
+    "mainDefect": "In Update, a Unified Storage failure is recorded with recordLegacyDuration instead of recordStorageDuration.",
+    "secondary": [
+     {
+      "defect": "The DeleteCollection legacy goroutine records its latency with recordStorageDuration instead of recordLegacyDuration.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f50f8610",
+    "mainDefect": "Mode 3 legacy writes run asynchronously on a request-derived context, so they can be cancelled after the response is sent and legacy data silently diverges.",
+    "secondary": [
+     {
+      "defect": "The new Mode3 playlist integration tests read legacy data right after the k8s writes without waiting, so they are racy.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_53a567b3",
+    "mainDefect": "The mode 3 unit tests never wait for or assert the async legacy writes, so removing those writes would leave every test passing.",
+    "secondary": [
+     {
+      "defect": "The Delete and DeleteCollection test cases set up no legacy mock expectation, so the background goroutine makes an unexpected mock call that can panic or get lost depending on timing.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_ffe2609d",
+    "mainDefect": "Mode 3 legacy writes run in a goroutine whose context comes from the request ctx, so they can be cancelled before they finish.",
+    "secondary": [
+     {
+      "defect": "Legacy write failures are not logged; only a metric is recorded.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

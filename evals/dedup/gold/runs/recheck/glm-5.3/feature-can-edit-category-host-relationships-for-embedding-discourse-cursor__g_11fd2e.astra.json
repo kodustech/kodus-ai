@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_73823258",
+     "s_7c87fa7b"
+    ],
+    "defect": "update e destroy usam o resultado de uma busca sem verificar se o host existe, causando erro 500 quando o registro não é encontrado."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_73823258",
+   "s_7c87fa7b"
+  ],
+  "reasoningPt": "S3 e S19 relatam primeiro o mesmo defeito: desreferenciar um host inexistente em update/destroy, retornando 500. Ambas também apontam a ausência de validação de params[:embeddable_host], um defeito distinto e secundário; por isso, ficam juntas e são marcadas como bundles."
+ }
+}

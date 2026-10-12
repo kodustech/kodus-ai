@@ -1,0 +1,10 @@
+{
+ "s_0cbe997b": {
+  "summaryPt": "",
+  "contentPt": "O QUÊ: Não é feito nenhum teste de double-checked cache após adquirir o write lock, e o cache é sobrescrito mesmo quando a leitura falha. POR QUÊ: Primeiras requisições concorrentes refazem a leitura do manifest em série, e um erro transitório armazena nil no cache, substituindo um valor válido anterior. CORREÇÃO: Após o Lock(), verifique novamente `if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`. Atribua o cache apenas quando err == nil."
+ },
+ "s_b82e1353": {
+  "summaryPt": "",
+  "contentPt": "Após adquirir o write lock, verifique o cache novamente (`if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`) para que os primeiros chamadores concorrentes não reconstruam cada um. Além disso, a atribuição `entryPointAssetsCache = result` (linha ~69) deve acontecer somente quando err == nil. Se `result` puder ser nil ou parcial em caso de erro, um carregamento com falha é armazenado no cache e servido a todos os leitores seguintes no modo não-dev. Não li o corpo da função entre o lock e essa atribuição, então não pude confirmar que esse caminho é alcançável."
+ }
+}

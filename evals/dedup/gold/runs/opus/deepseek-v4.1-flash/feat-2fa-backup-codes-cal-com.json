@@ -1,0 +1,103 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "promptSha": "87cb8d1fc2ea95d2abe119ccc35a35708ecb98bb",
+  "attempt": 1,
+  "ms": 18446,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 18340,
+    "cache_read_input_tokens": 792,
+    "output_tokens": 699,
+    "output_tokens_details": {
+      "thinking_tokens": 174
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 18340,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 699,
+        "cache_read_input_tokens": 792,
+        "cache_creation_input_tokens": 18340,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 18340
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1608664,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_7b1466dd",
+          "s_3e96920f"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "The component in BackupCode.tsx is declared as `function TwoFactor` when it should be named `BackupCode`.",
+        "rationale": "Both point at line 7 of BackupCode.tsx and report the same copy-paste naming mistake, with the same fix."
+      },
+      {
+        "members": [
+          "s_8e161876",
+          "s_7ae7f156"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": false,
+        "confidence": "high",
+        "defect": "resetState in EnableTwoFactorModal does not clear backupCodes or backupCodesUrl, so stale backup-code state and the blob URL remain after a reset.",
+        "rationale": "Both report the same missing state reset in the same function."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_7b2abff5",
+        "confidence": "high"
+      },
+      {
+        "id": "s_82fc6f7e",
+        "confidence": "mid"
+      },
+      {
+        "id": "s_5937758e",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4b6dba2f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4b5537ed",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a9040f8f",
+        "confidence": "high"
+      },
+      {
+        "id": "s_cda09d4d",
+        "confidence": "high"
+      },
+      {
+        "id": "s_4f88e788",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "defect": "The `queued` default `timezone.now()` is evaluated only once, at module import, so every AssignmentSource shares a stale timestamp; it should use `field(default_factory=timezone.now)`.",
+    "members": [
+     "s_c2f1d70e",
+     "s_b183150d",
+     "s_9eae5caf",
+     "s_0ee85020"
+    ]
+   }
+  ],
+  "unique": [
+   "s_03c0a1d9"
+  ],
+  "bundles": [
+   "s_c2f1d70e",
+   "s_03c0a1d9"
+  ],
+  "reasoningPt": "S1, S4, S5 e S6 apontam o mesmo defeito: o default `timezone.now()` de `queued` é calculado uma única vez, na importação, e a correção é usar `default_factory`. O defeito principal de S7, que vem primeiro no resumo e está no arquivo de teste, é o test_to_dict fraco que só verifica `is not None`; a troca para `default_factory` aparece apenas na correção proposta, então S7 fica sozinho. S1 também cita o teste fraco no WHY, e por isso S1 e S7 são marcados como bundles."
+ }
+}

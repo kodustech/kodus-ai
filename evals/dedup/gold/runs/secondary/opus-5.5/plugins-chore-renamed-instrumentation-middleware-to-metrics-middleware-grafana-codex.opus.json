@@ -1,0 +1,17 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_e1aa277e",
+    "mainDefect": "WithContextualAttributes appends to the slice stored in the parent context, which can have spare capacity. Concurrent or nested plugin calls then write into the same backing array and overwrite each other's contextual log attributes.",
+    "secondary": [
+     {
+      "defect": "Nested plugin calls through an already-instrumented ctx log duplicate endpoint and pluginId keys.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

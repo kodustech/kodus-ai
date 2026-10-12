@@ -1,0 +1,283 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_7f78185c",
+    "mainDefect": "Google updateEvent cannot resolve a destination calendar when externalCalendarId is absent because its fallback searches for that absent ID.",
+    "secondary": [
+     {
+      "defect": "Google deleteEvent has the same broken fallback and can delete from primary instead of the configured destination calendar.",
+      "coveredBy": [
+       "s_dd554f89",
+       "s_e57c1a14"
+      ]
+     },
+     {
+      "defect": "The no-credentialId creation branch produces booking references without externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     },
+     {
+      "defect": "Location edits create booking references without the calendar metadata needed for later updates and deletions.",
+      "coveredBy": [
+       "s_ba685c8e"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_aa8b5b10",
+    "mainDefect": "Google createEvent selects primary instead of the configured destination when the destination has no credentialId.",
+    "secondary": [
+     {
+      "defect": "The no-credentialId creation branch omits destination.externalId and consequently stores a booking reference without externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_0fcfd2d6",
+    "mainDefect": "Office365 creates each host's event using the first host's destination calendar instead of the destination matching the creating credential.",
+    "secondary": [
+     {
+      "defect": "Lark createEvent and createAttendees also select the first host's destination instead of the destination matching the creating credential.",
+      "coveredBy": []
+     },
+     {
+      "defect": "BaseCalendarService filters calendars using the first host's destination, preventing other hosts' events from being created on their destinations.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_f50a5d4f",
+    "mainDefect": "Google updateEvent's fallback searches for a falsy externalCalendarId and therefore passes an undefined calendarId to Google.",
+    "secondary": [
+     {
+      "defect": "The no-credentialId creation branch omits externalId and creates booking references without externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_dd554f89",
+    "mainDefect": "Google deleteEvent's fallback cannot resolve the configured destination when externalCalendarId is missing.",
+    "secondary": [
+     {
+      "defect": "The no-credentialId creation branch creates booking references without externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_b7a8f74b",
+    "mainDefect": "Google createEvent incorrectly defaults to primary for destination calendars without credentialId.",
+    "secondary": [
+     {
+      "defect": "The no-credentialId creation branch does not pass destination.externalId, leaving the stored reference without externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     },
+     {
+      "defect": "Google updateEvent has a broken fallback for references without externalCalendarId.",
+      "coveredBy": [
+       "s_7f78185c",
+       "s_f50a5d4f",
+       "s_29b344c5",
+       "s_08035170",
+       "s_7aa0f717"
+      ]
+     },
+     {
+      "defect": "Google deleteEvent has a broken fallback for references without externalCalendarId.",
+      "coveredBy": [
+       "s_dd554f89",
+       "s_e57c1a14"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_f6aef3f1",
+    "mainDefect": "The loadUsers error handler exposes internal Prisma error messages to booking clients.",
+    "secondary": [
+     {
+      "defect": "The handler classifies server-side database failures as HTTP 400 client errors instead of 5xx errors.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_29b344c5",
+    "mainDefect": "Google updateEvent's fallback compares destination IDs against a falsy externalCalendarId and fails to resolve a usable calendar.",
+    "secondary": [
+     {
+      "defect": "The no-credentialId creation branch calls createEvent without externalId, producing references without externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a23b880b",
+    "mainDefect": "Office365 uses the organizer's destination calendar instead of the destination matching the credential creating the event.",
+    "secondary": [
+     {
+      "defect": "Lark also selects destinationCalendar[0] instead of the destination matching the creating credential.",
+      "coveredBy": []
+     },
+     {
+      "defect": "BaseCalendarService also selects destinationCalendar[0] instead of the destination matching the creating credential.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_23f7d949",
+    "mainDefect": "EventManager's database credential fallbacks create or update events without validating that the fetched credential belongs to a booking participant.",
+    "secondary": [
+     {
+      "defect": "The database credential fallbacks accept credentials marked invalid.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_9518d664",
+    "mainDefect": "Cancellation's database credential fallback deletes events without validating that the fetched credential belongs to the booking's user or hosts.",
+    "secondary": [
+     {
+      "defect": "Cancellation's database credential fallback does not skip credentials marked invalid.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_08035170",
+    "mainDefect": "Google updateEvent's fallback searches for an absent externalCalendarId and cannot resolve the destination calendar.",
+    "secondary": [
+     {
+      "defect": "Google deleteEvent contains the same ineffective fallback when externalCalendarId is absent.",
+      "coveredBy": [
+       "s_dd554f89",
+       "s_e57c1a14"
+      ]
+     },
+     {
+      "defect": "The no-credentialId creation branch omits externalId and saves references without externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     },
+     {
+      "defect": "A Google API failure inside an async Promise executor can leave the outer promise unsettled and hang the operation.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_65bc8258",
+    "mainDefect": "Google createEvent defaults to each matching credential's primary calendar instead of the configured destination when the destination lacks credentialId.",
+    "secondary": [
+     {
+      "defect": "The no-credentialId creation branch stores booking references with undefined externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     },
+     {
+      "defect": "Google updateEvent has a broken fallback for references without externalCalendarId.",
+      "coveredBy": [
+       "s_7f78185c",
+       "s_f50a5d4f",
+       "s_29b344c5",
+       "s_08035170",
+       "s_7aa0f717"
+      ]
+     },
+     {
+      "defect": "Google deleteEvent has a broken fallback for references without externalCalendarId.",
+      "coveredBy": [
+       "s_dd554f89",
+       "s_e57c1a14"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_7aa0f717",
+    "mainDefect": "Google updateEvent's fallback searches for a falsy externalCalendarId and passes undefined as calendarId.",
+    "secondary": [
+     {
+      "defect": "The no-credentialId creation branch produces booking references without externalCalendarId.",
+      "coveredBy": [
+       "s_8ebfd962"
+      ]
+     },
+     {
+      "defect": "Google deleteEvent repeats the same ineffective destination lookup when externalCalendarId is missing.",
+      "coveredBy": [
+       "s_dd554f89",
+       "s_e57c1a14"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_8ebfd962",
+    "mainDefect": "EventManager's no-credentialId creation branch omits destination.externalId, causing booking references to lose externalCalendarId.",
+    "secondary": [
+     {
+      "defect": "Google createEvent selects primary instead of the configured destination when no destination credentialId matches.",
+      "coveredBy": [
+       "s_aa8b5b10",
+       "s_b7a8f74b",
+       "s_65bc8258"
+      ]
+     },
+     {
+      "defect": "Google updateEvent's fallback fails to resolve a destination when externalCalendarId is absent.",
+      "coveredBy": [
+       "s_7f78185c",
+       "s_f50a5d4f",
+       "s_29b344c5",
+       "s_08035170",
+       "s_7aa0f717"
+      ]
+     },
+     {
+      "defect": "Google deleteEvent's fallback fails to resolve a destination when externalCalendarId is absent.",
+      "coveredBy": [
+       "s_dd554f89",
+       "s_e57c1a14"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_a98dfe02",
+    "mainDefect": "Office365 creates a host's event using destinationCalendar[0] instead of the destination matching that host's credential.",
+    "secondary": [
+     {
+      "defect": "Lark also uses the first destination instead of matching the destination to the creating credential.",
+      "coveredBy": []
+     },
+     {
+      "defect": "BaseCalendarService also uses the first destination instead of matching the destination to the creating credential.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

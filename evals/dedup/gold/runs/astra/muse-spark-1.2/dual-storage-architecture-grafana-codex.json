@@ -1,0 +1,97 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "ff105125fa795f090758ee4dd3c8a34d3c0a3288",
+  "attempt": 1,
+  "ms": 86412,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_0f8576a3",
+          "s_0256cf0e",
+          "s_d8591060",
+          "s_02ad3834",
+          "s_e95c784c",
+          "s_d464c133",
+          "s_28699aa5",
+          "s_705859db",
+          "s_bc787d91",
+          "s_4c68a502",
+          "s_0d3070ec",
+          "s_db51092c",
+          "s_6451b2bb"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Create and Update attribute storage failures to legacy metrics, DeleteCollection attributes legacy work to storage metrics, and Delete uses the object name as the kind label and discards its enriched logger when constructing the context.",
+        "rationale": "s_4c68a502 connects the three metric-recorder mistakes with Delete's incorrect label; s_0d3070ec connects that label defect with the discarded logger. These overlapping reports form one group, requiring edits at several locations and preservation of every defect."
+      },
+      {
+        "members": [
+          "s_a6079adb",
+          "s_95d38bcb",
+          "s_3eda2f5b"
+        ],
+        "kind": "same_location",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Asynchronous legacy writes inherit request cancellation, and Create also captures a shared mutable object pointer that can race with other access.",
+        "rationale": "All three point to the same goroutine and report request-context cancellation affecting the legacy operations. s_a6079adb additionally reports the shared-object race, which must survive consolidation."
+      },
+      {
+        "members": [
+          "s_e90d80f5",
+          "s_cb150066",
+          "s_99b73949"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "Mode3 logging and metrics dereference nullable options and listOptions without guards across multiple methods.",
+        "rationale": "These reports describe the same repeated unchecked-pointer-access mistake, with overlapping method coverage. The merged comment must cover the separate accesses requiring guards."
+      },
+      {
+        "members": [
+          "s_028635c3",
+          "s_9cd9483f",
+          "s_b32e2b9e",
+          "s_49bc7a3a"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The Create, Update, Delete, and DeleteCollection tests neither synchronize with nor verify their asynchronous legacy operations.",
+        "rationale": "Each test repeats the same omission: checking the storage result without establishing that legacy work ran. The metric mistake mentioned in s_49bc7a3a is context for the coverage gap, rather than a separate report linking this group to the production metric defects."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_7157fd26",
+        "confidence": "high"
+      },
+      {
+        "id": "s_90b385b2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5d21873c",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b937db36",
+        "confidence": "high"
+      },
+      {
+        "id": "s_b4125606",
+        "confidence": "high"
+      },
+      {
+        "id": "s_bc4783e7",
+        "confidence": "high"
+      }
+    ]
+  }
+}

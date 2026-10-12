@@ -1,0 +1,22 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_0bd77fe1",
+     "s_36a5b400",
+     "s_30992443",
+     "s_2719ce4a",
+     "s_289657e8",
+     "s_d040909a"
+    ],
+    "defect": "Os caminhos de erro de Storage.Create e Storage.Update usam recordLegacyDuration em vez de recordStorageDuration, atribuindo falhas do armazenamento unificado às métricas do legado."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S2, S7, S8, S13, S15 e S23 descrevem o mesmo uso incorreto do helper de métricas, repetido em Create e Update. A substituição pelo helper correto nos dois caminhos resolve todos os relatos; nenhuma sugestão apresenta um segundo defeito independente."
+ }
+}

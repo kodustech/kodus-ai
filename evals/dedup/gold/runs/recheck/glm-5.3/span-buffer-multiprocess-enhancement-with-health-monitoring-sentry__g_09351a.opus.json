@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_f393808c",
+     "s_d8e8bf32"
+    ],
+    "defect": "The spans.buffer.flusher.wait_produce timer uses the tag key \"shards\" while the other flusher metrics use \"shard\", which splits the shard dimension across two keys."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_d8e8bf32"
+  ],
+  "reasoningPt": "S4 e S7 apontam o mesmo defeito principal: o timer wait_produce usa a chave de tag \"shards\" em vez de \"shard\", e a correção é a mesma. S7 acrescenta no fim uma nota separada sobre o formato do valor da tag em flusher_unhealthy, por isso entra em bundles, mas continua no grupo do seu defeito principal."
+ }
+}

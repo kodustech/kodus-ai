@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_b5a7f414",
+     "s_2f45f628"
+    ],
+    "defect": "When the derived English properties file is missing, verifySafeHtml() throws an unchecked RuntimeException instead of reporting the problem in messages or throwing MojoExecutionException."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S9 apontam o mesmo defeito: quando o arquivo inglês derivado não existe, verifySafeHtml() lança uma RuntimeException não tratada nas linhas 73-80 e quebra o contrato de verify(). As duas propõem a mesma correção, que é registrar o problema em messages ou lançar MojoExecutionException. Nenhuma das duas traz um segundo defeito, então o grupo fica como está."
+ }
+}

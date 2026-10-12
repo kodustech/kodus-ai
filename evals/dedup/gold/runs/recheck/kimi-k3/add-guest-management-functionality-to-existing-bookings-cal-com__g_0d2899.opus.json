@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_5ba66eb6",
+     "s_8324ba87",
+     "s_91d85c33",
+     "s_c08fb5ce"
+    ],
+    "defect": "isTeamAdminOrOwner combina isTeamAdmin e isTeamOwner com && em vez de ||, bloqueando admins de time que não são owners."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S12, S16 e S23 apontam o mesmo defeito nas linhas 46-48: o uso de && em vez de || em isTeamAdminOrOwner, que bloqueia admins de time que não são owners. A correção é a mesma (trocar por || ou usar só isTeamAdmin). A sugestão de renomear a variável em S16 é só uma alternativa de correção, não um segundo defeito."
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_72e910b1",
+     "s_82c35c19",
+     "s_6d66fb8e"
+    ],
+    "defect": "The new three-argument `downsize` definition replaces the existing five-argument `downsize(from, to, max_width, max_height, opts)` in Ruby, so existing callers that pass width and height now raise ArgumentError."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S2 e S3 apontam o mesmo defeito: a segunda definição de `downsize` substitui a assinatura antiga de cinco argumentos. Por isso, os chamadores existentes passam a lançar ArgumentError. As diferenças estão só no intervalo de linhas e no exemplo de chamador citado (o ResizeEmoji em S1), e a correção é a mesma: manter a API antiga ou unificar as assinaturas."
+ }
+}

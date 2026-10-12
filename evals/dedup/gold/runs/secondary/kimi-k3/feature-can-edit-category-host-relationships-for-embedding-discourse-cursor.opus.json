@@ -1,0 +1,61 @@
+{
+ "judge": "opus",
+ "answer": {
+  "items": [
+   {
+    "id": "s_3869a81c",
+    "mainDefect": "The plural `*_ids` hydration branch calls `obj[k].map` without guarding against a null value, so `foo_ids: null` throws a TypeError.",
+    "secondary": [
+     {
+      "defect": "The plural branch pushes `undefined` into the hydrated array when a sideloaded record is missing, because it lacks the `if (hydrated)` guard the singular branch has, and consumers then crash.",
+      "coveredBy": [
+       "s_9bf99a8b"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_6fa3626d",
+    "mainDefect": "The migration's embed_category lookup indexes `[0]['id']` on a result that can be empty, so it raises and aborts the migration when no matching site_settings row exists.",
+    "secondary": [
+     {
+      "defect": "The uncategorized_category_id fallback lookup on line 15 can also crash on an empty result, because it indexes `[0]['value']` without a guard.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_073fc623",
+    "mainDefect": "`execute(...)[0]['id']` raises NoMethodError when the embed_category JOIN returns no rows, so the `category_id == 0` fallback never runs and the migration crashes.",
+    "secondary": [
+     {
+      "defect": "Line 15 can hit the same nil error through `[0]['value']` when the uncategorized_category_id row is missing.",
+      "coveredBy": []
+     }
+    ]
+   },
+   {
+    "id": "s_4b5af67b",
+    "mainDefect": "`record_for_host` lowercases only the database column and not the referer host, and before_validation never downcases stored hosts, so whether a host matches depends on letter case.",
+    "secondary": [
+     {
+      "defect": "The validation regex lets a host be stored with a port, but `record_for_host` compares only `uri.host` (no port), so a host saved with a port can never match.",
+      "coveredBy": [
+       "s_721295fb"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_c864cfd5",
+    "mainDefect": "The describe string has a typo: 'emeddable' should be 'embeddable'.",
+    "secondary": [
+     {
+      "defect": "The `Fabricate(:embeddable_host)` in the before-block has no effect because `expandable_first_post?` no longer checks EmbeddableHost, so the context name describes the wrong condition.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

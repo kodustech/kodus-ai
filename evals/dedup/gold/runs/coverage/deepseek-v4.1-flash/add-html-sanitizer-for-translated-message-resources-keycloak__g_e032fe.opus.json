@@ -1,0 +1,31 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "account/messages/messages_lt.properties totpStep1 (line 101) holds Italian text instead of a Lithuanian translation"
+   },
+   {
+    "id": "F2",
+    "description": "login/messages/messages_lt.properties loginTotpStep1 (line 71) holds Italian text instead of a Lithuanian translation"
+   }
+  ],
+  "members": [
+   {
+    "id": "s_29c9524c",
+    "covers": [
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_c8231ce6",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

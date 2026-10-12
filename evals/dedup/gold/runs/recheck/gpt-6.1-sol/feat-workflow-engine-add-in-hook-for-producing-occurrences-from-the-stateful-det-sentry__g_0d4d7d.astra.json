@@ -1,0 +1,21 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_a9cb3ea0",
+     "s_addb3ff9",
+     "s_144b01e9",
+     "s_4edcb19f",
+     "s_aa4af8aa"
+    ],
+    "defect": "MetricAlertDetectorHandler herda StatefulDetectorHandler sem implementar os métodos abstratos exigidos, impedindo sua instanciação e o processamento dos detectores de alertas métricos."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S2, S3, S4 e S8 descrevem o mesmo defeito: o handler ficou abstrato após a troca da classe base. S3 destaca apenas o hook de ocorrência, enquanto as demais abrangem outros métodos obrigatórios; essa diferença de abrangência não constitui um defeito separado."
+ }
+}

@@ -1,0 +1,43 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_4875e870",
+    "mainDefect": "The assertion runs without joining the reader thread, so an exception from its final request can be recorded after the test passes.",
+    "secondary": [
+     {
+      "defect": "No startup rendezvous guarantees the reader executes any reads before deletion finishes, allowing a vacuous pass.",
+      "coveredBy": [
+       "s_609a1176"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_624823a3",
+    "mainDefect": "The assertion races with the unjoined reader thread and can miss an exception from its final in-flight request.",
+    "secondary": [
+     {
+      "defect": "A late-scheduled reader can execute zero reads and let the test pass without exercising concurrent access.",
+      "coveredBy": [
+       "s_609a1176"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "s_af3017dc",
+    "mainDefect": "The reader thread is not joined before the assertion, allowing its final request's exception to arrive after the test passes.",
+    "secondary": [
+     {
+      "defect": "There is no start barrier between launching the reader and deleting groups to ensure concurrent reads occur.",
+      "coveredBy": [
+       "s_609a1176"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

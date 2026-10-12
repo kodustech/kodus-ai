@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "update/destroy in EmbeddableHostsController use the result of EmbeddableHost.where(id:).first without a nil check, so a missing record raises NoMethodError (500) instead of returning 404.",
+    "members": [
+     "s_73823258",
+     "s_7c87fa7b"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_73823258",
+   "s_7c87fa7b"
+  ],
+  "reasoningPt": "S3 e S19 têm o mesmo defeito principal: update/destroy não checam se o registro retornado por where(id:).first é nil, o que gera um 500 em vez de um 404. As duas também comentam, como segundo ponto, a falta de checagem de params[:embeddable_host], por isso entram em bundles. Esse segundo ponto não muda o grupo, então o grupo continua como está."
+ }
+}

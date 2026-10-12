@@ -1,0 +1,17 @@
+{
+ "judge": "astra",
+ "answer": {
+  "items": [
+   {
+    "id": "s_f78b766c",
+    "mainDefect": "Calling Init inline makes NewResourceServer block on the full index build and watcher startup, breaking callers that expect prompt construction.",
+    "secondary": [
+     {
+      "defect": "Initialization errors now make construction return nil, err instead of preserving a usable server with the error recorded in initErr, breaking degraded startup.",
+      "coveredBy": []
+     }
+    ]
+   }
+  ]
+ }
+}

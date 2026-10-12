@@ -1,0 +1,68 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "AssertEvents.java:483: isAccessTokenId inverts the grant comparison, rejecting matching shortcuts and allowing incorrect ones."
+   },
+   {
+    "id": "F2",
+    "description": "AssertEvents.java:483: isAccessTokenId extracts the grant shortcut with substring(3, 5) instead of substring(4, 6)."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_f5e7d9a5",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5454e119",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_5bd24a7d",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_5f605bbb",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_0767cf64",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cd0716d2",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_b26743e8",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

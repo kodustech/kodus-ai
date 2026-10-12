@@ -1,0 +1,20 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_e0e24b04",
+     "s_a5c1072a",
+     "s_aeb710a3",
+     "s_88cab4e0"
+    ],
+    "defect": "The time.sleep(0.1) added to test_basic does nothing because time.sleep was monkeypatched to a no-op earlier in the same test, so the race with the flusher thread is still there."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S1, S3, S6 e S8 apontam o mesmo defeito, nas mesmas linhas: o time.sleep(0.1) adicionado não tem efeito porque o monkeypatch da linha 15 o transforma em no-op. Nenhuma delas traz um segundo defeito distinto, então o grupo continua como está."
+ }
+}

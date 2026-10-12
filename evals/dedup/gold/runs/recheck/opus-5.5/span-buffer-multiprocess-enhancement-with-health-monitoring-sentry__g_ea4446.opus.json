@@ -1,0 +1,29 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "split",
+  "groups": [
+   {
+    "members": [
+     "s_4ee392ad",
+     "s_555f4a4d",
+     "s_b2cc6608"
+    ],
+    "defect": "In _ensure_processes_alive, the check `isinstance(process, multiprocessing.Process)` is always False for SpawnProcess, so a hung process is never killed before its replacement starts."
+   },
+   {
+    "members": [
+     "s_7a1b8c6d",
+     "s_7f309577"
+    ],
+    "defect": "In join(), the `break` taken when the deadline expires skips terminate() for the remaining processes."
+   }
+  ],
+  "unique": [],
+  "bundles": [
+   "s_7a1b8c6d",
+   "s_b2cc6608"
+  ],
+  "reasoningPt": "S1, S7 e S8 têm como defeito principal o isinstance que nunca é verdadeiro para SpawnProcess no kill() do restart. S8 só cita o terminate() do join() no final, então é bundle. S2 e S10 tratam do break no join() que deixa de chamar terminate() nos processos restantes; S2 só acrescenta depois o problema do isinstance, então também é bundle e fica no grupo do join."
+ }
+}

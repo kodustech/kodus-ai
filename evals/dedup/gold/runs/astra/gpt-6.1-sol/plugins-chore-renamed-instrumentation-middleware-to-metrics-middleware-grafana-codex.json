@@ -1,0 +1,43 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "promptSha": "4c64636527eb1b93e32a23803c8d3a9bb6d3eb79",
+  "attempt": 1,
+  "ms": 30943,
+  "answer": {
+    "groups": [
+      {
+        "members": [
+          "s_87ece20e",
+          "s_ca7aeab6",
+          "s_29d4df72",
+          "s_c4bfaaf2"
+        ],
+        "kind": "systemic_pattern",
+        "needsUnifiedComment": true,
+        "confidence": "high",
+        "defect": "The contextual logger and metrics middlewares dereference nullable request pointers before forwarding them, causing nil-request panics.",
+        "rationale": "All four report the same repeated omission of nil-request guards at middleware entry points. Both middleware files need edits to preserve nil-request forwarding, so the unified comment must cover both locations."
+      }
+    ],
+    "unique": [
+      {
+        "id": "s_a2ef7a52",
+        "confidence": "high"
+      },
+      {
+        "id": "s_7118acb2",
+        "confidence": "high"
+      },
+      {
+        "id": "s_46745551",
+        "confidence": "high"
+      },
+      {
+        "id": "s_76186e72",
+        "confidence": "high"
+      }
+    ]
+  }
+}

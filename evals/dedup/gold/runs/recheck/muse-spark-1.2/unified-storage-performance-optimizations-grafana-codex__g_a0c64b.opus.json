@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "Moving search.init ahead of initWatcher in Init opens a window where writes made during the index build are lost, and the fix is to restore the watcher-first order or replay events from the RV captured before the build.",
+    "members": [
+     "s_a0690d05",
+     "s_ca606e8f"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S3 e S6 apontam o mesmo defeito: a nova ordem em Init roda search.init antes de initWatcher e abre uma janela em que escritas feitas durante o build se perdem. S3 destaca o efeito nos clientes de watch e S6 o efeito no índice de busca, mas a causa é a mesma e a correção também (voltar a iniciar o watcher primeiro ou reprocessar a partir do RV). Nenhuma das duas traz um segundo defeito."
+ }
+}

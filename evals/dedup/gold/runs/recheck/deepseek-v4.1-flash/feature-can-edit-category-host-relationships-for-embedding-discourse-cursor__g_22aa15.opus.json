@@ -1,0 +1,18 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_135e8b0e",
+     "s_da7b8917"
+    ],
+    "defect": "The 'is false if embeddable_host is blank' test in topic_spec no longer exercises any embeddable-host condition, because expandable_first_post? stopped checking it, so the test is stale and misleading."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S8 e S17 apontam o mesmo teste (linhas 1403-1405): ele se chama 'embeddable_host is blank', mas não testa mais essa condição, já que expandable_first_post? deixou de verificá-la. As correções propostas mudam (S8 sugere remover o teste e S17 sugere renomear), mas o defeito é o mesmo, então o grupo continua como está."
+ }
+}

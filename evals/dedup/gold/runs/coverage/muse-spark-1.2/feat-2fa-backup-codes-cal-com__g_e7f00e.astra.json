@@ -1,0 +1,37 @@
+{
+ "judge": "astra",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "authorize() in next-auth-options.ts: non-atomic backup-code consumption lets concurrent logins reuse the same single-use code."
+   },
+   {
+    "id": "F2",
+    "description": "next-auth-options.ts, line 148: consumed backup codes leave null entries that accumulate without removal."
+   },
+   {
+    "id": "F3",
+    "description": "authorize() in next-auth-options.ts: exhausted, all-null backup codes produce IncorrectBackupCode instead of MissingBackupCodes."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_bca7ea55",
+    "covers": [
+     "F1"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_cf0c790d",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   }
+  ]
+ }
+}

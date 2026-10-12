@@ -1,0 +1,46 @@
+{
+ "judge": "opus",
+ "answer": {
+  "facets": [
+   {
+    "id": "F1",
+    "description": "getShortcut() javadoc suggests 3-letter shortcuts, but getTokenContextFromTokenId requires a 6-char context (2-char grant shortcut), so tokens from a conforming custom grant can't be decoded."
+   },
+   {
+    "id": "F2",
+    "description": "Shortcut length is never checked (not in encodeTokenId and not in DefaultTokenContextEncoderProviderFactory.postInit), so token ids that can't be decoded still get created."
+   },
+   {
+    "id": "F3",
+    "description": "Ids that contain a colon but have a prefix that isn't 6 chars throw IllegalArgumentException instead of falling back to UNKNOWN like ids without a colon."
+   }
+  ],
+  "members": [
+   {
+    "id": "s_07f54fcf",
+    "covers": [
+     "F1",
+     "F2",
+     "F3"
+    ],
+    "complete": true
+   },
+   {
+    "id": "s_d50d9f26",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   },
+   {
+    "id": "s_f0bbf95c",
+    "covers": [
+     "F1",
+     "F2"
+    ],
+    "complete": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,29 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "promptSha": "9b4ac13e83a8d8f1e35ff9ded2cbe40b63b2e251",
+  "attempt": 1,
+  "ms": 29453,
+  "answer": {
+    "groups": [],
+    "unique": [
+      {
+        "id": "s_62dee10b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_44491e3b",
+        "confidence": "high"
+      },
+      {
+        "id": "s_a69e0b2a",
+        "confidence": "high"
+      },
+      {
+        "id": "s_5d6b4710",
+        "confidence": "high"
+      }
+    ]
+  }
+}

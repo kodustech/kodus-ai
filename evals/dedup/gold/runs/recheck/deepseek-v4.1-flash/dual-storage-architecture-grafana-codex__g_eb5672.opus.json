@@ -1,0 +1,21 @@
+{
+ "judge": "opus",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "defect": "No caminho de sucesso do Delete, recordStorageDuration recebe `name` em vez de `options.Kind` como label de kind da métrica.",
+    "members": [
+     "s_07b0de25",
+     "s_4ba6d893",
+     "s_fcc2ff07",
+     "s_6c1d1dab",
+     "s_c3b88c49"
+    ]
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S4, S10, S11, S19 e S22 apontam o mesmo defeito: na linha 106 o Delete passa `name` no lugar de `options.Kind` para recordStorageDuration. A correção é a mesma em todas. Só mudam o intervalo de linhas (S10 cobre 99-106) e a ênfase do impacto, então o grupo continua como está."
+ }
+}

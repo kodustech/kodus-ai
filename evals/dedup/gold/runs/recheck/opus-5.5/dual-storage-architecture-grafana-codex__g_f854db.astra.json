@@ -1,0 +1,18 @@
+{
+ "judge": "astra",
+ "answer": {
+  "verdict": "keep",
+  "groups": [
+   {
+    "members": [
+     "s_849456ca",
+     "s_22b6a64c"
+    ],
+    "defect": "Delete insere d.Log no contexto em vez de log, perdendo os campos name, kind e method nos logs downstream."
+   }
+  ],
+  "unique": [],
+  "bundles": [],
+  "reasoningPt": "S7 e S11 apontam o mesmo defeito na chamada klog.NewContext de Delete. Trocar d.Log por log resolve ambas; a menção imprecisa de S7 à perda de mode não constitui outro defeito."
+ }
+}
