@@ -91,6 +91,33 @@ describe('GetReactionsUseCase', () => {
         expect(result).toEqual([]);
     });
 
+    it('links a comment whose first identifier is not the stored one (Forgejo)', async () => {
+        // Forgejo's adapter fills threadId with the review id, so the first
+        // candidate misses; the comment's own id is what the suggestion was
+        // stored under (#2054), and the lookup has to try it too.
+        const pr = createSamplePullRequestWithSuggestions();
+        pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue([pr]);
+
+        const comment = createSampleComment({ id: 100, threadId: 'review-999' });
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([comment]);
+
+        const reaction = createSampleReactionResult({
+            comment: { id: 100, pull_request_review_id: 'pr-review-999' },
+        });
+        codeManagementService.countReactions.mockResolvedValue([reaction]);
+
+        const result = await useCase.execute(orgAndTeam, [42]);
+
+        expect(codeManagementService.countReactions).toHaveBeenCalledWith(
+            expect.objectContaining({ comments: [comment] }),
+        );
+        expect(result).toHaveLength(1);
+        expect(result[0]).toMatchObject({
+            reactions: { thumbsUp: 1, thumbsDown: 0 },
+            suggestionId: 'suggestion-001',
+        });
+    });
+
     it('should fetch comments and reactions for PRs with suggestions', async () => {
         const pr = createSamplePullRequestWithSuggestions();
         pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
