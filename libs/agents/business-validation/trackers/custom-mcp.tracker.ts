@@ -6,8 +6,8 @@ import type {
 } from '../business-validation.types';
 import { asRecord } from '../value-utils';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
-import { mentions, recordsIn, textField } from './task-payload';
-import { McpTaskTracker } from './tracker';
+import { htmlToText, mentions, recordsIn, textField } from './task-payload';
+import { McpTaskTracker, type TrackerReadContext } from './tracker';
 
 /** Verbs that change something. A tool named with one is never called. */
 const WRITE_VERB =
@@ -18,8 +18,20 @@ const TASK_NOUN =
 /** A plural noun or a list/search verb: returns many items, not the one asked for. */
 const MANY =
     /(list|search|query|find|all|batch|backlog)|(issues|tasks|tickets|items|stories|cards)\b/i;
+/**
+ * What may follow the task noun in a reader's name: `get_issue`,
+ * `issue_read`, `getIssueById`. Anything else reads something about the task
+ * (`jira_get_issue_watchers`, `jira_get_issue_dates`), not the task.
+ */
+const AFTER_TASK_NOUN =
+    /^.*(?:issue|task|ticket|story|bug|epic|card|work_?item|workitem)((?:[_\-\s.]?(?:by[_-]?)?(?:id|key|number|details?|get|read|fetch|view|info))*)$/i;
 const ID_PARAM =
-    /^(id|key|identifier|number|issue_?(id|key|number)|issueIdOrKey|task_?id|ticket_?id|work_?item_?id|workItemId|item_?id)$/i;
+    /^(id|key|identifier|number|i?id|issue_?(id|iid|key|number)|issueIdOrKey|task|task_?id|ticket_?id|work_?item_?id|workItemId|item_?id|story_?public_?id)$/i;
+
+/** Where a repository host's server takes the repository of `#12`. */
+const OWNER_PARAM = /^owner$/i;
+const REPO_PARAM = /^repo(sitory)?(_?name)?$/i;
+const PROJECT_PATH_PARAM = /^project(_?(id|path))?$|^full_?name$/i;
 
 const MAX_TOOLS_TRIED = 2;
 
@@ -57,6 +69,11 @@ export class CustomMcpTracker extends McpTaskTracker {
         session: McpToolSession,
         private readonly tool?: string,
         private readonly agentReader?: AgentToolReader,
+        /**
+         * The org picked this plugin as its task source, so it also reads
+         * `#12`: it is the repository host's own server (GitHub, GitLab).
+         */
+        private readonly chosenSource = false,
     ) {
         super(session);
     }
@@ -64,11 +81,19 @@ export class CustomMcpTracker extends McpTaskTracker {
     canRead(reference: TaskReference): boolean {
         return (
             (reference.kind === 'key' && reference.host === undefined) ||
-            reference.kind === 'work_item'
+            reference.kind === 'work_item' ||
+            (reference.kind === 'git_issue' && this.chosenSource)
         );
     }
 
-    protected async lookup(reference: TaskReference): Promise<TrackerLookup> {
+    protected async lookup(
+        reference: TaskReference,
+        context: TrackerReadContext,
+    ): Promise<TrackerLookup> {
+        const repository =
+            reference.kind === 'git_issue'
+                ? (reference.repository ?? context.repository)
+                : undefined;
         const readers = await this.loadReaders();
         if (!readers.length) {
             return {
@@ -77,8 +102,16 @@ export class CustomMcpTracker extends McpTaskTracker {
             };
         }
 
-        for (const tool of readers.slice(0, MAX_TOOLS_TRIED)) {
-            const args = buildReadArgs(tool, reference);
+        // `#12` is read only through a tool that takes the repository: given
+        // to a Jira tool it is an internal id, and reads an unrelated issue.
+        const usable =
+            reference.kind === 'git_issue'
+                ? repository
+                    ? readers.filter(takesRepository)
+                    : []
+                : readers;
+        for (const tool of usable.slice(0, MAX_TOOLS_TRIED)) {
+            const args = buildReadArgs(tool, reference, repository);
             let payload: unknown;
             try {
                 payload = args
@@ -105,33 +138,54 @@ export class CustomMcpTracker extends McpTaskTracker {
                             record.key,
                             record.identifier,
                             record.number,
+                            record.iid,
+                            record.custom_id,
                         ],
                         reference.id,
                     ),
                 ) ?? asRecord(payload);
+            if (item.pull_request) {
+                // GitHub answers a pull request number as an issue.
+                continue;
+            }
             const fields = { ...item, ...asRecord(item.fields) };
+            const title = textField(fields, [
+                'System.Title',
+                'title',
+                'summary',
+                'name',
+            ]);
+            const description = joinSections([
+                htmlToText(
+                    textField(fields, [
+                        'System.Description',
+                        'description',
+                        'markdown_description',
+                        'text_content',
+                        'notes',
+                        'body',
+                    ]) ?? (typeof payload === 'string' ? payload : undefined),
+                ),
+                htmlToText(
+                    textField(fields, [
+                        'Microsoft.VSTS.Common.AcceptanceCriteria',
+                        'acceptance_criteria',
+                        'acceptanceCriteria',
+                    ]),
+                ),
+            ]);
+            if (!title && !description) {
+                // It names the task but says nothing of it: watchers, dates, links.
+                continue;
+            }
             return {
                 status: 'found',
                 task: {
                     tracker: this.name,
-                    id:
-                        reference.kind === 'work_item'
-                            ? `AB#${reference.id}`
-                            : reference.id,
-                    title: textField(fields, [
-                        'System.Title',
-                        'title',
-                        'summary',
-                        'name',
-                    ]),
-                    description:
-                        textField(fields, [
-                            'System.Description',
-                            'description',
-                            'body',
-                            'Microsoft.VSTS.Common.AcceptanceCriteria',
-                        ]) ??
-                        (typeof payload === 'string' ? payload : undefined),
+                    id: taskId(reference),
+                    title,
+                    description,
+                    url: textField(fields, ['html_url', 'web_url', 'url']),
                 },
             };
         }
@@ -186,6 +240,7 @@ export function isSingleItemReader(tool: MCPToolRaw): boolean {
     if (
         !isReadOnly(tool) ||
         !TASK_NOUN.test(tool.name) ||
+        !AFTER_TASK_NOUN.test(tool.name) ||
         MANY.test(tool.name)
     ) {
         return false;
@@ -221,6 +276,7 @@ export function rankReadTools(tools: MCPToolRaw[]): Array<{
 export function buildReadArgs(
     tool: MCPToolRaw,
     reference: TaskReference,
+    repository?: { owner?: string; name: string },
 ): Record<string, unknown> | undefined {
     const schema = asRecord(tool.inputSchema) as Schema;
     const properties = schema.properties ?? {};
@@ -252,10 +308,52 @@ export function buildReadArgs(
         }
     }
 
+    if (repository) {
+        // `#12` lives in the PR's repository: fill where the server asks for it.
+        for (const name of Object.keys(properties)) {
+            if (name === id) {
+                continue;
+            }
+            if (OWNER_PARAM.test(name) && repository.owner) {
+                args[name] = repository.owner;
+            } else if (REPO_PARAM.test(name)) {
+                args[name] = repository.name;
+            } else if (PROJECT_PATH_PARAM.test(name) && repository.owner) {
+                args[name] = `${repository.owner}/${repository.name}`;
+            }
+        }
+    }
+
     const missing = (schema.required ?? []).filter(
         (name) => args[name] === undefined,
     );
     return missing.length ? undefined : args;
+}
+
+function takesRepository(tool: MCPToolRaw): boolean {
+    return Object.keys(asRecord(asRecord(tool.inputSchema).properties)).some(
+        (name) =>
+            OWNER_PARAM.test(name) ||
+            REPO_PARAM.test(name) ||
+            PROJECT_PATH_PARAM.test(name),
+    );
+}
+
+function taskId(reference: TaskReference): string {
+    if (reference.kind === 'work_item') {
+        return `AB#${reference.id}`;
+    }
+    if (reference.kind === 'git_issue') {
+        return reference.repository
+            ? `${reference.repository.owner}/${reference.repository.name}#${reference.id}`
+            : `#${reference.id}`;
+    }
+    return reference.id;
+}
+
+function joinSections(sections: Array<string | undefined>): string | undefined {
+    const present = sections.filter(Boolean);
+    return present.length ? present.join('\n\n') : undefined;
 }
 
 function idParam(schema: Schema): string | undefined {

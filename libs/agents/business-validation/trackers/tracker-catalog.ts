@@ -92,6 +92,7 @@ function chosenTracker(
         new McpToolSession(server, tool ? [tool] : undefined),
         tool,
         tool ? options.agentReader : undefined,
+        true,
     );
 }
 

@@ -30,6 +30,16 @@ describe('McpToolSession', () => {
             session().call('get_issue', { id: 'SAA-9' }),
         ).rejects.toBeInstanceOf(TaskNotFoundError);
 
+        // Notion's answer for a page that is missing or not shared.
+        executeTool.mockResolvedValueOnce(
+            errorResult(
+                '{"code":"object_not_found","message":"Could not load page"}',
+            ),
+        );
+        await expect(
+            session().call('get_issue', { id: 'SAA-9' }),
+        ).rejects.toBeInstanceOf(TaskNotFoundError);
+
         executeTool.mockResolvedValueOnce(errorResult('rate limited'));
         await expect(
             session().call('get_issue', { id: 'SAA-9' }),

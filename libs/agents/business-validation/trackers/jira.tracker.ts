@@ -24,6 +24,7 @@ const MIN_CUSTOM_FIELD_TEXT = 20;
 export class JiraTracker extends McpTaskTracker {
     readonly name = 'Jira';
     private sites?: Promise<Array<{ id: string; url?: string }>>;
+    private fullIssueArgs?: Promise<Record<string, unknown>>;
 
     constructor(session: McpToolSession) {
         super(session);
@@ -55,6 +56,7 @@ export class JiraTracker extends McpTaskTracker {
                 payload = await this.session.call('getJiraIssue', {
                     cloudId: site.id,
                     issueIdOrKey: reference.id,
+                    ...(await this.loadFullIssueArgs()),
                 });
             } catch (error) {
                 if (error instanceof TaskNotFoundError) {
@@ -113,6 +115,26 @@ export class JiraTracker extends McpTaskTracker {
             }
         }
         return keys;
+    }
+
+    /**
+     * Without `fields`, Rovo answers a compact set of system fields: the
+     * custom fields where teams keep acceptance criteria never arrive. Sent
+     * only when the tool declares them, since an unknown argument fails.
+     */
+    private loadFullIssueArgs(): Promise<Record<string, unknown>> {
+        this.fullIssueArgs ??= this.session.tools().then((tools) => {
+            const properties = asRecord(
+                asRecord(
+                    tools.find((t) => t.name === 'getJiraIssue')?.inputSchema,
+                ).properties,
+            );
+            return {
+                ...('fields' in properties ? { fields: ['*all'] } : {}),
+                ...('expand' in properties ? { expand: 'names' } : {}),
+            };
+        });
+        return this.fullIssueArgs;
     }
 
     private loadSites(): Promise<Array<{ id: string; url?: string }>> {

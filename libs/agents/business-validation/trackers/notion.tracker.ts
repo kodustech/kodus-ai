@@ -2,15 +2,18 @@ import type {
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
+import { asRecord } from '../value-utils';
 import { McpToolSession } from './mcp-tool-session';
 import { recordsIn, textField } from './task-payload';
 import { McpTaskTracker } from './tracker';
 
-export const NOTION_TOOLS = ['fetch'];
+/** Notion's hosted MCP names it `notion-fetch`; OpenAI-style servers name it `fetch`. */
+export const NOTION_TOOLS = ['notion-fetch', 'fetch'];
 
 /** Notion's remote MCP. A task is a page, referenced only by its URL. */
 export class NotionTracker extends McpTaskTracker {
     readonly name = 'Notion';
+    private fetchTool?: Promise<string>;
 
     constructor(session: McpToolSession) {
         super(session);
@@ -24,27 +27,19 @@ export class NotionTracker extends McpTaskTracker {
         if (reference.kind !== 'page') {
             return { status: 'not_found' };
         }
-        const payload = await this.session.call('fetch', { id: reference.url });
+        const payload = await this.session.call(await this.loadFetchTool(), {
+            id: reference.url,
+        });
 
-        if (typeof payload === 'string') {
-            return payload.trim()
-                ? {
-                      status: 'found',
-                      task: {
-                          tracker: this.name,
-                          id: reference.id,
-                          description: payload,
-                          url: reference.url,
-                      },
-                  }
-                : { status: 'not_found' };
-        }
-
-        const page = recordsIn(payload)[0];
-        const description = page
-            ? textField(page, ['text', 'markdown', 'content', 'body'])
-            : undefined;
-        if (!page || !description) {
+        const page = typeof payload === 'string' ? {} : recordsIn(payload)[0];
+        const text =
+            typeof payload === 'string'
+                ? payload
+                : page
+                  ? textField(page, ['text', 'markdown', 'content', 'body'])
+                  : undefined;
+        const description = text ? pageText(text) : undefined;
+        if (!description) {
             return { status: 'not_found' };
         }
         return {
@@ -52,10 +47,52 @@ export class NotionTracker extends McpTaskTracker {
             task: {
                 tracker: this.name,
                 id: reference.id,
-                title: textField(page, ['title', 'name']),
+                title: page ? textField(page, ['title', 'name']) : undefined,
                 description,
                 url: reference.url,
             },
         };
+    }
+
+    private loadFetchTool(): Promise<string> {
+        this.fetchTool ??= this.session
+            .tools()
+            .then(
+                (tools) =>
+                    NOTION_TOOLS.find((name) =>
+                        tools.some((t) => t.name === name),
+                    ) ?? NOTION_TOOLS[0],
+            );
+        return this.fetchTool;
+    }
+}
+
+/**
+ * A fetched page is `<page><properties>{json}</properties><content>md</content></page>`:
+ * the properties as `Name: value` lines, then the content.
+ */
+function pageText(text: string): string | undefined {
+    const content = /<content>([\s\S]*?)<\/content>/.exec(text)?.[1];
+    if (content === undefined) {
+        return text.trim() || undefined;
+    }
+    const properties = /<properties>([\s\S]*?)<\/properties>/.exec(text)?.[1];
+    const lines = Object.entries(asRecord(parseJson(properties)))
+        .filter(
+            ([, value]) =>
+                typeof value === 'string' || typeof value === 'number',
+        )
+        .map(([name, value]) => `${name}: ${value}`);
+    return (
+        [lines.join('\n'), content.trim()].filter(Boolean).join('\n\n') ||
+        undefined
+    );
+}
+
+function parseJson(text?: string): unknown {
+    try {
+        return text ? JSON.parse(text) : undefined;
+    } catch {
+        return undefined;
     }
 }

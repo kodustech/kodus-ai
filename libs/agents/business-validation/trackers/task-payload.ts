@@ -3,7 +3,11 @@ import { asRecord } from '../value-utils';
 type JsonRecord = Record<string, unknown>;
 
 /** Every object inside a tool payload, outermost first. */
-export function recordsIn(payload: unknown, maxDepth = 6): JsonRecord[] {
+export function recordsIn(
+    payload: unknown,
+    maxDepth = 6,
+    maxItems = 50,
+): JsonRecord[] {
     const records: JsonRecord[] = [];
     const visit = (value: unknown, depth: number) => {
         if (depth > maxDepth || value === null || value === undefined) {
@@ -21,7 +25,7 @@ export function recordsIn(payload: unknown, maxDepth = 6): JsonRecord[] {
             return;
         }
         if (Array.isArray(value)) {
-            value.slice(0, 50).forEach((item) => visit(item, depth + 1));
+            value.slice(0, maxItems).forEach((item) => visit(item, depth + 1));
             return;
         }
         if (typeof value === 'object') {
@@ -109,6 +113,30 @@ function adfToText(doc: JsonRecord): string | undefined {
         .replace(/\n{3,}/g, '\n\n')
         .trim();
     return text || undefined;
+}
+
+const HTML_TAG =
+    /<\/?(?:div|p|br|span|b|i|u|strong|em|ul|ol|li|h[1-6]|table|thead|tbody|tr|td|th|a|img|code|pre|blockquote|hr)\b[^>]*>/gi;
+
+/** Plain text from the HTML some trackers store (Azure DevOps). Text without HTML is returned as is. */
+export function htmlToText(text: string | undefined): string | undefined {
+    if (!text || !new RegExp(HTML_TAG.source, 'i').test(text)) {
+        return text;
+    }
+    const plain = text
+        .replace(/<li\b[^>]*>/gi, '- ')
+        .replace(/<br\s*\/?>|<\/(?:p|div|li|h[1-6]|tr|blockquote)>/gi, '\n')
+        .replace(HTML_TAG, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    return plain || undefined;
 }
 
 /** True when `payload` mentions `id` as a whole token anywhere. */
