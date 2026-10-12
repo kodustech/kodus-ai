@@ -1,0 +1,121 @@
+{
+ "__doc": "Revisao do Junior em 12/10/26 das fusoes que o dedup do Muse (v8, regra de cobertura) fez e o gold nao tinha (pagina Fusoes do Muse). juntar: as sugestoes viram um grupo so (unindo os grupos que ja tinham). descartar: a sugestao nao relata problema e sai antes do dedup (sanitizador).",
+ "itens": [
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+   "ids": [
+    "S8",
+    "S11"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+   "ids": [
+    "S9",
+    "S12"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+   "ids": [
+    "S17",
+    "S7"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+   "ids": [
+    "S2",
+    "S6"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+   "ids": [
+    "S11",
+    "S12"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+   "ids": [
+    "S1",
+    "S4",
+    "S7",
+    "S8"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "frontend-asset-optimization-grafana-codex",
+   "ids": [
+    "S1",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "unified-storage-performance-optimizations-grafana-codex",
+   "ids": [
+    "S10",
+    "S11",
+    "S12"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "implement-access-token-context-encoding-framework-keycloak",
+   "ids": [
+    "S3",
+    "S15"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+   "ids": [
+    "S4",
+    "S5"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "replays-self-serve-bulk-delete-system-sentry",
+   "ids": [
+    "S11",
+    "S2"
+   ],
+   "decisao": "juntar"
+  },
+  {
+   "model": "muse-spark-1.2",
+   "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+   "ids": [
+    "S11",
+    "S5",
+    "S6",
+    "S7",
+    "S8"
+   ],
+   "decisao": "descartar"
+  }
+ ]
+}

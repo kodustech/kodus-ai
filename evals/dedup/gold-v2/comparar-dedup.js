@@ -21,7 +21,15 @@ const fs = require('fs');
 const path = require('path');
 const { DEDUP_CONTENT_THRESHOLD, DEDUP_EMBEDDING_LOW, DEDUP_EMBEDDING_HIGH } = { DEDUP_CONTENT_THRESHOLD: 0.3, DEDUP_EMBEDDING_LOW: 0.4, DEDUP_EMBEDDING_HIGH: 0.7 };
 
-const [VERSAO, ...ARGS] = process.argv.slice(2);
+const FLAGS = process.argv.slice(2).filter((a) => a.startsWith('--'));
+const [VERSAO, ...ARGS] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+// --sem-sanitizador: tira as sugestoes que o sanitizador descarta antes do dedup
+// (evals/suggestion-sanitizer/dataset/<model>.json), dos dois lados.
+const SEM_SANITIZADOR = FLAGS.includes('--sem-sanitizador');
+const foraDoDedup = (model) => {
+    const f = path.join(__dirname, '..', '..', 'suggestion-sanitizer', 'dataset', `${model}.json`);
+    return SEM_SANITIZADOR && fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')).semProblema : {};
+};
 const DIR = path.join(__dirname, 'dedup-real', VERSAO);
 const MODELS = ARGS.length ? ARGS : fs.readdirSync(DIR).map((f) => f.replace(/\.json$/, ''));
 const honra = (p) => p.lex >= DEDUP_CONTENT_THRESHOLD || p.cos >= DEDUP_EMBEDDING_HIGH || (p.cos >= DEDUP_EMBEDDING_LOW && p.tb === true);
@@ -51,12 +59,13 @@ const linhas = [];
 for (const model of MODELS) {
     const fin = JSON.parse(fs.readFileSync(path.join(__dirname, `09.10.26_${model}.final.json`), 'utf8')).prs;
     const ded = JSON.parse(fs.readFileSync(path.join(DIR, `${model}.json`), 'utf8')).prs;
+    const fora = foraDoDedup(model);
     for (const modo of ['LLM', 'producao']) {
         const c = { sug: 0, iguais: 0, gruposGold: 0, gruposIguais: 0, comGold: 0, comDedup: 0, pg: 0, pd: 0, pa: 0 };
         for (const [cid, pr] of Object.entries(fin)) {
             const d = ded[cid];
             if (!d || d.erro) continue;
-            const ids = Object.keys(pr);
+            const ids = Object.keys(pr).filter((id) => !(fora[cid] || []).includes(id));
             const gGold = {};
             for (const [id, s] of Object.entries(pr)) if (s.grupo) (gGold[s.grupo] = gGold[s.grupo] || []).push(id);
             const G = particao(ids, Object.values(gGold));

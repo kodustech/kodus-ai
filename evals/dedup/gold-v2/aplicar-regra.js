@@ -30,6 +30,7 @@ const JUDGES = ['opus', 'astra'];
 const key = (xs) => [...xs].sort().join(',');
 const num = (id) => Number(String(id).slice(1));
 
+const REVISADAS = fs.existsSync(path.join(DIR, 'fusoes-revisadas.json')) ? JSON.parse(fs.readFileSync(path.join(DIR, 'fusoes-revisadas.json'), 'utf8')).itens : [];
 const decisoes = {};
 const ddir = path.join(DIR, 'decisoes-db', 'decisoes');
 if (fs.existsSync(ddir)) for (const f of fs.readdirSync(ddir)) {
@@ -174,7 +175,19 @@ for (const gold of golds) {
             if (st === 'claude') cont.decididoClaude++;
             if (st === 'junior') cont.decididoJunior++;
         }
-        cont.grupos += r.grupos.length;
+        // Fusoes revisadas pelo Junior depois do gold (fusoes-revisadas.json).
+        for (const f of REVISADAS.filter((x) => x.model === gold.model && x.caseId === caseId)) {
+            if (f.decisao === 'descartar') {
+                for (const id of f.ids) out[id] = { ...out[id], grupo: null, membros: undefined, status: 'descartada-sem-problema' };
+                continue;
+            }
+            const juntos = new Set(f.ids);
+            for (const id of f.ids) for (const m of out[id]?.membros || []) juntos.add(m);
+            const membros = [...juntos].sort((a, b) => num(a) - num(b));
+            const gid = out[membros.find((id) => out[id]?.grupo)]?.grupo || `R${++gi}`;
+            for (const id of membros) out[id] = { ...out[id], grupo: gid, membros, status: 'junior' };
+        }
+        cont.grupos += new Set(Object.values(out).map((s) => s.grupo).filter(Boolean)).size;
         final.prs[caseId] = out;
     }
     fs.writeFileSync(path.join(DIR, `09.10.26_${gold.model}.final.json`), JSON.stringify(final, null, 1));

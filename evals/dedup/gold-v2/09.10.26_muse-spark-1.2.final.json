@@ -1115,8 +1115,12 @@
     "relevantLinesStart": 24,
     "relevantLinesEnd": 29,
     "suggestionContent": "WHAT: Webhook secret check uses !== without timing-safe compare, header name lookup is case-sensitive, and handler has no method check, allowing GET to overwrite any userId credential (IDOR) if secret is known. WHY: Header lookup req.headers[envName || \"calcom-webhook-secret\"] fails if admin sets mixed-case name; timing-unsafe compare leaks secret via side channel; missing if(req.method!==\"POST\") lets crawlers/CSRF trigger writes. HOW: Normalize header name toLowerCase, use crypto.timingSafeEqual, enforce POST, and verify caller authorization for userId.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R7",
+    "status": "junior",
+    "membros": [
+     "S8",
+     "S11"
+    ]
    },
    "S9": {
     "id": "S9",
@@ -1128,8 +1132,12 @@
     "relevantLinesStart": 56,
     "relevantLinesEnd": 60,
     "suggestionContent": "WHAT: Decrypt uses symmetricDecrypt(reqBody.keys, process.env.CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY || \"\") then JSON.parse without try/catch or key-length validation. WHY: Invalid base64/aes key throws and crashes with 500, leaking stack; empty fallback key would decrypt with wrong key and produce garbage that is stored as credential. HOW: Validate env key length (32 bytes), catch decrypt/parse errors and return 400.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R8",
+    "status": "junior",
+    "membros": [
+     "S9",
+     "S12"
+    ]
    },
    "S10": {
     "id": "S10",
@@ -1154,8 +1162,12 @@
     "relevantLinesStart": 24,
     "relevantLinesEnd": 28,
     "suggestionContent": "Timing attack: webhook secret compared with !==. Use constant-time comparison (e.g., crypto.timingSafeEqual on equal-length buffers after hashing/length check) instead of direct string !== to avoid leaking secret via execution time.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R7",
+    "status": "junior",
+    "membros": [
+     "S8",
+     "S11"
+    ]
    },
    "S12": {
     "id": "S12",
@@ -1167,8 +1179,12 @@
     "relevantLinesStart": 57,
     "relevantLinesEnd": 59,
     "suggestionContent": "Insecure fallback for encryption key: symmetricDecrypt(..., process.env.CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY || \"\") supplies empty string if env missing. For 32-byte AES256 key this is a weak default; fail-fast (throw/403) when key is absent instead of decrypting with \"\".",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R8",
+    "status": "junior",
+    "membros": [
+     "S9",
+     "S12"
+    ]
    },
    "S17": {
     "id": "S17",
@@ -2368,8 +2384,12 @@
     "relevantLinesStart": 9,
     "relevantLinesEnd": 26,
     "suggestionContent": "Migration does execute(...)[0]['id'] / [0]['value'] without checking empty result => nil['id'] NoMethodError aborts migration with partial state. INSERT interpolates raw host '#{h}' without quoting => single quote breaks SQL PG::SyntaxError. Use quote/parameterized SQL and empty checks.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R6",
+    "status": "junior",
+    "membros": [
+     "S7",
+     "S17"
+    ]
    },
    "S8": {
     "id": "S8",
@@ -2420,8 +2440,12 @@
     "relevantLinesStart": 9,
     "relevantLinesEnd": 16,
     "suggestionContent": "Fallback unreachable: execute(...)[0]['id'].to_i dereferences [0] before testing emptiness — if no embed_category row, [0] is nil and nil['id'] raises instead of falling through to `if category_id==0` uncategorized lookup. Check row existence first (row = execute(...)[0]; category_id = row ? row['id'].to_i : 0).",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R6",
+    "status": "junior",
+    "membros": [
+     "S7",
+     "S17"
+    ]
    }
   },
   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
@@ -2511,8 +2535,12 @@
     "relevantLinesStart": 117,
     "relevantLinesEnd": 123,
     "suggestionContent": "WHAT: @mixin align-items emits invalid `-ms-align-items` and omits `-moz-box-align` while reusing same $alignment for -webkit-box-align. WHY: No browser implements -ms-align-items, so IE10 fallback is broken; old Firefox (19-21) with display:-moz-box needs -moz-box-align and ignores unprefixed align-items; baseline value is also unsupported by 2009 box-align causing silent failure in badges.css.scss baseline case. HOW: Remove `-ms-align-items`, add `-moz-box-align: $alignment` and map values correctly (flex-start->start, flex-end->end) or restrict callers to spec-safe values.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R2",
+    "status": "junior",
+    "membros": [
+     "S2",
+     "S6"
+    ]
    },
    "S3": {
     "id": "S3",
@@ -2537,8 +2565,12 @@
     "relevantLinesStart": 117,
     "relevantLinesEnd": 123,
     "suggestionContent": "align-items() emits an invalid prefix -ms-align-items (no browser implements it; IE10 is -ms-flex-align) and forwards $alignment verbatim to -webkit-box-align/-ms-flex-align. Standard values flex-start/flex-end are invalid for the old spec which expects start/end, so the mixin produces wrong results for general calls and a dead declaration on the -ms-align-items line. Map values or keep only -webkit-box-align with start/end/center/baseline/stretch translation and remove/fix the -ms-align-items line.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R2",
+    "status": "junior",
+    "membros": [
+     "S2",
+     "S6"
+    ]
    }
   },
   "feature-automatically-downsize-large-images-discourse-cursor": {
@@ -2801,8 +2833,12 @@
     "relevantLinesStart": 179,
     "relevantLinesEnd": 185,
     "suggestionContent": "Change hardcodes maxSizeKB to 10*1024 and shows bootbox.alert with max_size_kb only, no sensitive data. No logging or user-visible error/response containing sensitive data.",
-    "grupo": null,
-    "status": "junior"
+    "grupo": "R2",
+    "status": "junior",
+    "membros": [
+     "S11",
+     "S12"
+    ]
    },
    "S12": {
     "id": "S12",
@@ -2814,8 +2850,12 @@
     "relevantLinesStart": 243,
     "relevantLinesEnd": 249,
     "suggestionContent": "Change hardcodes maxSizeKB to 10*1024 and shows bootbox.alert with max_size_kb only, no sensitive data. No logging or user-visible error/response containing sensitive data.",
-    "grupo": null,
-    "status": "junior"
+    "grupo": "R2",
+    "status": "junior",
+    "membros": [
+     "S11",
+     "S12"
+    ]
    }
   },
   "fix-proper-handling-of-group-memberships-discourse-cursor": {
@@ -3129,9 +3169,10 @@
     "membros": [
      "S1",
      "S4",
-     "S7"
+     "S7",
+     "S8"
     ],
-    "status": "consenso"
+    "status": "junior"
    },
    "S4": {
     "id": "S4",
@@ -3147,9 +3188,10 @@
     "membros": [
      "S1",
      "S4",
-     "S7"
+     "S7",
+     "S8"
     ],
-    "status": "consenso"
+    "status": "junior"
    },
    "S7": {
     "id": "S7",
@@ -3165,9 +3207,10 @@
     "membros": [
      "S1",
      "S4",
-     "S7"
+     "S7",
+     "S8"
     ],
-    "status": "consenso"
+    "status": "junior"
    },
    "S6": {
     "id": "S6",
@@ -3252,8 +3295,14 @@
     "relevantLinesStart": 12,
     "relevantLinesEnd": 18,
     "suggestionContent": "Cross-reference inconsistency: FallbackLocaleList#[] mixes types - `locale` is used raw (string \"en\" from ApplicationController#set_locale which assigns SiteSetting.default_locale without to_sym) while `SiteSetting.default_locale.to_sym` and `:en` are symbols. `uniq` will keep both \"en\" and :en, `I18n.ensure_loaded!` / @loaded_locales.include? and the translate cache key `\"#{key}#{config.locale}...\"` treat string vs symbol as different, causing duplicate loads and cache misses. Normalize consistently, e.g. `locale.to_sym` and `I18n.locale = SiteSetting.default_locale.to_sym`.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "F1",
+    "status": "junior",
+    "membros": [
+     "S1",
+     "S4",
+     "S7",
+     "S8"
+    ]
    }
   },
   "anonymous-add-configurable-device-limit-grafana-codex": {
@@ -3535,9 +3584,10 @@
     "membros": [
      "S1",
      "S3",
-     "S4"
+     "S4",
+     "S5"
     ],
-    "status": "consenso"
+    "status": "junior"
    },
    "S3": {
     "id": "S3",
@@ -3553,9 +3603,10 @@
     "membros": [
      "S1",
      "S3",
-     "S4"
+     "S4",
+     "S5"
     ],
-    "status": "consenso"
+    "status": "junior"
    },
    "S4": {
     "id": "S4",
@@ -3571,9 +3622,10 @@
     "membros": [
      "S1",
      "S3",
-     "S4"
+     "S4",
+     "S5"
     ],
-    "status": "consenso"
+    "status": "junior"
    },
    "S2": {
     "id": "S2",
@@ -3598,8 +3650,14 @@
     "relevantLinesStart": 48,
     "relevantLinesEnd": 52,
     "suggestionContent": "Cache poisoning on failure path made worse by shared global. After Lock, code unconditionally does entryPointAssetsCache = result at line 69 even when result==nil/err!=nil. A Dev-mode request (which bypasses the early return) that fails will overwrite a valid production cache with nil, so every later non-Dev reader is served failure/retries. Fix: only cache on success (if err==nil && result!=nil) and/or skip cache write when cfg.Env==Dev.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "F1",
+    "status": "junior",
+    "membros": [
+     "S1",
+     "S3",
+     "S4",
+     "S5"
+    ]
    },
    "S6": {
     "id": "S6",
@@ -4500,8 +4558,13 @@
     "relevantLinesStart": 173,
     "relevantLinesEnd": 173,
     "suggestionContent": "Tracer context capture change at line 173 only fixes ignored context, no signature change, no added/removed parameters or interface members.",
-    "grupo": null,
-    "status": "junior"
+    "grupo": "R1",
+    "status": "junior",
+    "membros": [
+     "S10",
+     "S11",
+     "S12"
+    ]
    },
    "S11": {
     "id": "S11",
@@ -4513,8 +4576,13 @@
     "relevantLinesStart": 310,
     "relevantLinesEnd": 310,
     "suggestionContent": "Tracer context capture change at line 310 only fixes ignored context, no signature change, no added/removed parameters or interface members.",
-    "grupo": null,
-    "status": "junior"
+    "grupo": "R1",
+    "status": "junior",
+    "membros": [
+     "S10",
+     "S11",
+     "S12"
+    ]
    },
    "S12": {
     "id": "S12",
@@ -4526,8 +4594,13 @@
     "relevantLinesStart": 126,
     "relevantLinesEnd": 126,
     "suggestionContent": "Tracer context capture change at line 126 only fixes ignored context, no signature change, no added/removed parameters or interface members.",
-    "grupo": null,
-    "status": "junior"
+    "grupo": "R1",
+    "status": "junior",
+    "membros": [
+     "S10",
+     "S11",
+     "S12"
+    ]
    },
    "S13": {
     "id": "S13",
@@ -4988,8 +5061,12 @@
     "relevantLinesStart": 99,
     "relevantLinesEnd": 103,
     "suggestionContent": "WHAT: New Context constructor does formParams.getFirst(GRANT_TYPE) without null-check and deletes the copy constructor Context(Context). WHY: If formParams is null (mock/test or alternate flow) NPE on every grant construction; external code using new Context(oldContext) for clone-and-modify now fails to compile/breaks runtime via NoSuchMethod. HOW: Guard `this.grantType = formParams==null?null:formParams.getFirst(...)` and restore copy constructor or provide equivalent clone method for backward compatibility.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R4",
+    "status": "junior",
+    "membros": [
+     "S3",
+     "S15"
+    ]
    },
    "S5": {
     "id": "S5",
@@ -5053,8 +5130,12 @@
     "relevantLinesStart": 99,
     "relevantLinesEnd": 103,
     "suggestionContent": "Context constructor does formParams.getFirst(OAuth2Constants.GRANT_TYPE) without null check on formParams. Any path constructing Context with null formParams throws NPE before grant processing. Also removal of copy constructor Context(Context) is a breaking change for callers expecting copy semantics. Add null guard: this.grantType = formParams==null?null:formParams.getFirst(...).",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R4",
+    "status": "junior",
+    "membros": [
+     "S3",
+     "S15"
+    ]
    },
    "S18": {
     "id": "S18",
@@ -6087,8 +6168,12 @@
     "relevantLinesStart": 389,
     "relevantLinesEnd": 414,
     "suggestionContent": "Test checks cache internals (realmCache.getCache().get(cacheKeyForLogin,...)) with assertNotNull/assertEquals on IdentityProviderListQuery.getIDPs().size() instead of the provider contract. After priming the cache with getForLogin (miss), it never calls getForLogin again on a hit to assert the returned Stream size/contents. Fix: after cache is populated, call session.identityProviders().getForLogin(mode, orgId) again and assert the returned stream equals expected set (and equals direct-cache expectation). Add a second hit-path assertion for each mode and a negative case with a private org-linked IDP (BROKER_PUBLIC=false) to exercise the new getLoginPredicate branch.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R2",
+    "status": "junior",
+    "membros": [
+     "S4",
+     "S5"
+    ]
    },
    "S5": {
     "id": "S5",
@@ -6100,8 +6185,12 @@
     "relevantLinesStart": 251,
     "relevantLinesEnd": 256,
     "suggestionContent": "New public-broker predicate (organizationId==null || BROKER_PUBLIC) is not exercised by testCacheIDPForLogin: test only creates public org IDPs (line 379) so removing the predicate would not change expected counts 5/5/10. Test would still pass if branch were broken. Add a private org-linked IDP fixture and assert it is excluded from getForLogin results and cache size.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R2",
+    "status": "junior",
+    "membros": [
+     "S4",
+     "S5"
+    ]
    },
    "S6": {
     "id": "S6",
@@ -6264,8 +6353,12 @@
     "relevantLinesStart": 36,
     "relevantLinesEnd": 60,
     "suggestionContent": "WHAT: BrowserReportSerializer makes both age and timestamp required=False and only validates exclusivity when one is present, so a report with neither field passes. WHY: The spec requires exactly one of age (Editor's draft) or timestamp (Working draft); accepting neither creates invalid reports that bypass validation and are counted in metrics. HOW: Add cross-field validation (validate() or require at least one) ensuring exactly one of age/timestamp is present.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R3",
+    "status": "junior",
+    "membros": [
+     "S2",
+     "S11"
+    ]
    },
    "S3": {
     "id": "S3",
@@ -6329,8 +6422,12 @@
     "relevantLinesStart": 44,
     "relevantLinesEnd": 60,
     "suggestionContent": "BrowserReportSerializer allows a report with neither `age` nor `timestamp` (both required=False and validators only fire when the field is present) and validators use `if initial_data.get(...)` truthiness so age=0/timestamp=0 bypasses the mutual-exclusivity check. No test asserts rejection of a report missing both fields (or age=0 with timestamp), so test_rejects_* would still pass if the spec requirement 'exactly one of age/timestamp' were broken. Add validation requiring one of the two and use `in initial_data` instead of truthiness, plus a test for missing-both and zero-value cases.",
-    "grupo": null,
-    "status": "consenso"
+    "grupo": "R3",
+    "status": "junior",
+    "membros": [
+     "S2",
+     "S11"
+    ]
    },
    "S12": {
     "id": "S12",
@@ -7120,7 +7217,7 @@
     "relevantLinesEnd": 171,
     "suggestionContent": "User-facing strings issue_title \"Monitor failure: {name}\", subtitle, evidence_display remain f-string/plain like prior code. Refactor is verbatim move, not new omission vs neighbours. No new missing translation introduced in changed lines.",
     "grupo": null,
-    "status": "consenso"
+    "status": "descartada-sem-problema"
    },
    "S6": {
     "id": "S6",
@@ -7133,7 +7230,7 @@
     "relevantLinesEnd": 171,
     "suggestionContent": "HUMAN_FAILURE_STATUS_MAP / SINGULAR_HUMAN_FAILURE_MAP correctly use gettext_lazy _() . No new hard-coded locale format or missing translation. Consistent with localization expectations.",
     "grupo": null,
-    "status": "consenso"
+    "status": "descartada-sem-problema"
    },
    "S7": {
     "id": "S7",
@@ -7146,7 +7243,7 @@
     "relevantLinesEnd": 156,
     "suggestionContent": "Placeholders %(count)d / %(status)s and %(problem_checkins)s match interpolation keys at lines 150-156. last_word _(\"and\") consistent. No new placeholder mismatch introduced.",
     "grupo": null,
-    "status": "consenso"
+    "status": "descartada-sem-problema"
    },
    "S8": {
     "id": "S8",
@@ -7159,7 +7256,7 @@
     "relevantLinesEnd": 137,
     "suggestionContent": "Docstring typo \"humam readible\" at 130-137 is pre-existing carried verbatim, not made worse/reachable by this PR. No new name/prose disagreement introduced in changed lines.",
     "grupo": null,
-    "status": "consenso"
+    "status": "descartada-sem-problema"
    },
    "S9": {
     "id": "S9",
@@ -7185,7 +7282,7 @@
     "relevantLinesEnd": 171,
     "suggestionContent": "No new placeholder mismatch, missing translation, hard-coded locale format, or name/prose disagreement introduced in changed lines. Also checked diff hunks for incidents.py, mark_failed.py, types.py.",
     "grupo": null,
-    "status": "consenso"
+    "status": "descartada-sem-problema"
    }
   }
  }
