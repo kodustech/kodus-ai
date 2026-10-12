@@ -42,7 +42,6 @@ const LANGUAGE_EXTENSIONS = new Map<string, string[]>([
     ['typescript', ['.ts', '.tsx']],
     ['javascript', ['.js', '.jsx']],
     ['python', ['.py']],
-    ['csharp', ['.cs']],
     ['dart', ['.dart']],
     ['ruby', ['.rb', '.rake', '.erb', '.gemspec']],
     ['php', ['.php']],
@@ -54,8 +53,8 @@ const LANGUAGE_EXTENSIONS = new Map<string, string[]>([
     // would silently stop those rules from ever firing.
     ['go', ['.go', '.work', '.mod']],
     ['kotlin', ['.kt', '.kts']],
-    ['rust', ['.rs', '.toml']],
-    ['java', ['.java', '.gradle', '.kts']],
+    ['rust', ['.rs', 'cargo.toml']],
+    ['java', ['.java', '.gradle', '.gradle.kts']],
     ['csharp', ['.cs', '.csproj', '.props']],
 ]);
 
@@ -101,9 +100,10 @@ export function resolveLibraryRuleFileScope(
         // Same hash contract as the inference: sha256 of the exact rule text
         // the scope was derived from.
         sourceHash: createHash('sha256').update(ruleText).digest('hex'),
-        // Declared by the library rule, not inferred from the text: an `author`
-        // scope is never overwritten by a later inference.
-        source: 'author',
+        // Stamped as a compiler scope, not `author`: an author scope is never
+        // replaced by inference and there is no UI to clear a fileScope, so a
+        // rule rewritten to be language-agnostic would stay narrowed for good.
+        source: 'compiler',
         inferredAt: new Date(),
     };
 }

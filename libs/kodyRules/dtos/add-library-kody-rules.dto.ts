@@ -70,8 +70,9 @@ export class AddLibraryKodyRulesDto {
     @ApiPropertyOptional({
         description:
             'Source language of the library rule (e.g. ruby, python). When ' +
-            '`path` is empty, the imported rule is scoped to a glob derived ' +
-            'from this language instead of applying to every file (#1832).',
+            '`path` is empty, the imported rule is persisted with a fileScope ' +
+            'carrying this language\'s extensions, rather than applying to ' +
+            'every file (#1832).',
         example: 'ruby',
     })
     language?: string;

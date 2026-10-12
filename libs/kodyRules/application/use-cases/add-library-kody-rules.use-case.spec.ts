@@ -74,8 +74,9 @@ describe('library import persists a language scope (#1832)', () => {
         // scope abstains rather than excluding them.
         expect(extensionScopeAppliesToFile('Rakefile', extensions)).toBe(true);
 
-        // Declared by the library rule, so a later inference cannot replace it.
-        expect(persisted.fileScope.source).toBe('author');
+        // A compiler scope: the inference replaces it once the rule text
+        // stops matching the language it was imported with.
+        expect(persisted.fileScope.source).toBe('compiler');
         expect(typeof persisted.fileScope.sourceHash).toBe('string');
         expect(persisted.fileScope.sourceHash).toHaveLength(64);
     });
