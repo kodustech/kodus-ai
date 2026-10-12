@@ -1,0 +1,1405 @@
+{
+ "model": "sonnet-5.5",
+ "dedupModel": "claude-sonnet-5.5@sdk",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "n": 14,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S3",
+      "S6",
+      "S8",
+      "S10"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S4",
+      "S7",
+      "S9",
+      "S11"
+     ]
+    }
+   ],
+   "unique": [
+    "S5",
+    "S12",
+    "S13",
+    "S14"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S1",
+     "lex": 0.3448275862068966,
+     "cos": 0.85248319713278,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.47058823529411764,
+     "cos": 0.8862178382908324,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S1",
+     "lex": 0.5357142857142857,
+     "cos": 0.9347914960739473,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S1",
+     "lex": 0.2857142857142857,
+     "cos": 0.8412668542524866,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S2",
+     "lex": 0.26666666666666666,
+     "cos": 0.8610469553744811,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S2",
+     "lex": 0.46511627906976744,
+     "cos": 0.9364801297693149,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S2",
+     "lex": 0.3469387755102041,
+     "cos": 0.8675471111273824,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S2",
+     "lex": 0.5641025641025641,
+     "cos": 0.9250263903276641,
+     "tb": true
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "n": 15,
+   "groups": [
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S1",
+      "S11"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S5"
+     ]
+    },
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S7",
+      "S14"
+     ]
+    },
+    {
+     "keep": "S13",
+     "duplicates": [
+      "S15"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S4",
+    "S9",
+    "S10",
+    "S12"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S8",
+     "lex": 0.59375,
+     "cos": 0.8164418270846092,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S8",
+     "lex": 0.2894736842105263,
+     "cos": 0.8403195483058349,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S3",
+     "lex": 0.2727272727272727,
+     "cos": 0.8267931437724779,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S6",
+     "lex": 0.3404255319148936,
+     "cos": 0.916409764752174,
+     "tb": true
+    },
+    {
+     "dup": "S14",
+     "keep": "S6",
+     "lex": 0.6363636363636364,
+     "cos": 0.9309397421865526,
+     "tb": true
+    },
+    {
+     "dup": "S15",
+     "keep": "S13",
+     "lex": 0.3559322033898305,
+     "cos": 0.8619449065750592,
+     "tb": true
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "n": 21,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S7",
+      "S9",
+      "S13",
+      "S15",
+      "S18",
+      "S20"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S2",
+      "S11",
+      "S14",
+      "S19"
+     ]
+    },
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S12",
+      "S17"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S6"
+     ]
+    }
+   ],
+   "unique": [
+    "S5",
+    "S10",
+    "S16",
+    "S21"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S7",
+     "keep": "S1",
+     "lex": 0.475,
+     "cos": 0.9091176849603038,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S1",
+     "lex": 0.3684210526315789,
+     "cos": 0.8914219792411697,
+     "tb": true
+    },
+    {
+     "dup": "S13",
+     "keep": "S1",
+     "lex": 0.43243243243243246,
+     "cos": 0.8969711972114042,
+     "tb": true
+    },
+    {
+     "dup": "S15",
+     "keep": "S1",
+     "lex": 0.4722222222222222,
+     "cos": 0.9214215806794858,
+     "tb": true
+    },
+    {
+     "dup": "S18",
+     "keep": "S1",
+     "lex": 0.42105263157894735,
+     "cos": 0.884696945586536,
+     "tb": true
+    },
+    {
+     "dup": "S20",
+     "keep": "S1",
+     "lex": 0.5142857142857142,
+     "cos": 0.9179755740597856,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S8",
+     "lex": 0.38095238095238093,
+     "cos": 0.9319825111445543,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S8",
+     "lex": 0.22448979591836735,
+     "cos": 0.8603626978485455,
+     "tb": true
+    },
+    {
+     "dup": "S14",
+     "keep": "S8",
+     "lex": 0.3,
+     "cos": 0.8565199805659671,
+     "tb": true
+    },
+    {
+     "dup": "S19",
+     "keep": "S8",
+     "lex": 0.34146341463414637,
+     "cos": 0.8214653229648252,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S4",
+     "lex": 0.39215686274509803,
+     "cos": 0.754547277827835,
+     "tb": true
+    },
+    {
+     "dup": "S17",
+     "keep": "S4",
+     "lex": 0.4230769230769231,
+     "cos": 0.8253630001347114,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S3",
+     "lex": 0.3137254901960784,
+     "cos": 0.9162877906604349,
+     "tb": true
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "n": 1,
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "pares": []
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "n": 7,
+   "groups": [
+    {
+     "keep": "S5",
+     "duplicates": [
+      "S3",
+      "S4",
+      "S7"
+     ]
+    },
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S6"
+     ]
+    }
+   ],
+   "unique": [
+    "S2"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S5",
+     "lex": 0.35,
+     "cos": 0.8092691674710029,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S5",
+     "lex": 0.5,
+     "cos": 0.8703956062527665,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S5",
+     "lex": 0.4838709677419355,
+     "cos": 0.9121485449666632,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.45,
+     "cos": 0.7314347291088781,
+     "tb": true
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "n": 7,
+   "groups": [
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S1"
+     ]
+    },
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S2"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S6",
+     "lex": 0.4520547945205479,
+     "cos": 0.9169487841740211,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S7",
+     "lex": 0.34210526315789475,
+     "cos": 0.8899971775941499,
+     "tb": true
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "n": 0,
+   "groups": [],
+   "unique": [],
+   "unmentioned": [],
+   "pares": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "n": 16,
+   "groups": [
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S9"
+     ]
+    },
+    {
+     "keep": "S15",
+     "duplicates": [
+      "S16"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S7",
+    "S8",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S9",
+     "keep": "S6",
+     "lex": 0.5306122448979592,
+     "cos": 0.9235050346827904,
+     "tb": true
+    },
+    {
+     "dup": "S16",
+     "keep": "S15",
+     "lex": 0.7741935483870968,
+     "cos": 0.8687638780896755,
+     "tb": true
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "n": 15,
+   "groups": [
+    {
+     "keep": "S14",
+     "duplicates": [
+      "S1",
+      "S7"
+     ]
+    },
+    {
+     "keep": "S11",
+     "duplicates": [
+      "S2"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S12"
+     ]
+    },
+    {
+     "keep": "S13",
+     "duplicates": [
+      "S5",
+      "S8",
+      "S10"
+     ]
+    }
+   ],
+   "unique": [
+    "S4",
+    "S6",
+    "S9",
+    "S15"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S14",
+     "lex": 0.5666666666666667,
+     "cos": 0.8863207074415008,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S14",
+     "lex": 0.42105263157894735,
+     "cos": 0.8346180449533311,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S11",
+     "lex": 0.3157894736842105,
+     "cos": 0.8426855967004733,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S3",
+     "lex": 0.5,
+     "cos": 0.8013301630766542,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S13",
+     "lex": 0.19642857142857142,
+     "cos": 0.7282224707019863,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S13",
+     "lex": 0.425,
+     "cos": 0.9091786427305267,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S13",
+     "lex": 0.30612244897959184,
+     "cos": 0.8294356182164859,
+     "tb": true
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "n": 1,
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "pares": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "n": 5,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S2",
+      "S3",
+      "S4",
+      "S5"
+     ]
+    }
+   ],
+   "unique": [],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S1",
+     "lex": 0.5769230769230769,
+     "cos": 0.9224112899918262,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S1",
+     "lex": 0.5294117647058824,
+     "cos": 0.9315382491090558,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S1",
+     "lex": 0.4642857142857143,
+     "cos": 0.9132454815223023,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S1",
+     "lex": 0.5344827586206896,
+     "cos": 0.9261236991099899,
+     "tb": true
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "n": 7,
+   "groups": [
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S1",
+      "S4",
+      "S5"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S6",
+    "S7"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S3",
+     "lex": 0.5384615384615384,
+     "cos": 0.9309204195188178,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S3",
+     "lex": 0.6111111111111112,
+     "cos": 0.9537950907495588,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S3",
+     "lex": 0.5277777777777778,
+     "cos": 0.9597008259234786,
+     "tb": true
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "n": 9,
+   "groups": [
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S1"
+     ]
+    },
+    {
+     "keep": "S9",
+     "duplicates": [
+      "S2"
+     ]
+    },
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S4"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S5",
+    "S8"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S6",
+     "lex": 0.2962962962962963,
+     "cos": 0.931969793907596,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S9",
+     "lex": 0.5897435897435898,
+     "cos": 0.9302473728399919,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S7",
+     "lex": 0.28205128205128205,
+     "cos": 0.8718546377535858,
+     "tb": true
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "n": 3,
+   "groups": [
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S1"
+     ]
+    }
+   ],
+   "unique": [
+    "S2"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S3",
+     "lex": 0.5434782608695652,
+     "cos": 0.9371596783374085,
+     "tb": true
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "n": 2,
+   "groups": [],
+   "unique": [
+    "S1",
+    "S2"
+   ],
+   "unmentioned": [],
+   "pares": []
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "n": 21,
+   "groups": [
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S1",
+      "S15"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S2",
+      "S14"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S13"
+     ]
+    },
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S12",
+      "S19"
+     ]
+    },
+    {
+     "keep": "S9",
+     "duplicates": [
+      "S5",
+      "S16"
+     ]
+    },
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S11",
+      "S17",
+      "S10",
+      "S18"
+     ]
+    }
+   ],
+   "unique": [
+    "S20",
+    "S21"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S7",
+     "lex": 0.3877551020408163,
+     "cos": 0.8505624125362812,
+     "tb": true
+    },
+    {
+     "dup": "S15",
+     "keep": "S7",
+     "lex": 0.38,
+     "cos": 0.8827948122518706,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S8",
+     "lex": 0.3333333333333333,
+     "cos": 0.8332843840928122,
+     "tb": true
+    },
+    {
+     "dup": "S14",
+     "keep": "S8",
+     "lex": 0.4230769230769231,
+     "cos": 0.9419086087800559,
+     "tb": true
+    },
+    {
+     "dup": "S13",
+     "keep": "S3",
+     "lex": 0.11764705882352941,
+     "cos": 0.6558237109760517,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S4",
+     "lex": 0.35294117647058826,
+     "cos": 0.533581945440904,
+     "tb": true
+    },
+    {
+     "dup": "S19",
+     "keep": "S4",
+     "lex": 0.2894736842105263,
+     "cos": 0.7662325898049598,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S9",
+     "lex": 0.34615384615384615,
+     "cos": 0.8565711673187998,
+     "tb": true
+    },
+    {
+     "dup": "S16",
+     "keep": "S9",
+     "lex": 0.41379310344827586,
+     "cos": 0.9155226721366068,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S6",
+     "lex": 0.2222222222222222,
+     "cos": 0.874300687872071,
+     "tb": true
+    },
+    {
+     "dup": "S17",
+     "keep": "S6",
+     "lex": 0.25806451612903225,
+     "cos": 0.8847292584351425,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S6",
+     "lex": 0.2222222222222222,
+     "cos": 0.8450980873836262,
+     "tb": true
+    },
+    {
+     "dup": "S18",
+     "keep": "S6",
+     "lex": 0.25806451612903225,
+     "cos": 0.8541846940417216,
+     "tb": true
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "n": 4,
+   "groups": [
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S1"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S3"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S4",
+     "lex": 0.3939393939393939,
+     "cos": 0.7991041282147883,
+     "tb": true
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "n": 6,
+   "groups": [
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S2"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S6",
+     "lex": 0.34615384615384615,
+     "cos": 0.867465533149084,
+     "tb": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "n": 1,
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "pares": []
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "n": 12,
+   "groups": [
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S2",
+      "S5",
+      "S11"
+     ]
+    },
+    {
+     "keep": "S10",
+     "duplicates": [
+      "S1",
+      "S3",
+      "S7",
+      "S12"
+     ]
+    },
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S8"
+     ]
+    }
+   ],
+   "unique": [
+    "S9"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S4",
+     "lex": 0.4444444444444444,
+     "cos": 0.8623482972143894,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S4",
+     "lex": 0.5,
+     "cos": 0.900404699274224,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S4",
+     "lex": 0.40625,
+     "cos": 0.874697079451699,
+     "tb": true
+    },
+    {
+     "dup": "S1",
+     "keep": "S10",
+     "lex": 0.40425531914893614,
+     "cos": 0.8969616724664958,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S10",
+     "lex": 0.375,
+     "cos": 0.8172404810610122,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S10",
+     "lex": 0.3617021276595745,
+     "cos": 0.8063702208305985,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S10",
+     "lex": 0.3673469387755102,
+     "cos": 0.8350377488905404,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S6",
+     "lex": 0.16666666666666666,
+     "cos": 0.8326139388586438,
+     "tb": true
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "n": 10,
+   "groups": [
+    {
+     "keep": "S10",
+     "duplicates": [
+      "S1",
+      "S7"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S6"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S4"
+     ]
+    },
+    {
+     "keep": "S9",
+     "duplicates": [
+      "S5"
+     ]
+    }
+   ],
+   "unique": [
+    "S3"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S10",
+     "lex": 0.2,
+     "cos": 0.6366961053808837,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S10",
+     "lex": 0.2,
+     "cos": 0.5998501004774954,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S2",
+     "lex": 0.625,
+     "cos": 0.9202060834662094,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S8",
+     "lex": 0.23076923076923078,
+     "cos": 0.7824842894026309,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S9",
+     "lex": 0.3888888888888889,
+     "cos": 0.8792448233250263,
+     "tb": true
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "n": 5,
+   "groups": [
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S3"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S4",
+    "S5"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S2",
+     "lex": 0.7894736842105263,
+     "cos": 0.848402107461301,
+     "tb": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "n": 2,
+   "groups": [],
+   "unique": [
+    "S1",
+    "S2"
+   ],
+   "unmentioned": [],
+   "pares": []
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "n": 2,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S2"
+     ]
+    }
+   ],
+   "unique": [],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S1",
+     "lex": 0.3137254901960784,
+     "cos": 0.829740224780772,
+     "tb": true
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "n": 9,
+   "groups": [
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S1",
+      "S3",
+      "S4"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S5",
+    "S6",
+    "S7",
+    "S9"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S8",
+     "lex": 0.4827586206896552,
+     "cos": 0.8833947655870179,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S8",
+     "lex": 0.5490196078431373,
+     "cos": 0.9682335723802094,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S8",
+     "lex": 0.52,
+     "cos": 0.8597801037905003,
+     "tb": true
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "n": 8,
+   "groups": [
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S5",
+      "S7"
+     ]
+    },
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S4"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S2",
+    "S3"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S5",
+     "keep": "S8",
+     "lex": 0.4423076923076923,
+     "cos": 0.8435924491276875,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S8",
+     "lex": 0.4444444444444444,
+     "cos": 0.7986988354882194,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S6",
+     "lex": 0.275,
+     "cos": 0.8826192470285141,
+     "tb": true
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "n": 7,
+   "groups": [
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S1",
+      "S3",
+      "S6",
+      "S7"
+     ]
+    }
+   ],
+   "unique": [
+    "S4",
+    "S5"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S2",
+     "lex": 0.45,
+     "cos": 0.8869141002143583,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S2",
+     "lex": 0.425,
+     "cos": 0.887575122051358,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S2",
+     "lex": 0.4857142857142857,
+     "cos": 0.7900176437680497,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S2",
+     "lex": 0.6451612903225806,
+     "cos": 0.9633183444848905,
+     "tb": true
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "n": 8,
+   "groups": [
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S2",
+      "S6"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S3",
+    "S4",
+    "S5",
+    "S7"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S8",
+     "lex": 0.28,
+     "cos": 0.8323121446118253,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S8",
+     "lex": 0.4791666666666667,
+     "cos": 0.8154407600562038,
+     "tb": true
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "n": 7,
+   "groups": [
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S1",
+      "S5",
+      "S6",
+      "S7"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S3"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S4",
+     "lex": 0.42857142857142855,
+     "cos": 0.9233525011242856,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S4",
+     "lex": 0.4375,
+     "cos": 0.9414935255972084,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S4",
+     "lex": 0.43137254901960786,
+     "cos": 0.9536984621521039,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S4",
+     "lex": 0.4117647058823529,
+     "cos": 0.936040540284099,
+     "tb": true
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "n": 2,
+   "groups": [],
+   "unique": [
+    "S1",
+    "S2"
+   ],
+   "unmentioned": [],
+   "pares": []
+  }
+ }
+}

@@ -97,3 +97,18 @@ node evals/dedup/gold-v2/reconcile.js
 node evals/dedup/gold-v2/aplicar-regra.js
 python3 evals/dedup/gold-v2/placar-dedup.py
 ```
+
+Production dedup against the gold (`gold-v2/dedup-real.js` runs `dedup-prompt.ts` through `LLM.run` in the scenario's model and records every proposed merge with its guard scores; `gold-v2/comparar-dedup.js` compares with the gold). Share of suggestions placed exactly as in the gold, after the production guard:
+
+| Prompt | DeepSeek V4.1 Flash | GPT 6.1 Sol | Sonnet 5.5 |
+|---|---|---|---|
+| `v0-producao`: prompt before #1821 | 62.4% | 92.8% | 87.2% |
+| `v1-indices-texto`: every index exactly once, full suggestion text | 84.0% | 96.6% | 88.5% |
+| `v2-sistemico`: + systemic class on, "different code never merges" removed | 87.1% | 98.5% | 92.1% |
+
+On `v2`, 96–100% of the pairs the dedup merges are pairs the gold merges. The guard now vetoes some correct merges (LLM alone: 90.9%, 100%, 92.1%).
+
+```bash
+RECALL_MODEL=<id> node evals/dedup/gold-v2/dedup-real.js --model=<gold model> --versao=<label>
+node evals/dedup/gold-v2/comparar-dedup.js <label>
+```
