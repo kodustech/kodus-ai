@@ -168,12 +168,10 @@ export function repositoryForLookup(repository: {
 }): { owner?: string; name: string } {
     const full = repository.name.includes('/')
         ? repository.name
-        : repository.fullName;
-    const cut = full?.includes('/') ? full.lastIndexOf('/') : -1;
+        : (repository.fullName ?? '');
+    const cut = full.lastIndexOf('/');
     return {
-        owner: repository.owner ?? (cut > 0 ? full!.slice(0, cut) : undefined),
-        name: repository.name.includes('/')
-            ? repository.name.slice(repository.name.lastIndexOf('/') + 1)
-            : repository.name,
+        owner: repository.owner ?? (cut > 0 ? full.slice(0, cut) : undefined),
+        name: repository.name.slice(repository.name.lastIndexOf('/') + 1),
     };
 }

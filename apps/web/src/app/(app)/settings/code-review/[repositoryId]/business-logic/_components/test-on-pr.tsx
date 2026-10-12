@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button } from "@components/ui/button";
 import { Card } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
@@ -9,15 +9,12 @@ import { Link } from "@components/ui/link";
 import { Markdown } from "@components/ui/markdown";
 import { useTestOnPullRequest } from "@services/business-logic/hooks";
 import type {
-    BusinessLogicSettingsValue,
     BusinessLogicTestResult,
     RequirementState,
 } from "@services/business-logic/types";
-import { useFormContext } from "react-hook-form";
 import { cn } from "src/core/utils/components";
-import { unformatConfig } from "src/core/utils/helpers";
 
-import type { CodeReviewFormType } from "../../../_types";
+import { useScreenSettings } from "./use-screen-settings";
 
 const SOURCE: Record<string, string> = {
     command: "the task you named",
@@ -61,27 +58,26 @@ export const TestOnPr = ({
     teamId: string;
     canEdit: boolean;
 }) => {
-    const form = useFormContext<CodeReviewFormType>();
+    const settings = useScreenSettings();
     const [prUrl, setPrUrl] = useState("");
     const [task, setTask] = useState("");
     const test = useTestOnPullRequest();
     const post = useTestOnPullRequest();
     const result = test.data;
 
-    const settings = () => {
-        const current = form.getValues("businessLogic" as never);
-        return current
-            ? (unformatConfig(current as never) as BusinessLogicSettingsValue)
-            : undefined;
-    };
+    const canRun = !!prUrl.trim() && canEdit;
+    const payload = () => ({
+        teamId,
+        prUrl: prUrl.trim(),
+        taskInput: task.trim() || undefined,
+        settings: settings(),
+    });
     const run = () => {
         post.reset();
-        test.mutate({
-            teamId,
-            prUrl: prUrl.trim(),
-            taskInput: task.trim() || undefined,
-            settings: settings(),
-        });
+        test.mutate(payload());
+    };
+    const runOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter" && canRun) run();
     };
 
     return (
@@ -101,23 +97,19 @@ export const TestOnPr = ({
                     placeholder="Pull request link, e.g. https://github.com/acme/web/pull/47"
                     value={prUrl}
                     onChange={(e) => setPrUrl(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" && prUrl.trim() && canEdit) run();
-                    }}
+                    onKeyDown={runOnEnter}
                 />
                 <Input
                     className="w-56"
                     placeholder="Task (optional), e.g. #245"
                     value={task}
                     onChange={(e) => setTask(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" && prUrl.trim() && canEdit) run();
-                    }}
+                    onKeyDown={runOnEnter}
                 />
                 <Button
                     size="md"
                     variant="secondary"
-                    disabled={!prUrl.trim() || !canEdit}
+                    disabled={!canRun}
                     loading={test.isPending}
                     onClick={run}>
                     Run test
@@ -143,15 +135,7 @@ export const TestOnPr = ({
                     posting={post.isPending}
                     posted={post.data?.posted}
                     postError={post.isError ? errorMessage(post.error) : null}
-                    onPost={() =>
-                        post.mutate({
-                            teamId,
-                            prUrl: prUrl.trim(),
-                            taskInput: task.trim() || undefined,
-                            settings: settings(),
-                            post: true,
-                        })
-                    }
+                    onPost={() => post.mutate({ ...payload(), post: true })}
                 />
             )}
         </section>

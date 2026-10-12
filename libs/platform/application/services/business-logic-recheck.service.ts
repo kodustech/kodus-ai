@@ -36,6 +36,7 @@ export class BusinessLogicRecheckService {
 
     async recheckPending(now = new Date()): Promise<number> {
         let rechecked = 0;
+        const failed: string[] = [];
         for (let i = 0; i < MAX_PER_TICK; i++) {
             const run = await this.runs.claimPendingRecheck({
                 notBefore: new Date(now.getTime() - MAX_AGE_MS),
@@ -49,12 +50,7 @@ export class BusinessLogicRecheckService {
                     rechecked += 1;
                 }
             } catch (error) {
-                // The run was claimed before the re-check ran: give it back
-                // so the next tick retries it, inside the 24h window.
-                await this.runs
-                    .update(run.id, { pendingRecheck: true })
-                    .catch(() => undefined);
-
+                failed.push(run.id);
                 this.logger.warn({
                     message: 'Business logic re-check failed',
                     context: BusinessLogicRecheckService.name,
@@ -66,6 +62,16 @@ export class BusinessLogicRecheckService {
                 });
             }
         }
+        // Claimed runs that failed go back for the next tick, inside the 24h
+        // window; given back inside the loop, the same run would be claimed
+        // again right away.
+        await Promise.all(
+            failed.map((id) =>
+                this.runs
+                    .update(id, { pendingRecheck: true })
+                    .catch(() => undefined),
+            ),
+        );
         return rechecked;
     }
 

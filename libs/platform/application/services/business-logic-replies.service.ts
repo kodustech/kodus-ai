@@ -364,6 +364,5 @@ function openFindings(run: ValidationRunRecord): Located[] {
 }
 
 function sameText(a: string, b: string): boolean {
-    const norm = requirementKey;
-    return norm(a) === norm(b);
+    return requirementKey(a) === requirementKey(b);
 }

@@ -28,6 +28,7 @@ import {
     DEFAULT_BUSINESS_LOGIC_SETTINGS,
     resolveBusinessLogicSettings,
 } from '@libs/agents/business-validation/settings';
+import { repositoryForLookup } from '@libs/agents/business-validation/task-resolver';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     type ICodeBaseConfigService,
@@ -186,9 +187,7 @@ export class BusinessLogicPublisher {
                       }),
             },
             check: {
-                supported:
-                    platform === PlatformType.GITHUB ||
-                    platform === PlatformType.FORGEJO,
+                supported: hasChecks(platform),
                 ...checkFor(outcome),
             },
         };
@@ -418,21 +417,10 @@ export class BusinessLogicPublisher {
         headSha: string,
     ): Promise<string | undefined> {
         const platform = request.platformType as PlatformType;
-        if (
-            platform !== PlatformType.GITHUB &&
-            platform !== PlatformType.FORGEJO
-        ) {
+        if (!hasChecks(platform)) {
             return undefined;
         }
-        const repository = request.repository!;
-        const owner =
-            repository.owner ??
-            (repository.fullName?.includes('/')
-                ? repository.fullName.slice(
-                      0,
-                      repository.fullName.lastIndexOf('/'),
-                  )
-                : undefined);
+        const { owner, name } = repositoryForLookup(request.repository!);
         if (!owner) {
             return undefined;
         }
@@ -441,7 +429,7 @@ export class BusinessLogicPublisher {
             const adapter = this.checksAdapterFactory.getAdapter(platform);
             const target = {
                 organizationAndTeamData: request.organizationAndTeamData,
-                repository: { owner, name: repository.name },
+                repository: { owner, name },
             };
             const existing = await adapter.findCheckRun({
                 ...target,
@@ -545,4 +533,11 @@ function commentIds(
             ? { threadId: created.threadId }
             : {}),
     };
+}
+
+/** GitHub and Forgejo have checks; elsewhere the comment is the whole signal. */
+function hasChecks(platform: PlatformType | undefined): boolean {
+    return (
+        platform === PlatformType.GITHUB || platform === PlatformType.FORGEJO
+    );
 }

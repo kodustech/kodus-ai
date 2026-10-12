@@ -247,14 +247,6 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 input: { prUrl: params.prUrl },
             }),
         ]);
-        // The lookup falls back to the first PR it finds; a test must run on
-        // the PR that was asked for, never a neighbour.
-        const asked = Number(params.prUrl.match(/(\d+)\/?(?:[?#].*)?$/)?.[1]);
-        if (Number.isInteger(asked) && asked !== executionContext.prNumber) {
-            throw new BadRequestException(
-                `Pull request not found for URL: ${params.prUrl}`,
-            );
-        }
         const settings = params.settings
             ? resolveBusinessLogicSettings(params.settings)
             : await this.businessLogicPublisher.settingsFor(
@@ -340,7 +332,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             | PullRequestValidationExecutionContext
             | LocalDiffValidationExecutionContext;
         settings: BusinessLogicSettings;
-        platformType: unknown;
+        platformType?: string;
         taskInput?: string;
     }): BusinessValidationRequest {
         const { organizationAndTeamData, executionContext } = params;
@@ -365,7 +357,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                           baseRef: executionContext.baseRef,
                       }
                     : undefined,
-            platformType: params.platformType as string | undefined,
+            platformType: params.platformType,
             taskInput: params.taskInput,
             diff:
                 executionContext.mode === 'local_diff'
@@ -462,26 +454,19 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 );
             }
 
-            const context = this.mapPullRequestContext(
-                selectedPr,
-                requestedUrl,
-            );
-            // The PR list names the repository `owner/name`; the platform
-            // calls want it as the integration stores it, or the diff 404s.
             const configured = await this.resolveRepository({
                 organizationAndTeamData,
-                repositoryId: context.repository.id,
+                repositoryId: String(
+                    selectedPr.repositoryData?.id ||
+                        selectedPr.repositoryId ||
+                        '',
+                ),
             }).catch(() => undefined);
-            return configured
-                ? {
-                      ...context,
-                      repository: {
-                          ...context.repository,
-                          name: configured.name,
-                          owner: configured.owner ?? context.repository.owner,
-                      },
-                  }
-                : context;
+            return this.mapPullRequestContext(
+                selectedPr,
+                requestedUrl,
+                configured,
+            );
         }
 
         const requestedPrNumber = Number(input.prNumber);
@@ -523,19 +508,23 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
         });
     }
 
+    /**
+     * `configured` is the repository as the integration stores it: its name
+     * and owner win over the PR's, which some platforms give as `owner/name`
+     * (the diff then 404s).
+     */
     private mapPullRequestContext(
         pr: PullRequest,
         fallbackUrl: string,
-        fallbackRepository?: BusinessValidationRepositoryContext,
+        configured?: BusinessValidationRepositoryContext,
     ): PullRequestValidationExecutionContext {
         const repositoryId =
             String(pr.repositoryData?.id || pr.repositoryId || '').trim() ||
-            fallbackRepository?.id;
+            configured?.id;
         const repositoryName =
-            pr.repositoryData?.name ||
-            pr.repository ||
-            fallbackRepository?.name;
+            configured?.name || pr.repositoryData?.name || pr.repository;
         const repositoryOwner =
+            configured?.owner ||
             this.extractRepositoryOwnerFromFullName(
                 pr.head?.repo?.fullName,
                 pr.head?.repo?.name,
@@ -547,8 +536,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             this.extractRepositoryOwnerFromFullName(
                 pr.repository,
                 repositoryName,
-            ) ||
-            fallbackRepository?.owner;
+            );
 
         if (!repositoryId || !repositoryName) {
             throw new BadRequestException(
@@ -581,11 +569,21 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             return undefined;
         }
 
+        // Never another PR than the one asked for: by its link, else by the
+        // number in the link.
         const normalizedRequestedUrl = this.normalizeUrl(requestedUrl);
+        const number = Number(
+            requestedUrl.match(
+                /\/(?:pulls?|merge_requests|pull-requests|pullrequest)\/(\d+)/i,
+            )?.[1],
+        );
         return (
             pullRequests.find(
                 (pr) => this.normalizeUrl(pr.prURL) === normalizedRequestedUrl,
-            ) || pullRequests[0]
+            ) ??
+            pullRequests.find(
+                (pr) => Number(pr.number || pr.pull_number) === number,
+            )
         );
     }
 

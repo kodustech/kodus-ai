@@ -6,27 +6,18 @@ import { Card } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
 import { Input } from "@components/ui/input";
 import { useTryReadTask } from "@services/business-logic/hooks";
-import type { BusinessLogicSettingsValue } from "@services/business-logic/types";
 import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
-import { useFormContext } from "react-hook-form";
-import { unformatConfig } from "src/core/utils/helpers";
 
-import type { CodeReviewFormType } from "../../../_types";
+import { useScreenSettings } from "./use-screen-settings";
 
 /** Reads one real task with the settings on screen, before saving (UC-01, UC-03, UC-05). */
 export const TryIt = ({ teamId }: { teamId: string }) => {
-    const form = useFormContext<CodeReviewFormType>();
+    const settings = useScreenSettings();
     const [task, setTask] = useState("");
     const tryRead = useTryReadTask();
     const result = tryRead.data;
 
-    const run = () => {
-        const current = form.getValues("businessLogic" as never);
-        const settings = current
-            ? (unformatConfig(current as never) as BusinessLogicSettingsValue)
-            : undefined;
-        tryRead.mutate({ teamId, task, settings });
-    };
+    const run = () => tryRead.mutate({ teamId, task, settings: settings() });
 
     return (
         <section className="flex flex-col gap-3">

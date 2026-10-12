@@ -200,8 +200,12 @@ function acceptanceText(accepted: NonNullable<RequirementVerdict['accepted']>) {
 function locations(evidence: CodeLocation[]): string {
     return evidence
         .slice(0, 3)
-        .map((l) => `\`${l.file}${l.line ? `:${l.line}` : ''}\``)
+        .map((l) => `\`${location(l)}\``)
         .join(', ');
+}
+
+function location(l: CodeLocation): string {
+    return `${l.file}${l.line ? `:${l.line}` : ''}`;
 }
 
 function taskTitle(id: string, title?: string, url?: string): string {
@@ -277,7 +281,7 @@ export function renderCliText(outcome: BusinessValidationOutcome): string {
         );
         for (const r of check.verdict.requirements ?? []) {
             const where = r.evidence.length
-                ? ` ${r.evidence.map((l) => `${l.file}${l.line ? `:${l.line}` : ''}`).join(', ')}`
+                ? ` ${r.evidence.map(location).join(', ')}`
                 : '';
             const why = r.note ? ` — ${r.note}` : '';
             const fix =
@@ -290,7 +294,7 @@ export function renderCliText(outcome: BusinessValidationOutcome): string {
         }
         for (const c of check.verdict.outOfScope ?? []) {
             const where = c.evidence.length
-                ? ` ${c.evidence.map((l) => `${l.file}${l.line ? `:${l.line}` : ''}`).join(', ')}`
+                ? ` ${c.evidence.map(location).join(', ')}`
                 : '';
             lines.push(`  ${'NOT IN TASK'.padEnd(14)} ${c.change}${where}`);
         }

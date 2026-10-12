@@ -54,18 +54,15 @@ export class McpToolSession {
         try {
             result = await adapter.executeTool(name, args, this.server.name);
         } catch (error) {
-            const message =
-                error instanceof Error ? error.message : String(error);
-            throw NOT_FOUND_PATTERN.test(message)
-                ? new TaskNotFoundError(message)
-                : new TrackerUnavailableError(message);
+            throw trackerError(
+                error instanceof Error ? error.message : String(error),
+            );
         }
         if ((result as CallToolResult | undefined)?.isError) {
             // A tool that reports a failure answered nothing about the task.
-            const message = String(readToolPayload(result) ?? `${name} failed`);
-            throw NOT_FOUND_PATTERN.test(message)
-                ? new TaskNotFoundError(message)
-                : new TrackerUnavailableError(message);
+            throw trackerError(
+                String(readToolPayload(result) ?? `${name} failed`),
+            );
         }
         return readToolPayload(result);
     }
@@ -136,4 +133,10 @@ export function readToolPayload(result: unknown): unknown {
     } catch {
         return text;
     }
+}
+
+function trackerError(message: string): Error {
+    return NOT_FOUND_PATTERN.test(message)
+        ? new TaskNotFoundError(message)
+        : new TrackerUnavailableError(message);
 }

@@ -283,12 +283,27 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
             expect(target.findBestPrByUrl(prs, 'HTTP://B.com/2/')).toBe(prs[1]);
         });
 
-        it('falls back to the first PR when no url matches', () => {
+        it('matches by the number in the link when the urls differ', () => {
             const prs = [
-                { prURL: 'http://a.com/1' },
-                { prURL: 'http://b.com/2' },
+                { number: 1, prURL: 'http://a.com/1' },
+                { number: 12, prURL: 'http://api.gl/projects/3/mr/12' },
             ] as any;
-            expect(target.findBestPrByUrl(prs, 'http://z.com')).toBe(prs[0]);
+            expect(
+                target.findBestPrByUrl(
+                    prs,
+                    'https://gl.com/acme/notes/-/merge_requests/12/diffs',
+                ),
+            ).toBe(prs[1]);
+        });
+
+        it('never picks another PR when nothing matches', () => {
+            const prs = [
+                { number: 1, prURL: 'http://a.com/1' },
+                { number: 2, prURL: 'http://b.com/2' },
+            ] as any;
+            expect(
+                target.findBestPrByUrl(prs, 'https://gh.com/a/b/pull/47'),
+            ).toBeUndefined();
         });
     });
 
@@ -388,7 +403,7 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
             expect(result.prUrl).toBe('http://f');
         });
 
-        it('prefers pr.repositoryData over pr.repositoryId and fallback for the id', () => {
+        it('prefers pr.repositoryData for the id, the configured repository for the name', () => {
             const pr = {
                 number: 1,
                 prURL: 'u',
@@ -400,7 +415,7 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
                 name: 'fname',
             });
             expect(result.repository.id).toBe('data-id');
-            expect(result.repository.name).toBe('data-name');
+            expect(result.repository.name).toBe('fname');
         });
 
         it('uses pr.repositoryId when repositoryData is absent', () => {
