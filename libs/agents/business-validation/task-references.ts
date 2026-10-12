@@ -85,7 +85,11 @@ export function selectReferences(
     const stated = references.filter(
         (r) => r.source !== 'body' || r.intent !== 'mentions',
     );
-    const chosen = stated.length ? stated : references;
+    // A `#45` the body only mentions is another issue or PR far more often
+    // than the PR's own task: it is never judged unless the PR states it.
+    const chosen = stated.length
+        ? stated
+        : references.filter((r) => r.kind !== 'git_issue');
     return chosen.length > max ? undefined : chosen;
 }
 
@@ -164,6 +168,15 @@ function extractFromText(
         raw: m[0],
         source,
     }));
+    if (source === 'branch') {
+        // `12-add-login`, the branch GitHub creates from issue #12.
+        collect(/(?<![^/])(\d{1,6})(?=-[A-Za-z])/g, (m) => ({
+            kind: 'git_issue',
+            id: m[1],
+            raw: m[0],
+            source,
+        }));
+    }
     collect(
         /(?<![A-Za-z0-9_])([A-Za-z][A-Za-z0-9_]*)-(\d+)(?![A-Za-z0-9_])/g,
         (m) => ({

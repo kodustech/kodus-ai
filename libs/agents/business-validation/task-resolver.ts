@@ -29,6 +29,9 @@ export async function resolveTasks(
     if (!selected) {
         return { kind: 'too_many_references', attempts };
     }
+    if (!selected.length) {
+        return { kind: 'no_reference', attempts };
+    }
     if (!trackers.length) {
         return { kind: 'no_tracker', attempts };
     }

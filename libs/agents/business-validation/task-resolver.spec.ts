@@ -112,6 +112,21 @@ describe('resolveTasks', () => {
         );
         expect(result.kind).toBe('no_capable_tracker');
     });
+
+    it('never reads a #N the description only mentions as the task', async () => {
+        const issues = tracker(
+            'Git Issues',
+            { '45': 'another feature' },
+            { reads: ['git_issue'] },
+        );
+        const result = await resolveTasks(
+            refs('Similar to #45, see the screenshot.', 'feat: reorder'),
+            [issues],
+            context,
+        );
+        expect(result.kind).toBe('no_reference');
+        expect(issues.reads).toEqual([]);
+    });
 });
 
 describe('repositoryForLookup', () => {

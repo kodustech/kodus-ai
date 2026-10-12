@@ -101,6 +101,20 @@ describe('extractTaskReferences', () => {
     });
 });
 
+describe('issue number in the branch', () => {
+    it('reads the branch GitHub creates from an issue as that issue', () => {
+        expect(ids({ branch: '12-add-login' })).toEqual(['git_issue:12']);
+        expect(ids({ branch: 'feature/12-add-login' })).toEqual([
+            'git_issue:12',
+        ]);
+    });
+
+    it('does not read dates or versions as an issue', () => {
+        expect(ids({ branch: 'release/2026-10-01' })).toEqual([]);
+        expect(ids({ branch: 'v2-cleanup' })).toEqual([]);
+    });
+});
+
 describe('reference intent (UC-18)', () => {
     const intents = (sources: Parameters<typeof extractTaskReferences>[0]) =>
         extractTaskReferences(sources).map((r) => `${r.id}:${r.intent}`);
@@ -154,6 +168,15 @@ describe('selectReferences (UC-17)', () => {
                 3,
             ),
         ).toBeUndefined();
+    });
+
+    it('never judges a #N the body only mentions: it is another issue or PR', () => {
+        expect(
+            selectReferences(
+                refs({ body: 'Similar to #45. Step #1 done.' }),
+                3,
+            ),
+        ).toEqual([]);
     });
 
     it('falls back to mentions when nothing is stated', () => {

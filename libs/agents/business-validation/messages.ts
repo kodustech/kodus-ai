@@ -49,7 +49,7 @@ Fix the reference in the title or description and comment ${RERUN}.`;
 export function noReferenceMessage(): string {
     return `## 🤔 No task found
 
-This pull request doesn't reference a task. Reference it in the title, description or branch (\`PROJ-123\`, \`#123\` or a link), or run ${RERUN} followed by the task id or link.`;
+This pull request doesn't reference a task. Reference it in the title, description or branch (\`PROJ-123\`, \`#123\` or a link), or run ${RERUN} followed by the task id or link. A \`#123\` the description only mentions isn't read as the task: write \`Closes #123\`.`;
 }
 
 export function noTrackerMessage(): string {
