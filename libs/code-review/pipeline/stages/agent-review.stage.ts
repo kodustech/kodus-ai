@@ -930,6 +930,33 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
+            // Parse schema (#1821): from here on a finder suggestion carries
+            // only the five lean fields; code snippets come back at enrichment.
+            // It runs before anchoring, so every suggestion anchored has a file
+            // and lines.
+            const parsed = parseFinderSchema(
+                result.suggestions.filter(
+                    (s) => s.label !== 'kody_rules',
+                ) as Array<Record<string, unknown>>,
+            );
+            if (parsed.discarded.length > 0) {
+                this.logger.warn({
+                    message: `[PARSE-SCHEMA] PR#${prNumber}: discarded ${parsed.discarded.length} finder suggestions missing lean fields`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        teamId: context.organizationAndTeamData?.teamId,
+                        prNumber,
+                        discarded: parsed.discarded,
+                    },
+                });
+            }
+            const anchoringInput: Partial<CodeSuggestion>[] = [
+                ...(parsed.suggestions as unknown as Partial<CodeSuggestion>[]),
+                ...result.suggestions.filter((s) => s.label === 'kody_rules'),
+            ];
+
             // Snap suggestion line numbers to valid diff ranges before passing downstream.
             // GitHub rejects inline comments on lines that aren't part of the diff.
             // A finding whose cited lines don't overlap ANY changed hunk is dropped
@@ -962,7 +989,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 (s.brokenKodyRulesIds ?? []).some((uuid) =>
                     contextNeedingRuleUuids.has(uuid),
                 );
-            const validatedSuggestions = result.suggestions
+            const validatedSuggestions = anchoringInput
                 .map((s) => {
                     const file = changedFilesByName.get(s.relevantFile);
                     if (!file) return s;
@@ -1036,14 +1063,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     };
                 });
 
-            const severityNormalizedNonRules: Partial<CodeSuggestion>[] =
-                nonKodyRulesSuggestions.map((suggestion) => ({
-                    ...suggestion,
-                    severity: this.normalizeSeverity(suggestion.severity),
-                }));
-
+            // Severity is set at enrichment; the finder suggestions carry none.
             const severityNormalized: Partial<CodeSuggestion>[] = [
-                ...severityNormalizedNonRules,
+                ...nonKodyRulesSuggestions,
                 ...kodyRulesWithSeverity,
             ];
 
@@ -1069,28 +1091,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 allKodyRules,
                 prNumber,
             );
-            // Parse schema (#1821): from here on a finder suggestion carries
-            // only the five lean fields; code snippets come back at enrichment.
-            const parsed = parseFinderSchema(
-                severityNormalized.filter((s) => s.label !== 'kody_rules') as Array<
-                    Record<string, unknown>
-                >,
-            );
-            if (parsed.discarded.length > 0) {
-                this.logger.warn({
-                    message: `[PARSE-SCHEMA] PR#${prNumber}: discarded ${parsed.discarded.length} finder suggestions missing lean fields`,
-                    context: this.stageName,
-                    metadata: {
-                        organizationId:
-                            context.organizationAndTeamData?.organizationId,
-                        teamId: context.organizationAndTeamData?.teamId,
-                        prNumber,
-                        discarded: parsed.discarded,
-                    },
-                });
-            }
-            const nonKodyRulesForDedup =
-                parsed.suggestions as unknown as Partial<CodeSuggestion>[];
+            const nonKodyRulesForDedup = nonKodyRulesSuggestions;
 
             let dedupedNonRules = nonKodyRulesForDedup;
             let dedupTrace: DedupTraceSummary = {
@@ -2232,7 +2233,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // decided; any still left out falls to the safety net below.
             const leftOut =
                 groups.length || unique.length
-                    ? unclassifiedDedupIndices(suggestions.length, groups, unique)
+                    ? unclassifiedDedupIndices(
+                          suggestions.length,
+                          groups,
+                          unique,
+                      )
                     : [];
             if (leftOut.length > 0) {
                 try {
