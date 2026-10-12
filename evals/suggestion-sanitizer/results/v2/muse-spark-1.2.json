@@ -1,0 +1,357 @@
+{
+ "model": "muse-spark-1.2",
+ "sanitizerModel": "muse-spark-1.2",
+ "prs": {
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "n": 9,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "n": 18,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "n": 21,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "n": 29,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "n": 12,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "n": 8,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [
+    "S4"
+   ],
+   "aMais": [
+    "S4"
+   ],
+   "aMenos": []
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "n": 7,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "n": 24,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "n": 16,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "n": 22,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "n": 15,
+   "descartadasNoParse": [],
+   "esperado": [
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12"
+   ],
+   "descartou": [
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12"
+   ],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "n": 9,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "n": 16,
+   "descartadasNoParse": [],
+   "esperado": [
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12"
+   ],
+   "descartou": [
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12"
+   ],
+   "aMais": [],
+   "aMenos": []
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "n": 25,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "n": 13,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "n": 7,
+   "descartadasNoParse": [],
+   "esperado": [
+    "S6",
+    "S7"
+   ],
+   "descartou": [
+    "S6",
+    "S7"
+   ],
+   "aMais": [],
+   "aMenos": []
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "n": 9,
+   "descartadasNoParse": [],
+   "esperado": [
+    "S4"
+   ],
+   "descartou": [
+    "S4"
+   ],
+   "aMais": [],
+   "aMenos": []
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "n": 10,
+   "descartadasNoParse": [
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12"
+   ],
+   "esperado": [
+    "S6",
+    "S13",
+    "S14",
+    "S15",
+    "S16"
+   ],
+   "descartou": [
+    "S6",
+    "S13",
+    "S14",
+    "S15",
+    "S16"
+   ],
+   "aMais": [],
+   "aMenos": []
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "n": 20,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "n": 24,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "n": 3,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "n": 17,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S17"
+   ],
+   "aMais": [
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S17"
+   ],
+   "aMenos": []
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "n": 15,
+   "descartadasNoParse": [
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22"
+   ],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "n": 9,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "n": 12,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "n": 11,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "n": 8,
+   "descartadasNoParse": [
+    "S8"
+   ],
+   "esperado": [],
+   "descartou": [
+    "S9"
+   ],
+   "aMais": [
+    "S9"
+   ],
+   "aMenos": []
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "n": 8,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "n": 11,
+   "descartadasNoParse": [],
+   "esperado": [
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11"
+   ],
+   "descartou": [
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11"
+   ],
+   "aMais": [],
+   "aMenos": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "n": 16,
+   "descartadasNoParse": [],
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  }
+ }
+}

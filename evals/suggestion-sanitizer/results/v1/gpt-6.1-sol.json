@@ -1,0 +1,216 @@
+{
+ "model": "gpt-6.1-sol",
+ "sanitizerModel": "gpt-6.1-sol@sub",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "n": 12,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "n": 6,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "n": 0,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "n": 20,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "n": 24,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "n": 17,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "n": 10,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "n": 17,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "n": 2,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "n": 8,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "n": 2,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "n": 10,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "n": 8,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "n": 1,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "n": 16,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "n": 4,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "n": 3,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "n": 9,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "n": 6,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "n": 19,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "n": 1,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "n": 5,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "n": 9,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "n": 6,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "n": 21,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "n": 4,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "n": 0,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "n": 9,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "n": 7,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "n": 9,
+   "esperado": [],
+   "descartou": [],
+   "aMais": [],
+   "aMenos": []
+  }
+ }
+}

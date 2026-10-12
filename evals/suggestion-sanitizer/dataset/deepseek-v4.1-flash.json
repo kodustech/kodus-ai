@@ -1,0 +1,106 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "fonte": "evals/dedup/gold-v2/09.10.26_deepseek-v4.1-flash.json",
+ "semProblema": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [],
+  "add-guest-management-functionality-to-existing-bookings-cal-com": [],
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": [],
+  "sms-workflow-reminder-retry-count-tracking-cal-com": [],
+  "feat-2fa-backup-codes-cal-com": [
+   "S13"
+  ],
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+   "S3"
+  ],
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+   "S12",
+   "S13",
+   "S14",
+   "S15",
+   "S16",
+   "S17",
+   "S18",
+   "S19"
+  ],
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [],
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [],
+  "feature-automatically-downsize-large-images-discourse-cursor": [],
+  "fix-proper-handling-of-group-memberships-discourse-cursor": [],
+  "feature-localization-fallbacks-server-side-discourse-cursor": [],
+  "anonymous-add-configurable-device-limit-grafana-codex": [],
+  "frontend-asset-optimization-grafana-codex": [],
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [],
+  "dual-storage-architecture-grafana-codex": [],
+  "unified-storage-performance-optimizations-grafana-codex": [],
+  "notification-rule-processing-engine-grafana-codex": [],
+  "implement-access-token-context-encoding-framework-keycloak": [],
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [],
+  "add-html-sanitizer-for-translated-message-resources-keycloak": [
+   "S14"
+  ],
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [],
+  "fixing-re-authentication-with-passkeys-keycloak": [
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S8",
+   "S9",
+   "S10",
+   "S11",
+   "S12",
+   "S13",
+   "S14",
+   "S15",
+   "S16",
+   "S17",
+   "S18",
+   "S19"
+  ],
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [],
+  "replays-self-serve-bulk-delete-system-sentry": [],
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [],
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [],
+  "github-oauth-security-enhancement-sentry": [],
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [],
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": []
+ },
+ "motivo": {
+  "feat-2fa-backup-codes-cal-com|S13": "declara que não achou defeito da classe atribuída",
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com|S3": "declara que não conseguiu construir falha",
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor|S12": "comparação de enum dita segura",
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor|S13": "present? e enum ditos corretos",
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor|S14": "if topic_id dito seguro",
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor|S15": "só descreve uso de blank?/!=, sem achado",
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor|S16": "content_sha1/absolutize_urls ditos corretos",
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor|S17": "fallback dito correto",
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor|S18": "setnx/no_throttle descritos, sem achado",
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor|S19": "conclui que indexOf não pode ser contornado",
+  "fixing-re-authentication-with-passkeys-keycloak|S2": "sem exposição de dado sensível",
+  "fixing-re-authentication-with-passkeys-keycloak|S3": "sem exposição de dado sensível",
+  "fixing-re-authentication-with-passkeys-keycloak|S4": "sem exposição de dado sensível",
+  "fixing-re-authentication-with-passkeys-keycloak|S5": "sem exposição de dado sensível",
+  "fixing-re-authentication-with-passkeys-keycloak|S6": "credentialId público, sem exposição",
+  "fixing-re-authentication-with-passkeys-keycloak|S8": "no issue found: mesma constante",
+  "fixing-re-authentication-with-passkeys-keycloak|S9": "no issue found",
+  "fixing-re-authentication-with-passkeys-keycloak|S10": "no issue found: valor da constante mantido",
+  "fixing-re-authentication-with-passkeys-keycloak|S11": "no issue found: helper reutilizado corretamente",
+  "fixing-re-authentication-with-passkeys-keycloak|S12": "no issue found",
+  "fixing-re-authentication-with-passkeys-keycloak|S13": "no issue found",
+  "fixing-re-authentication-with-passkeys-keycloak|S14": "no issue found",
+  "fixing-re-authentication-with-passkeys-keycloak|S15": "no issue found",
+  "fixing-re-authentication-with-passkeys-keycloak|S16": "no issue found: sem branch inalcançável",
+  "fixing-re-authentication-with-passkeys-keycloak|S17": "no issue found: guarda contra NPE",
+  "fixing-re-authentication-with-passkeys-keycloak|S18": "no issue found: tudo consumido",
+  "fixing-re-authentication-with-passkeys-keycloak|S19": "não verificável, nenhuma divergência afirmada",
+  "add-html-sanitizer-for-translated-message-resources-keycloak|S14": "Revisado pelo Junior: nao pede mudanca nenhuma ao autor (aponta que índice errado dentro do choice não seria detectado, mas conclui que é escopo deliberado e consistente)"
+ },
+ "duvidas": [
+  {
+   "caseId": "dual-storage-architecture-grafana-codex",
+   "id": "S22",
+   "porque": "suggestionContent vazio (changed-files-disagree, arquivo vazio, linha 0): não relata nada, mas também não conclui nada"
+  }
+ ]
+}
