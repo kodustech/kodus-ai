@@ -91,3 +91,75 @@ export type IntentCockpit = {
         withoutTaskRate?: number;
     }>;
 };
+
+export type RequirementState = "met" | "partial" | "missing" | "check_manually";
+
+/** Mirrors `BusinessLogicTestResult` in trigger-business-validation.use-case.ts. */
+export type BusinessLogicTestResult = {
+    pullRequest: {
+        number: number;
+        url: string;
+        title?: string;
+        repositoryName: string;
+    };
+    references: Array<{
+        raw: string;
+        id: string;
+        kind: string;
+        source: "command" | "title" | "branch" | "body";
+        intent: "closes" | "part_of" | "mentions";
+    }>;
+    attempts: Array<{
+        reference: string;
+        tracker: string;
+        status: "found" | "not_found" | "error";
+        message?: string;
+        tools?: string[];
+    }>;
+    trackers: string[];
+    tasks: Array<{
+        tracker: string;
+        id: string;
+        title?: string;
+        url?: string;
+        criteria: string[];
+        descriptionLength: number;
+    }>;
+    verdict: {
+        status:
+            | "compliant"
+            | "issues_found"
+            | "skipped"
+            | "task_too_thin"
+            | "task_missing";
+        passed: boolean;
+        reason?: string;
+        message?: string;
+        tasks: Array<{
+            tracker: string;
+            id: string;
+            title?: string;
+            passed: boolean;
+            requirements: Array<{
+                requirement: string;
+                state: RequirementState;
+                note?: string;
+                downgraded?: string;
+                accepted?: { by: string };
+            }>;
+            outOfScope: Array<{ change: string; accepted?: { by: string } }>;
+        }>;
+    };
+    comment: {
+        posted: boolean;
+        reason?: string;
+        body?: string;
+        editsExisting: boolean;
+    };
+    check: {
+        supported: boolean;
+        conclusion: string;
+        title: string;
+    };
+    posted?: "created" | "updated" | "none";
+};

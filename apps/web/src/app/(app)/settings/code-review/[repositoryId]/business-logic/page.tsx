@@ -1,6 +1,14 @@
 "use client";
 
 import { Suspense } from "react";
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbLink,
+    BreadcrumbList,
+    BreadcrumbPage,
+    BreadcrumbSeparator,
+} from "@components/ui/breadcrumb";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
@@ -23,6 +31,7 @@ import { useCodeReviewRouteParams } from "../../../_hooks";
 import { PrOptions } from "./_components/pr-options";
 import { StatusStrip } from "./_components/status-strip";
 import { TaskSource } from "./_components/task-source";
+import { TestOnPr } from "./_components/test-on-pr";
 import { TryIt } from "./_components/try-it";
 import { Tune } from "./_components/tune";
 
@@ -110,6 +119,25 @@ function BusinessLogicContent() {
         <Page.Root>
             <Page.Header sticky>
                 <Page.TitleContainer>
+                    {/* Not in the sidebar: reached from "What to review". */}
+                    <Breadcrumb className="mb-1">
+                        <BreadcrumbList>
+                            <BreadcrumbItem>
+                                <BreadcrumbLink
+                                    href={`/settings/code-review/${repositoryId}/review-scope${
+                                        directoryId
+                                            ? `?directoryId=${directoryId}`
+                                            : ""
+                                    }`}>
+                                    What to review
+                                </BreadcrumbLink>
+                            </BreadcrumbItem>
+                            <BreadcrumbSeparator />
+                            <BreadcrumbItem>
+                                <BreadcrumbPage>Business Logic</BreadcrumbPage>
+                            </BreadcrumbItem>
+                        </BreadcrumbList>
+                    </Breadcrumb>
                     <Page.Title>Business Logic</Page.Title>
                     <Page.Description>
                         Kody checks each pull request against the task it
@@ -134,6 +162,7 @@ function BusinessLogicContent() {
                 />
                 <TaskSource teamId={teamId} canEdit={canEdit} />
                 <TryIt teamId={teamId} />
+                <TestOnPr teamId={teamId} canEdit={canEdit} />
                 <PrOptions canEdit={canEdit} />
                 <Tune canEdit={canEdit} platformHasChecks={platformHasChecks} />
             </Page.Content>

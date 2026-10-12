@@ -6,6 +6,7 @@ import {
     getIntentCockpit,
     getReadTools,
     getTaskSources,
+    testOnPullRequest,
     tryReadTask,
 } from "./fetch";
 
@@ -35,7 +36,9 @@ export const useTaskSources = (teamId?: string) =>
         queryKey: [BUSINESS_LOGIC_PATHS.TASK_SOURCES, teamId],
         queryFn: () => getTaskSources(teamId!),
         enabled: !!teamId,
-        staleTime: 5 * 60 * 1000,
+        // Plugins are connected on another page: a cached list hid a tracker
+        // connected a minute earlier. Read it again whenever the page opens.
+        staleTime: 0,
         retry: false,
     });
 
@@ -52,6 +55,9 @@ export const useReadTools = (teamId?: string, integrationId?: string) =>
     });
 
 export const useTryReadTask = () => useMutation({ mutationFn: tryReadTask });
+
+export const useTestOnPullRequest = () =>
+    useMutation({ mutationFn: testOnPullRequest });
 
 export const useIntentCockpit = (params: {
     startDate: string;

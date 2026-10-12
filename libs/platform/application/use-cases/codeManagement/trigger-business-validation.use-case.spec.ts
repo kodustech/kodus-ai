@@ -569,3 +569,181 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
         });
     });
 });
+
+describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
+    const prUrl = 'https://github.com/acme/notes/pull/47';
+    const outcome = {
+        kind: 'validated' as const,
+        checks: [
+            {
+                task: {
+                    tracker: 'Linear',
+                    id: 'SAA-96',
+                    title: 'Sticky notes',
+                    description: 'Drag to reorder',
+                    acceptanceCriteria: ['Order persists'],
+                },
+                verdict: {
+                    needsMoreInfo: false,
+                    summary: '',
+                    requirements: [
+                        {
+                            requirement: 'Order persists',
+                            state: 'missing' as const,
+                            evidence: [],
+                            confidence: 'high' as const,
+                        },
+                    ],
+                    outOfScope: [],
+                },
+                passed: false,
+                readAt: '2026-10-07T12:00:00.000Z',
+            },
+        ],
+        thinTasks: [],
+        passed: false,
+        unseenFiles: [],
+    };
+
+    function build(prNumber = 47) {
+        const code = {
+            getTypeIntegration: jest.fn(async () => 'GITHUB'),
+            getPullRequests: jest.fn(async () => [
+                {
+                    number: prNumber,
+                    prURL: `https://github.com/acme/notes/pull/${prNumber}`,
+                    title: 'Sticky notes: drag to reorder',
+                    body: 'Closes SAA-96',
+                    repositoryData: { id: 'repo-1', name: 'acme/notes' },
+                    head: {
+                        ref: 'feat/SAA-96',
+                        repo: { fullName: 'acme/notes', name: 'notes' },
+                    },
+                    base: { ref: 'main' },
+                },
+            ]),
+        };
+        const service = {
+            validate: jest.fn(async () => ({
+                outcome,
+                references: [
+                    {
+                        kind: 'key',
+                        id: 'SAA-96',
+                        raw: 'SAA-96',
+                        source: 'body',
+                        intent: 'closes',
+                    },
+                ],
+                attempts: [
+                    {
+                        reference: 'SAA-96',
+                        tracker: 'Linear',
+                        status: 'found',
+                        tools: ['get_issue'],
+                    },
+                ],
+                trackers: ['Linear'],
+            })),
+        };
+        const publisher = {
+            settingsFor: jest.fn(),
+            headShaOf: jest.fn(async () => 'abc1234'),
+            preview: jest.fn(async () => ({
+                outcome,
+                comment: { posted: true, editsExisting: false, body: 'body' },
+                check: {
+                    supported: true,
+                    conclusion: 'failure',
+                    title: '1 missing',
+                },
+            })),
+            publish: jest.fn(async () => ({ outcome, comment: 'created' })),
+        };
+        const runs = { create: jest.fn() };
+        const integrationConfig = {
+            findIntegrationConfigFormatted: jest.fn(async () => [
+                { id: 'repo-1', name: 'notes', organizationName: 'acme' },
+            ]),
+        };
+        const useCase = new TriggerBusinessValidationUseCase(
+            code as any,
+            integrationConfig as any,
+            service as any,
+            publisher as any,
+            runs as any,
+        );
+        return { useCase, service, publisher, runs };
+    }
+
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
+
+    it('runs with the settings on screen and writes nothing', async () => {
+        const { useCase, service, publisher, runs } = build();
+
+        const result = await useCase.testOnPullRequest({
+            organizationAndTeamData,
+            prUrl,
+            settings: { failOn: ['missing', 'partial'] },
+        });
+
+        expect(service.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pullRequest: expect.objectContaining({
+                    number: 47,
+                    body: 'Closes SAA-96',
+                }),
+                settings: expect.objectContaining({
+                    failOn: ['missing', 'partial'],
+                }),
+            }),
+        );
+        // The list names it `acme/notes`; the diff needs the stored name.
+        expect(service.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                repository: expect.objectContaining({
+                    name: 'notes',
+                    owner: 'acme',
+                }),
+            }),
+        );
+        expect(result.pullRequest.repositoryName).toBe('notes');
+        expect(publisher.settingsFor).not.toHaveBeenCalled();
+        expect(publisher.publish).not.toHaveBeenCalled();
+        expect(runs.create).not.toHaveBeenCalled();
+        expect(result.attempts[0].tools).toEqual(['get_issue']);
+        expect(result.tasks[0]).toMatchObject({
+            id: 'SAA-96',
+            criteria: ['Order persists'],
+        });
+        expect(result.comment.posted).toBe(true);
+        expect(result.posted).toBeUndefined();
+    });
+
+    it('posts like the command when asked to', async () => {
+        const { useCase, publisher } = build();
+
+        const result = await useCase.testOnPullRequest({
+            organizationAndTeamData,
+            prUrl,
+            post: true,
+        });
+
+        expect(publisher.publish).toHaveBeenCalledWith(
+            expect.objectContaining({ trigger: 'command', headSha: 'abc1234' }),
+        );
+        expect(result.posted).toBe('created');
+    });
+
+    it('never runs on another PR than the one asked for', async () => {
+        const { useCase, service } = build(12);
+
+        await expect(
+            useCase.testOnPullRequest({ organizationAndTeamData, prUrl }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(service.validate).not.toHaveBeenCalled();
+    });
+});

@@ -33,11 +33,14 @@ function session(handlers: {
     call?: (name: string, args: Record<string, unknown>) => unknown;
 }): McpToolSession & { calls: Array<[string, Record<string, unknown>]> } {
     const calls: Array<[string, Record<string, unknown>]> = [];
+    const called: string[] = [];
     return {
         calls,
+        called,
         tools: async () => handlers.tools ?? [],
         call: async (name: string, args: Record<string, unknown>) => {
             calls.push([name, args]);
+            called.push(name);
             return handlers.call?.(name, args);
         },
         close: async () => undefined,
@@ -174,6 +177,20 @@ describe('McpTaskTracker', () => {
         });
         expect(calls).toBe(2);
         expect(lookup.status).toBe('found');
+    });
+
+    it('says which tools it called to read a task, for the test on a PR', async () => {
+        const s = session({
+            call: () => ({
+                identifier: 'SAA-96',
+                title: 'Sticky notes',
+                description: 'Drag to reorder',
+            }),
+        });
+        const lookup = await new LinearTracker(s).read(ref('SAA-96'), {
+            organizationAndTeamData: {} as any,
+        });
+        expect(lookup).toMatchObject({ status: 'found', tools: ['get_issue'] });
     });
 
     it('knows SAA is a team in Linear and UTF is not (UC-14, UC-21)', async () => {

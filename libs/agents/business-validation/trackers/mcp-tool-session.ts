@@ -1,3 +1,8 @@
+import type {
+    CallToolResult,
+    TextContent,
+} from '@modelcontextprotocol/sdk/types.js';
+
 import {
     createMCPAdapter,
     type MCPAdapter,
@@ -22,6 +27,8 @@ const NOT_FOUND_PATTERN =
 export class McpToolSession {
     private adapter?: MCPAdapter;
     private connecting?: Promise<MCPAdapter>;
+    /** Every tool called through this session, in order. */
+    readonly called: string[] = [];
 
     constructor(
         private readonly server: MCPServerConfig,
@@ -42,12 +49,20 @@ export class McpToolSession {
             );
         }
         const adapter = await this.connect();
+        this.called.push(name);
         let result: unknown;
         try {
             result = await adapter.executeTool(name, args, this.server.name);
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error);
+            throw NOT_FOUND_PATTERN.test(message)
+                ? new TaskNotFoundError(message)
+                : new TrackerUnavailableError(message);
+        }
+        if ((result as CallToolResult | undefined)?.isError) {
+            // A tool that reports a failure answered nothing about the task.
+            const message = String(readToolPayload(result) ?? `${name} failed`);
             throw NOT_FOUND_PATTERN.test(message)
                 ? new TaskNotFoundError(message)
                 : new TrackerUnavailableError(message);
@@ -67,11 +82,10 @@ export class McpToolSession {
             return Promise.resolve(this.adapter);
         }
         this.connecting ??= (async () => {
+            const serverTools = new Set(this.server.allowedTools ?? []);
             const allowed = this.allowedTools
                 ? this.allowedTools.filter(
-                      (tool) =>
-                          !this.server.allowedTools?.length ||
-                          this.server.allowedTools.includes(tool),
+                      (tool) => !serverTools.size || serverTools.has(tool),
                   )
                 : this.server.allowedTools;
             const adapter = createMCPAdapter({
@@ -99,10 +113,7 @@ export function readToolPayload(result: unknown): unknown {
     if (!result || typeof result !== 'object') {
         return result;
     }
-    const record = result as {
-        structuredContent?: unknown;
-        content?: Array<{ type?: string; text?: string }>;
-    };
+    const record = result as Partial<CallToolResult>;
     if (record.structuredContent !== undefined) {
         return record.structuredContent;
     }
@@ -111,7 +122,8 @@ export function readToolPayload(result: unknown): unknown {
     }
     const text = record.content
         .filter(
-            (item) => item?.type === 'text' && typeof item.text === 'string',
+            (item): item is TextContent =>
+                item?.type === 'text' && typeof item.text === 'string',
         )
         .map((item) => item.text)
         .join('\n')

@@ -62,13 +62,18 @@ export abstract class McpTaskTracker implements TaskTracker {
         context: TrackerReadContext,
     ): Promise<TrackerLookup> {
         const deadline = Date.now() + READ_BUDGET_MS;
+        const firstCall = this.session.called.length;
+        const tools = () => [...new Set(this.session.called.slice(firstCall))];
         let message = '';
         for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt++) {
             try {
-                return await this.lookup(reference, context);
+                return {
+                    ...(await this.lookup(reference, context)),
+                    tools: tools(),
+                };
             } catch (error) {
                 if (error instanceof TaskNotFoundError) {
-                    return { status: 'not_found' };
+                    return { status: 'not_found', tools: tools() };
                 }
                 message =
                     error instanceof Error ? error.message : String(error);
@@ -80,7 +85,7 @@ export abstract class McpTaskTracker implements TaskTracker {
                 );
             }
         }
-        return { status: 'error', message };
+        return { status: 'error', message, tools: tools() };
     }
 
     /** The tracker's team or project keys (`SAA`), when it can list them. */

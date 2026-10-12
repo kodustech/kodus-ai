@@ -55,6 +55,17 @@
     }
   },
   {
+    "key": "businessLogic.controller.ts#test",
+    "httpMethod": "POST",
+    "urlPath": "/business-logic/test",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "businessLogic.controller.ts#tryRead",
     "httpMethod": "POST",
     "urlPath": "/business-logic/try",

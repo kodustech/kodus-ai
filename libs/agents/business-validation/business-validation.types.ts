@@ -81,17 +81,23 @@ export interface FoundTask {
 }
 
 /** What one tracker said about one reference. */
-export type TrackerLookup =
+export type TrackerLookup = (
     | { status: 'found'; task: Task }
     | { status: 'not_found' }
     /** The tracker could not be reached or failed: outage, auth, timeout. */
-    | { status: 'error'; message: string };
+    | { status: 'error'; message: string }
+) & {
+    /** The MCP tools called for this read, in order. */
+    tools?: string[];
+};
 
 export interface ResolutionAttempt {
     reference: string;
     tracker: string;
     status: TrackerLookup['status'];
     message?: string;
+    /** The MCP tools called to read it, so a team can see how it was found. */
+    tools?: string[];
 }
 
 export type TaskResolution =

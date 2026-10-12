@@ -124,6 +124,76 @@ describe('BusinessLogicPublisher', () => {
         );
     });
 
+    it('posts a new comment when the old one was deleted or cannot be edited', async () => {
+        const { publisher, code } = build({ comment: { comment: { id: 77 } } });
+        code.updateIssueComment.mockRejectedValueOnce(new Error('Not Found'));
+
+        const result = await publisher.publish({
+            request,
+            result: {
+                outcome: validated('missing'),
+                references: [],
+                attempts: [],
+                trackers: ['Linear'],
+            },
+            headSha: 'abc1234',
+        });
+
+        expect(code.updateIssueComment).toHaveBeenCalled();
+        expect(code.createIssueComment).toHaveBeenCalled();
+        expect(result.comment).toBe('created');
+    });
+
+    it('previews the comment and the check without writing anything', async () => {
+        const { publisher, code, adapter, runs } = build();
+
+        const preview = await publisher.preview({
+            request,
+            result: {
+                outcome: validated('missing'),
+                references: [],
+                attempts: [],
+                trackers: ['Linear'],
+            },
+            headSha: 'abc1234',
+        });
+
+        expect(preview.comment).toMatchObject({
+            posted: true,
+            editsExisting: false,
+            body: expect.stringContaining('kody-business-logic'),
+        });
+        expect(preview.check).toMatchObject({
+            supported: true,
+            conclusion: CheckConclusion.FAILURE,
+        });
+        expect(code.createIssueComment).not.toHaveBeenCalled();
+        expect(code.updateIssueComment).not.toHaveBeenCalled();
+        expect(adapter.createCheckRun).not.toHaveBeenCalled();
+        expect(runs.create).not.toHaveBeenCalled();
+    });
+
+    it('says why a met PR gets no comment, and still shows it', async () => {
+        const { publisher } = build();
+
+        const preview = await publisher.preview({
+            request,
+            result: {
+                outcome: validated('met'),
+                references: [],
+                attempts: [],
+                trackers: [],
+            },
+        });
+
+        expect(preview.comment.posted).toBe(false);
+        expect(preview.comment.reason).toMatch(
+            /Comment when every requirement is met/,
+        );
+        expect(preview.comment.body).toContain('kody-business-logic');
+        expect(preview.check.conclusion).toBe(CheckConclusion.SUCCESS);
+    });
+
     it('leaves only the green check when every requirement is met (UC-26)', async () => {
         const { publisher, code, adapter } = build();
 

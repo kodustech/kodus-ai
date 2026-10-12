@@ -4,6 +4,7 @@ import { pathToApiUrl } from "src/core/utils/helpers";
 import type {
     BusinessLogicSettingsValue,
     BusinessLogicStatus,
+    BusinessLogicTestResult,
     IntentCockpit,
     ReadTool,
     TaskSourceOption,
@@ -18,6 +19,7 @@ export const BUSINESS_LOGIC_PATHS = {
             `/business-logic/task-sources/${encodeURIComponent(integrationId)}/tools`,
         ),
     TRY: pathToApiUrl("/business-logic/try"),
+    TEST: pathToApiUrl("/business-logic/test"),
     INTENT: pathToApiUrl("/business-logic/intent"),
 };
 
@@ -48,6 +50,18 @@ export const tryReadTask = (body: {
     settings?: BusinessLogicSettingsValue;
 }) =>
     authorizedFetch<TryReadResult>(BUSINESS_LOGIC_PATHS.TRY, {
+        method: "POST",
+        body: JSON.stringify(body),
+    });
+
+export const testOnPullRequest = (body: {
+    teamId: string;
+    prUrl: string;
+    taskInput?: string;
+    settings?: BusinessLogicSettingsValue;
+    post?: boolean;
+}) =>
+    authorizedFetch<BusinessLogicTestResult>(BUSINESS_LOGIC_PATHS.TEST, {
         method: "POST",
         body: JSON.stringify(body),
     });

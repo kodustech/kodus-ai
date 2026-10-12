@@ -23,6 +23,7 @@ import {
     type BusinessLogicConfig,
     resolveBusinessLogicSettings,
 } from '@libs/agents/business-validation/settings';
+import { TriggerBusinessValidationUseCase } from '@libs/platform/application/use-cases/codeManagement/trigger-business-validation.use-case';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     Action,
@@ -38,6 +39,12 @@ import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 
 const canReadSettings = checkPermissions({
     action: Action.Read,
+    resource: ResourceType.CodeReviewSettings,
+});
+
+// A test spends a model call and can post to the PR.
+const canEditSettings = checkPermissions({
+    action: Action.Update,
     resource: ResourceType.CodeReviewSettings,
 });
 
@@ -57,6 +64,7 @@ export class BusinessLogicController {
         private readonly request: UserRequest,
         private readonly businessValidationService: BusinessValidationService,
         private readonly insights: BusinessLogicInsightsService,
+        private readonly triggerBusinessValidation: TriggerBusinessValidationUseCase,
     ) {}
 
     private organizationId(): string {
@@ -149,6 +157,39 @@ export class BusinessLogicController {
             body.task.trim(),
             resolveBusinessLogicSettings(body.settings),
         );
+    }
+
+    @Post('test')
+    @ApiOperation({
+        summary: 'Test on a pull request',
+        description:
+            'Runs Business Logic on a real pull request with the settings on screen, saved or not, and shows each step: references found, the tracker and tools that read each task, the verdict, and the comment and check it would post. Writes nothing unless `post` is true.',
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canEditSettings)
+    test(
+        @Body()
+        body: {
+            teamId: string;
+            prUrl: string;
+            settings?: BusinessLogicConfig;
+            taskInput?: string;
+            post?: boolean;
+        },
+    ) {
+        if (!body?.teamId || !body?.prUrl?.trim()) {
+            throw new BadRequestException('teamId and prUrl are required');
+        }
+        return this.triggerBusinessValidation.testOnPullRequest({
+            organizationAndTeamData: {
+                organizationId: this.organizationId(),
+                teamId: body.teamId,
+            },
+            prUrl: body.prUrl.trim(),
+            settings: body.settings,
+            taskInput: body.taskInput,
+            post: body.post === true,
+        });
     }
 
     @Get('runs')

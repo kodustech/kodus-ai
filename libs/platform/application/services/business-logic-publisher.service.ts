@@ -70,6 +70,27 @@ export interface PublishInput {
     dryRun?: boolean;
 }
 
+/** What a publish would put on the PR, without writing anything. */
+export interface PublishPreview {
+    outcome: BusinessValidationOutcome;
+    comment: {
+        /** Whether this run would post or edit the comment. */
+        posted: boolean;
+        /** Why it would not, when it would not. */
+        reason?: string;
+        /** The comment as it would read, also when it would not be posted. */
+        body?: string;
+        /** An earlier run's comment would be edited in place. */
+        editsExisting: boolean;
+    };
+    check: {
+        /** False where the platform has no checks (GitLab, Bitbucket, Azure). */
+        supported: boolean;
+        conclusion: CheckConclusion;
+        title: string;
+    };
+}
+
 export interface PublishResult {
     outcome: BusinessValidationOutcome;
     runId?: string;
@@ -133,7 +154,48 @@ export class BusinessLogicPublisher {
         }
     }
 
-    async publish(input: PublishInput): Promise<PublishResult> {
+    /**
+     * What `publish` would do with this result, read-only: the comment as it
+     * would read and whether it would be posted, and the check. Accepted
+     * findings from earlier runs are carried over the same way.
+     */
+    async preview(input: PublishInput): Promise<PublishPreview> {
+        const { request } = input;
+        const settings = input.settings ?? DEFAULT_BUSINESS_LOGIC_SETTINGS;
+        const { outcome, previousComment } = await this.carriedOver(input);
+        const posted = this.shouldComment(outcome, settings, previousComment);
+        const body = await this.businessValidationService.commentFor(
+            outcome,
+            request,
+            { headSha: input.headSha },
+        );
+        const platform = request.platformType as PlatformType | undefined;
+        return {
+            outcome,
+            comment: {
+                posted: posted && !!body,
+                editsExisting: !!previousComment?.comment,
+                ...(body ? { body } : {}),
+                ...(posted
+                    ? {}
+                    : {
+                          reason:
+                              outcome.kind === 'skipped'
+                                  ? 'Nothing was checked, so nothing is posted.'
+                                  : 'Every requirement is met: only the check turns green. Turn on "Comment when every requirement is met" to post it anyway.',
+                      }),
+            },
+            check: {
+                supported:
+                    platform === PlatformType.GITHUB ||
+                    platform === PlatformType.FORGEJO,
+                ...checkFor(outcome),
+            },
+        };
+    }
+
+    /** The outcome with what earlier runs decided (accepted findings), and the comment to edit. */
+    private async carriedOver(input: PublishInput) {
         const { request } = input;
         const settings = input.settings ?? DEFAULT_BUSINESS_LOGIC_SETTINGS;
         const pr = request.pullRequest;
@@ -147,7 +209,6 @@ export class BusinessLogicPublisher {
                       pullRequestNumber: pr.number,
                   }
                 : undefined;
-
         const [previousVerdict, previousComment] = scope
             ? await Promise.all([
                   this.runs
@@ -158,12 +219,19 @@ export class BusinessLogicPublisher {
                       .catch(() => undefined),
               ])
             : [undefined, undefined];
-
         const outcome = carryOver(
             input.result.outcome,
             previousVerdict?.tasks,
             settings.failOn,
         );
+        return { scope, outcome, previousComment };
+    }
+
+    async publish(input: PublishInput): Promise<PublishResult> {
+        const { request } = input;
+        const settings = input.settings ?? DEFAULT_BUSINESS_LOGIC_SETTINGS;
+        const { scope, outcome, previousComment } =
+            await this.carriedOver(input);
         const result = { ...input.result, outcome };
 
         let comment: RunComment | undefined;
@@ -267,17 +335,25 @@ export class BusinessLogicPublisher {
                 previous?.comment ??
                 (await this.findByMarker(target, platform));
             if (existing) {
-                await this.codeManagementService.updateIssueComment(
-                    {
-                        ...target,
-                        body,
-                        commentId: existing.id as number,
-                        noteId: (existing.noteId ?? existing.id) as number,
-                        threadId: existing.threadId as number,
-                    },
-                    platform,
-                );
-                return { comment: existing, action: 'updated' };
+                // A comment deleted on the PR, or one Kody can no longer
+                // edit, is replaced by a new one; otherwise the PR would
+                // never get a Business Logic comment again.
+                const updated = await this.codeManagementService
+                    .updateIssueComment(
+                        {
+                            ...target,
+                            body,
+                            commentId: existing.id as number,
+                            noteId: (existing.noteId ?? existing.id) as number,
+                            threadId: existing.threadId as number,
+                        },
+                        platform,
+                    )
+                    .then(() => true)
+                    .catch(() => false);
+                if (updated) {
+                    return { comment: existing, action: 'updated' };
+                }
             }
             const created = await this.codeManagementService.createIssueComment(
                 { ...target, body },
