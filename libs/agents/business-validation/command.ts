@@ -1,6 +1,13 @@
-import type { BusinessValidationOutcome } from './business-validation.types';
+import type {
+    BusinessValidationOutcome,
+    Task,
+    TaskReference,
+} from './business-validation.types';
 
 const COMMAND = /@kody\s+-v\s+business-logic\b/i;
+
+/** Text passed to the command that names no task is the task itself, if it says this much. */
+const MIN_INLINE_TASK = 40;
 
 /** What follows `@kody -v business-logic` in a comment: a task id, a link, or the task itself. */
 export function commandArgument(
@@ -32,4 +39,26 @@ export function replyFor(
             : outcome.message;
     }
     return 'Business logic re-checked. The Kody · Business Logic comment on this pull request is updated.';
+}
+
+/** Text given to the command that is not a reference is the task itself. */
+export function inlineTask(
+    taskInput: string | undefined,
+    references: TaskReference[],
+): Task | undefined {
+    const text = taskInput?.trim() ?? '';
+    if (text.length < MIN_INLINE_TASK) {
+        return undefined;
+    }
+    if (references.some((r) => r.source === 'command')) {
+        return undefined;
+    }
+    // The text IS the task: give it a title so it grades as judgeable
+    // even when it is shorter than a tracker description.
+    return {
+        tracker: 'the command',
+        id: 'Task in the command',
+        title: text.split('\n')[0].slice(0, 120),
+        description: text,
+    };
 }

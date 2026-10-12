@@ -8,6 +8,7 @@ import {
     ValidationRunRepository,
 } from '@libs/agents/business-validation/runs/validation-run.repository';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import type { PullRequest } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { createLogger } from '@libs/core/log/logger';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
@@ -48,6 +49,12 @@ export class BusinessLogicRecheckService {
                     rechecked += 1;
                 }
             } catch (error) {
+                // The run was claimed before the re-check ran: give it back
+                // so the next tick retries it, inside the 24h window.
+                await this.runs
+                    .update(run.id, { pendingRecheck: true })
+                    .catch(() => undefined);
+
                 this.logger.warn({
                     message: 'Business logic re-check failed',
                     context: BusinessLogicRecheckService.name,
@@ -93,13 +100,7 @@ export class BusinessLogicRecheckService {
                 prNumber: run.pullRequestNumber,
             },
             platformType,
-        )) as {
-            title?: string;
-            body?: string;
-            state?: string;
-            head?: { ref?: string; sha?: string };
-            base?: { ref?: string };
-        } | null;
+        )) as PullRequest | null;
         if (!pr || (pr.state && !/open/i.test(pr.state))) {
             return false;
         }

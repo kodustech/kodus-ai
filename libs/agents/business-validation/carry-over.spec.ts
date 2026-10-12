@@ -103,4 +103,41 @@ describe('carryOver', () => {
             result.checks[0].verdict.requirements![0].accepted,
         ).toBeUndefined();
     });
+
+    it('never carries an acceptance to a requirement whose operator changed', () => {
+        const accepted: RunTask[] = [
+            {
+                ...before[0],
+                requirements: [
+                    {
+                        requirement: 'Rejects a count > 10',
+                        state: 'missing',
+                        evidence: [],
+                        confidence: 'high',
+                        accepted: {
+                            by: 'nina',
+                            at: '2026-10-05T11:00:00.000Z',
+                        },
+                    },
+                ],
+            },
+        ];
+        const result = carryOver(
+            now([
+                {
+                    requirement: 'Rejects a count < 10',
+                    state: 'missing',
+                    evidence: [],
+                    confidence: 'high',
+                },
+            ]),
+            accepted,
+            ['missing'],
+        );
+        if (result.kind !== 'validated') throw new Error('expected validated');
+        expect(
+            result.checks[0].verdict.requirements![0].accepted,
+        ).toBeUndefined();
+        expect(result.passed).toBe(false);
+    });
 });

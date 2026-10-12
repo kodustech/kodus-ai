@@ -45,6 +45,14 @@ describe('extractTaskReferences', () => {
         ).toEqual([]);
     });
 
+    it('skips a URL with a malformed escape and still reads the rest', () => {
+        expect(
+            ids({
+                body: 'See https://linear.app/acme/issue/%E0%A4%A and SAA-12',
+            }),
+        ).toEqual(['key:SAA-12']);
+    });
+
     it('reads tracker URLs with their host', () => {
         const refs = extractTaskReferences({
             body: [

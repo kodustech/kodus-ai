@@ -188,7 +188,12 @@ function fromUrl(url: string, source: ReferenceSource): Candidate | undefined {
         return undefined;
     }
     const host = parsed.hostname.toLowerCase();
-    const path = decodeURIComponent(parsed.pathname);
+    let path: string;
+    try {
+        path = decodeURIComponent(parsed.pathname);
+    } catch {
+        return undefined;
+    }
 
     if (host === 'linear.app' || host.endsWith('.linear.app')) {
         const key = path.match(/\/issue\/([A-Za-z][A-Za-z0-9_]*-\d+)/)?.[1];

@@ -211,13 +211,14 @@ function taskTitle(id: string, title?: string, url?: string): string {
 
 function cell(text: string): string {
     return text
+        .replace(/\\/g, '\\\\')
         .replace(/\|/g, '\\|')
         .replace(/\r?\n+/g, ' ')
         .trim();
 }
 
 function escapeLinkText(text: string): string {
-    return text.replace(/[[\]]/g, '\\$&');
+    return text.replace(/[\\[\]]/g, '\\$&');
 }
 
 function plural(count: number, one: string, many = `${one}s`): string {

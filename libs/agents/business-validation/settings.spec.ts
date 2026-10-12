@@ -90,4 +90,59 @@ describe('applyCriteriaLocation (UC-05, UC-23)', () => {
             }),
         ).toBe(task);
     });
+
+    describe('detected automatically', () => {
+        const auto = { location: 'auto' } as const;
+
+        it('takes the list under a criteria heading, not the other lists', () => {
+            expect(
+                applyCriteriaLocation({ ...task, fields: undefined }, auto)
+                    .acceptanceCriteria,
+            ).toEqual(['Exports as CSV', 'Includes archived notes']);
+        });
+
+        it('reads a heading in Portuguese, accents and all', () => {
+            expect(
+                applyCriteriaLocation(
+                    {
+                        tracker: 'Git Issues',
+                        id: '#245',
+                        description:
+                            '## Contexto\nLinks de reset.\n\n### Critérios de aceite\n- O link expira em 15 minutos\n- O link vale uma vez só',
+                    },
+                    auto,
+                ).acceptanceCriteria,
+            ).toEqual([
+                'O link expira em 15 minutos',
+                'O link vale uma vez só',
+            ]);
+        });
+
+        it("keeps the tracker's own criteria", () => {
+            const fromTracker = {
+                ...task,
+                acceptanceCriteria: ['From the Jira field'],
+            };
+            expect(applyCriteriaLocation(fromTracker, auto)).toBe(fromTracker);
+        });
+
+        it('falls back to the list in the description, but not a single item', () => {
+            expect(
+                applyCriteriaLocation(
+                    {
+                        tracker: 'Linear',
+                        id: 'SAA-1',
+                        description: '- Drag to reorder\n- Order persists',
+                    },
+                    auto,
+                ).acceptanceCriteria,
+            ).toEqual(['Drag to reorder', 'Order persists']);
+            const one = {
+                tracker: 'Linear',
+                id: 'SAA-2',
+                description: 'Context.\n- See the design file',
+            };
+            expect(applyCriteriaLocation(one, auto)).toBe(one);
+        });
+    });
 });

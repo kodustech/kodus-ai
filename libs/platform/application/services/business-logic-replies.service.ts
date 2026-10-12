@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
 import type { BusinessValidationRequest } from '@libs/agents/business-validation/business-validation.types';
+import { requirementKey } from '@libs/agents/business-validation/carry-over';
 import { taskPasses } from '@libs/agents/business-validation/check-policy';
 import type { OpenFinding } from '@libs/agents/business-validation/judge/reply-classifier';
 import type {
@@ -22,7 +23,14 @@ import { BusinessLogicPublisher } from './business-logic-publisher.service';
 export interface BusinessLogicReplyInput {
     request: Omit<BusinessValidationRequest, 'door'>;
     message: string;
-    sender: { login: string };
+    sender: {
+        login: string;
+        /**
+         * Whether the sender can write to the repository, when the platform
+         * says (GitHub's `author_association`). Unknown elsewhere.
+         */
+        canWrite?: boolean;
+    };
     /** The PR author, who can't waive their own requirements. */
     authorLogin?: string;
 }
@@ -129,11 +137,11 @@ export class BusinessLogicReplies {
             !!input.authorLogin &&
             input.authorLogin.toLowerCase() ===
                 input.sender.login.toLowerCase();
-        if (isAuthor) {
+        if (isAuthor || input.sender.canWrite === false) {
             return {
                 handled: true,
                 reply: await say(
-                    `Only a reviewer or maintainer can accept a requirement, not the PR author. If the code already covers it, say where and I'll re-check; or comment \`@kody -v business-logic\` after a fix.`,
+                    `Only a reviewer or maintainer can accept a requirement: not the PR author, and on GitHub only someone with write access to the repository. If the code already covers it, say where and I'll re-check; or comment \`@kody -v business-logic\` after a fix.`,
                 ),
             };
         }
@@ -246,7 +254,9 @@ export class BusinessLogicReplies {
             ...request,
             door: 'command',
             // The task(s) the comment was about, not whatever the PR says now.
-            taskInput: run.tasks.map((t) => t.id).join(' '),
+            // The URL when there is one: a Notion page id alone is not a
+            // reference the parser reads back.
+            taskInput: run.tasks.map((t) => t.url ?? t.id).join(' '),
             settings,
             authorClaim: {
                 claim: intent.claim || input.message,
@@ -354,10 +364,6 @@ function openFindings(run: ValidationRunRecord): Located[] {
 }
 
 function sameText(a: string, b: string): boolean {
-    const norm = (t: string) =>
-        t
-            .toLowerCase()
-            .replace(/[^\p{L}\p{N}]+/gu, ' ')
-            .trim();
+    const norm = requirementKey;
     return norm(a) === norm(b);
 }

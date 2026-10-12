@@ -34,10 +34,10 @@ function applyPrevious(
     failOn: FailOnState[],
 ): TaskCheck {
     const earlier = new Map(
-        before.requirements.map((r) => [key(r.requirement), r]),
+        before.requirements.map((r) => [requirementKey(r.requirement), r]),
     );
     const requirements = (check.verdict.requirements ?? []).map((r) => {
-        const prior = earlier.get(key(r.requirement));
+        const prior = earlier.get(requirementKey(r.requirement));
         if (!prior) {
             return r;
         }
@@ -52,10 +52,10 @@ function applyPrevious(
     const acceptedChanges = new Map(
         before.outOfScope
             .filter((c) => c.accepted)
-            .map((c) => [key(c.change), c.accepted!]),
+            .map((c) => [requirementKey(c.change), c.accepted!]),
     );
     const outOfScope = (check.verdict.outOfScope ?? []).map((c) => {
-        const accepted = acceptedChanges.get(key(c.change));
+        const accepted = acceptedChanges.get(requirementKey(c.change));
         return accepted ? { ...c, accepted } : c;
     });
     const verdict: ValidationResult = {
@@ -71,10 +71,15 @@ function applyPrevious(
     };
 }
 
-/** Requirements are matched by their text, ignoring case, punctuation and spacing. */
-function key(text: string): string {
+/**
+ * Requirements are matched by their text, ignoring case, spacing and the
+ * punctuation around it ("reload" and "reload!"). Symbols inside stay:
+ * "count > 10" and "count < 10" are different requirements, and one must
+ * not inherit the other's acceptance.
+ */
+export function requirementKey(text: string): string {
     return text
         .toLowerCase()
-        .replace(/[^\p{L}\p{N}]+/gu, ' ')
-        .trim();
+        .replace(/\s+/g, ' ')
+        .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 }

@@ -232,6 +232,49 @@ describe('ChatWithKodyFromGitUseCase', () => {
         expect(response).toMatch(/no task-management mcp/i);
     });
 
+    it('lets only people with write access waive a requirement on GitHub', () => {
+        const canWrite = (
+            association?: string,
+            platformType = PlatformType.GITHUB,
+        ) =>
+            (useCase as any).senderCanWrite({
+                platformType,
+                payload: { comment: { author_association: association } },
+            });
+        expect(canWrite('MEMBER')).toBe(true);
+        expect(canWrite('COLLABORATOR')).toBe(true);
+        expect(canWrite('CONTRIBUTOR')).toBe(false);
+        expect(canWrite('NONE')).toBe(false);
+        // Other platforms don't say; the rule there is "anyone but the author".
+        expect(canWrite('MEMBER', PlatformType.GITLAB)).toBeUndefined();
+    });
+
+    // A bare `#12` is read from the PR's repository, which needs its owner.
+    it('passes the repository owner to the validation', async () => {
+        businessValidationService.validate.mockResolvedValueOnce(
+            skippedWith('no_tracker', 'No task-management MCP is connected.'),
+        );
+
+        await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: {
+                userQuestion: '@kody -v business-logic #12',
+                repository: { id: 'repo-1', name: 'web', owner: 'acme' },
+                pullRequestNumber: 7,
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                repository: expect.objectContaining({ owner: 'acme' }),
+            }),
+        );
+    });
+
     it('publishes a verdict through the publisher and points to the edited comment', async () => {
         const outcome = {
             kind: 'validated',

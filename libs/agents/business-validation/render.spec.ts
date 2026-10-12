@@ -82,6 +82,25 @@ describe('renderComment', () => {
         expect(body).toContain('re-checked on request at `a41c9e2`');
         // A pipe in a requirement would break the table.
         expect(body).toContain('Toggle visible \\| in the toolbar');
+        // A backslash before a pipe must not undo its escape.
+        const tricky = renderComment(
+            outcome({
+                verdict: {
+                    needsMoreInfo: false,
+                    summary: '',
+                    requirements: [
+                        {
+                            requirement: 'Path C:\\temp\\| ends here',
+                            state: 'missing',
+                            evidence: [],
+                            confidence: 'high',
+                        },
+                    ],
+                    outOfScope: [],
+                },
+            }),
+        );
+        expect(tricky).toContain('Path C:\\\\temp\\\\\\| ends here');
     });
 
     it('says when the PR only delivers part of the task', () => {

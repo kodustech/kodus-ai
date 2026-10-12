@@ -139,7 +139,14 @@ export class IntentJudge {
                 'businessRulesUserFacingFormatter',
             );
             return content.trim() ? content.trim() : message;
-        } catch {
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Business validation could not translate a message; sent it untranslated',
+                context: IntentJudge.name,
+                error,
+                metadata: { organizationId: this.telemetry.organizationId },
+            });
             return message;
         }
     }

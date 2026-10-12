@@ -70,8 +70,9 @@ export function toText(value: unknown): string | undefined {
         return joined || undefined;
     }
     for (const key of ['plain_text', 'text', 'content', 'value', 'name']) {
-        if (typeof record[key] === 'string' && record[key]) {
-            return (record[key] as string).trim();
+        const text = record[key];
+        if (typeof text === 'string' && text) {
+            return text.trim();
         }
     }
     if (record.rich_text) {

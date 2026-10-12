@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
+import { createLogger } from '@libs/core/log/logger';
 import { BusinessLogicRecheckService } from '@libs/platform/application/services/business-logic-recheck.service';
 
 /**
@@ -10,7 +11,7 @@ import { BusinessLogicRecheckService } from '@libs/platform/application/services
  */
 @Injectable()
 export class BusinessLogicRecheckCron {
-    private readonly logger = new Logger(BusinessLogicRecheckCron.name);
+    private readonly logger = createLogger(BusinessLogicRecheckCron.name);
     private running = false;
 
     constructor(private readonly recheck: BusinessLogicRecheckService) {}
@@ -27,12 +28,19 @@ export class BusinessLogicRecheckCron {
         try {
             const count = await this.recheck.recheckPending();
             if (count) {
-                this.logger.log(`business logic: re-checked ${count} PR(s)`);
+                this.logger.log({
+                    message: `Business logic re-checked ${count} PR(s)`,
+                    context: BusinessLogicRecheckCron.name,
+                    metadata: { job: 'business-logic-recheck', count },
+                });
             }
         } catch (error) {
-            this.logger.warn(
-                `business logic re-check failed: ${error instanceof Error ? error.message : String(error)}`,
-            );
+            this.logger.warn({
+                message: 'Business logic re-check failed',
+                context: BusinessLogicRecheckCron.name,
+                error,
+                metadata: { job: 'business-logic-recheck' },
+            });
         } finally {
             this.running = false;
         }

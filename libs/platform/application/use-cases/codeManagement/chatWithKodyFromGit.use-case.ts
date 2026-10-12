@@ -693,7 +693,10 @@ export class ChatWithKodyFromGitUseCase {
                         ),
                 },
                 message,
-                sender: { login: this.getSender(params).login },
+                sender: {
+                    login: this.getSender(params).login,
+                    canWrite: this.senderCanWrite(params),
+                },
                 authorLogin: this.getPullRequestAuthorLogin(params),
             })
             .catch(() => ({ handled: false as const }));
@@ -707,6 +710,22 @@ export class ChatWithKodyFromGitUseCase {
             body: result.reply,
         });
         return true;
+    }
+
+    /**
+     * GitHub says how the commenter relates to the repository. Only people
+     * with write access may waive a requirement; other platforms don't say,
+     * so there it stays "anyone but the author".
+     */
+    private senderCanWrite(params: WebhookParams): boolean | undefined {
+        const association = params.payload?.comment?.author_association;
+        if (
+            params.platformType !== PlatformType.GITHUB ||
+            typeof association !== 'string'
+        ) {
+            return undefined;
+        }
+        return ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association);
     }
 
     private getCommentBody(params: WebhookParams): string {
@@ -2650,6 +2669,7 @@ export class ChatWithKodyFromGitUseCase {
             ? {
                   id: String(pc.repository.id),
                   name: pc.repository.name,
+                  owner: pc.repository.owner,
                   fullName: pc.repository.fullName,
               }
             : undefined;

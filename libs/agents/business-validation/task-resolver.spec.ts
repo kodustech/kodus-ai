@@ -1,6 +1,6 @@
 import type { TaskReference, TrackerLookup } from './business-validation.types';
 import { extractTaskReferences } from './task-references';
-import { resolveTasks } from './task-resolver';
+import { repositoryForLookup, resolveTasks } from './task-resolver';
 import type { TaskTracker } from './trackers/tracker';
 
 const context = { organizationAndTeamData: { organizationId: 'org-1' } };
@@ -111,5 +111,29 @@ describe('resolveTasks', () => {
             context,
         );
         expect(result.kind).toBe('no_capable_tracker');
+    });
+});
+
+describe('repositoryForLookup', () => {
+    it('splits a name given as owner/name, so #12 is read in the right repository', () => {
+        expect(
+            repositoryForLookup({
+                name: 'acme/notes',
+                owner: 'acme',
+            }),
+        ).toEqual({ owner: 'acme', name: 'notes' });
+        expect(repositoryForLookup({ name: 'acme/notes' })).toEqual({
+            owner: 'acme',
+            name: 'notes',
+        });
+    });
+
+    it('takes the owner from the full name, nested groups included', () => {
+        expect(
+            repositoryForLookup({
+                name: 'notes',
+                fullName: 'acme/platform/notes',
+            }),
+        ).toEqual({ owner: 'acme/platform', name: 'notes' });
     });
 });

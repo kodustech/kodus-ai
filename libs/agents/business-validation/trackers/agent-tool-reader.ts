@@ -18,7 +18,7 @@ const TIMEOUT_MS = 30_000;
  */
 export function createAgentToolReader(
     model: NormalizedModel | undefined,
-    telemetry: { organizationId?: string; teamId?: string },
+    telemetry: { organizationId: string; teamId?: string },
 ): AgentToolReader {
     return async ({ tool, reference, call }) => {
         let payload: unknown;

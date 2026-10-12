@@ -166,8 +166,13 @@ export class FakeMcpHost {
             chunks.push(chunk as Buffer);
         }
         const raw = Buffer.concat(chunks).toString('utf8');
-        const handler = this.handlers.get((req.url ?? '').split('?')[0]);
-        if (typeof handler !== 'function') {
+        // Matched against the registered paths, never looked up by the
+        // request's own string (CodeQL: unvalidated dynamic method call).
+        const path = (req.url ?? '').split('?')[0];
+        const handler = [...this.handlers].find(
+            ([known]) => known === path,
+        )?.[1];
+        if (!handler) {
             res.writeHead(404).end();
             return;
         }

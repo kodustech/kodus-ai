@@ -41,6 +41,7 @@ import {
     type ReplyIntent,
 } from './judge/reply-classifier';
 import { settleVerdict } from './judge/settle-verdict';
+import { inlineTask } from './command';
 import * as messages from './messages';
 import {
     BUSINESS_LOGIC_COMMENT_MARKER,
@@ -59,7 +60,7 @@ import {
     gradeTask,
 } from './task-quality';
 import { extractTaskReferences } from './task-references';
-import { resolveTasks } from './task-resolver';
+import { repositoryForLookup, resolveTasks } from './task-resolver';
 import { createAgentToolReader } from './trackers/agent-tool-reader';
 import { rankReadTools } from './trackers/custom-mcp.tracker';
 import { McpToolSession } from './trackers/mcp-tool-session';
@@ -101,8 +102,6 @@ export interface TryReadResult {
 
 export const BUSINESS_VALIDATION_SKILL = 'business-rules-validation';
 const DEFAULT_LANGUAGE = 'en-US';
-/** Text passed to the command that names no task is the task itself, if it says this much. */
-const MIN_INLINE_TASK = 40;
 
 /**
  * The one way into business-logic validation, for the review pipeline, the
@@ -173,15 +172,15 @@ export class BusinessValidationService {
         // A task named in the command is the one to check, whatever the PR says.
         const fromCommand = references.filter((r) => r.source === 'command');
         const wanted = fromCommand.length ? fromCommand : references;
-        const inlineTask = this.inlineTask(request.taskInput, references);
+        const commandTask = inlineTask(request.taskInput, references);
         const judge = this.lazyJudge(request);
 
         let resolution: TaskResolution;
         let trackerNames: string[] = [];
-        if (inlineTask) {
+        if (commandTask) {
             resolution = {
                 kind: 'found',
-                tasks: [{ task: inlineTask }],
+                tasks: [{ task: commandTask }],
                 attempts: [],
             };
         } else if (!wanted.length) {
@@ -207,7 +206,20 @@ export class BusinessValidationService {
                     repository: this.repositoryOf(request),
                 });
             } finally {
-                await Promise.all(trackers.map((t) => t.close()));
+                const closed = await Promise.allSettled(
+                    trackers.map((t) => t.close()),
+                );
+                if (closed.some((c) => c.status === 'rejected')) {
+                    this.logger.warn({
+                        message:
+                            'Business validation could not release every MCP client',
+                        context: BusinessValidationService.name,
+                        metadata: {
+                            organizationId:
+                                request.organizationAndTeamData.organizationId,
+                        },
+                    });
+                }
             }
         }
 
@@ -615,25 +627,6 @@ export class BusinessValidationService {
         return request.door === 'command' || request.door === 'cli';
     }
 
-    /** Text given to the command that is not a reference is the task itself. */
-    private inlineTask(
-        taskInput: string | undefined,
-        references: TaskReference[],
-    ): Task | undefined {
-        const text = taskInput?.trim() ?? '';
-        if (text.length < MIN_INLINE_TASK) {
-            return undefined;
-        }
-        if (references.some((r) => r.source === 'command')) {
-            return undefined;
-        }
-        return {
-            tracker: 'the command',
-            id: 'Task in the command',
-            description: text,
-        };
-    }
-
     private async connections(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<MCPServerConfig[]> {
@@ -657,19 +650,9 @@ export class BusinessValidationService {
     }
 
     private repositoryOf(request: BusinessValidationRequest) {
-        const repository = request.repository;
-        if (!repository) {
-            return undefined;
-        }
-        const owner =
-            repository.owner ??
-            (repository.fullName?.includes('/')
-                ? repository.fullName.slice(
-                      0,
-                      repository.fullName.lastIndexOf('/'),
-                  )
-                : undefined);
-        return { owner, name: repository.name };
+        return request.repository
+            ? repositoryForLookup(request.repository)
+            : undefined;
     }
 
     private async loadDiff(

@@ -20,6 +20,7 @@ const run = {
         {
             tracker: 'Linear',
             id: 'SAA-96',
+            url: 'https://linear.app/acme/issue/SAA-96',
             readAt: '2026-10-05T12:00:00Z',
             passed: false,
             requirements: [
@@ -53,7 +54,9 @@ function build(intent: any, revalidated?: any) {
     const service = {
         classifyReply: jest.fn(async () => intent),
         inTeamLanguage: jest.fn(async (_org: unknown, text: string) => text),
-        tryRead: jest.fn(async () => ({ status: 'found' })),
+        tryRead: jest.fn(async (_org: unknown, id: string) => ({
+            status: id === 'SAA-102' ? 'found' : 'not_found',
+        })),
         validate: jest.fn(async () => revalidated),
     };
     const publisher = {
@@ -196,7 +199,7 @@ describe('BusinessLogicReplies', () => {
         expect(service.validate).toHaveBeenCalledWith(
             expect.objectContaining({
                 door: 'command',
-                taskInput: 'SAA-96',
+                taskInput: 'https://linear.app/acme/issue/SAA-96',
                 authorClaim: {
                     claim: 'covered in useDrag.ts',
                     requirements: ['Keyboard reordering'],
@@ -212,6 +215,47 @@ describe('BusinessLogicReplies', () => {
         expect(result).toMatchObject({
             handled: true,
             reply: expect.stringContaining('still MISSING'),
+        });
+    });
+
+    it('accepts nothing when the task it moved to does not exist', async () => {
+        const { replies, publisher } = build({
+            intent: 'accept',
+            findings: [1],
+            movedTo: 'SAA-999',
+        });
+
+        const result = await replies.handle({
+            request,
+            message: 'moved to SAA-999',
+            sender: { login: 'nina' },
+            authorLogin: 'rafa',
+        });
+
+        expect(publisher.publish).not.toHaveBeenCalled();
+        expect(result).toMatchObject({
+            handled: true,
+            reply: expect.stringContaining("couldn't find SAA-999"),
+        });
+    });
+
+    it('refuses an acceptance from someone without write access (GitHub)', async () => {
+        const { replies, publisher } = build({
+            intent: 'accept',
+            findings: [1],
+        });
+
+        const result = await replies.handle({
+            request,
+            message: 'out of scope',
+            sender: { login: 'drive-by', canWrite: false },
+            authorLogin: 'rafa',
+        });
+
+        expect(publisher.publish).not.toHaveBeenCalled();
+        expect(result).toMatchObject({
+            handled: true,
+            reply: expect.stringContaining('write access'),
         });
     });
 });

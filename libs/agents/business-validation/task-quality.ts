@@ -41,7 +41,7 @@ export function applyCriteriaLocation(
     criteria: BusinessLogicSettings['criteria'],
 ): Task {
     if (criteria.location === 'auto') {
-        return task;
+        return detectCriteria(task);
     }
     const text =
         criteria.location === 'heading'
@@ -52,6 +52,41 @@ export function applyCriteriaLocation(
         return { ...task, acceptanceCriteria: items };
     }
     return text ? { ...task, acceptanceCriteria: [text.trim()] } : task;
+}
+
+/** Headings teams put acceptance criteria under, normalized. */
+const CRITERIA_HEADINGS = [
+    'acceptance criteria',
+    'acceptance criterion',
+    'ac',
+    'definition of done',
+    'dod',
+    'requirements',
+    'criterios de aceite',
+    'criterios de aceitacao',
+    'criterio de aceite',
+    'criterios de aceptacion',
+];
+
+/**
+ * Auto: the tracker's own criteria field; else the list under a criteria
+ * heading; else the description's list when it has two or more items. What
+ * the settings page shows is then what the judge reads.
+ */
+function detectCriteria(task: Task): Task {
+    if (task.acceptanceCriteria?.length) {
+        return task;
+    }
+    const description = task.description ?? '';
+    for (const heading of CRITERIA_HEADINGS) {
+        const section = sectionUnder(description, heading);
+        const items = section ? listItems(section) : [];
+        if (items.length) {
+            return { ...task, acceptanceCriteria: items };
+        }
+    }
+    const items = listItems(description);
+    return items.length >= 2 ? { ...task, acceptanceCriteria: items } : task;
 }
 
 function sectionUnder(
@@ -101,6 +136,8 @@ function listItems(text: string): string[] {
 
 function normalize(text: string): string {
     return text
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
         .toLowerCase()
         .replace(/[^\p{L}\p{N}]+/gu, ' ')
         .trim();

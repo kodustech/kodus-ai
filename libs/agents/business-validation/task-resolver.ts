@@ -52,6 +52,7 @@ export async function resolveTasks(
                 ...(lookup.status === 'error'
                     ? { message: lookup.message }
                     : {}),
+                ...(lookup.tools?.length ? { tools: lookup.tools } : {}),
             });
             if (lookup.status === 'found') {
                 found.push({ reference, task: lookup.task });
@@ -153,4 +154,26 @@ async function nearbyTasks(
         }
     }
     return nearby;
+}
+
+/**
+ * The PR's repository as a tracker reads `#12` against: owner and bare name.
+ * Some doors name it `owner/name`; the lookup then asked for
+ * `owner/owner/name` and found nothing.
+ */
+export function repositoryForLookup(repository: {
+    name: string;
+    owner?: string;
+    fullName?: string;
+}): { owner?: string; name: string } {
+    const full = repository.name.includes('/')
+        ? repository.name
+        : repository.fullName;
+    const cut = full?.includes('/') ? full.lastIndexOf('/') : -1;
+    return {
+        owner: repository.owner ?? (cut > 0 ? full!.slice(0, cut) : undefined),
+        name: repository.name.includes('/')
+            ? repository.name.slice(repository.name.lastIndexOf('/') + 1)
+            : repository.name,
+    };
 }
