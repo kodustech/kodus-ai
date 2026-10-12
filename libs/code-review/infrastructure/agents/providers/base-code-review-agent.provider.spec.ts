@@ -370,10 +370,11 @@ describe('A. output-shape zoo', () => {
             } as any,
             mapperCtx() as any,
         );
+        // No code snippets: absent, not '' (#1821).
+        expect(mapped.suggestions[0]).not.toHaveProperty('existingCode');
+        expect(mapped.suggestions[0]).not.toHaveProperty('improvedCode');
         expect(mapped.suggestions[0]).toMatchObject({
             language: '',
-            existingCode: '',
-            improvedCode: '',
             oneSentenceSummary: '',
             severity: 'medium',
             label: 'bug',

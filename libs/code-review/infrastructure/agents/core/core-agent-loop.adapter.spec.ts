@@ -580,7 +580,7 @@ describe('contract matrix — A. output-shape zoo (finder findings seam)', () =>
             suggestions: [validItem(), { relevantFile: 'b.ts', suggestionContent: 'x', existingCode: 'y' }],
         } as any);
         expect(r!.suggestions).toHaveLength(2);
-        expect(r!.suggestions[1].improvedCode).toBe('');
+        expect(r!.suggestions[1].improvedCode).toBeUndefined();
     });
 
     // Row 13 — Extra unknown keys are tolerated (stripped), never a crash.

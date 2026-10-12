@@ -81,7 +81,10 @@ const findings = {
     },
 };
 
-const tag = (s: any) => String(s?.oneSentenceSummary ?? '').slice(0, 2);
+// The parse schema (#1821) drops oneSentenceSummary from finder findings;
+// Kody Rules keep it (their PR-level content gets a location prefix).
+const tag = (s: any) =>
+    String(s?.oneSentenceSummary || s?.suggestionContent || '').slice(0, 2);
 
 const buildStages = () => {
     const reviewOrchestrator = { execute: jest.fn() };

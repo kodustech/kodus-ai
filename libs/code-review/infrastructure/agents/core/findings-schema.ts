@@ -16,13 +16,12 @@ const logger = createLogger('FindingsSchema');
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
 
-/** A missing/null code snippet is an empty one. The prompts tell the model to
- *  give improvedCode "only if the fix is clear", so omitting it is following
- *  the instructions — dropping the whole finding for it lost real bugs
- *  (#1821: every model, ~3% of lens findings in a GPT-6 round). */
+/** Code snippets are not part of the lean finder output (#1821). A model that
+ *  still sends one keeps it (Kody Rules use it); null or absent stays absent,
+ *  never an empty string, and never drops the finding. */
 const optionalSnippet = z.preprocess(
-    (v) => (v == null ? '' : v),
-    z.string(),
+    (v) => (v == null ? undefined : v),
+    z.string().optional(),
 );
 
 /** Schema for structured output */

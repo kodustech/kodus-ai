@@ -106,8 +106,9 @@ describe('sanitizeFindingsResult', () => {
             ],
         } as any);
         expect(result!.suggestions).toHaveLength(2);
-        expect(result!.suggestions[0].improvedCode).toBe('');
-        expect(result!.suggestions[1].existingCode).toBe('');
+        // Absent, never an empty string (#1821): code comes back at enrichment.
+        expect(result!.suggestions[0].improvedCode).toBeUndefined();
+        expect(result!.suggestions[1].existingCode).toBeUndefined();
     });
 
     it('uses oneSentenceSummary when suggestionContent is missing', () => {

@@ -106,8 +106,8 @@ export interface FinderSuggestion {
     language?: string;
     label?: 'bug' | 'security' | 'performance';
     suggestionContent: string;
-    existingCode: string;
-    improvedCode: string;
+    existingCode?: string;
+    improvedCode?: string;
     oneSentenceSummary?: string;
     relevantLinesStart?: number;
     relevantLinesEnd?: number;
@@ -513,12 +513,7 @@ export function recoverLeniently(err: unknown): FinderSuggestion[] {
                     !!s &&
                     typeof (s as Record<string, unknown>).relevantFile === 'string' &&
                     typeof (s as Record<string, unknown>).suggestionContent === 'string',
-            )
-            .map((s) => ({
-                ...s,
-                existingCode: typeof s.existingCode === 'string' ? s.existingCode : '',
-                improvedCode: typeof s.improvedCode === 'string' ? s.improvedCode : '',
-            })) as unknown as FinderSuggestion[];
+            ) as unknown as FinderSuggestion[];
     } catch {
         // Best-effort: recovery must never break the review.
         return [];
@@ -591,13 +586,7 @@ export async function recoverFindingsFromProse(
             // production, where byokConfig is the slot.
             prebuiltModel,
         });
-        return ((result.suggestions ?? []) as Array<Record<string, unknown>>).map(
-            (s) => ({
-                ...s,
-                existingCode: (s.existingCode as string | null) ?? '',
-                improvedCode: (s.improvedCode as string | null) ?? '',
-            }),
-        ) as unknown as FinderSuggestion[];
+        return (result.suggestions ?? []) as unknown as FinderSuggestion[];
     } catch (err) {
         // Eval-only (RECALL_DEBUG_ENVELOPE_DIR): keep what the model answered,
         // so a schema mismatch can be read instead of guessed.
