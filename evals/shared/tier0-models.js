@@ -104,6 +104,7 @@ const TIER0 = {
     'gpt-5.6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-sol', keyEnvs: [] },
     'gpt-6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-6-sol', keyEnvs: [] },
     'gpt-6.1-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-6.1-sol', keyEnvs: [] },
+    'gpt-6-astra@sub': { provider: 'codex_subscription', codexModel: 'gpt-6-astra', keyEnvs: [] },
     // Claude pela ASSINATURA via Claude Agent SDK (#1821): o loop roda no Claude
     // Code, com as tools do bench por MCP. Credencial em ~/.claude-oauth
     // (`claude setup-token`), nao em env.

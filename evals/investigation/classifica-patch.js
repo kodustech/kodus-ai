@@ -21,13 +21,16 @@ const { prepareRepo } = require('./prepare-repo');
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
 const V = JSON.parse(fs.readFileSync(arg('verify'), 'utf8')).prs;
 const OUT = arg('out'), PAR = Number(arg('par', '3'));
+// --definicao=chave: uma string que o programa usa como chave/identificador nao conta como texto.
+const CHAVE = arg('definicao', '') === 'chave';
+const EXTRA_CHAVE = ' It is also false when the changed string is used by the program as a key or identifier rather than as text for people: a metric or tag name, a dictionary/JSON key, an event, route, header or config name, a SQL fragment, a format pattern.';
 const MODELO = process.env.RECALL_MODEL;
 
 const SCHEMA = {
     type: 'object',
     properties: {
         onlyCommentsOrWhitespace: { type: 'boolean', description: 'true only if the ONLY differences are in code comments, whitespace or line breaks. Any change to executable code makes it false.' },
-        onlyStringText: { type: 'boolean', description: 'true only if the ONLY differences are inside string literals (the text between quotes), whatever the string is used for: log message, error message, user-facing text, translation key. If anything outside the quotes changes (a call, a variable, an operator, a new line of code, an interpolated expression), it is false.' },
+        onlyStringText: { type: 'boolean', description: 'true only if the ONLY differences are inside string literals (the text between quotes), whatever the string is used for: log message, error message, user-facing text, translation key. If anything outside the quotes changes (a call, a variable, an operator, a new line of code, an interpolated expression), it is false.' + (CHAVE ? EXTRA_CHAVE : '') },
     },
     required: ['onlyCommentsOrWhitespace', 'onlyStringText'],
     additionalProperties: false,
@@ -44,7 +47,7 @@ ${depois}
 
 Classify the change:
 - onlyCommentsOrWhitespace: true only if the ONLY differences are in code comments, whitespace or line breaks. Any change to executable code makes it false.
-- onlyStringText: true only if the ONLY differences are inside string literals (the text between quotes), whatever the string is used for: log message, error message, user-facing text, translation key. If anything outside the quotes changes (a call, a variable, an operator, a new line of code, an interpolated expression), it is false.`;
+- onlyStringText: true only if the ONLY differences are inside string literals (the text between quotes), whatever the string is used for: log message, error message, user-facing text, translation key. If anything outside the quotes changes (a call, a variable, an operator, a new line of code, an interpolated expression), it is false.${CHAVE ? EXTRA_CHAVE : ''}`;
 
 async function retry(fn) { let u; for (let t = 0; t < 3; t++) { try { return await fn(); } catch (e) { u = e; await new Promise((ok) => setTimeout(ok, 8000 * 2 ** t)); } } throw u; }
 
