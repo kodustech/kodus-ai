@@ -1,0 +1,182 @@
+<title>Duplicatas do Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<style>
+/* Layout: uma fila de itens de revisao; cada item mostra as sugestoes do grupo e, lado a lado, a leitura de cada juiz, com a decisao no rodape. */
+:root {
+  --bg: #f3f4f6; --surface: #ffffff; --ink: #1c2230; --muted: #5d6676; --line: #dde1e8;
+  --opus: #a8551a; --opus-soft: #f6e9df; --astra: #3a4fb0; --astra-soft: #e5e9f8;
+  --ok: #2f7a4f; --ok-soft: #e1f1e7; --warn: #9a6a00; --warn-soft: #f7efd7;
+  --focus: #3a4fb0;
+  --f-display: "Fraunces", Georgia, serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, Segoe UI, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151c; --surface: #1a1f29; --ink: #e6e8ee; --muted: #9aa3b2; --line: #2b3240;
+  --opus: #e3955c; --opus-soft: #3a2a1f; --astra: #8fa2f0; --astra-soft: #232b48;
+  --ok: #6cc093; --ok-soft: #1d3327; --warn: #e2b54b; --warn-soft: #3a3120; --focus: #8fa2f0; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #12151c; --surface: #1a1f29; --ink: #e6e8ee; --muted: #9aa3b2; --line: #2b3240;
+  --opus: #e3955c; --opus-soft: #3a2a1f; --astra: #8fa2f0; --astra-soft: #232b48;
+  --ok: #6cc093; --ok-soft: #1d3327; --warn: #e2b54b; --warn-soft: #3a3120; --focus: #8fa2f0; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 64px; display: grid; gap: 20px; }
+header { display: grid; gap: 10px; }
+h1 { font-family: var(--f-display); font-weight: 600; font-size: 1.9rem; margin: 0; text-wrap: balance; }
+.lede { color: var(--muted); margin: 0; max-width: 70ch; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line); }
+.chip { font: 500 13px var(--f-body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.chip:focus-visible, button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.count { margin-left: auto; font: 500 13px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.item { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 14px; padding: 16px; }
+.item.done { border-color: var(--ok); }
+.ihead { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; }
+.model { font: 600 12px var(--f-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.pr { font: 500 14px var(--f-mono); word-break: break-all; min-width: 0; }
+.tag { font: 500 12px var(--f-body); padding: 2px 8px; border-radius: 4px; background: var(--warn-soft); color: var(--warn); }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.sugs { display: grid; gap: 8px; }
+.sug { border-left: 3px solid var(--line); padding: 4px 0 4px 12px; min-width: 0; }
+.sug .meta { display: flex; flex-wrap: wrap; gap: 8px; font: 12px var(--f-mono); color: var(--muted); }
+.sid { font: 600 13px var(--f-mono); color: var(--ink); }
+.sug p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 95ch; }
+.judges { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.judge { border-radius: 8px; padding: 12px; display: grid; gap: 8px; min-width: 0; }
+.judge.opus { background: var(--opus-soft); }
+.judge.astra { background: var(--astra-soft); }
+.judge h3 { margin: 0; font: 600 13px var(--f-body); letter-spacing: .04em; text-transform: uppercase; }
+.judge.opus h3 { color: var(--opus); }
+.judge.astra h3 { color: var(--astra); }
+.row { font-size: 14px; overflow-wrap: anywhere; }
+.row b { font-family: var(--f-mono); font-weight: 500; }
+.conf { font: 500 11px var(--f-mono); text-transform: uppercase; color: var(--muted); }
+.conf.low { color: var(--warn); }
+.decide { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice { font: 500 14px var(--f-body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+.choice[aria-pressed="true"].c-opus { background: var(--opus); border-color: var(--opus); color: var(--surface); }
+.choice[aria-pressed="true"].c-astra { background: var(--astra); border-color: var(--astra); color: var(--surface); }
+.choice[aria-pressed="true"].c-outra { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+textarea { width: 100%; min-height: 64px; font: 14px var(--f-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; }
+.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.save { font: 600 14px var(--f-body); background: var(--ink); color: var(--surface); border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+.save:disabled { opacity: .45; cursor: default; }
+.status { font-size: 13px; color: var(--muted); }
+.empty { color: var(--muted); padding: 24px 0; }
+@media (prefers-reduced-motion: no-preference) { .item { transition: border-color .2s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Duplicatas do Finder</h1>
+    <p class="lede">Itens em que o Opus 5.5 e o GPT-6 Astra discordaram, ou deram confiança baixa, ao agrupar as sugestões do finder de 09/10 (generalista + M3). Leia as sugestões, compare as duas leituras e escolha qual está certa. Se nenhuma estiver, escreva o agrupamento correto.</p>
+  </header>
+  <div class="bar" role="toolbar" aria-label="Filtros">
+    <button class="chip" data-f="pendentes" aria-pressed="true" id="f-pend">Pendentes</button>
+    <button class="chip" data-f="todos" aria-pressed="false" id="f-todos">Todos</button>
+    <span id="models" style="display:contents"></span>
+    <span class="count" id="count">carregando…</span>
+  </div>
+  <main id="list" class="sugs" aria-live="polite"><p class="empty">Carregando os itens de revisão…</p></main>
+</div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+};
+let ITEMS = [], DEC = {}, db = null, me = null;
+const state = { filtro: 'pendentes', modelo: '' , rascunho: {} };
+
+function judgeView(nome, v) {
+  const box = el('div', { class: `judge ${nome}` }, el('h3', {}, nome === 'opus' ? 'Opus 5.5' : 'GPT-6 Astra'));
+  for (const g of v.groups) box.append(el('div', { class: 'row' }, el('b', {}, `${g.id} `), `[${g.members.join(', ')}] `, el('span', { class: `conf ${g.confidence}` }, g.confidence), el('br'), g.problem));
+  for (const m of v.multiProblem) box.append(el('div', { class: 'row' }, el('b', {}, `${m.id} `), 'vários problemas → ', m.relatedGroups.length ? `grupos ${m.relatedGroups.join(', ')}` : 'nenhum grupo', ' ', el('span', { class: `conf ${m.confidence}` }, m.confidence),
+    m.uncoveredProblems.length ? el('div', {}, 'Sem grupo: ', m.uncoveredProblems.join(' · ')) : null));
+  if (v.unique.length) box.append(el('div', { class: 'row' }, 'Únicas: ', v.unique.map((u) => `${u.id} (${u.confidence})`).join(', ')));
+  return box;
+}
+
+function render() {
+  const list = $('#list');
+  const vis = ITEMS.filter((it) => (!state.modelo || it.model === state.modelo) && (state.filtro === 'todos' || !DEC[it.key]));
+  const feitos = ITEMS.filter((it) => DEC[it.key]).length;
+  $('#count').textContent = `${feitos}/${ITEMS.length} decididos · ${vis.length} na tela`;
+  list.replaceChildren();
+  if (!vis.length) { list.append(el('p', { class: 'empty' }, ITEMS.length ? 'Nada pendente com esse filtro.' : 'Nenhum item de revisão.')); return; }
+  for (const it of vis) {
+    const dec = DEC[it.key];
+    const draft = state.rascunho[it.key] || (dec ? { escolha: dec.escolha, nota: dec.nota || '' } : { escolha: '', nota: '' });
+    const sugs = el('div', { class: 'sugs' }, it.suggestions.map((s) => el('div', { class: 'sug' },
+      el('div', { class: 'meta' }, el('span', { class: 'sid' }, s.id), el('span', {}, s.technique), el('span', {}, `${s.relevantFile}:${s.relevantLinesStart ?? '?'}-${s.relevantLinesEnd ?? '?'}`)),
+      el('p', {}, s.suggestionContent))));
+    const btn = (k, txt) => el('button', { class: `choice c-${k}`, 'aria-pressed': String(draft.escolha === k), onclick: () => { state.rascunho[it.key] = { ...draft, escolha: k }; render(); } }, txt);
+    const ta = el('textarea', { id: `nota-${it.key}`, placeholder: draft.escolha === 'outra' ? 'Descreva o agrupamento correto (ex.: S3+S8 juntos; S5 vários problemas → grupo de S3)' : 'Observação (opcional)' });
+    ta.value = draft.nota;
+    ta.addEventListener('input', () => { state.rascunho[it.key] = { ...(state.rascunho[it.key] || draft), nota: ta.value }; });
+    const salvar = el('button', { class: 'save', onclick: () => salvarDec(it, salvar) }, dec ? 'Atualizar decisão' : 'Salvar decisão');
+    if (!db || !draft.escolha) salvar.disabled = true;
+    list.append(el('section', { class: `item${dec ? ' done' : ''}`, id: it.key },
+      el('div', { class: 'ihead' }, el('span', { class: 'model' }, it.model), el('span', { class: 'pr' }, it.caseId), el('span', { class: `tag${dec ? ' ok' : ''}` }, dec ? (dec.por === 'claude' ? 'decidido pelo Claude' : 'decidido') : it.motivo)),
+      sugs,
+      el('div', { class: 'judges' }, judgeView('opus', it.opus), judgeView('astra', it.astra)),
+      el('div', { class: 'decide' },
+        el('div', { class: 'choices', role: 'group', 'aria-label': 'Qual leitura está certa' }, btn('opus', 'Opus está certo'), btn('astra', 'Astra está certo'), btn('outra', 'Nenhum dos dois')),
+        ta,
+        dec && dec.por === 'claude' ? el('p', { class: 'status' }, dec.nota) : null,
+        el('div', { class: 'actions' }, salvar, el('span', { class: 'status' }, !db ? 'Entre na sua conta para salvar decisões.' : dec ? `Salvo em ${new Date(dec.em).toLocaleString('pt-BR')}` : '')))));
+  }
+}
+
+async function salvarDec(it, botao) {
+  const d = state.rascunho[it.key] || { escolha: DEC[it.key]?.escolha, nota: DEC[it.key]?.nota || '' };
+  if (!d.escolha) return;
+  if (d.escolha === 'outra' && !String(d.nota || '').trim()) { botao.nextSibling.textContent = 'Descreva o agrupamento correto antes de salvar.'; return; }
+  botao.disabled = true;
+  try {
+    await db.collection('decisoes').doc(it.key).set({ escolha: d.escolha, nota: d.nota || '', model: it.model, caseId: it.caseId, ids: it.ids, por: me || '', em: new Date().toISOString() });
+    delete state.rascunho[it.key];
+  } catch (e) {
+    botao.disabled = false;
+    botao.nextSibling.textContent = `Não salvou (${e?.code || 'erro'}). Tente de novo.`;
+  }
+}
+
+function filtros() {
+  const modelos = [...new Set(ITEMS.map((i) => i.model))];
+  const box = $('#models'); box.replaceChildren();
+  const mk = (val, txt) => el('button', { class: 'chip', id: `m-${val || 'todos'}`, 'aria-pressed': String(state.modelo === val), onclick: () => { state.modelo = val; filtros(); render(); } }, txt);
+  box.append(mk('', 'Todos os modelos'), modelos.map((m) => mk(m, m)));
+}
+for (const b of document.querySelectorAll('[data-f]')) b.addEventListener('click', () => {
+  state.filtro = b.dataset.f;
+  for (const x of document.querySelectorAll('[data-f]')) x.setAttribute('aria-pressed', String(x === b));
+  render();
+});
+
+(async () => {
+  try {
+    const r = await fetch('review-data.json');
+    ITEMS = await r.json();
+  } catch { $('#list').replaceChildren(el('p', { class: 'empty' }, 'Não consegui carregar os itens de revisão.')); return; }
+  filtros(); render();
+  const c = window.claude;
+  if (!c?.use) return;
+  const [dbNs, user] = await Promise.all([c.use('db'), c.use('user')]);
+  if (user) { try { me = await user.id(); } catch {} }
+  if (!dbNs) { render(); return; }
+  db = dbNs;
+  db.collection('decisoes').onSnapshot((snap) => {
+    DEC = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
+    render();
+  }, () => { db = null; render(); });
+})();
+</script>

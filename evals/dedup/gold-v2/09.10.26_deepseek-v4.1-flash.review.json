@@ -1,0 +1,950 @@
+[
+ {
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "ids": [
+   "S15"
+  ],
+  "motivo": "discordancia ou confianca baixa",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S15",
+     "confidence": "low"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S15",
+     "confidence": "low"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S15",
+    "finderIndex": 14,
+    "producedBy": "micro-exp-p3-data-exposure",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "EventManager.ts",
+    "relevantLinesStart": null,
+    "relevantLinesEnd": null,
+    "suggestionContent": "Null vs [] inconsistency."
+   }
+  ]
+ },
+ {
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "ids": [
+   "S5"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S5",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S5",
+     "problems": [
+      "Case-sensitive attendee authorization can reject a legitimate attendee whose session email has different casing.",
+      "Case-sensitive comparison against existing attendees allows an address differing only by case to be added again."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Case-sensitive attendee authorization can reject a legitimate attendee whose session email has different casing.",
+      "Case-sensitive comparison against existing attendees allows an address differing only by case to be added again."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "security",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 52,
+    "relevantLinesEnd": 76,
+    "suggestionContent": "Inconsistent email normalization for identity checks. Both the authorization check `attendee.email === user.email` (line 52) and the existing-attendee dedup `guest === attendee.email` (line 76) use strict case-sensitive equality, while emails are treated as case-insensitive everywhere else in this handler (the blacklist block directly below lowercases). Consequence: a legitimate attendee whose stored casing differs from their session email is wrongly FORBIDDEN, and a guest differing from an existing attendee only by case is duplicated rather than filtered. Compare on a normalized form (both sides `.toLowerCase()`), consistent with the blacklist normalization."
+   }
+  ]
+ },
+ {
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "ids": [
+   "S1",
+   "S5"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G1",
+     "members": [
+      "S1",
+      "S5"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "The public findMany method was removed (and the service's return contract changed to Prisma.Sql), breaking existing consumers of InsightsBookingService.",
+     "rationale": "Both report the same API-breaking change in which findMany was replaced by getBaseConditions without migrating callers. S5's mention of the changed return types is part of the same breaking-contract concern."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S5",
+     "problems": [
+      "Removing findMany breaks consumers of the service's existing data-access method.",
+      "Changing authorization and filter conditions to Prisma.Sql breaks consumers that use them as Prisma where inputs."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Removing findMany breaks existing consumers; S1 also reports this, but no group has two eligible single-problem suggestions.",
+      "Returning Prisma.Sql conditions breaks consumers expecting Prisma where inputs."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S1",
+     "confidence": "high"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/lib/server/service/insightsBooking.ts",
+    "relevantLinesStart": 68,
+    "relevantLinesEnd": 81,
+    "suggestionContent": "WHAT: The public `findMany(findManyArgs)` method was removed and replaced by `getBaseConditions()`, which only returns a SQL fragment — the analogous method is still present in the sibling `insightsRouting.ts` (lines 63-76). WHY: Any existing caller of `InsightsBookingService.findMany` (e.g. `service.findMany({ select: {...} })`) now fails to compile or throws `service.findMany is not a function` at runtime; the class's primary data-access contract was dropped without a compatibility shim. HOW: Either retain `findMany` delegating to `getBaseConditions()` (build the raw query with the returned conditions) or confirm/update every consumer of the service; note no production caller exists in this repo, so this is an API-surface regression to verify against downstream consumers."
+   },
+   {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/lib/server/service/insightsBooking.ts",
+    "relevantLinesStart": 68,
+    "relevantLinesEnd": 95,
+    "suggestionContent": "This PR removes the public `findMany(findManyArgs)` method and changes `getAuthorizationConditions()`/`getFilterConditions()` to return `Prisma.Sql` instead of `Prisma.BookingTimeStatusDenormalizedWhereInput`. Consumers written against the old contract break: a caller doing `service.findMany({ select, where })` now hits an undefined method, and a caller that spread the returned conditions into a Prisma `where` (or passed them to `findMany({ where })`) can no longer use a `Prisma.Sql` fragment there — it is only valid interpolated into `$queryRaw`. The PR updated only the integration test to the new `getBaseConditions()` + `$queryRaw` usage but did not update any other caller; find and migrate any remaining `InsightsBookingService.findMany`/`where: <conditions>` call sites to the new SQL-fragment contract."
+   }
+  ]
+ },
+ {
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "ids": [
+   "S2",
+   "S4"
+  ],
+  "motivo": "discordancia ou confianca baixa",
+  "opus": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S4",
+      "S2"
+     ],
+     "kind": "same_location",
+     "confidence": "low",
+     "problem": "The getBaseConditions branches that handle falsy authConditions (returning filterConditions alone, or NOTHING_CONDITION) are wrong: unreachable, or a latent auth bypass.",
+     "rationale": "Both target the same falsy-auth branches in getBaseConditions. Restructuring it to always AND in the auth predicate resolves both, even though one frames the branches as dead code and the other as an authorization bypass."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S4",
+     "confidence": "high"
+    },
+    {
+     "id": "S2",
+     "confidence": "high"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "packages/lib/server/service/insightsBooking.ts",
+    "relevantLinesStart": 76,
+    "relevantLinesEnd": 77,
+    "suggestionContent": "WHAT: `getBaseConditions` returns `filterConditions` alone (no authorization predicate) when `authConditions` is falsy (`else if (filterConditions) { return filterConditions; }`). WHY: The WHERE clause returned to consumers then contains no ownership/authorization restriction, so a caller using it would return every booking matching the filters (e.g. all bookings for the given eventTypeId/memberUserId) regardless of the requesting user's org/team membership — an authorization-boundary bypass if `getAuthorizationConditions()` ever yields a falsy value. HOW: Always AND the authorization predicate with the filters and fall back to `NOTHING_CONDITION` when no auth predicate exists, e.g. `return filterConditions ? Prisma.sql`(${authConditions}) AND (${filterConditions})` : authConditions;` (or keep the `NOTHING_CONDITION` default when auth is missing)."
+   },
+   {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/lib/server/service/insightsBooking.ts",
+    "relevantLinesStart": 72,
+    "relevantLinesEnd": 80,
+    "suggestionContent": "Dead branches in getBaseConditions: getAuthorizationConditions() is typed Promise<Prisma.Sql> and buildAuthorizationConditions() always returns a Prisma.Sql (worst case NOTHING_CONDITION), so authConditions is never null/undefined/empty — always a truthy object. The `if (authConditions && filterConditions)` check therefore reduces to `filterConditions`, and both the `else if (filterConditions)` (76-77) and the final `else` (78-79) can never execute. The intended no-authorization fallback to NOTHING_CONDITION is unreachable; the code reads as if auth could be falsy when it cannot."
+   }
+  ]
+ },
+ {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "ids": [
+   "S3",
+   "S11"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S11",
+      "S3"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "PollFeed calls `i.content.scrub` without a nil guard, so a feed item without <content> raises and aborts the whole feed import.",
+     "rationale": "Both report the same nil dereference at the same line, and both propose falling back to description/to_s and skipping blank items."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S11",
+     "problems": [
+      "Missing feed content causes unconditional content processing to raise and abort polling.",
+      "An absent link accessor can raise before the URL fallback is reached.",
+      "An absent title accessor can raise during item import."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Missing feed content causes unconditional content processing to raise and abort polling; S3 also reports this, but has no second single-problem counterpart.",
+      "An absent link accessor can raise before the URL fallback is reached.",
+      "An absent title accessor can raise during item import."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S3",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+    "relevantLinesStart": 35,
+    "relevantLinesEnd": 35,
+    "suggestionContent": "WHAT: `CGI.unescapeHTML(i.content.scrub)` assumes every feed item has a `content` element. WHY: many RSS 2.0 items expose only `<description>` (simple-rss returns nil for `content`), so `nil.scrub` raises NoMethodError and, because the job is `sidekiq_options retry: false`, the entire hourly feed import for all items is aborted. HOW: fall back to the available field, e.g. `(i.content || i.description || i.summary).to_s.scrub`, and skip items whose body is blank."
+   },
+   {
+    "id": "S11",
+    "finderIndex": 10,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+    "relevantLinesStart": 31,
+    "relevantLinesEnd": 36,
+    "suggestionContent": "The feed item is consumed unconditionally: url = i.link, then i.title, and content = CGI.unescapeHTML(i.content.scrub). SimpleRSS item accessors raise NoMethodError when the element is absent (RSS 2.0 feeds frequently carry only <description>, no <content>, and some items have no <link>/<title>), so a single malformed or content-less item aborts the whole hourly job with an unhandled exception instead of skipping it. The code already anticipates a blank link (line 33 fallback) but reads i.content/i.title without a nil guard; use i.content.to_s (or fall back to i.description/summary) and skip items whose content is blank."
+   }
+  ]
+ },
+ {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "ids": [
+   "S5",
+   "S19"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S19",
+     "confidence": "mid"
+    },
+    {
+     "id": "S5",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S5",
+      "S19"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "The message-origin check uses substring containment instead of exact origin equality.",
+     "rationale": "Both describe the same comparison at embed.js line 17. They disagree about exploitability, but identify the same underlying check."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "security",
+    "relevantFile": "app/assets/javascripts/embed.js",
+    "relevantLinesStart": 15,
+    "relevantLinesEnd": 17,
+    "suggestionContent": "The message-origin check uses substring matching: `discourseUrl.indexOf(e.origin) === -1`. Any origin that is a substring of discourseUrl is accepted (e.g. discourseUrl `https://discourse.example.com` accepts origin `https://discourse`), so a malicious page can post `discourse-resize` messages into the embed. Compare against the iframe's actual origin exactly (`e.origin !== expectedOrigin`) instead of a substring test."
+   },
+   {
+    "id": "S19",
+    "finderIndex": 18,
+    "producedBy": "micro-exp-p3-value-boundary-and-position",
+    "technique": "M3",
+    "label": "criticism",
+    "relevantFile": "embed.js",
+    "relevantLinesStart": 17,
+    "relevantLinesEnd": 17,
+    "suggestionContent": "Uses indexOf containment instead of origin equality, but it cannot be bypassed."
+   }
+  ]
+ },
+ {
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "ids": [
+   "S1",
+   "S2"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G1",
+     "members": [
+      "S1",
+      "S2"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "After taking the write lock in GetWebAssets, the code doesn't check the cache again, so concurrent callers each reload the web assets.",
+     "rationale": "Both suggestions point at the same missing double-check after entryPointAssetsCacheMu.Lock(), which leads to redundant reloads. S1's comment about holding the lock during I/O is closely tied to the same locking redesign."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S1",
+     "problems": [
+      "Holding the exclusive lock across blocking I/O serializes concurrent loads, including every request in Dev mode.",
+      "Failing to re-check the cache after acquiring the write lock causes concurrent cold-cache callers to perform redundant loads."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Holding the exclusive lock across blocking I/O serializes concurrent loads, including every request in Dev mode.",
+      "The missing cache re-check causes redundant loads; S2 also reports this, but there are insufficient single-problem suggestions to form a group."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S2",
+     "confidence": "high"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "performance",
+    "relevantFile": "pkg/api/webassets/webassets.go",
+    "relevantLinesStart": 48,
+    "relevantLinesEnd": 69,
+    "suggestionContent": "WHAT: The exclusive lock acquired at line 48 is held (via defer on line 49) across the blocking file read / synchronous CDN HTTP request (lines 56-67) and there is no re-check of entryPointAssetsCache after acquiring the lock. WHY: On a cold cache, all concurrent callers (api/index.go:82, api/frontendsettings.go:62, middleware/recovery.go:141) block on the write lock and then each sequentially re-executes the full load (file I/O or blocking http.DefaultClient.Do), producing a thundering-herd serialization and N redundant loads instead of one; in Dev mode this happens on every request since the fast path is skipped, serializing all concurrent page loads. HOW: after `entryPointAssetsCacheMu.Lock()` re-check the cache (`if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`) so only the first goroutine performs the load, and drop the defer in favor of releasing the lock immediately after assigning `entryPointAssetsCache = result` to avoid holding it during I/O."
+   },
+   {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "micro-exp-p3-test-does-not-verify",
+    "technique": "M3",
+    "label": "suggetion_3",
+    "relevantFile": "pkg/api/webassets/webassets.go",
+    "relevantLinesStart": 41,
+    "relevantLinesEnd": 48,
+    "suggestionContent": "cache is not re-checked under the lock after re-acquiring write Lock, so concurrent callers can each recompute web assets"
+   }
+  ]
+ },
+ {
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "ids": [
+   "S2",
+   "S6"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S2",
+      "S6"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "In checkHistogram, foundLabels is never reset between metrics, so label matching across series is wrong.",
+     "rationale": "Both point at the same counter in checkHistogram that carries over from one metric to the next, and both propose resetting it for each metric. S6 also mentions the early error return, but that is part of the same flawed matching logic."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S6",
+     "problems": [
+      "checkHistogram does not reset foundLabels for each metric.",
+      "checkHistogram returns an error on a mismatching series instead of searching subsequent series."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The foundLabels counter persists between metrics; S2 also reports this, but no group has two eligible single-problem suggestions.",
+      "A label-value mismatch prematurely terminates the search for a matching metric."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S2",
+     "confidence": "high"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "relevantLinesStart": 132,
+    "relevantLinesEnd": 153,
+    "suggestionContent": "WHAT: in checkHistogram, `foundLabels` is declared before the `for _, m := range metricFamily.Metric` loop and is never reset between metrics. WHY: the counter accumulates across metrics, so the `foundLabels != len(expLabels)` check is evaluated against a stale/inflated count — a metric with only a partial label match can be accepted (false pass) and a valid metric after a partial match can error (false fail), letting the metric assertions miss real regressions. HOW: move `foundLabels := 0` inside the outer loop (reset per metric)."
+   },
+   {
+    "id": "S6",
+    "finderIndex": 5,
+    "producedBy": "micro-exp-p3-value-boundary-and-position",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "relevantLinesStart": 132,
+    "relevantLinesEnd": 153,
+    "suggestionContent": "`foundLabels` is declared outside the `for _, m := range metricFamily.Metric` loop and never reset per metric, and the code returns an error as soon as a metric has a matching label key with a different value (rather than `continue`-ing). The correct-metric decision therefore relies on state carried over between metrics and on a premature error return instead of an exact per-metric label comparison. With more than one series in a family this produces false failures and wrong \"expected N labels, got M\" counts. Reset the counter per metric and `continue` to the next metric when the label set does not fully match, instead of returning an error."
+   }
+  ]
+ },
+ {
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "ids": [
+   "S1",
+   "S2",
+   "S3",
+   "S5",
+   "S6",
+   "S7",
+   "S11",
+   "S12",
+   "S13",
+   "S18",
+   "S19",
+   "S20"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G1",
+     "members": [
+      "S1",
+      "S5",
+      "S11",
+      "S19",
+      "S12",
+      "S2",
+      "S6"
+     ],
+     "kind": "systemic_pattern",
+     "confidence": "mid",
+     "problem": "Storage failure paths in Create (line 45) and Update (line 129) call recordLegacyDuration instead of recordStorageDuration.",
+     "rationale": "The same copy-pasted mistake appears in both Create and Update error paths. Changing the helper call at each site fixes it, and S19 reports both sites."
+    },
+    {
+     "id": "G2",
+     "members": [
+      "S20",
+      "S7",
+      "S13",
+      "S3"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "The legacy DeleteCollection goroutine records its timing with recordStorageDuration instead of recordLegacyDuration (line 166).",
+     "rationale": "All of these point at line 166 and give the same fix."
+    }
+   ],
+   "multiProblem": [
+    {
+     "id": "S18",
+     "problems": [
+      "Storage failure paths in Create and Update record timings with recordLegacyDuration.",
+      "The legacy DeleteCollection goroutine records timings with recordStorageDuration."
+     ],
+     "relatedGroups": [
+      "G1",
+      "G2"
+     ],
+     "uncoveredProblems": [],
+     "confidence": "high"
+    }
+   ],
+   "unique": []
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G1",
+     "members": [
+      "S19",
+      "S7",
+      "S1",
+      "S18",
+      "S11",
+      "S12",
+      "S6",
+      "S13",
+      "S3",
+      "S5",
+      "S2",
+      "S20"
+     ],
+     "kind": "systemic_pattern",
+     "confidence": "high",
+     "problem": "Duration and error metrics use the recorder for the wrong storage backend.",
+     "rationale": "Create and Update storage failures call recordLegacyDuration, while the legacy DeleteCollection calls recordStorageDuration. These repeat the same backend-recorder mismatch; S19 and S18 report multiple instances of this single systemic mistake."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 43,
+    "relevantLinesEnd": 46,
+    "suggestionContent": "On a Storage.Create failure the code records the error with recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage) — the failing subsystem is Storage, not Legacy, and it passes the storage start time. This records storage failures under the legacy metric, corrupting the dual-writer error dashboards (and contradicts the success path on line 48 which uses recordStorageDuration). Use d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)."
+   },
+   {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 127,
+    "relevantLinesEnd": 130,
+    "suggestionContent": "On a Storage.Update failure the code records the error with recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage), attributing a storage failure and its storage duration to the legacy metric. This is inconsistent with the success path on line 132 (recordStorageDuration) and with mode1's semantics. Use d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)."
+   },
+   {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 161,
+    "relevantLinesEnd": 167,
+    "suggestionContent": "The async goroutine performing the LEGACY DeleteCollection measures it with d.recordStorageDuration(err != nil, mode3Str, options.Kind, method, startLegacy). Every other legacy write in this file uses recordLegacyDuration (lines 56, 113, 140); recording it under the storage metric reports legacy latency/errors as storage latency/errors. Use d.recordLegacyDuration(err != nil, mode3Str, options.Kind, method, startLegacy)."
+   },
+   {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 43,
+    "relevantLinesEnd": 46,
+    "suggestionContent": "On the Storage.Create failure path the error duration is recorded with d.recordLegacyDuration, but the timed operation was d.Storage.Create (started at line 41). This attributes a unified-storage failure to the legacy datastore metric and leaves the storage-error metric unemitted, while the success path (line 48) correctly uses recordStorageDuration. Change line 45 to d.recordStorageDuration(true, ...)."
+   },
+   {
+    "id": "S6",
+    "finderIndex": 5,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 127,
+    "relevantLinesEnd": 132,
+    "suggestionContent": "In Update, the failing operation is d.Storage.Update (started at line 125) but the failure is recorded with d.recordLegacyDuration at line 129, whereas the success path at line 132 uses recordStorageDuration. The storage-error metric never fires and a legacy-error datapoint is fabricated. Line 129 should call d.recordStorageDuration(true, ...)."
+   },
+   {
+    "id": "S7",
+    "finderIndex": 6,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 161,
+    "relevantLinesEnd": 167,
+    "suggestionContent": "In DeleteCollection the goroutine invokes d.Legacy.DeleteCollection but records the result at line 166 with d.recordStorageDuration. The legacy operation is therefore counted as a storage operation (and the storage op at line 159 is double-counted), while legacy metrics stay silent. Line 166 should call d.recordLegacyDuration(err != nil, ...)."
+   },
+   {
+    "id": "S11",
+    "finderIndex": 10,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 45,
+    "relevantLinesEnd": 45,
+    "suggestionContent": "On the Storage.Create failure path the code calls `d.recordLegacyDuration(true, ...)` although the error came from Storage. The legacy write has not even been attempted here, so a storage failure is recorded as a legacy failure, mislabeling and hiding real storage errors in the legacy metric. Should be recordStorageDuration."
+   },
+   {
+    "id": "S12",
+    "finderIndex": 11,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 129,
+    "relevantLinesEnd": 129,
+    "suggestionContent": "Same mixup in Update: the Storage.Update error path records `d.recordLegacyDuration(true, ...)` for a storage failure while the legacy goroutine is never launched. Update failures are attributed to the legacy back end instead of storage."
+   },
+   {
+    "id": "S13",
+    "finderIndex": 12,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 166,
+    "relevantLinesEnd": 166,
+    "suggestionContent": "Inside the legacy goroutine of DeleteCollection the code records `d.recordStorageDuration(err != nil, ...)`. A legacy DeleteCollection failure is written to the storage metric, misattributing the error. Should be recordLegacyDuration, matching the Create/Delete/Update legacy goroutines."
+   },
+   {
+    "id": "S18",
+    "finderIndex": 17,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 45,
+    "relevantLinesEnd": 45,
+    "suggestionContent": "On a *storage* Create failure the storage-path timing is recorded with `d.recordLegacyDuration(...)` rather than `recordStorageDuration`; the same mistake is repeated for the Update storage-failure path (line 129) and even for the legacy delete-collection goroutine (line 166, which calls `recordStorageDuration`). The result is that the two duration series are swapped/misattributed for these paths, so any dashboard or alert consuming them will see legacy latency for failed unified-store writes and vice versa. The correct helpers already exist and are used correctly on the success paths (lines 48, 103, 156) — these call sites need fixing."
+   },
+   {
+    "id": "S19",
+    "finderIndex": 18,
+    "producedBy": "micro-exp-p3-text-that-ships",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 45,
+    "relevantLinesEnd": 45,
+    "suggestionContent": "In the Storage.Create error path the duration of the *Storage* call is recorded with recordLegacyDuration; the function name says it measures the legacy store, so the legacy-duration metric receives unified-store timings (and the storage error path never increments the storage metric). Same mismatch at the Update error path (line 129). Use recordStorageDuration here so the metric name and the measured store agree."
+   },
+   {
+    "id": "S20",
+    "finderIndex": 19,
+    "producedBy": "micro-exp-p3-text-that-ships",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 166,
+    "relevantLinesEnd": 166,
+    "suggestionContent": "Inside the Legacy.DeleteCollection goroutine the code calls recordStorageDuration with the timing of the legacy call. The name states it records the unified-store duration, but the value measured is the Legacy call's, so the storage series is polluted with legacy timings while the legacy series is never written. Should be recordLegacyDuration, matching the sibling Create/Delete/Update goroutines."
+   }
+  ]
+ },
+ {
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "ids": [
+   "S4",
+   "S16"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G4",
+     "members": [
+      "S4",
+      "S16"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "The async legacy-write goroutines derive their context from the request-scoped ctx, so the legacy write can be cancelled when the request ends.",
+     "rationale": "Both point at the context.WithTimeoutCause(ctx, ...) in the goroutines and propose detaching it with context.WithoutCancel."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S16",
+     "problems": [
+      "Asynchronous legacy writes remove the synchronous completion behavior that callers depended on.",
+      "Legacy goroutines inherit request cancellation and can lose their writes when the handler returns."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Returning before the legacy operation completes changes the contract for existing consumers.",
+      "Request-derived contexts can cancel legacy writes prematurely; S4 also reports this, but there are insufficient single-problem suggestions to form a group."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S4",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 50,
+    "relevantLinesEnd": 57,
+    "suggestionContent": "The async legacy write goroutine derives its context from the request-scoped `ctx` (context.WithTimeoutCause(ctx, ...)). The apiserver cancels that context as soon as the HTTP handler returns — which is immediately after Create/Update/Delete/DeleteCollection return — so the goroutine's Legacy.Create can be canceled before completing, silently dropping the legacy write that this mode exists to guarantee. The same applies to the goroutines at lines 108-114, 134-141 and 161-167. Detach the async context from request cancellation (e.g. derive from context.WithoutCancel(ctx) / context.Background()) before applying the timeout."
+   },
+   {
+    "id": "S16",
+    "finderIndex": 15,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "relevantLinesStart": 50,
+    "relevantLinesEnd": 57,
+    "suggestionContent": "The legacy write in Mode 3 became fire-and-forget, changing the contract callers relied on: previously Create (and, identically, Update/Delete/DeleteCollection) returned only after the LegacyStorage call had been made in-request; now it returns immediately and the write runs in a detached goroutine. Worse, the goroutine builds its context from the request-scoped `ctx` (line 51: `context.WithTimeoutCause(ctx, ...)`), which the API server cancels as soon as the handler returns/flushes the response — so the legacy write and its 10s timeout will typically be cancelled outright and the legacy store silently stops being updated, which is precisely what the new mode-3 integration cases assume still happens. Any detached work must be given a context not tied to the request lifetime (e.g. context.WithoutCancel(ctx) or a server-lifetime context), and consumers that depended on the synchronous legacy write need to be updated."
+   }
+  ]
+ },
+ {
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "ids": [
+   "S15"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S15",
+     "confidence": "high"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S15",
+     "problems": [
+      "Tests never await or assert that the asynchronous legacy operations occur.",
+      "Sharing one mock between both backends prevents assertions from distinguishing legacy calls from storage calls."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Legacy expectations are never verified and asynchronous legacy operations are never awaited.",
+      "The shared mock obscures which backend received a call."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S15",
+    "finderIndex": 14,
+    "producedBy": "micro-exp-p3-test-does-not-verify",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+    "relevantLinesStart": 30,
+    "relevantLinesEnd": 57,
+    "suggestionContent": "The legacy half of Mode 3 is never verified, so these tests cannot catch its removal. Mode 3 is documented as writing to BOTH LegacyStorage and Storage, and the implementation performs the legacy write in a detached goroutine (`go func(){ d.Legacy.Create(...) }()`, dualwriter_mode3.go lines 50-57, and likewise at 108-114, 134-141, 161-167). Each test registers legacy expectations (`setupLegacyFn`, e.g. lines 30-32 and 40-42) but never calls `m.AssertExpectations(t)`, `AssertCalled` or `AssertNumberOfCalls`, and never waits for or observes the goroutine — no channel, no polling. Additionally `legacyStoreMock{m, l}` and `storageMock{m, s}` (lines 53-54, and the same pair in every other test function) share one `*mock.Mock`, so even a count assertion could not distinguish a legacy call from a storage call. Deleting every `d.Legacy.*` call from the implementation leaves all six tests passing, which is exactly the regression the names — and the Mode 3 contract — claim to cover."
+   }
+  ]
+ },
+ {
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "ids": [
+   "S22"
+  ],
+  "motivo": "discordancia ou confianca baixa",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S22",
+     "confidence": "high"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S22",
+     "confidence": "low"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S22",
+    "finderIndex": 21,
+    "producedBy": "micro-exp-p3-changed-files-disagree",
+    "technique": "M3",
+    "label": "",
+    "relevantFile": "",
+    "relevantLinesStart": 0,
+    "relevantLinesEnd": 0,
+    "suggestionContent": ""
+   }
+  ]
+ },
+ {
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "ids": [
+   "S7"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S7",
+     "confidence": "high"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S7",
+     "problems": [
+      "The English-file substitution regex can rewrite directory components instead of only the locale suffix in the filename.",
+      "A missing English counterpart aborts verification with a raw RuntimeException instead of being handled gracefully."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The English-file substitution regex can rewrite directory components instead of only the locale suffix in the filename.",
+      "A missing English counterpart aborts verification with a raw RuntimeException instead of being handled gracefully."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S7",
+    "finderIndex": 6,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "relevantLinesStart": 73,
+    "relevantLinesEnd": 80,
+    "suggestionContent": "verifySafeHtml() derives the English sibling file via file.getAbsolutePath().replaceAll(\"resources-community\",\"resources\").replaceAll(\"_[a-zA-Z-_]*\\\\.properties\",\"_en.properties\") and opens it unconditionally, throwing a raw RuntimeException (not MojoExecutionException) on failure. The second regex is broad ('-'..'_' also matches '/', digits, and other chars), so a path with an underscore before the final path segment can be rewritten to a non-existent _en.properties, and any locale lacking an English counterpart aborts the build with an opaque RuntimeException. Restrict the substitution to the final segment and handle the missing English file gracefully."
+   }
+  ]
+ }
+]

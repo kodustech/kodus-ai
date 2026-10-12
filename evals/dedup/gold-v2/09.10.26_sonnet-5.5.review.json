@@ -1,0 +1,221 @@
+[
+ {
+  "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+  "ids": [
+   "S3",
+   "S6"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G5",
+     "members": [
+      "S6",
+      "S3"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "The webhook secret is compared with !==, which is not constant-time and allows timing attacks.",
+     "rationale": "Both report the same comparison and recommend crypto.timingSafeEqual."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S3",
+     "problems": [
+      "The webhook secret comparison is not constant-time.",
+      "The webhook secret comparison lacks guards for missing or array-valued headers."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The webhook secret comparison is not constant-time; S6 also reports this, but no group has two eligible single-problem suggestions.",
+      "The webhook secret comparison lacks guards for missing or array-valued headers."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S6",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "apps/web/pages/api/webhook/app-credential.ts",
+    "relevantLinesStart": 24,
+    "relevantLinesEnd": 29,
+    "suggestionContent": "The webhook secret is compared with `!==`, which is not constant-time, and the comparison is not guarded against a missing or array-valued header. This allows timing attacks on the secret, which would let an attacker overwrite any user's app credentials. Use crypto.timingSafeEqual on equal-length buffers."
+   },
+   {
+    "id": "S6",
+    "finderIndex": 5,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "security",
+    "relevantFile": "apps/web/pages/api/webhook/app-credential.ts",
+    "relevantLinesStart": 24,
+    "relevantLinesEnd": 29,
+    "suggestionContent": "The webhook secret is checked with a plain !== comparison, which leaks timing information and lets an attacker recover the secret byte by byte. Compare the header value and the secret with crypto.timingSafeEqual, after checking that both are strings of equal length, so the comparison runs in constant time."
+   }
+  ]
+ },
+ {
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "ids": [
+   "S2",
+   "S7"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S7",
+      "S2"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "onEnable is only called from the backup-codes Close button, so dismissing the dialog otherwise leaves the parent unaware 2FA was enabled.",
+     "rationale": "Both describe onEnable no longer firing when the dialog is dismissed via onOpenChange after successful enable; S2's mention of unreset state is part of the same fix."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S2",
+     "problems": [
+      "Dismissing the backup-code dialog without its Close button skips onEnable and leaves the parent UI stale.",
+      "Alternative dismissal paths retain the modal's step state and plaintext backup codes."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Alternative dismissal skips onEnable; S7 also reports this, but there are not two single-problem suggestions to form a group.",
+      "Alternative dismissal retains the modal's step state and plaintext backup codes."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S7",
+     "confidence": "high"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "relevantLinesStart": 132,
+    "relevantLinesEnd": 136,
+    "suggestionContent": "After a successful enable, `onEnable()` is no longer called and is only called from the backup-codes Close button. If the user dismisses the dialog by Escape or overlay click (`onOpenChange`) while the codes are displayed, the parent is never notified that 2FA is enabled. The modal also keeps its step state and the plaintext backup codes. Call `onEnable` when 2FA is enabled, or make the dialog's `onOpenChange(false)` on the DisplayBackupCodes step run the same handler as Close, which resets state and clears `backupCodes`."
+   },
+   {
+    "id": "S7",
+    "finderIndex": 6,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "relevantLinesStart": 132,
+    "relevantLinesEnd": 136,
+    "suggestionContent": "`onEnable()` used to run right after the TOTP code was verified. It now runs only from the backup-codes \"close\" button. If the user dismisses the dialog another way (escape, an outside click or the X, all via `onOpenChange`), 2FA is already enabled server-side but `onEnable` never fires. The parent's state and UI then stay stale and the switch still shows 2FA as off. Call `onEnable` when verification succeeds, or call it from the dialog's `onOpenChange` close path while on the DisplayBackupCodes step."
+   }
+  ]
+ },
+ {
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "ids": [
+   "S2",
+   "S11"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G3",
+     "members": [
+      "S11",
+      "S2"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "The before_validation block calls host.sub! without a nil check, so a missing host raises NoMethodError and returns a 500.",
+     "rationale": "Both report the missing nil guard on host in before_validation. S11's note about in-place mutation is part of its proposed fix."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S11",
+     "problems": [
+      "Host normalization calls sub! on nil and raises instead of producing a validation error.",
+      "Host normalization mutates the supplied string in place."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Host normalization calls sub! on nil; S2 also reports this, but no group has two eligible single-problem suggestions.",
+      "Host normalization mutates the supplied string in place."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S2",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/models/embeddable_host.rb",
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 8,
+    "suggestionContent": "before_validation calls sub! on self.host, which raises NoMethodError when host is nil. A request with a missing host therefore returns a 500. Fix: guard for nil, e.g. self.host = host.sub(...) if host."
+   },
+   {
+    "id": "S11",
+    "finderIndex": 10,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "app/models/embeddable_host.rb",
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 8,
+    "suggestionContent": "The before_validation block calls `self.host.sub!` with no nil check. A create request without `host`, or `EmbeddableHost.new`, raises NoMethodError and returns a 500 instead of a validation error. It also mutates the string in place. Guard on `host.present?` and use non-destructive assignment."
+   }
+  ]
+ }
+]

@@ -1,0 +1,1700 @@
+[
+ {
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "ids": [
+   "S3",
+   "S8",
+   "S9",
+   "S18",
+   "S20"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G3",
+     "members": [
+      "S20",
+      "S9",
+      "S18",
+      "S8",
+      "S3"
+     ],
+     "kind": "systemic_pattern",
+     "confidence": "mid",
+     "problem": "The Calendar interface's createEvent now requires a credentialId, but the Lark, Office365 and other Calendar implementations still declare createEvent(event) and ignore the credential when picking the calendar.",
+     "rationale": "All of these report the same signature/contract mismatch with the new credentialId parameter, either per implementation or at the interface, and the fix is to update each implementation the same way."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G3",
+     "members": [
+      "S9",
+      "S3",
+      "S8"
+     ],
+     "kind": "systemic_pattern",
+     "confidence": "mid",
+     "problem": "Calendar implementations retain one-parameter createEvent signatures after the interface adds a required credentialId parameter.",
+     "rationale": "These suggestions report the same alleged signature-contract mismatch across implementations. S8 mentions credential-based selection only within its proposed fix; S3 broadly describes consequences of the alleged mismatch."
+    }
+   ],
+   "multiProblem": [
+    {
+     "id": "S18",
+     "problems": [
+      "Office365 createEvent lacks the credentialId parameter required by the updated interface.",
+      "Office365 creates events using the first destination calendar instead of the destination belonging to the current credential."
+     ],
+     "relatedGroups": [
+      "G3"
+     ],
+     "uncoveredProblems": [
+      "Office365 selects destinationCalendar[0] instead of matching the current credential."
+     ],
+     "confidence": "mid"
+    },
+    {
+     "id": "S20",
+     "problems": [
+      "Lark createEvent lacks the credentialId parameter required by the updated interface.",
+      "Lark creates events using the first destination calendar instead of the destination belonging to the current credential."
+     ],
+     "relatedGroups": [
+      "G3"
+     ],
+     "uncoveredProblems": [
+      "Lark selects destinationCalendar[0] instead of matching the current credential."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/types/Calendar.d.ts",
+    "relevantLinesStart": 220,
+    "relevantLinesEnd": 222,
+    "suggestionContent": "WHAT: `Calendar.createEvent(event, credentialId: number)` now requires credentialId but LarkCalendarService, Office365CalendarService and BaseCalendarService still declare `createEvent(event)` with one param. WHY: Implementations no longer satisfy the interface, breaking type contract and CalendarManager now calls `calendar.createEvent(calEvent, credential.id)` with an argument those services ignore/signature-mismatch, causing build errors and inconsistent calendar selection. HOW: Update all Calendar implementations to accept `credentialId: number` (even if unused) or make the param optional."
+   },
+   {
+    "id": "S8",
+    "finderIndex": 7,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "relevantLinesStart": 72,
+    "relevantLinesEnd": 77,
+    "suggestionContent": "Calendar interface now requires createEvent(event: CalendarEvent, credentialId: number). This file still declares async createEvent(event: CalendarEvent) with one param — add credentialId param to satisfy contract and select correct calendar per credential (like Google via find(...credentialId))."
+   },
+   {
+    "id": "S9",
+    "finderIndex": 8,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/app-store/larkcalendar/lib/CalendarService.ts",
+    "relevantLinesStart": 125,
+    "relevantLinesEnd": 130,
+    "suggestionContent": "Same contract break: Calendar.createEvent now requires (event, credentialId). Still declares async createEvent(event: CalendarEvent). Add credentialId param; otherwise CalendarManager.createEvent(event, credential.id) relies on ignored arg."
+   },
+   {
+    "id": "S18",
+    "finderIndex": 17,
+    "producedBy": "micro-exp-p3-changed-files-disagree",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "relevantLinesStart": 72,
+    "relevantLinesEnd": 77,
+    "suggestionContent": "Interface Calendar (packages/types/Calendar.d.ts:221) now requires createEvent(event, credentialId:number) and CalendarManager passes credential.id, but this class still declares createEvent(event: CalendarEvent) without credentialId. For collective events where evt.destinationCalendar has multiple entries, it always uses destinationCalendar[0] instead of finding the calendar matching credentialId (as GoogleCalendarService does via find(...credentialId)). Update signature to createEvent(event: CalendarEvent, credentialId:number) and select calendar by credentialId: destinationCalendar.find(c=>c.credentialId===credentialId)?.externalId || mainHost fallback."
+   },
+   {
+    "id": "S20",
+    "finderIndex": 19,
+    "producedBy": "micro-exp-p3-changed-files-disagree",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/app-store/larkcalendar/lib/CalendarService.ts",
+    "relevantLinesStart": 125,
+    "relevantLinesEnd": 130,
+    "suggestionContent": "Same contract mismatch as Office365: Calendar interface now requires createEvent(event, credentialId:number) but this class still declares createEvent(event: CalendarEvent). Add credentialId param and select calendarId via destinationCalendar.find(c=>c.credentialId===credentialId)?.externalId instead of always using destinationCalendar[0], otherwise collective team events create all calendars on the first host's calendar."
+   }
+  ]
+ },
+ {
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "ids": [
+   "S2",
+   "S8",
+   "S9",
+   "S13",
+   "S14",
+   "S15"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G3",
+     "members": [
+      "S13",
+      "S15"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "The server schema and handler don't remove duplicate emails within one request, so duplicate attendee rows get inserted.",
+     "rationale": "Both report that the server lacks the client's uniqueness refine, so duplicates within one request reach createMany."
+    },
+    {
+     "id": "G4",
+     "members": [
+      "S8",
+      "S9"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "The handler's guest filter compares emails case-sensitively, so the duplicate-attendee check and the blacklist check can be bypassed.",
+     "rationale": "Both report non-normalized email comparison in the same uniqueGuests filter; lowercasing the guests fixes both."
+    }
+   ],
+   "multiProblem": [
+    {
+     "id": "S2",
+     "problems": [
+      "The duplicate and blacklist filtering compares emails case-sensitively.",
+      "Identical emails within the same input array are not removed."
+     ],
+     "relatedGroups": [
+      "G4",
+      "G3"
+     ],
+     "uncoveredProblems": [],
+     "confidence": "mid"
+    },
+    {
+     "id": "S14",
+     "problems": [
+      "The non-atomic read-then-write allows a race that inserts duplicate attendees.",
+      "Duplicate emails within one request are not removed.",
+      "Email comparison is case-sensitive."
+     ],
+     "relatedGroups": [
+      "G3",
+      "G4"
+     ],
+     "uncoveredProblems": [
+      "The non-atomic check-then-create lets concurrent addGuests requests insert duplicate attendees."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S15",
+     "problems": [
+      "The server schema permits duplicate emails within a request.",
+      "The server schema permits an empty guests array."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The server schema permits duplicate emails within a request.",
+      "The server schema permits an empty guests array."
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "S14",
+     "problems": [
+      "The non-atomic attendee lookup and insertion allow concurrent requests to create duplicates or encounter unhandled conflicts.",
+      "The handler does not deduplicate repeated addresses within one request, including case variants.",
+      "The comparison against existing attendees is case-sensitive."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The non-atomic attendee lookup and insertion allow concurrent requests to create duplicates or encounter unhandled conflicts.",
+      "The handler does not deduplicate repeated addresses within one request, including case variants.",
+      "The comparison against existing attendees is case-sensitive."
+     ],
+     "confidence": "mid"
+    },
+    {
+     "id": "S2",
+     "problems": [
+      "Case-sensitive comparison against existing attendees permits case-variant duplicates.",
+      "Case-sensitive blacklist matching permits blocked addresses with different capitalization.",
+      "Repeated emails within the input array are not deduplicated before insertion."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Case-sensitive comparison against existing attendees permits case-variant duplicates.",
+      "Case-sensitive blacklist matching permits blocked addresses with different capitalization.",
+      "Repeated emails within the input array are not deduplicated before insertion."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S9",
+     "confidence": "high"
+    },
+    {
+     "id": "S13",
+     "confidence": "high"
+    },
+    {
+     "id": "S8",
+     "confidence": "high"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 74,
+    "relevantLinesEnd": 78,
+    "suggestionContent": "WHAT: Duplicate/blacklist filtering is case-sensitive and does not dedupe within input array. WHY: guest === attendee.email and blacklisted.includes(guest) without lowercasing lets AddGuests with 'A@a.com' vs 'a@a.com' bypass dedupe/blacklist and create duplicate Attendee rows or bypass BLACKLISTED_GUEST_EMAILS block; identical emails in the same request both pass through to createMany. HOW: Lowercase/normalize (trim+toLowerCase) guests and attendees before compare, and dedupe guests via Set before filtering, e.g., uniqueGuests = [...new Set(guests.map(g=>g.toLowerCase()))] filtered."
+   },
+   {
+    "id": "S8",
+    "finderIndex": 7,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "security",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 70,
+    "relevantLinesEnd": 78,
+    "suggestionContent": "Case-sensitivity bypass in blacklist check: blacklistedGuestEmails are normalized to lower case (line 71 .toLowerCase()) but the incoming guest is compared without normalization via blacklistedGuestEmails.includes(guest) at line 77. An attacker can bypass BLACKLISTED_GUEST_EMAILS by submitting Blocked@Example.com vs blocked@example.com. Fix: normalize guest to lower case before comparison (and for the duplicate check), e.g., guest.toLowerCase() === attendee.email.toLowerCase() and blacklistedGuestEmails.includes(guest.toLowerCase())."
+   },
+   {
+    "id": "S9",
+    "finderIndex": 8,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "security",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 74,
+    "relevantLinesEnd": 77,
+    "suggestionContent": "Case-sensitive duplicate attendee check allows bypass: guest === attendee.email at line 76 compares case-insensitive emails case-sensitively. Submitting existing@example.com as Existing@Example.com passes the filter and creates a duplicate attendee record (also defeats the uniqueGuests dedup). Fix: compare lowercased forms: guest.toLowerCase() === attendee.email.toLowerCase()."
+   },
+   {
+    "id": "S13",
+    "finderIndex": 12,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 6,
+    "suggestionContent": "Cross-reference inconsistency: client AddGuestsDialog.tsx validates guests with .refine(unique) while server ZAddGuestsInputSchema only checks z.array(z.string().email()) with no uniqueness check. Server handler’s filter also doesn’t dedupe duplicates within guests itself, so bypassing client validation can insert duplicate attendee rows via createMany."
+   },
+   {
+    "id": "S14",
+    "finderIndex": 13,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 74,
+    "relevantLinesEnd": 106,
+    "suggestionContent": "Check-then-create race + missing intra-request dedup allows duplicate Attendees and execution break: `uniqueGuests` only filters against existing attendees with case-sensitive `===` and against blacklisted list, but never deduplicates `guests` itself nor normalizes case, and the read (findFirst) and write (booking.update createMany) are non-atomic with no unique constraint handling. Two concurrent addGuests with same email or a single request with [\"x@a.com\",\"x@a.com\"] or [\"X@a.com\",\"x@a.com\"] both insert duplicate rows (state corruption) or throw Prisma P2002 unhandled. Fix: normalize to lower-case, dedupe with Set, and make insertion atomic — e.g., add unique index on (bookingId, email) if missing and handle conflict, or use transaction/upsert and validate `uniqueGuests` after normalization."
+   },
+   {
+    "id": "S15",
+    "finderIndex": 14,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 6,
+    "suggestionContent": "Server input schema permits duplicate/invalid invariants that client rejects: `z.array(z.string().email())` allows duplicate emails and empty array, unlike client schema which refines `uniqueEmails.size === emails.length`. A crafted request bypasses client and reaches handler with duplicates, causing duplicate createMany (state corruption) or DB unique-constraint exception (unhandled execution break at JSON-encode/Prisma layer). Fix: add `.refine` for uniqueness (and optionally `.nonempty().max(N)`) mirroring client, and normalize emails to lower-case before validation."
+   }
+  ]
+ },
+ {
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "ids": [
+   "S5"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S5",
+     "confidence": "high"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S5",
+     "problems": [
+      "The invalid-email banner remains after the user corrects input or successfully submits.",
+      "Submitting after removing every email field silently returns without feedback."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The invalid-email banner remains after the user corrects input or successfully submits.",
+      "Submitting after removing every email field silently returns without feedback."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "relevantLinesStart": 32,
+    "relevantLinesEnd": 58,
+    "suggestionContent": "WHAT: isInvalidEmail is set true on failed validation but never reset on input change or success path. WHY: Once user triggers an invalid submit, the error banner persists forever even after fixing emails, and validation with initial [''] plus length-0 early return gives no feedback when user deletes all fields. HOW: Reset isInvalidEmail to false onChange via useEffect on multiEmailValue or at start of handleAdd when validation succeeds."
+   }
+  ]
+ },
+ {
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "ids": [
+   "S6"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S6",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S6",
+     "problems": [
+      "The server accepts an unbounded guest array, enabling excessive database work and email fanout.",
+      "Missing email trimming and normalization allows address variants to bypass filtering."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The server accepts an unbounded guest array, enabling excessive database work and email fanout.",
+      "Missing email trimming and normalization allows address variants to bypass filtering."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S6",
+    "finderIndex": 5,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 6,
+    "suggestionContent": "WHAT: ZAddGuestsInputSchema accepts unbounded array of emails with no max length, trim, or normalize. WHY: Attacker (any authenticated attendee per handler line 52) can submit thousands of emails in one request, bypassing per-email checks via whitespace/case variants, amplifying DB writes (createMany), translation loading, and outbound email fanout in sendAddGuestsEmails. HOW: Add .max(10-25), .transform(s=>s.trim().toLowerCase()), and refine uniqueness at schema level."
+   }
+  ]
+ },
+ {
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "ids": [
+   "S1",
+   "S3",
+   "S4",
+   "S6",
+   "S8",
+   "S9"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G1",
+     "members": [
+      "S4",
+      "S1",
+      "S6",
+      "S8",
+      "S9",
+      "S3"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "The deleteMany OR branch `{retryCount: {gt: 1}}` has no `method: SMS` filter, so it deletes any WorkflowReminder with retryCount > 1, not just SMS reminders.",
+     "rationale": "All of these point at the same unscoped OR clause in deleteMany and propose scoping it to SMS. S3 frames it as a mismatch with the comment, but the underlying problem and fix are the same."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G1",
+     "members": [
+      "S1",
+      "S9",
+      "S6",
+      "S4"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "The retryCount cleanup branch lacks an SMS method filter and can delete non-SMS reminders.",
+     "rationale": "All four identify the same unscoped OR branch and propose restricting it to WorkflowMethods.SMS."
+    }
+   ],
+   "multiProblem": [
+    {
+     "id": "S8",
+     "problems": [
+      "The retry cleanup can delete non-SMS reminders because it lacks a method filter.",
+      "The retry cleanup can delete future-dated reminders because it lacks a date restriction.",
+      "The retry cleanup can delete already scheduled reminders because it lacks a scheduling-state restriction."
+     ],
+     "relatedGroups": [
+      "G1"
+     ],
+     "uncoveredProblems": [
+      "The retry cleanup can delete future-dated reminders because it lacks a date restriction.",
+      "The retry cleanup can delete already scheduled reminders because it lacks a scheduling-state restriction."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S3",
+     "confidence": "high"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "relevantLinesStart": 28,
+    "relevantLinesEnd": 44,
+    "suggestionContent": "WHAT: deleteMany OR branch for retryCount has no method filter, so it deletes any WorkflowReminder with retryCount>1 regardless of method. WHY: Second OR clause is {retryCount:{gt:1}} without method: WorkflowMethods.SMS, so an EMAIL reminder that ever gets retryCount>1 (or future code that reuses the column) is deleted, and even SMS the scope is broader than the original method-qualified delete. HOW: Add method: WorkflowMethods.SMS to the second OR branch or change OR to AND-filtered logic as intended by the PR description."
+   },
+   {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "micro-exp-p3-text-that-ships",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "relevantLinesStart": 28,
+    "relevantLinesEnd": 44,
+    "suggestionContent": "Comment at line 28 says 'delete all scheduled sms reminders where scheduled date is past current date' but the changed deleteMany at lines 31-43 now deletes OR retryCount gt 1 without a method or date filter. The prose now disagrees with the code: code deletes non-SMS and non-expired reminders when retryCount>1, which the comment claims it does not. Update the comment to describe both prongs (e.g., '// delete expired SMS reminders OR any reminder that has exceeded retryCount') or, if intent was SMS-only, add method: WorkflowMethods.SMS to the second OR branch and update comment accordingly."
+   },
+   {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "relevantLinesStart": 28,
+    "relevantLinesEnd": 44,
+    "suggestionContent": "Second OR branch missing method filter: `OR: [{method:SMS, scheduledDate lte now}, {retryCount gt 1}]` deletes ANY WorkflowReminder with retryCount>1, including EMAIL reminders, regardless of scheduledDate. Should scope retry cleanup to SMS, e.g. `OR` each with `method:SMS` or change to `where:{method:WorkflowMethods.SMS, OR:[{scheduledDate lte now},{retryCount:{gt:1}}]}` or `AND` for the retry case."
+   },
+   {
+    "id": "S6",
+    "finderIndex": 5,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "relevantLinesStart": 28,
+    "relevantLinesEnd": 44,
+    "suggestionContent": "deleteMany OR second branch lacks method filter: `OR: [{method:SMS, scheduledDate:{lte:now}}, {retryCount:{gt:1}}]` deletes ANY WorkflowReminder with retryCount>1 regardless of method (EMAIL, etc.). This is state corruption/invariant violation - intended cleanup is SMS-only. Fix: scope retryCount clause under method: `OR` should be `AND` or second clause should also include `method: WorkflowMethods.SMS` (e.g., `{ method: SMS, retryCount:{gt:1}}` or wrap both conditions correctly)."
+   },
+   {
+    "id": "S8",
+    "finderIndex": 7,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "relevantLinesStart": 30,
+    "relevantLinesEnd": 44,
+    "suggestionContent": "BEHAVIOUR contract change not followed through: deleteMany was previously scoped to method=WorkflowMethods.SMS AND scheduledDate <= now so callers (EMAIL/physical workflows, scheduled future reminders) could count on not being deleted by the SMS cron. New OR branch `retryCount: {gt:1}` has no method/date filter, so it deletes ANY WorkflowReminder with retryCount>1 including EMAIL, future-dated, or already scheduled reminders. Narrow the second OR to `method: WorkflowMethods.SMS` (and likely `scheduled:false`) to preserve the previous scope, e.g. OR: [{method SMS, scheduledDate lte now}, {method SMS, retryCount gt 1, scheduled:false}]."
+   },
+   {
+    "id": "S9",
+    "finderIndex": 8,
+    "producedBy": "micro-exp-p3-value-boundary-and-position",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "relevantLinesStart": 30,
+    "relevantLinesEnd": 44,
+    "suggestionContent": "OR branch `{ retryCount: { gt: 1 } }` has no `method: WorkflowMethods.SMS` filter, so `deleteMany` deletes ANY WorkflowReminder with retryCount>1, not just SMS. Comment/layout says delete SMS reminders only. Predicate boundary is inverted/widened. Fix by scoping the retry branch: `{ method: WorkflowMethods.SMS, retryCount: { gt: 1 } }` or restructure as `AND` groups, e.g. `where: { method: SMS, OR: [{scheduledDate:{lte:now}},{retryCount:{gt:1}}] }`."
+   }
+  ]
+ },
+ {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "ids": [
+   "S6"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S6",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S6",
+     "problems": [
+      "Feed and article fetching lack SSRF safeguards against internal destinations and unsafe redirects.",
+      "Feed and article fetching lack timeouts, allowing slow responses to occupy workers."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Remote fetching lacks SSRF destination and redirect validation.",
+      "Remote fetching lacks timeouts to bound worker occupation."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S6",
+    "finderIndex": 5,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+    "relevantLinesStart": 29,
+    "relevantLinesEnd": 29,
+    "suggestionContent": "WHAT: rss = SimpleRSS.parse open(SiteSetting.feed_polling_url) and TopicEmbed.import_remote open(url).read use Kernel#open on admin-controlled URL without SSRF safeguards or timeouts. WHY: An attacker who controls feed_polling_url or embed_url (via embed controller) can probe internal network/metadata IPs and hang workers with slow responses. HOW: Use FinalDestination/Net::HTTP with SSRF blocklist, redirected host validation, and open timeouts."
+   }
+  ]
+ },
+ {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "ids": [
+   "S8",
+   "S20",
+   "S23",
+   "S24"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S20",
+      "S23",
+      "S8",
+      "S24"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "parent.postMessage gets the full request.referer URL as targetOrigin instead of an origin, so the browser drops the resize message.",
+     "rationale": "All four target embed.html.erb line 11 and suggest the same fix: extract scheme://host[:port] or use '*'."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S23",
+      "S24",
+      "S20"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "The resize message uses the full referrer URL as targetOrigin instead of extracting its origin.",
+     "rationale": "Each reports the same postMessage argument and the resulting failure to deliver resize messages."
+    }
+   ],
+   "multiProblem": [
+    {
+     "id": "S8",
+     "problems": [
+      "The resize message uses the full referrer URL as targetOrigin, causing delivery failures and alleged referrer exposure.",
+      "The targetOrigin construction does not handle a nil referrer."
+     ],
+     "relatedGroups": [
+      "G2"
+     ],
+     "uncoveredProblems": [
+      "The resize message does not guard against a nil referrer."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S8",
+    "finderIndex": 7,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/views/layouts/embed.html.erb",
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "suggestionContent": "WHAT: parent.postMessage(..., '<%= request.referer %>') uses full referer URL (including path/query) as targetOrigin, and may be nil. WHY: postMessage will fail with Invalid target origin when referer contains path, and leaks full referer; spec expects origin like https://host[:port]. HOW: Use request.referer origin (URI(request.referer).scheme+host+port) or '*' / Discourse.base_url origin, and guard nil."
+   },
+   {
+    "id": "S20",
+    "finderIndex": 19,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "app/views/layouts/embed.html.erb",
+    "relevantLinesStart": 10,
+    "relevantLinesEnd": 12,
+    "suggestionContent": "parent.postMessage targetOrigin is set to '<%= request.referer %>' which is the full referrer URL with path. Browsers require targetOrigin to be an origin (scheme://host:port) or \"*\". With a path the message is discarded and the receiver in embed.js never gets discourse-resize, so iframe never resizes. Use origin only: \"#{URI(request.referer).scheme}://#{URI(request.referer).host}\" (plus port if non-default) or \"*\" with explicit origin check on receipt."
+   },
+   {
+    "id": "S23",
+    "finderIndex": 22,
+    "producedBy": "micro-exp-p3-value-boundary-and-position",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "app/views/layouts/embed.html.erb",
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "suggestionContent": "parent.postMessage second argument is request.referer which includes path/query, not an origin. Browsers require targetOrigin to be scheme+host+port or '*'; passing full URL causes message to be dropped. Extract origin: URI(request.referer).scheme + '://' + URI(request.referer).host (+port) or use '*', e.g., parent.postMessage(..., '<%= URI(request.referer || '').scheme %>://<%= URI(request.referer || '').host %>') / use Discourse.base_url origin."
+   },
+   {
+    "id": "S24",
+    "finderIndex": 23,
+    "producedBy": "micro-exp-p3-changed-files-disagree",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "app/views/layouts/embed.html.erb",
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "suggestionContent": "Producer passes full referer URL as postMessage targetOrigin, but postMessage requires an origin (scheme+host+port) or '*'. With a full path the browser discards the message and embed.js never receives discourse-resize. Change to origin only, e.g. extract URI(request.referer).scheme://host[:port] or use '*', so it matches the origin that embed.js validates with discourseUrl.indexOf(e.origin)."
+   }
+  ]
+ },
+ {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "ids": [
+   "S12"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S12",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S12",
+     "problems": [
+      "Remote article fetching leaves network and OpenURI failures unhandled.",
+      "URL absolutization leaves URI parsing failures unhandled for malformed URLs that pass the prefix check."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Remote article fetching can terminate retrieval jobs with unhandled network exceptions.",
+      "URL absolutization can raise unhandled URI parsing exceptions."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S12",
+    "finderIndex": 11,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "app/models/topic_embed.rb",
+    "relevantLinesStart": 48,
+    "relevantLinesEnd": 58,
+    "suggestionContent": "Unhandled URI/open exceptions: import_remote does open(url).read and absolutize_urls does URI(url) without rescuing. url only checked via /^https?:\\/\\//, so malformed URLs or unreachable hosts raise URI::InvalidURIError/OpenURI errors unhandled from TopicRetriever jobs. Rescue InvalidURIError and OpenURI errors."
+   }
+  ]
+ },
+ {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "ids": [
+   "S21"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S21",
+     "confidence": "high"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S21",
+     "problems": [
+      "The feed_key method computes a cache key that is never used.",
+      "Feed polling fetches unchanged feeds without conditional requests or a cache check."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The feed_key method is unused dead computation.",
+      "Feed polling lacks caching or conditional fetching to avoid redundant downloads."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S21",
+    "finderIndex": 20,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+    "relevantLinesStart": 20,
+    "relevantLinesEnd": 22,
+    "suggestionContent": "Dead computation: feed_key computes \"feed-modified:#{SHA1(feed_url)}\" but is never read. poll_feed fetches SimpleRSS.parse open(feed_url) unconditionally every hour without If-Modified-Since/ETag or Redis check. Either wire feed_key to store/check Last-Modified/ETag/Redis expiry or remove the dead method; as-is it suggests incomplete caching and causes unnecessary fetches."
+   }
+  ]
+ },
+ {
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "ids": [
+   "S3"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S3",
+     "confidence": "high"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S3",
+     "problems": [
+      "Repeated synchronous image conversions block the upload request and can exhaust request-processing resources.",
+      "The loop ignores conversion failures and repeats unsuccessful conversions without shrinking the file."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Repeated synchronous image conversions block the upload request and can exhaust request-processing resources.",
+      "The loop ignores conversion failures and repeats unsuccessful conversions without shrinking the file."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "performance",
+    "relevantFile": "app/controllers/uploads_controller.rb",
+    "relevantLinesStart": 64,
+    "relevantLinesEnd": 69,
+    "suggestionContent": "WHAT: Synchronous `while attempt>0 && tempfile.size>limit` loop runs up to 5 `OptimizedImage.downsize(tempfile.path,tempfile.path,'80%')` ImageMagick converts inside `create_upload` request thread. WHY: Blocks the Rails request for seconds per upload, holds tempfile, amplifies CPU/IO under concurrent 10MB uploads (client limit also raised to 10MB) and can timeout; ignores return value so failed converts spin without shrinking. HOW: Enqueue downsizing to background job or at least check return value/break, re-stat file size via `File.size(path)` after each convert, and cap total work."
+   }
+  ]
+ },
+ {
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "ids": [
+   "S11",
+   "S12"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S11",
+     "confidence": "mid"
+    },
+    {
+     "id": "S12",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S11",
+      "S12"
+     ],
+     "kind": "systemic_pattern",
+     "confidence": "mid",
+     "problem": "Both size-limit alert changes are reported as introducing no sensitive-data exposure.",
+     "rationale": "These repeat the same assessment of the identical hardcoded-limit and alert pattern at two locations. Both explicitly conclude that only max_size_kb is displayed."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S11",
+    "finderIndex": 10,
+    "producedBy": "micro-exp-p3-data-exposure",
+    "technique": "M3",
+    "label": "color-1",
+    "relevantFile": "app/assets/javascripts/discourse/lib/utilities.js",
+    "relevantLinesStart": 179,
+    "relevantLinesEnd": 185,
+    "suggestionContent": "Change hardcodes maxSizeKB to 10*1024 and shows bootbox.alert with max_size_kb only, no sensitive data. No logging or user-visible error/response containing sensitive data."
+   },
+   {
+    "id": "S12",
+    "finderIndex": 11,
+    "producedBy": "micro-exp-p3-data-exposure",
+    "technique": "M3",
+    "label": "color-1",
+    "relevantFile": "app/assets/javascripts/discourse/lib/utilities.js",
+    "relevantLinesStart": 243,
+    "relevantLinesEnd": 249,
+    "suggestionContent": "Change hardcodes maxSizeKB to 10*1024 and shows bootbox.alert with max_size_kb only, no sensitive data. No logging or user-visible error/response containing sensitive data."
+   }
+  ]
+ },
+ {
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "ids": [
+   "S4",
+   "S13"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G3",
+     "members": [
+      "S4",
+      "S13"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "Authenticate now calls TagDevice synchronously instead of in a background goroutine, so every anonymous request blocks on database work.",
+     "rationale": "Both describe the switch from fire-and-forget to synchronous TagDevice in the auth hot path and suggest keeping tagging async."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S13",
+     "problems": [
+      "Synchronous device tagging adds database latency to anonymous authentication.",
+      "Anonymous authentication can now reject requests without corresponding handling of the changed authentication contract."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Synchronous tagging adds database latency to authentication; S4 also reports this, but has no second single-problem suggestion with which to form a group.",
+      "Authentication callers are unprepared for the newly possible device-limit rejection."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S4",
+     "confidence": "high"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "performance",
+    "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+    "relevantLinesStart": 44,
+    "relevantLinesEnd": 50,
+    "suggestionContent": "WHAT: Authenticate changed from async fire-and-forget TagDevice (background context + 2m timeout) to synchronous a.anonDeviceService.TagDevice(ctx,...) on the request context. WHY: Every anonymous authentication now blocks on CountDevices (SELECT COUNT(*) WHERE updated_at BETWEEN) plus INSERT/UPDATE, adding DB latency to the hot auth path and holding request context cancellation; under load this amplifies DB QPS and p99 auth latency. HOW: Restore async tagging or gate synchronous path behind sampling/cache, and use background context with timeout if synchronous enforcement is required."
+   },
+   {
+    "id": "S13",
+    "finderIndex": 12,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+    "relevantLinesStart": 41,
+    "relevantLinesEnd": 50,
+    "suggestionContent": "Authenticate changed from fire-and-forget best-effort (go routine with background context, 2m timeout, error swallowed) to synchronous blocking TagDevice on the request context that can return ErrDeviceLimitReached and fail the request (return nil, err). Callers (authn pipeline) previously could count on anonymous auth always succeeding quickly; they are not updated to handle the new rejection or the added DB latency (CountDevices on every request). Consider keeping tagging off the hot path (async) or making limit-enforcement explicit to callers with proper handling/metrics, and avoid blocking Authenticate on DB."
+   }
+  ]
+ },
+ {
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "ids": [
+   "S10",
+   "S11",
+   "S12"
+  ],
+  "motivo": "discordancia ou confianca baixa",
+  "opus": {
+   "groups": [
+    {
+     "id": "G5",
+     "members": [
+      "S10",
+      "S11",
+      "S12"
+     ],
+     "kind": "cross_location",
+     "confidence": "low",
+     "problem": "Observation that the new error and log paths contain no sensitive device data (ClientIP, UserAgent, DeviceID).",
+     "rationale": "All three confirm that the new error strings and logs do not expose device fields."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G4",
+     "members": [
+      "S10",
+      "S11",
+      "S12"
+     ],
+     "kind": "cross_location",
+     "confidence": "mid",
+     "problem": "Device-limit errors and associated logging do not expose device identifiers, IP addresses, or user agents.",
+     "rationale": "These repeat the same observation about generic errors and the absence of device payloads in logging, pointing at error creation, propagation, and logging."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S10",
+    "finderIndex": 9,
+    "producedBy": "micro-exp-p3-data-exposure",
+    "technique": "M3",
+    "label": "Hello",
+    "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "relevantLinesStart": 18,
+    "relevantLinesEnd": 18,
+    "suggestionContent": "Adds ErrDeviceLimitReached='device limit reached' (line 18) and updateDevice/CreateOrUpdateDevice logic - error strings generic, no ClientIP/UserAgent/DeviceID interpolated; SQL args use placeholders. No sensitive data in errors or logs."
+   },
+   {
+    "id": "S11",
+    "finderIndex": 10,
+    "producedBy": "micro-exp-p3-data-exposure",
+    "technique": "M3",
+    "label": "Hello",
+    "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+    "relevantLinesStart": 44,
+    "relevantLinesEnd": 49,
+    "suggestionContent": "Client auth path now returns ErrDeviceLimitReached synchronously (44-49) instead of async Warn - only generic error returned; other DB errors still only Warn-logged via a.log.Warn('Failed to tag anonymous session','error',err) without embedding device payload. No Device struct fields logged."
+   },
+   {
+    "id": "S12",
+    "finderIndex": 11,
+    "producedBy": "micro-exp-p3-data-exposure",
+    "technique": "M3",
+    "label": "Hello",
+    "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+    "relevantLinesStart": 44,
+    "relevantLinesEnd": 49,
+    "suggestionContent": "Confirmed no new log statements print Device struct fields (ClientIP, UserAgent, DeviceID); renamed constant anonymousDeviceExpiration and test wiring pass 0/1 limits without logging. No sensitive data added to logs, responses, or error messages."
+   }
+  ]
+ },
+ {
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "ids": [
+   "S10",
+   "S11",
+   "S12",
+   "S14",
+   "S16"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S10",
+     "confidence": "mid"
+    },
+    {
+     "id": "S11",
+     "confidence": "mid"
+    },
+    {
+     "id": "S12",
+     "confidence": "mid"
+    },
+    {
+     "id": "S14",
+     "confidence": "mid"
+    },
+    {
+     "id": "S16",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G1",
+     "members": [
+      "S10",
+      "S11",
+      "S12",
+      "S14",
+      "S16"
+     ],
+     "kind": "systemic_pattern",
+     "confidence": "mid",
+     "problem": "Contexts returned by tracer.Start were discarded instead of propagated to downstream operations.",
+     "rationale": "These suggestions describe the same context-propagation correction in search initialization, search building, and SQL statistics retrieval. S14 also assesses logging changes, but reports no separate logging problem."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S10",
+    "finderIndex": 9,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": null,
+    "relevantFile": "search.go",
+    "relevantLinesStart": 173,
+    "relevantLinesEnd": 173,
+    "suggestionContent": "Tracer context capture change at line 173 only fixes ignored context, no signature change, no added/removed parameters or interface members."
+   },
+   {
+    "id": "S11",
+    "finderIndex": 10,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": null,
+    "relevantFile": "search.go",
+    "relevantLinesStart": 310,
+    "relevantLinesEnd": 310,
+    "suggestionContent": "Tracer context capture change at line 310 only fixes ignored context, no signature change, no added/removed parameters or interface members."
+   },
+   {
+    "id": "S12",
+    "finderIndex": 11,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": null,
+    "relevantFile": "backend.go",
+    "relevantLinesStart": 126,
+    "relevantLinesEnd": 126,
+    "suggestionContent": "Tracer context capture change at line 126 only fixes ignored context, no signature change, no added/removed parameters or interface members."
+   },
+   {
+    "id": "S14",
+    "finderIndex": 13,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "Follow: Development Workflow Documentation",
+    "relevantFile": "search.go",
+    "relevantLinesStart": 110,
+    "relevantLinesEnd": 152,
+    "suggestionContent": "init/build tracer ctx change only adds span propagation (no new state) - no new state introduced. s.log substitution correct. Added log has no serialization risk."
+   },
+   {
+    "id": "S16",
+    "finderIndex": 15,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "Explore: SQL Resource Statistics Context",
+    "relevantFile": "sql",
+    "relevantLinesStart": 75,
+    "relevantLinesEnd": 101,
+    "suggestionContent": "GetResourceStats ctx propagation fix only adds tracing - no functional change beyond span propagation."
+   }
+  ]
+ },
+ {
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "ids": [
+   "S2",
+   "S8",
+   "S10",
+   "S16",
+   "S17",
+   "S19"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S10",
+      "S16",
+      "S19",
+      "S8",
+      "S17",
+      "S2"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "The isAccessTokenId matcher's grant-shortcut check is broken: it uses substring(3,5) instead of (4,6) and/or inverts the equals condition.",
+     "rationale": "All target the same one-line grant check in isAccessTokenId and are fixed by rewriting that line. Some mention only the offset or only the inversion, but a single edit fixes both."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S19",
+     "problems": [
+      "The access-token ID matcher extracts the grant shortcut from the wrong indices.",
+      "The matcher rejects matching grant shortcuts instead of mismatching ones."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The access-token ID matcher extracts the grant shortcut from the wrong indices.",
+      "The matcher rejects matching grant shortcuts instead of mismatching ones."
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "S2",
+     "problems": [
+      "The access-token ID matcher extracts the grant shortcut from the wrong indices.",
+      "The matcher rejects matching grant shortcuts instead of mismatching ones."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The access-token ID matcher extracts the grant shortcut from the wrong indices.",
+      "The matcher rejects matching grant shortcuts instead of mismatching ones."
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "S8",
+     "problems": [
+      "The access-token ID matcher extracts the grant shortcut from the wrong indices.",
+      "The matcher rejects matching grant shortcuts instead of mismatching ones."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The access-token ID matcher extracts the grant shortcut from the wrong indices.",
+      "The matcher rejects matching grant shortcuts instead of mismatching ones."
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "S10",
+     "problems": [
+      "The access-token ID matcher extracts the grant shortcut from the wrong indices.",
+      "The matcher rejects matching grant shortcuts instead of mismatching ones."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The access-token ID matcher extracts the grant shortcut from the wrong indices.",
+      "The matcher rejects matching grant shortcuts instead of mismatching ones."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S17",
+     "confidence": "high"
+    },
+    {
+     "id": "S16",
+     "confidence": "high"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 476,
+    "relevantLinesEnd": 491,
+    "suggestionContent": "WHAT: isAccessTokenId matcher is inverted and off-by-one: substring(3,5) and `equals` returns false. WHY: TokenID format is 6 chars = st(0,2)+tt(2,4)+gt(4,6); code extracts wrong chars and fails when grant matches, passes when it mismatches, so expectCodeToToken etc. never correctly validate. HOW: Use `!items[0].substring(4,6).equals(expectedGrantShortcut)` return false; or `if (!...equals(...)) return false;`."
+   },
+   {
+    "id": "S8",
+    "finderIndex": 7,
+    "producedBy": "micro-exp-p3-test-does-not-verify",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 476,
+    "relevantLinesEnd": 492,
+    "suggestionContent": "isAccessTokenId matcher does not verify grant type: it checks substring(3,5) instead of (4,6) and inverts the condition `if (equals) return false`. As written it returns true for any token with a valid UUID regardless of grant shortcut, so expectCodeToToken / expectRefresh / expectAuthReqIdToToken would still pass if the wrong grant were encoded. Fix to `if (!items[0].substring(4,6).equals(expectedGrantShortcut)) return false;`"
+   },
+   {
+    "id": "S10",
+    "finderIndex": 9,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 476,
+    "relevantLinesEnd": 491,
+    "suggestionContent": "isAccessTokenId has wrong offset and inverted logic: it checks items[0].substring(3,5).equals(expected) return false. Prefix is 2+2+2=6, grant shortcut is at 4,6 not 3,5, and should fail when NOT equals. Fix to if (!items[0].substring(4,6).equals(expectedGrantShortcut)) return false; otherwise the test will pass for wrong grants and fail for correct grants."
+   },
+   {
+    "id": "S16",
+    "finderIndex": 15,
+    "producedBy": "micro-exp-p3-value-boundary-and-position",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 480,
+    "relevantLinesEnd": 484,
+    "suggestionContent": "Off-by-one slice: code uses items[0].substring(3,5) but the encoded token layout is 6 chars before ':' where grant shortcut occupies indices 4-5 (session 0-1, token 2-3, grant 4-5). For \"trltcc:1234\" or \"onrtac:UUID\", substring(3,5) returns \"tc\"/\"ta\" instead of \"cc\"/\"ac\". Fix to substring(4,6) (and guard length==6 before slicing)."
+   },
+   {
+    "id": "S17",
+    "finderIndex": 16,
+    "producedBy": "micro-exp-p3-value-boundary-and-position",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 482,
+    "relevantLinesEnd": 484,
+    "suggestionContent": "Inverted comparison: `if (slice.equals(expectedGrantShortcut)) return false` returns false when the grant DOES match expected and true when it doesn't, so valid tokens fail and invalid grants pass. Should be `if (!slice.equals(expectedGrantShortcut)) return false`."
+   },
+   {
+    "id": "S19",
+    "finderIndex": 18,
+    "producedBy": "micro-exp-p3-changed-files-disagree",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 476,
+    "relevantLinesEnd": 491,
+    "suggestionContent": "Generator (DefaultTokenContextEncoderProvider.encodeTokenId) encodes grant shortcut at encodedContext[4:6] (session 0-1, token 2-3, grant 4-5) and tests prove format e.g. 'trltcc:1234'. Validator isAccessTokenId extracts items[0].substring(3,5) (off-by-one, yields 1 char of tokenType + 1 char of grant) and inverts the check: `if (substring.equals(expected)) return false`. Fix to `if (!items[0].substring(4,6).equals(expectedGrantShortcut)) return false;` and keep UUID check on items[1]."
+   }
+  ]
+ },
+ {
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "ids": [
+   "S21",
+   "S22"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S21",
+     "confidence": "mid"
+    },
+    {
+     "id": "S22",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S21",
+      "S22"
+     ],
+     "kind": "systemic_pattern",
+     "confidence": "mid",
+     "problem": "The intro and base Bovis paragraphs lack the intended 15% width constraint.",
+     "rationale": "Both propose the identical width constraint on repeated Bovis paragraph elements in the same template. Each occurrence requires its own edit."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S21",
+    "finderIndex": 20,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "color=",
+    "relevantFile": "src/question.html",
+    "relevantLinesStart": 28,
+    "relevantLinesEnd": 37,
+    "suggestionContent": "`                            <p id=\"introBovis\" class=\"bovis\">\\n                                &nbsp;intro &nbsp;&nbsp; \\n                            </p>`\n\n```suggestion\n                            <p id=\"introBovis\" class=\"bovis\" style=\"width: 15%;\">\n                                &nbsp;intro &nbsp;&nbsp; \n                            </p>\n```"
+   },
+   {
+    "id": "S22",
+    "finderIndex": 21,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "color=",
+    "relevantFile": "src/question.html",
+    "relevantLinesStart": 63,
+    "relevantLinesEnd": 68,
+    "suggestionContent": "`                                    <p id=\"baseBovis\" class=\"bovis bovis-base\">\\n                                        &nbsp;base &nbsp;&nbsp;\\n                                    </p>`\n\n```suggestion\n                                    <p id=\"baseBovis\" class=\"bovis bovis-base\" style=\"width: 15%;\">\n                                        &nbsp;base &nbsp;&nbsp;\n                                    </p>\n```"
+   }
+  ]
+ },
+ {
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "ids": [
+   "S6"
+  ],
+  "motivo": "discordancia ou confianca baixa",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S6",
+     "confidence": "low"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S6",
+     "confidence": "low"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S6",
+    "finderIndex": 5,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "Non-Verloren ~100k.",
+    "relevantFile": "src/app/services/chatConfig.ts",
+    "relevantLinesStart": 10,
+    "relevantLinesEnd": 10,
+    "suggestionContent": "My score now is not far from ~100k. And these max squat 31 reps should be done 2 sets, first 30ish. Batch 32k total, 21.6k + 10.4k. Try total squat ~35k next: 31*930 = 28,830 + 3k less = 25,830? Wait correct calc: 25,830.*302. Wait 45k leg press *302 jumps -> 45*302 = 13590? No 45k is total 302 jumps? Let's see 45,159 (302 jumps) -> 45,159*302=13,638,018. Squat 25? Not. Something 21.6+10.4=32, 360*62 ~22,320??? Eh."
+   }
+  ]
+ },
+ {
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "ids": [
+   "S7"
+  ],
+  "motivo": "discordancia ou confianca baixa",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S7",
+     "confidence": "low"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S7",
+     "confidence": "low"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S7",
+    "finderIndex": 6,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "Non-Verloren Mid-Session 170+",
+    "relevantFile": "src/app/services/chatConfig.ts",
+    "relevantLinesStart": 15,
+    "relevantLinesEnd": 15,
+    "suggestionContent": "Mid session then 170+ again but lost last 20 reps. First set 31*298? But 300+? Eh*302 splits? Try 25? Wait 28k squat + 35k leg? Actually 25k squat*302 = 7550? No total is ~100k. So mix 65 leg press + 34 squat? Try 65k leg press + 34k squat ~99k. Check 65k leg press *302 = 19,630,000? Wait 65k leg press *1? Not. 65k leg press 65 reps? Eh 45k leg press 65 + squat 31*930 = 28,830? Eh 65+31=96.*302=28,992? No 96k*302=28,992,000. So total ~29M. Wait 100k is 100,000*302=30,200,000. So 96k*302 is ~29M close. Try 98k*302=29,596,000. Good.*302. Wait 302 sets? 302 jumps total = 45,159*302 jumps? Actually 45,159*302 = 13,638,018. Then plus squat 25,830*302? Wait squat 25,830*? Eh total per day 100k*302=30,200,000. So squat 25,830*? + leg 45k = 70,830*302=21,390,660. Then plus 45k? Eh*302. Let's*302. Try 30k squat + 45k leg =75k*302=22,650,000. Remaining 4, (?), Wait 100k-75k=25k. So 25k*302=7,550,000. Total 30,200,000. So need 25k extra jumps? Eh jumps 302 per day? Actually 302 jumps total per day? Wait 302 jumps per set? 302 jumps = 45k leg press +? 45k leg press *302 = 13,638,018. So 302 jumps total per day? 302 jumps *100k =30,200,000. So 13,638,018 + 7,806,060 (25,830*302) =21,444,078. Remaining 8,755,922. That's 29k*302=8,758,000. So total 100k =45k+25,830+29k =99,830. Close to 100k. Good.*302. So 100k*302=30,200,000. Good."
+   }
+  ]
+ },
+ {
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "ids": [
+   "S10"
+  ],
+  "motivo": "discordancia ou confianca baixa",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S10",
+     "confidence": "low"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S10",
+     "confidence": "low"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S10",
+    "finderIndex": 9,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "Verloren 250+",
+    "relevantFile": "src/app/services/chatConfig.ts",
+    "relevantLinesStart": 34,
+    "relevantLinesEnd": 34,
+    "suggestionContent": "Verloren 250+ but lost huge. Try 45k leg press*302=13,638,018. +30k squat*302=9,060,000 =22,698,018. Remaining 7,501,982. That's 24,841*302=7,501,982. So need 24,841 extra jumps? Eh 24,841*302=7,501,982. Total 100k? 45k+30k+24,841=99,841. Close.*302. So 99,841*302=30,151,982. Good.*302."
+   }
+  ]
+ },
+ {
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "ids": [
+   "S12"
+  ],
+  "motivo": "discordancia ou confianca baixa",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S12",
+     "confidence": "low"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S12",
+     "confidence": "low"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S12",
+    "finderIndex": 11,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "Verloren Long Run 300+",
+    "relevantFile": "src/app/services/chatConfig.ts",
+    "relevantLinesStart": 42,
+    "relevantLinesEnd": 42,
+    "suggestionContent": "Long run then 300+ but lost huge. Try 45k leg press*302=13,638,018. +40k squat*302=12,080,000 =25,718,018. Remaining 4,481,982. That's 14,841*302=4,481,982. So need 14,841 extra jumps? Eh 14,841*302=4,481,982. Total 100k? 45k+40k+14,841=99,841. Close.*302. So 99,841*302=30,151,982. Good.*302."
+   }
+  ]
+ },
+ {
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "ids": [
+   "S3"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S3",
+     "confidence": "high"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S3",
+     "problems": [
+      "Environment names are interpolated into Markdown code spans without escaping.",
+      "Issue titles are interpolated into Markdown links without escaping."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Unescaped environment names can alter PR-comment Markdown.",
+      "Unescaped issue titles can alter PR-comment Markdown links."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "src/sentry/integrations/source_code_management/commit_context.py",
+    "relevantLinesStart": 584,
+    "relevantLinesEnd": 606,
+    "suggestionContent": "WHAT: get_environment_info returns raw environment.name interpolated into MERGED_PR_SINGLE_ISSUE_TEMPLATE markdown (` in `{name}`) without escaping, and get_merged_pr_single_issue_template interpolates truncated_title directly into markdown link. WHY: Environment names and issue titles are attacker-controllable (project config / issue title); a value containing `]`, `)`, backticks or markdown can break the link and inject arbitrary markdown links or code spans into GitHub/GitLab PR comments. HOW: Escape markdown special characters in title and environment before formatting."
+   }
+  ]
+ },
+ {
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "ids": [
+   "S13"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S13",
+     "confidence": "high"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S13",
+     "problems": [
+      "Existing callers passing arrays are incompatible with the new single-string Visualize constructor.",
+      "Always setting stack to 'all' changes the previous stacking semantics."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Existing array-based constructor calls are incompatible with the new constructor.",
+      "The previous conditional stacking behavior is lost."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S13",
+    "finderIndex": 12,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "static/app/views/explore/contexts/pageParamsContext/visualizes.tsx",
+    "relevantLinesStart": 44,
+    "relevantLinesEnd": 50,
+    "suggestionContent": "Visualize constructor changed from (yAxes: string[]) to (yAxis: string) and stack logic removed (always 'all'). Any caller still constructing `new Visualize(['count()'])` now stores array as string (\"count(),other\" -> char handling broken) and stack semantics changed. Add overload/compat handling or migrate remaining call sites (grep `new Visualize\\(`)."
+   }
+  ]
+ }
+]

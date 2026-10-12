@@ -1,0 +1,691 @@
+[
+ {
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "ids": [
+   "S2",
+   "S8",
+   "S10"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S10",
+      "S2",
+      "S8"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "The server does not deduplicate the incoming guests array, so the same new email submitted twice creates duplicate attendee records and sends duplicate invitations.",
+     "rationale": "All three report that the uniqueGuests filter only checks against existing attendees and not for duplicates within the input. S8 also mentions a concurrency race, but as an extension of the same uniqueness-enforcement fix."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G3",
+     "members": [
+      "S2",
+      "S10"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "Duplicate new addresses within one submitted guests array survive filtering and create duplicate attendees and invitations.",
+     "rationale": "Both report missing server-side deduplication within a single request, because the filter compares only against existing attendees."
+    }
+   ],
+   "multiProblem": [
+    {
+     "id": "S8",
+     "problems": [
+      "Duplicate addresses within one request create duplicate attendees.",
+      "Concurrent requests can each pass the existing-attendee check and insert the same guest."
+     ],
+     "relatedGroups": [
+      "G3"
+     ],
+     "uncoveredProblems": [
+      "Concurrent requests can insert duplicate attendees because the existing-attendee check and insertion lack atomic uniqueness enforcement."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 74,
+    "relevantLinesEnd": 78,
+    "suggestionContent": "uniqueGuests filters against existing attendees but does not deduplicate addresses within the incoming guests array. A direct mutation with the same new address twice inserts two Attendee records and sends duplicate invitations because the server schema permits duplicates and the Attendee model has no unique booking/email constraint. Deduplicate normalized input before filtering and inserting."
+   },
+   {
+    "id": "S8",
+    "finderIndex": 7,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 74,
+    "relevantLinesEnd": 78,
+    "suggestionContent": "Enforce guest uniqueness on the server, including atomically against existing attendees. This filter checks each submitted address only against the original booking snapshot, so a request with guests [\"new@example.com\", \"new@example.com\"] retains both and passes both entries to createMany, despite the dialog's explicit uniqueness requirement. Two concurrent requests for the same new address can likewise both pass this check before insertion. Deduplicate/validate the input and enforce booking/email uniqueness transactionally or with a database constraint so duplicate requests cannot create duplicate attendees (or surface a database constraint error after validation)."
+   },
+   {
+    "id": "S10",
+    "finderIndex": 9,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 74,
+    "relevantLinesEnd": 78,
+    "suggestionContent": "uniqueGuests does not deduplicate the submitted guests: it only filters against attendees already in the booking. The server schema accepts duplicates, so submitting [\"new@example.com\", \"new@example.com\"] passes this filter and creates two attendee records (and sends duplicate invitations). Deduplicate the input on the server before creating attendees rather than relying on the dialog's uniqueness check."
+   }
+  ]
+ },
+ {
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "ids": [
+   "S3",
+   "S6",
+   "S11"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G1",
+     "members": [
+      "S11",
+      "S6",
+      "S3"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "The blacklist check compares guest emails that have not been normalized against lowercased blacklist entries, so mixed-case addresses get past it.",
+     "rationale": "All three point to the same comparison at line 77 and give the same fix: normalize the guest email before checking it against the blacklist. S3's mention of plus-address aliases only adds to that normalization fix."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S11",
+      "S6"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "Guest addresses are compared case-sensitively against lowercased blacklist entries, allowing mixed-case bypasses.",
+     "rationale": "Both identify the same unnormalized guest value in the blacklist comparison and propose consistent lowercasing."
+    }
+   ],
+   "multiProblem": [
+    {
+     "id": "S3",
+     "problems": [
+      "Mixed-case guest addresses bypass lowercased blacklist entries.",
+      "Plus-address aliases bypass the blacklist because guest addresses are not reduced to their base address."
+     ],
+     "relatedGroups": [
+      "G2"
+     ],
+     "uncoveredProblems": [
+      "Plus-address aliases bypass the blacklist because guest addresses are not reduced to their base address."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 77,
+    "relevantLinesEnd": 77,
+    "suggestionContent": "The blacklist comparison uses the raw guest address against lowercase blacklist entries instead of the canonical address used by handleNewBooking. An authorized attendee can invite a blocked address using uppercase characters or a plus-address alias, bypassing the guest-email block and triggering an invitation. Compare extractBaseEmail(guest).toLowerCase() against normalized blacklist entries, as the existing booking flow does."
+   },
+   {
+    "id": "S6",
+    "finderIndex": 5,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "security",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 74,
+    "relevantLinesEnd": 77,
+    "suggestionContent": "The blacklist entries are lowercased at line 71, but `guest` is not normalized before `includes`. Both the UI and server schemas accept mixed-case emails without lowercasing, so a caller can submit `Blocked@Example.com` to bypass a configured `blocked@example.com` blacklist and have that address added and emailed. Normalize the incoming address to the same lowercase representation before checking the blacklist (preferably normalize guest inputs once before identity comparisons)."
+   },
+   {
+    "id": "S11",
+    "finderIndex": 10,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 77,
+    "relevantLinesEnd": 77,
+    "suggestionContent": "Blacklist entries are lowercased at lines 70–72, but guest input is compared without lowercasing. An address such as Blocked@example.com therefore bypasses a blacklist entry blocked@example.com and is added and emailed. Normalize both sides of the comparison consistently."
+   }
+  ]
+ },
+ {
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "ids": [
+   "S5"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S5",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S5",
+     "problems": [
+      "Retry-limit cleanup can delete successfully scheduled future reminders whose retry counts were not reset.",
+      "The retry-limit deletion branch lacks an SMS method restriction."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Retry-limit cleanup can delete successfully scheduled future reminders whose retry counts were not reset.",
+      "The retry-limit deletion branch lacks an SMS method restriction."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "relevantLinesStart": 38,
+    "relevantLinesEnd": 42,
+    "suggestionContent": "Restrict retry-limit deletion to unscheduled SMS reminders (or reset retryCount when scheduling succeeds). A reminder can fail twice, enter the next invocation with retryCount = 2, and successfully schedule; the success update does not reset that count. This unconditional OR arm deletes that successfully scheduled future reminder on the following run, losing its tracking/reference before delivery. It also removes the SMS method restriction from this cleanup arm."
+   }
+  ]
+ },
+ {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "ids": [
+   "S4",
+   "S14"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G5",
+     "members": [
+      "S14",
+      "S4"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "absolutize_urls handles only leading-slash paths, so protocol-relative URLs (and other relative URLs) resolve to the wrong place; resolving them against the article URL fixes it.",
+     "rationale": "Both point to the same href/src rewriting code, report the protocol-relative URL being mangled, and propose resolving URLs against the article URL."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S14",
+     "problems": [
+      "Ordinary relative href/src paths remain unresolved and consequently resolve against the forum.",
+      "Protocol-relative href/src URLs are incorrectly rewritten onto the article host."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Ordinary relative href/src paths remain unresolved and consequently resolve against the forum.",
+      "Protocol-relative href/src URLs are incorrectly rewritten onto the article host; S4 also reports this, but no group has two single-problem suggestions."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S4",
+     "confidence": "mid"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/models/topic_embed.rb",
+    "relevantLinesStart": 64,
+    "relevantLinesEnd": 71,
+    "suggestionContent": "The URL rewrite treats protocol-relative URLs such as `//cdn.example.com/image.jpg` as paths on the article host, producing `http://article-host/cdn.example.com/image.jpg`. Imported images and links using protocol-relative external URLs therefore point to the wrong server. Resolve both href and src using URI joining against the article URL, which also handles ordinary relative paths correctly."
+   },
+   {
+    "id": "S14",
+    "finderIndex": 13,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "app/models/topic_embed.rb",
+    "relevantLinesStart": 62,
+    "relevantLinesEnd": 72,
+    "suggestionContent": "Resolve relative href/src references with URI joining rather than handling only leading slashes. For an article at http://example.com/blog/article, href='next' and src='images/photo.jpg' remain relative and resolve against the forum instead of the imported article. Moreover, '//cdn.example.com/photo.jpg' is rewritten to 'http://example.com/cdn.example.com/photo.jpg'. Both yield incorrect links/images in imported posts; apply proper URI resolution to both anchors and images."
+   }
+  ]
+ },
+ {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "ids": [
+   "S16"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [],
+   "multiProblem": [],
+   "unique": [
+    {
+     "id": "S16",
+     "confidence": "high"
+    }
+   ]
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S16",
+     "problems": [
+      "The missing-embed_url test is rejected by embeddability checks before reaching required-parameter validation.",
+      "The test asserts only non-success rather than the specific missing-parameter response it claims to verify."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "Invalid host/referer setup prevents the missing-embed_url test from exercising parameter validation.",
+      "The broad non-success assertion does not verify the intended missing-parameter response."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S16",
+    "finderIndex": 15,
+    "producedBy": "micro-exp-p3-test-does-not-verify",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "spec/controllers/embed_controller_spec.rb",
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 10,
+    "suggestionContent": "The missing-embed_url test does not establish a valid embeddable host and referer, so ensure_embeddable rejects this request before best reaches params.require(:embed_url). It also only checks non-success despite claiming a 404. Removing the required-parameter check would therefore leave this test green. Configure an allowed host/referer for this case and assert the intended missing-parameter response."
+   }
+  ]
+ },
+ {
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "ids": [
+   "S1",
+   "S7",
+   "S8",
+   "S13"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G4",
+     "members": [
+      "S7",
+      "S1",
+      "S13",
+      "S8"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "The migration indexes [0]['id'] on a category query that can return no rows, so it crashes before reaching the uncategorized fallback.",
+     "rationale": "All describe the same unguarded empty-result access in the migration's category lookup. The note about the fallback query is part of the same fix."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [
+    {
+     "id": "G2",
+     "members": [
+      "S7",
+      "S1",
+      "S13"
+     ],
+     "kind": "same_location",
+     "confidence": "high",
+     "problem": "The migration dereferences an empty embed_category query result before reaching its fallback.",
+     "rationale": "Each reports the unchecked first row of the same category query. S1 mentions handling missing fallback settings only as part of its proposed fix."
+    }
+   ],
+   "multiProblem": [
+    {
+     "id": "S8",
+     "problems": [
+      "The initial embed_category query can return no rows and crash before the fallback.",
+      "The uncategorized fallback query also dereferences a missing stored setting row."
+     ],
+     "relatedGroups": [
+      "G2"
+     ],
+     "uncoveredProblems": [
+      "The uncategorized fallback query crashes when its setting row is absent."
+     ],
+     "confidence": "mid"
+    }
+   ],
+   "unique": []
+  },
+  "suggestions": [
+   {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "relevantLinesStart": 9,
+    "relevantLinesEnd": 11,
+    "suggestionContent": "The migration indexes the first category-query result before checking whether any row was returned. An installation without a persisted embed_category setting, or with no matching category name, aborts migration before reaching the uncategorized fallback. Check whether the result contains a row before accessing its id and handle missing fallback settings as well."
+   },
+   {
+    "id": "S7",
+    "finderIndex": 6,
+    "producedBy": "micro-exp-p3-value-boundary-and-position",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "relevantLinesStart": 9,
+    "relevantLinesEnd": 11,
+    "suggestionContent": "Guard the empty query result before indexing row 0. If embed_category has no stored setting or its value does not match an existing category name, the join returns zero rows and `[0]['id']` raises rather than reaching the uncategorized fallback below. This aborts the migration even for sites that have never configured embedding. Retrieve the first row safely and use the uncategorized category when no row is returned."
+   },
+   {
+    "id": "S8",
+    "finderIndex": 7,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "relevantLinesStart": 9,
+    "relevantLinesEnd": 15,
+    "suggestionContent": "The category lookup assumes the SELECT returns a row: `[0]['id']` raises when embed_category has never been configured or its category no longer exists. This happens before the `category_id == 0` fallback, so ordinary installations without an embedding setting cannot run this migration. Handle an empty result explicitly and resolve the uncategorized fallback safely as well (its SELECT also assumes a stored setting row)."
+   },
+   {
+    "id": "S13",
+    "finderIndex": 12,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "relevantLinesStart": 9,
+    "relevantLinesEnd": 11,
+    "suggestionContent": "The category query can return no rows when embed_category has not been explicitly stored or does not match a category name. In that case `[0]` is nil and `['id']` raises before the `category_id == 0` fallback can run, preventing migration even on sites that never configured embedding. Check for an empty result before extracting the ID."
+   }
+  ]
+ },
+ {
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "ids": [
+   "S2",
+   "S5",
+   "S7",
+   "S8",
+   "S10",
+   "S11",
+   "S12",
+   "S18"
+  ],
+  "motivo": "discordancia",
+  "opus": {
+   "groups": [
+    {
+     "id": "G1",
+     "members": [
+      "S10",
+      "S11",
+      "S7",
+      "S12",
+      "S5",
+      "S18",
+      "S8",
+      "S2"
+     ],
+     "kind": "same_location",
+     "confidence": "mid",
+     "problem": "The isAccessTokenId matcher's grant check on line 483 is broken: it reads substring(3,5) instead of (4,6) and/or returns false on equality instead of on mismatch, so it doesn't actually check the expected grant.",
+     "rationale": "All point at the same grant-comparison line in AssertEvents.isAccessTokenId, and one line edit fixes it (!items[0].substring(4,6).equals(expected)). Some report only the index error or only the inversion, but the fix is the same."
+    }
+   ],
+   "multiProblem": [],
+   "unique": []
+  },
+  "astra": {
+   "groups": [],
+   "multiProblem": [
+    {
+     "id": "S7",
+     "problems": [
+      "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+      "The matcher rejects equality with the expected grant instead of rejecting inequality."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The matcher extracts the wrong substring for the grant.",
+      "The matcher's grant equality condition is inverted."
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "S18",
+     "problems": [
+      "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+      "The matcher rejects equality with the expected grant instead of rejecting inequality."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The matcher extracts the wrong substring for the grant.",
+      "The matcher's grant equality condition is inverted."
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "S12",
+     "problems": [
+      "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+      "The matcher rejects equality with the expected grant instead of rejecting inequality."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The matcher extracts the wrong substring for the grant.",
+      "The matcher's grant equality condition is inverted."
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "S5",
+     "problems": [
+      "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+      "The matcher rejects equality with the expected grant instead of rejecting inequality."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The matcher extracts the wrong substring for the grant.",
+      "The matcher's grant equality condition is inverted."
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "S2",
+     "problems": [
+      "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+      "The matcher rejects equality with the expected grant instead of rejecting inequality.",
+      "Malformed short prefixes can throw because the matcher slices without validating their length."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The matcher extracts the wrong substring for the grant.",
+      "The matcher's grant equality condition is inverted.",
+      "The matcher can throw on malformed short prefixes instead of returning a mismatch."
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "S8",
+     "problems": [
+      "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+      "The matcher rejects equality with the expected grant instead of rejecting inequality."
+     ],
+     "relatedGroups": [],
+     "uncoveredProblems": [
+      "The matcher extracts the wrong substring for the grant.",
+      "The matcher's grant equality condition is inverted."
+     ],
+     "confidence": "high"
+    }
+   ],
+   "unique": [
+    {
+     "id": "S11",
+     "confidence": "high"
+    },
+    {
+     "id": "S10",
+     "confidence": "high"
+    }
+   ]
+  },
+  "suggestions": [
+   {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 481,
+    "relevantLinesEnd": 484,
+    "suggestionContent": "The access-token ID matcher extracts substring(3, 5) instead of substring(4, 6) and returns false when the extracted value equals the expected grant. This allows tokens with incorrect grant shortcuts to pass the authorization-code, refresh, device and CIBA event assertions, while malformed short prefixes can throw instead of producing a mismatch. Require a six-character prefix and reject when !items[0].substring(4, 6).equals(expectedGrantShortcut)."
+   },
+   {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 480,
+    "relevantLinesEnd": 484,
+    "suggestionContent": "The event matcher does not follow the new token-ID contract. The encoder places the grant shortcut at indices [4, 6), but this consumer reads [3, 5) and returns false when it equals the expected shortcut rather than when it differs. Consequently, for example, expectCodeToToken accepts `onrtrt:<valid UUID>` even though that is a refresh-token grant instead of an authorization-code grant. Check the prefix length and reject when `!items[0].substring(4, 6).equals(expectedGrantShortcut)` so the updated event assertions actually validate the grant."
+   },
+   {
+    "id": "S7",
+    "finderIndex": 6,
+    "producedBy": "micro-exp-p3-text-that-ships",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 482,
+    "relevantLinesEnd": 483,
+    "suggestionContent": "The expectedGrantShortcut parameter and accompanying comment promise validation of the expected grant, but this implementation extracts substring(3, 5) and returns false on equality. The encoder places the grant at zero-based positions 4–5, so typical IDs with any grant pass this check, contradicting the matcher’s expected-grant contract and allowing incorrect grant context to pass the new event assertions. Compare substring(4, 6) with the expected shortcut and reject inequality (after validating prefix length)."
+   },
+   {
+    "id": "S8",
+    "finderIndex": 7,
+    "producedBy": "micro-exp-p3-test-does-not-verify",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 482,
+    "relevantLinesEnd": 484,
+    "suggestionContent": "The grant assertion uses substring(3, 5) and rejects equality. The encoder places the grant at indices 4–5, so this matcher generally accepts any grant prefix with a UUID suffix. For example, an authorization-code event containing `onrtna:<uuid>` still passes the expected `ac` check. Validate the prefix length and return false when substring(4, 6) does not equal expectedGrantShortcut."
+   },
+   {
+    "id": "S10",
+    "finderIndex": 9,
+    "producedBy": "micro-exp-p3-value-boundary-and-position",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 483,
+    "relevantLinesEnd": 483,
+    "suggestionContent": "The grant segment is at indices [4,6), not [3,5). For example, `onrtac:<uuid>` yields `ta` here rather than `ac`, preventing the matcher from actually checking the encoded grant. Extract `substring(4,6)` (after checking the prefix length) to match the encoder layout."
+   },
+   {
+    "id": "S11",
+    "finderIndex": 10,
+    "producedBy": "micro-exp-p3-value-boundary-and-position",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 483,
+    "relevantLinesEnd": 483,
+    "suggestionContent": "The equality condition is inverted: it returns false when the extracted grant equals the expected grant and accepts mismatches. Independently of correcting the slice indices, negate this equality check so that wrong-grant token IDs fail and correct-grant IDs pass."
+   },
+   {
+    "id": "S12",
+    "finderIndex": 11,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 482,
+    "relevantLinesEnd": 483,
+    "suggestionContent": "The encoder places the grant shortcut at indices 4–6, but this matcher reads substring(3, 5) and returns false on equality. Consequently a token with the wrong grant normally passes the assertion as long as its suffix is a UUID. Require substring(4, 6) to equal expectedGrantShortcut (and validate prefix length before slicing)."
+   },
+   {
+    "id": "S18",
+    "finderIndex": 17,
+    "producedBy": "micro-exp-p3-changed-files-disagree",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "relevantLinesStart": 480,
+    "relevantLinesEnd": 484,
+    "suggestionContent": "The encoder produces a prefix consisting of two session characters, two token characters, and two grant characters (for example `onrtac`), but this matcher reads substring(3, 5) and rejects equality instead of requiring it. Thus expectCodeToToken/expectRefresh/etc. accept token IDs with the wrong grant, hiding failures in the grant-context propagation this PR introduces. Validate a six-character prefix and require substring(4, 6).equals(expectedGrantShortcut)."
+   }
+  ]
+ }
+]
