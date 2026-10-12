@@ -20,6 +20,7 @@
  * inlining, hybrid regex+judge, compound-rule decomposition.
  */
 import { jsonSchema, type Schema } from 'ai';
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { z } from 'zod';
 import { recoverRuleUuid } from './finding-mapper';
 import {
@@ -725,7 +726,7 @@ function fileShardUser(
                   `When a finding is a DIFFERENT problem that exists because an entry in <PreviousReviewDecisions> was applied, or reverses or narrows one, put that entry's Id in "revisesSuggestionId" and say why in the finding; otherwise null.`,
               ]
             : []),
-        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<short>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>","revisesSuggestionId":"<Id or null>"}]}`,
+        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<${TITLE_PROMPT_SPEC}>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>","revisesSuggestionId":"<Id or null>"}]}`,
     ].join('\n');
 }
 
@@ -791,7 +792,7 @@ function prShardUser(
         ``,
         previousDecisionsSection,
         ...languageInstructionLines(languageLabel),
-        `Return ONLY JSON (ruleId is the rule's [n] number): {"violations":[{"ruleId":<n>,"suggestionContent":"WHAT/WHY","oneSentenceSummary":"<short>"}]}`,
+        `Return ONLY JSON (ruleId is the rule's [n] number): {"violations":[{"ruleId":<n>,"suggestionContent":"WHAT/WHY","oneSentenceSummary":"<${TITLE_PROMPT_SPEC}>"}]}`,
     ].join('\n');
 }
 

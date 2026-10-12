@@ -31,6 +31,18 @@ const SECONDARY_MODELS = {
         baseURL: 'https://api.z.ai/api/paas/v4',
         keyEnv: ['BYOK_ZHIPU_API_KEY', 'API_ZHIPU_API_KEY'],
     },
+    // Same route as tier0-models.js 'deepseek-v4-flash@fireworks' (the
+    // trial/managed default).
+    'deepseek-v4-flash@fireworks': {
+        provider: 'openai-compatible',
+        model: 'accounts/fireworks/models/deepseek-v4p1-flash',
+        baseURL: 'https://api.fireworks.ai/inference/v1',
+        keyEnv: [
+            'API_FIREWORKS_API_KEY',
+            'FIREWORKS_API_KEY',
+            'BYOK_FIREWORKS_API_KEY',
+        ],
+    },
     'haiku-4.5': {
         provider: 'anthropic',
         model: 'claude-haiku-4-5-20251001',

@@ -127,3 +127,34 @@ describe('GenerateKodyRulesUseCase.fetchPullRequestComments', () => {
         expect(pr1.files).toEqual(['file-1']);
     });
 });
+
+describe('GenerateKodyRulesUseCase — excluded reviewers inheritance', () => {
+    const resolve = (configValue: unknown) => {
+        const deps: any[] = new Array(GenerateKodyRulesUseCase.length).fill({});
+        deps[2] = { findByKey: jest.fn().mockResolvedValue({ configValue }) };
+        const useCase = new (GenerateKodyRulesUseCase as any)(...deps);
+        return useCase.resolveExcludedReviewersByRepo({
+            organizationId: 'org-1',
+            teamId: 'team-1',
+        });
+    };
+
+    it('applies the global list to repos without their own and lets a repo list replace it', async () => {
+        const { forRepo } = await resolve({
+            configs: { kodyLearningExcludedReviewers: ['bot'] },
+            repositories: [
+                { id: 'inherits', configs: {} },
+                {
+                    id: 'own',
+                    configs: { kodyLearningExcludedReviewers: ['alice'] },
+                },
+                { id: 'none', configs: { kodyLearningExcludedReviewers: [] } },
+            ],
+        });
+
+        expect(forRepo('inherits')).toEqual(new Set(['bot']));
+        expect(forRepo('own')).toEqual(new Set(['alice']));
+        expect(forRepo('none')).toBeUndefined();
+        expect(forRepo('unknown')).toEqual(new Set(['bot']));
+    });
+});

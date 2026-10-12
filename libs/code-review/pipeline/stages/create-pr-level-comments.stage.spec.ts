@@ -1,3 +1,4 @@
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { CreatePrLevelCommentsStage } from './create-pr-level-comments.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
@@ -63,19 +64,22 @@ describe('CreatePrLevelCommentsStage — input contract', () => {
         ['organizationAndTeamData', { organizationAndTeamData: undefined }],
         ['pullRequest.number', { pullRequest: {} }],
         ['repository id/name', { repository: { name: 'repo' } }],
-    ])('returns the context untouched and posts nothing when %s is missing', async (_l, patch) => {
-        const ctx = buildContext({
-            validSuggestionsByPR: [{ id: 's1' }],
-        } as any);
-        Object.assign(ctx, patch);
+    ])(
+        'returns the context untouched and posts nothing when %s is missing',
+        async (_l, patch) => {
+            const ctx = buildContext({
+                validSuggestionsByPR: [{ id: 's1' }],
+            } as any);
+            Object.assign(ctx, patch);
 
-        const out = await run(ctx);
+            const out = await run(ctx);
 
-        expect(out).toBe(ctx);
-        expect(
-            commentManagerService.createPrLevelReviewComments,
-        ).not.toHaveBeenCalled();
-    });
+            expect(out).toBe(ctx);
+            expect(
+                commentManagerService.createPrLevelReviewComments,
+            ).not.toHaveBeenCalled();
+        },
+    );
 
     it('does nothing when there are no PR-level suggestions from either source', async () => {
         await run(buildContext());
@@ -89,6 +93,7 @@ describe('CreatePrLevelCommentsStage — input contract', () => {
             buildContext({
                 validSuggestionsByPR: [{ id: 'a' }],
                 businessLogicResults: [{ id: 'b' }],
+                platformType: 'BITBUCKET',
             } as any),
         );
 
@@ -101,6 +106,8 @@ describe('CreatePrLevelCommentsStage — input contract', () => {
             [{ id: 'a' }, { id: 'b' }], // both sources merged
             undefined, // languageResultPrompt (unset in this context)
             undefined, // suggestionCopyPrompt (unset in this context)
+            'BITBUCKET', // platformType, so Bitbucket can reply with the prompt
+            expect.any(Function),
         );
     });
 
@@ -137,5 +144,29 @@ describe('CreatePrLevelCommentsStage — input contract', () => {
         expect(
             pullRequestsService.addPrLevelSuggestions,
         ).not.toHaveBeenCalled();
+    });
+    it('records missing prompt delivery as partial without mutating frozen context', async () => {
+        const error = new Error('reply failed');
+        commentManagerService.createPrLevelReviewComments.mockImplementation(
+            async (...args: unknown[]) => {
+                (args[7] as (error: Error) => void)(error);
+                return { commentResults: [] };
+            },
+        );
+        const ctx = frozenContext(
+            buildContext({
+                validSuggestionsByPR: [{ id: 's1' }] as never,
+                errors: [],
+            }),
+        );
+        const out = await run(ctx);
+        expect(ctx.errors).toEqual([]);
+        expect(out.errors).toEqual([
+            expect.objectContaining({
+                severity: 'partial',
+                substage: 'bitbucket-prompt-reply',
+                error,
+            }),
+        ]);
     });
 });

@@ -16,6 +16,8 @@ export type DisableIdeSyncAction = "keep" | "pause" | "delete";
 
 interface Props {
     counts: ImportedKodyRulesCounts;
+    /** Counts span every repository that follows the global setting. */
+    isGlobal?: boolean;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * — otherwise there's nothing to do and the caller should skip straight to
  * the mutation with `keep`.
  */
-export const DisableIdeSyncModal = ({ counts }: Props) => {
+export const DisableIdeSyncModal = ({ counts, isGlobal = false }: Props) => {
     useEffectOnce(() => magicModal.lock());
     const [action, setAction] = useState<DisableIdeSyncAction>("keep");
 
@@ -37,7 +39,10 @@ export const DisableIdeSyncModal = ({ counts }: Props) => {
                 <DialogHeader>
                     <DialogTitle>Disable IDE rules auto-sync?</DialogTitle>
                     <DialogDescription>
-                        You have <strong>{counts.active}</strong>{" "}
+                        {isGlobal
+                            ? "The repositories that follow this setting have"
+                            : "You have"}{" "}
+                        <strong>{counts.active}</strong>{" "}
                         {counts.active === 1 ? "rule" : "rules"} currently
                         auto-synced from IDE rule files (
                         <code className="text-xs">.cursorrules</code>,{" "}

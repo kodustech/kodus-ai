@@ -106,3 +106,33 @@ describe('review normalizer', () => {
         expect(result.duration).toBe(0);
     });
 });
+
+describe('review normalizer — full explanation', () => {
+    it('prefers the full explanation over the short comment body', () => {
+        const [file] = mapFileSuggestions([
+            {
+                id: '1',
+                relevantFile: 'a.ts',
+                suggestionContent: 'Short.',
+                fullExplanation: 'The whole explanation.',
+                oneSentenceSummary: 'Title',
+                label: 'bug',
+                severity: 'high',
+                relevantLinesStart: 1,
+            } as any,
+        ]);
+        const [pr] = mapPrLevelSuggestions([
+            {
+                id: '2',
+                suggestionContent: 'Short PR.',
+                fullExplanation: 'The whole PR explanation.',
+                oneSentenceSummary: 'PR title',
+                label: 'kody_rules',
+                severity: 'low',
+            } as any,
+        ]);
+
+        expect(file.message).toBe('The whole explanation.');
+        expect(pr.message).toBe('The whole PR explanation.');
+    });
+});

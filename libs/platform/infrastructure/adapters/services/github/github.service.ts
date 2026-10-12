@@ -24,6 +24,11 @@ import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
 import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
+import {
+    resolveAgentPrompt,
+    formatFixBlock,
+    formatTitleLine,
+} from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import {
@@ -4229,42 +4234,6 @@ export class GithubService
         return `<sub>${text}</sub>\n\n`;
     }
 
-    private formatPromptForLLM(lineComment: any) {
-        let copyPrompt = '';
-        if (lineComment?.suggestion?.llmPrompt) {
-            if (lineComment.path) {
-                copyPrompt += `File ${lineComment.path}:\n\n`;
-            }
-
-            if (lineComment.start_line && lineComment.line) {
-                copyPrompt += `Line ${lineComment.start_line} to ${lineComment.line}:\n\n`;
-            } else if (lineComment.line) {
-                copyPrompt += `Line ${lineComment.line}:\n\n`;
-            }
-
-            copyPrompt += lineComment?.suggestion?.llmPrompt;
-
-            if (lineComment?.body?.improvedCode) {
-                copyPrompt +=
-                    '\n\nSuggested Code:\n\n' + lineComment?.body?.improvedCode;
-            }
-
-            copyPrompt = `\n\n<details>
-
-<summary>Prompt for LLM</summary>
-
-\`\`\`
-
-${copyPrompt}
-
-\`\`\`
-
-</details>\n\n`;
-        }
-
-        return copyPrompt;
-    }
-
     formatBodyForGitHub(
         lineComment: any,
         repository: any,
@@ -4272,28 +4241,19 @@ ${copyPrompt}
         suggestionCopyPrompt: boolean,
         isCommittableSuggestion?: boolean,
     ) {
-        const improvedCode = isCommittableSuggestion
-            ? lineComment?.suggestion?.validatedData?.code
-            : lineComment?.body?.improvedCode;
-
-        const language = isCommittableSuggestion
-            ? 'suggestion'
-            : lineComment?.suggestion?.language?.toLowerCase() ||
-              repository?.language?.toLowerCase();
-
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
 
-        const codeBlock = improvedCode
+        // Code shows in the comment only as a native committable suggestion;
+        // otherwise the fix lives in the collapsed block below the body.
+        const codeBlock = isCommittableSuggestion
             ? this.formatCodeBlock(
-                  language,
-                  isCommittableSuggestion
-                      ? improvedCode
-                      : this.dedentCode(improvedCode),
+                  'suggestion',
+                  lineComment.suggestion.validatedData.code,
               )
             : '';
-        const suggestionContent = lineComment?.body?.suggestionContent || '';
+        const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
         const actionStatement = lineComment?.body?.actionStatement
             ? `${lineComment.body.actionStatement}\n\n`
             : '';
@@ -4307,9 +4267,16 @@ ${copyPrompt}
                 severityShield,
             ].join(' ') + '\n\n';
 
-        const copyPrompt = suggestionCopyPrompt
-            ? this.formatPromptForLLM(lineComment)
-            : '';
+        const copyPrompt = formatFixBlock({
+            copyPrompt: suggestionCopyPrompt,
+            path: lineComment?.path,
+            startLine: lineComment?.start_line,
+            endLine: lineComment?.line,
+            prompt: resolveAgentPrompt(lineComment?.suggestion),
+            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            language:
+                lineComment?.suggestion?.language || repository?.language,
+        });
 
         const experimentalWarning = isCommittableSuggestion
             ? `
@@ -8025,6 +7992,7 @@ This is an experimental feature that generates committable changes. Review the d
         }
 
         // BODY - Conteúdo principal
+        commentBody += formatTitleLine(suggestion?.oneSentenceSummary);
         if (suggestion?.suggestionContent) {
             commentBody += `${suggestion.suggestionContent}\n\n`;
         }
@@ -8033,9 +8001,12 @@ This is an experimental feature that generates committable changes. Review the d
             commentBody += `${suggestion.clusteringInformation.actionStatement}\n\n`;
         }
 
-        if (suggestionCopyPrompt) {
-            commentBody += this.formatPromptForLLM(suggestion);
-        }
+        commentBody += formatFixBlock({
+            copyPrompt: suggestionCopyPrompt,
+            prompt: resolveAgentPrompt(suggestion),
+            improvedCode: suggestion?.improvedCode,
+            language: suggestion?.language || params.repository?.language,
+        });
 
         // FOOTER - Interação/Feedback
         if (includeFooter) {

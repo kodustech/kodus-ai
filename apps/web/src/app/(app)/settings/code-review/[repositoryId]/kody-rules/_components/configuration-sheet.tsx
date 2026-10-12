@@ -44,7 +44,9 @@ export const KodyRulesConfigurationSheet = ({
                 <div className="flex flex-col gap-3 px-6 py-5">
                     <KodyKnowledgeApprovalSetting />
 
-                    {isRepoView && (
+                    {/* Repository-scoped behaviors: set org-wide at global,
+                        overridable per repository, absent per directory. */}
+                    {(isRepoView || isGlobalView) && (
                         <Suspense fallback={<Skeleton className="h-15" />}>
                             <GenerateRulesOptions />
                         </Suspense>

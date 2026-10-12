@@ -17,15 +17,17 @@ function build(opts: {
     seededAfterLock?: (repoId: string) => boolean;
     lockAcquired?: (repoId: string) => boolean;
     acquireThrows?: (repoId: string) => boolean;
+    globalConfigs?: Record<string, unknown>;
+    repoConfigs?: Record<string, Record<string, unknown>>;
 }) {
     const parametersService = {
         findByKey: jest.fn().mockResolvedValue({
             configValue: {
-                configs: {},
+                configs: opts.globalConfigs ?? {},
                 repositories: opts.repoIds.map((id) => ({
                     id,
                     isSelected: true,
-                    configs: {},
+                    configs: opts.repoConfigs?.[id] ?? {},
                 })),
             },
         }),
@@ -91,6 +93,40 @@ const run = (cron: KodyLearningCronProvider) =>
         organizationId: 'org-1',
         teamId: 'team-1',
     });
+
+describe('KodyLearningCronProvider — generator setting inheritance', () => {
+    it('skips repos that inherit "off" from global and keeps repo overrides', async () => {
+        const { cron, generateKodyRulesUseCase } = build({
+            repoIds: ['inherits', 'own-on'],
+            seeded: () => true,
+            globalConfigs: { kodyRulesGeneratorEnabled: false },
+            repoConfigs: { 'own-on': { kodyRulesGeneratorEnabled: true } },
+        });
+
+        await run(cron);
+
+        expect(generateKodyRulesUseCase.execute).toHaveBeenCalledTimes(1);
+        expect(generateKodyRulesUseCase.execute).toHaveBeenCalledWith(
+            { teamId: 'team-1', weeks: 1, repositoriesIds: ['own-on'] },
+            'org-1',
+        );
+    });
+
+    it('skips a repo whose own value is "off" while global is on', async () => {
+        const { cron, generateKodyRulesUseCase } = build({
+            repoIds: ['r1', 'own-off'],
+            seeded: () => true,
+            repoConfigs: { 'own-off': { kodyRulesGeneratorEnabled: false } },
+        });
+
+        await run(cron);
+
+        expect(generateKodyRulesUseCase.execute).toHaveBeenCalledWith(
+            { teamId: 'team-1', weeks: 1, repositoriesIds: ['r1'] },
+            'org-1',
+        );
+    });
+});
 
 describe('KodyLearningCronProvider — per-repo backfill window', () => {
     it('uses a 3-month window for repos with no past-review rules yet', async () => {

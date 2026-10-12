@@ -10,6 +10,7 @@ import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-dec
 export interface RevisableSuggestion {
     revisesSuggestionId?: string;
     suggestionContent?: string;
+    fullExplanation?: string;
     llmPrompt?: string;
 }
 
@@ -48,6 +49,9 @@ export function applyRevisionLinks(
         const line = revisionLinkLine(prior);
         if (!(s.suggestionContent || '').startsWith(line)) {
             s.suggestionContent = `${line}\n\n${s.suggestionContent || ''}`;
+        }
+        if (s.fullExplanation && !s.fullExplanation.startsWith(line)) {
+            s.fullExplanation = `${line}\n\n${s.fullExplanation}`;
         }
         if (s.llmPrompt && !s.llmPrompt.startsWith(line)) {
             s.llmPrompt = `${line}\n\n${s.llmPrompt}`;

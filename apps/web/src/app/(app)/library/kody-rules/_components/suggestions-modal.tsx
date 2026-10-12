@@ -12,6 +12,7 @@ import {
     DialogTrigger,
 } from "@components/ui/dialog";
 import { Link } from "@components/ui/link";
+import { Markdown } from "@components/ui/markdown";
 import { Separator } from "@components/ui/separator";
 import { Spinner } from "@components/ui/spinner";
 import { SyntaxHighlight } from "@components/ui/syntax-highlight";
@@ -378,11 +379,21 @@ export const SuggestionsModal = ({
                                                         </div>
                                                     </div>
 
-                                                    <p className="text-sm">
-                                                        {
-                                                            suggestion.suggestionContent
-                                                        }
-                                                    </p>
+                                                    {suggestion.oneSentenceSummary && (
+                                                        <p className="text-sm font-semibold">
+                                                            {
+                                                                suggestion.oneSentenceSummary
+                                                            }
+                                                        </p>
+                                                    )}
+
+                                                    <div className="text-sm">
+                                                        <Markdown>
+                                                            {
+                                                                suggestion.suggestionContent
+                                                            }
+                                                        </Markdown>
+                                                    </div>
 
                                                     {shouldShowDetailedView && (
                                                         <div className="space-y-3">

@@ -153,6 +153,8 @@ export type CodeSuggestion = {
     existingCode?: string;
     improvedCode: string;
     oneSentenceSummary?: string;
+    /** The finder's whole explanation, labels stripped; `suggestionContent` is the short body shown to people. */
+    fullExplanation?: string;
     relevantLinesStart?: number;
     relevantLinesEnd?: number;
     label: string;
@@ -214,6 +216,8 @@ export type CodeSuggestion = {
      * list, so executeStage renders it after the formatter runs.
      */
     kodyRuleOtherLocations?: string[];
+    /** Merged finding locations, rendered after the content formatter. */
+    alsoFoundIn?: string[];
 
     isCommittable?: boolean;
     validatedData?: {

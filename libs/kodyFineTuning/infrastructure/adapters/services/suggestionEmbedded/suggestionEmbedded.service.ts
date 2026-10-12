@@ -259,7 +259,9 @@ export class SuggestionEmbeddedService implements ISuggestionEmbeddedService {
             return null;
         }
 
-        const textToEmbed = `${suggestion.suggestionContent} ${suggestion.oneSentenceSummary} ${suggestion.label}`;
+        // The full explanation reads like the bodies the existing corpus was
+        // embedded from; the short body written for people does not.
+        const textToEmbed = `${suggestion.fullExplanation || suggestion.suggestionContent} ${suggestion.oneSentenceSummary} ${suggestion.label}`;
         const result = await getOpenAIEmbedding(textToEmbed);
         return result?.data[0]?.embedding;
     }

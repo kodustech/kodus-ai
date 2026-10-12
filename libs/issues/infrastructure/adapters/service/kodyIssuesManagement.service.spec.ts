@@ -145,6 +145,39 @@ describe('KodyIssuesManagementService', () => {
         );
     });
 
+    describe('createNewIssues — issue text', () => {
+        it('describes the issue with the full explanation, not the short comment body', async () => {
+            pullRequestsServiceMock.findByNumberAndRepositoryName = jest
+                .fn()
+                .mockResolvedValue({ number: 42, user: { id: 'user-1' } });
+            issuesServiceMock.create.mockResolvedValue({ uuid: 'i-1' });
+
+            await service.createNewIssues(
+                {
+                    organizationAndTeamData: mockOrganizationAndTeamData,
+                    repository: mockRepository,
+                    pullRequest: mockPullRequest,
+                } as any,
+                [
+                    {
+                        ...mockSuggestion,
+                        suggestionContent: 'Short body.',
+                        fullExplanation:
+                            'obj can be undefined when the cache misses. Reading prop throws. Use optional chaining.',
+                    } as any,
+                ],
+            );
+
+            expect(issuesServiceMock.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    title: 'Add null safety check',
+                    description:
+                        'obj can be undefined when the cache misses. Reading prop throws. Use optional chaining.',
+                }),
+            );
+        });
+    });
+
     it('should be defined', () => {
         expect(service).toBeDefined();
     });

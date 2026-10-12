@@ -70,6 +70,33 @@ describe('toOutcome', () => {
     });
 });
 
+describe('decision records read the full explanation', () => {
+    it('file-level: prefers fullExplanation over the short body', () => {
+        const record = toRecord({
+            id: 's-1',
+            suggestionContent: 'Short body.',
+            fullExplanation: 'The whole explanation.',
+        } as any);
+        expect(record.suggestionContent).toBe('The whole explanation.');
+    });
+
+    it('PR-level: prefers fullExplanation, falls back to the body for older records', () => {
+        expect(
+            toRecordFromPrLevel({
+                id: 'p-1',
+                suggestionContent: 'Short.',
+                fullExplanation: 'Whole.',
+            } as any).suggestionContent,
+        ).toBe('Whole.');
+        expect(
+            toRecordFromPrLevel({
+                id: 'p-2',
+                suggestionContent: 'Legacy.',
+            } as any).suggestionContent,
+        ).toBe('Legacy.');
+    });
+});
+
 describe('toRecord', () => {
     it('maps every field a consumer needs, deriving outcome from implementationStatus', () => {
         const record = toRecord(

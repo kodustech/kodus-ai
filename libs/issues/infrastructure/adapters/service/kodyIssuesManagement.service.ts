@@ -218,7 +218,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                                 id: suggestion.id,
                                 language: suggestion.language,
                                 relevantFile: suggestion.relevantFile,
-                                suggestionContent: suggestion.suggestionContent,
+                                suggestionContent:
+                                    suggestion.fullExplanation ||
+                                    suggestion.suggestionContent,
                                 existingCode: suggestion.existingCode,
                                 improvedCode: suggestion.improvedCode,
                                 oneSentenceSummary:
@@ -235,7 +237,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     id: suggestion.id,
                     language: suggestion.language,
                     relevantFile: suggestion.relevantFile,
-                    suggestionContent: suggestion.suggestionContent,
+                    suggestionContent:
+                        suggestion.fullExplanation ||
+                        suggestion.suggestionContent,
                     existingCode: suggestion.existingCode,
                     improvedCode: suggestion.improvedCode,
                     oneSentenceSummary: suggestion.oneSentenceSummary,
@@ -305,7 +309,11 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     createLimit(() =>
                         this.issuesService.create({
                             title: suggestion.oneSentenceSummary,
-                            description: suggestion.suggestionContent,
+                            // The issue outlives the PR comment: keep the whole
+                            // explanation, not the short body under the title.
+                            description:
+                                suggestion.fullExplanation ||
+                                suggestion.suggestionContent,
                             filePath: suggestion.relevantFile,
                             language: suggestion.language,
                             label: suggestion?.label as LabelType,
@@ -702,7 +710,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                             endLine: fullSuggestion.relevantLinesEnd,
                             oneSentenceSummary:
                                 fullSuggestion.oneSentenceSummary,
-                            suggestionContent: fullSuggestion.suggestionContent,
+                            suggestionContent:
+                                fullSuggestion.fullExplanation ||
+                                fullSuggestion.suggestionContent,
                             language: fullSuggestion.language,
                             label: fullSuggestion.label,
                             severity: fullSuggestion.severity,

@@ -81,6 +81,8 @@ const getTranslationsForLanguageByCategory = <T extends keyof Translations>(
 interface ReviewComment {
     talkToKody: string;
     feedback: string;
+    /** For hosts that count feedback from replies (Azure Repos, Bitbucket), not reactions. */
+    feedbackReply: string;
 }
 
 interface PullRequestFinishSummaryMarkdown {

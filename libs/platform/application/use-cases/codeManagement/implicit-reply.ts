@@ -7,6 +7,7 @@ import {
     replyAddressedToKodySchema,
     ReplyThreadMessage,
 } from '@libs/common/utils/prompts/replyAddressedToKody';
+import { isKodyPromptReply } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
 
 /**
  * A reply without @kody in a thread Kody started (#1946). The code gate below
@@ -65,8 +66,17 @@ export function isBotAuthor(author: {
  * reply being routed. Returns why Kody stays quiet, or undefined to go on.
  */
 export function implicitReplyGate(
-    thread: ThreadMessage[] | undefined,
+    fullThread: ThreadMessage[] | undefined,
 ): ImplicitReplySilence | undefined {
+    // The prompt reply Kody posts under a Bitbucket finding is part of the
+    // finding, not an answer: it does not count toward either cap. The routed
+    // message stays, so Kody's own prompt reply is still silenced as Kody's.
+    const thread = fullThread?.filter(
+        (m, i) =>
+            i === 0 ||
+            i === fullThread.length - 1 ||
+            !(m.isKody && isKodyPromptReply(m.body)),
+    );
     if (!thread || thread.length < 2 || !thread[0].isKody) {
         return 'not_kody_thread';
     }

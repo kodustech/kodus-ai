@@ -138,7 +138,11 @@ export class CliInputConverter {
             endLine: suggestion.relevantLinesEnd,
             severity: this.mapSeverity(suggestion.severity),
             category: this.mapCategory(suggestion.label),
-            message: suggestion.suggestionContent || '',
+            title: suggestion.oneSentenceSummary || undefined,
+            // Agents act on this text: the whole explanation, not the short
+            // body written for people reading the PR.
+            message:
+                suggestion.fullExplanation || suggestion.suggestionContent || '',
             suggestion: suggestion.improvedCode,
             recommendation: (suggestion as any).recommendation,
             ruleId: suggestion.brokenKodyRulesIds?.[0],

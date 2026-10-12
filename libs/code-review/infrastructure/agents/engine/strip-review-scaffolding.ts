@@ -1,3 +1,5 @@
+import { splitSentences } from '@libs/common/utils/codeManagement/suggestion-body-shape';
+
 /**
  * Turn the reviewer's internal WHAT/WHY/HOW structure into prose, without a
  * model.
@@ -42,7 +44,9 @@
  * labels still came off (the '.' of "2." satisfies the punctuation rule) but the
  * list numbers were left stranded mid-sentence — "a 2. b 3. c." Requiring a
  * numbered prefix to FOLLOW keeps it narrow: prose has no number there, so
- * "Here's why:" is still untouched.
+ * "Here's why:" is still untouched. The prefix is only 1-3, the three labels:
+ * any number would also eat a value ending the sentence ("fails with a 500.
+ * HOW:" lost its "500.").
  *
  * TWO deliberate restrictions, both there to protect prose:
  *
@@ -60,7 +64,7 @@
  * that was fine.
  */
 const LABEL_ANYWHERE =
-    /(?:^|\n|(?<=[.!?])[ \t]+|(?<=\S)[ \t]+(?=\d+[.)][ \t]*))(?:\d+[.)][ \t]*)?(?:\*\*|__)?[ \t]*(?:WHAT|WHY|HOW)[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?[ \t]*/g;
+    /(?:^|\n|(?<=[.!?])[ \t]+|(?<=\S)[ \t]+(?=[1-3][.)][ \t]*))(?:[1-3][.)][ \t]*)?(?:\*\*|__)?[ \t]*(WHAT|WHY|HOW)[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?[ \t]*/g;
 
 /** A control character, so it can never collide with the content itself. */
 const SENTINEL = '\u0001';
@@ -79,9 +83,7 @@ const outsideFences = (
         .join('');
 
 const mark = (content: string): string =>
-    outsideFences(content, (chunk) =>
-        chunk.replace(LABEL_ANYWHERE, SENTINEL),
-    );
+    outsideFences(content, (chunk) => chunk.replace(LABEL_ANYWHERE, SENTINEL));
 
 export function looksLikeReviewScaffolding(content: string): boolean {
     if (!content) {
@@ -127,4 +129,33 @@ export function stripReviewScaffolding(content: string): string {
     // If stripping somehow emptied the content, keep the original: a labelled
     // suggestion is bad, an empty one is worse.
     return joined || content;
+}
+
+/** Select explicit impact and action sections; unstructured prose stays untouched. */
+export function impactAndActionFallback(content: string): string | undefined {
+    const marked = outsideFences(content, (chunk) =>
+        chunk.replace(
+            LABEL_ANYWHERE,
+            (_match, label: string) => `${SENTINEL}${label}${SENTINEL}`,
+        ),
+    );
+    const parts = marked.split(SENTINEL);
+    const sections = new Map<string, string>();
+    for (let i = 1; i + 1 < parts.length; i += 2) {
+        if (sections.has(parts[i])) return undefined;
+        sections.set(parts[i], parts[i + 1].trim());
+    }
+    const impact = sections.get('WHY');
+    const action = sections.get('HOW');
+    if (!impact || !action) return undefined;
+    const firstSentence = (section: string): string | undefined =>
+        splitSentences(
+            stripReviewScaffolding(section).replace(/```[\s\S]*?```/g, ' '),
+        )[0];
+    const impactSentence = firstSentence(impact);
+    const actionSentence = firstSentence(action);
+    if (!impactSentence || !actionSentence) return undefined;
+    const stop = (sentence: string): string =>
+        /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
+    return `${stop(impactSentence)} ${stop(actionSentence)}`;
 }

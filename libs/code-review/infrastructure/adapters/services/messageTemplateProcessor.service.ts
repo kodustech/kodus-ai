@@ -8,6 +8,7 @@ import {
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { createLogger } from '@libs/core/log/logger';
 import {
     CodeReviewConfig,
     FileChange,
@@ -16,6 +17,22 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { CommentResult } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
+
+/**
+ * Longest comment body each host accepts. GitHub rejects anything longer with
+ * a 422, which loses the whole start/end review comment, not just the prompt.
+ * Bitbucket documents no limit; 32 KB is a conservative ceiling.
+ */
+const COMMENT_BODY_LIMITS: Partial<Record<PlatformType, number>> = {
+    [PlatformType.GITHUB]: 65_536,
+    [PlatformType.BITBUCKET]: 32_768,
+    [PlatformType.AZURE_REPOS]: 150_000,
+    [PlatformType.GITLAB]: 1_000_000,
+    [PlatformType.FORGEJO]: 1_048_576,
+};
+
+/** Share of the comment the @agentPrompt block may take; the template keeps the rest. */
+const AGENT_PROMPT_SHARE = 0.75;
 
 export interface PlaceholderContext {
     changedFiles?: FileChange[];
@@ -44,6 +61,7 @@ export type PlaceholderHandler = (
 
 @Injectable()
 export class MessageTemplateProcessor {
+    private readonly logger = createLogger(MessageTemplateProcessor.name);
     private handlers = new Map<string, PlaceholderHandler>();
 
     // Deprecated placeholder names kept resolvable for backward-compat with
@@ -70,6 +88,12 @@ export class MessageTemplateProcessor {
             async (context: PlaceholderContext) => {
                 return this.getConsolidatedLLMPromptBody(
                     context.lineComments || [],
+                    context.platformType,
+                    {
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        prNumber: context.prNumber,
+                    },
                 );
             },
         );
@@ -381,6 +405,8 @@ ${reviewOptionsMarkdown}
 
     private buildConsolidatedCommentBody(
         prompts: ConsolidatedPromptEntry[],
+        omitted = 0,
+        total = prompts.length,
     ): string {
         const taskList = prompts
             .map(
@@ -403,7 +429,7 @@ ${reviewOptionsMarkdown}
                     : '';
 
                 return [
-                    `### [${index + 1}/${prompts.length}] ${location}`,
+                    `### [${index + 1}/${total}] ${location}`,
                     ``,
                     `Issue identified during code review:`,
                     prompt.trim(),
@@ -425,6 +451,12 @@ ${reviewOptionsMarkdown}
             `---`,
             ``,
             tasks,
+            ...(omitted > 0
+                ? [
+                      ``,
+                      `${omitted} more fixes are not included here: this comment would exceed the platform's size limit. Each one has its own "Prompt for LLM" on its review comment.`,
+                  ]
+                : []),
             ``,
             `---`,
             ``,
@@ -442,7 +474,7 @@ ${reviewOptionsMarkdown}
         const fence = '`'.repeat(Math.max(3, longestBacktickRun + 1));
 
         return [
-            `**Kody Code Review** — ${prompts.length} suggested fix${prompts.length > 1 ? 'es' : ''}.`,
+            `**Kody Code Review** — ${total} suggested fix${total > 1 ? 'es' : ''}.`,
             `Paste the prompt below to your agent and all review fixed at once!\n`,
             `<details>`,
             `<summary>🛠️ Open Agent Prompt</summary>`,
@@ -455,9 +487,54 @@ ${reviewOptionsMarkdown}
         ].join('\n');
     }
 
-    public getConsolidatedLLMPromptBody(lineComments: CommentResult[]): string {
+    public getConsolidatedLLMPromptBody(
+        lineComments: CommentResult[],
+        platformType?: PlatformType,
+        logContext?: {
+            organizationAndTeamData?: OrganizationAndTeamData;
+            prNumber?: number;
+        },
+    ): string {
         const prompts = this.extractPromptsFromComments(lineComments);
         if (prompts.length === 0) return '';
-        return this.buildConsolidatedCommentBody(prompts);
+
+        const budget = Math.floor(
+            (COMMENT_BODY_LIMITS[platformType] ??
+                COMMENT_BODY_LIMITS[PlatformType.GITHUB]) * AGENT_PROMPT_SHARE,
+        );
+        const full = this.buildConsolidatedCommentBody(prompts);
+        if (full.length <= budget) return full;
+
+        // Keep whole fixes, in order, while the block fits; cutting one in
+        // half would hand the agent a broken instruction.
+        let kept = prompts.length - 1;
+        let body = this.buildConsolidatedCommentBody(
+            prompts.slice(0, kept),
+            prompts.length - kept,
+            prompts.length,
+        );
+        while (kept > 1 && body.length > budget) {
+            kept--;
+            body = this.buildConsolidatedCommentBody(
+                prompts.slice(0, kept),
+                prompts.length - kept,
+                prompts.length,
+            );
+        }
+
+        this.logger.warn({
+            message: `@agentPrompt cut to ${kept}/${prompts.length} fixes to fit the comment size limit`,
+            context: MessageTemplateProcessor.name,
+            metadata: {
+                ...logContext,
+                platformType,
+                budget,
+                fullChars: full.length,
+                keptChars: body.length,
+                kept,
+                total: prompts.length,
+            },
+        });
+        return body;
     }
 }

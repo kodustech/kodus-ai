@@ -104,7 +104,9 @@ export const conversationImplicitReply: Scenario = {
             const [toKodyThread, toTeammateThread] = threads!;
 
             // Everything the harness posts, so any other new comment in a
-            // thread is Kody's (it may post as the harness account).
+            // thread is Kody's (it may post as the harness account). On
+            // Bitbucket the finding's "Prompt for LLM" reply is part of the
+            // finding, not an answer, and can land after the snapshot.
             const ours = new Set<string>();
             const kodyIn = async (threadId: string, before: Set<string>) =>
                 (await provider.threadComments!(pr.number, threadId)).filter(
@@ -114,7 +116,10 @@ export const conversationImplicitReply: Scenario = {
                         !c.body
                             .toLowerCase()
                             .trim()
-                            .startsWith('analyzing your request'),
+                            .startsWith('analyzing your request') &&
+                        !c.body
+                            .trim()
+                            .startsWith('`kody|code-review` **Prompt for LLM**'),
                 );
             const snapshot = async (threadId: string) =>
                 new Set(

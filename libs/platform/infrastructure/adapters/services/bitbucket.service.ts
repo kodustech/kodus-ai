@@ -24,6 +24,13 @@ import {
     GetIssueParams,
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import { formatBitbucketSuggestionBody } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
+import { isKodyAuthoredBody } from '@libs/common/utils/kody-identifiers';
+import {
+    getTranslationsForLanguageByCategory,
+    TranslationsCategory,
+} from '@libs/common/utils/translations/translations';
+import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.BITBUCKET, 'codeManagement')
@@ -153,8 +160,11 @@ export class BitbucketService implements Omit<
                     const userReactions = new Map();
 
                     comment.replies.forEach((reply: any) => {
+                        const replyBody = reply?.content?.raw;
+                        // Kody's own replies (the prompt reply, conversation
+                        // answers) carry its chip and are not feedback.
+                        if (isKodyAuthoredBody(replyBody)) return;
                         const userId = reply.user.uuid;
-                        const replyBody = reply.content.raw;
 
                         if (!userReactions.has(userId)) {
                             userReactions.set(userId, {
@@ -233,38 +243,29 @@ export class BitbucketService implements Omit<
     }): Promise<string> {
         const {
             suggestion,
-            repository,
             includeHeader = true,
             includeFooter = true,
+            language,
         } = params;
-        let commentBody = '';
+        const translations = getTranslationsForLanguageByCategory(
+            language as LanguageValue,
+            TranslationsCategory.ReviewComment,
+        );
 
-        if (includeHeader) {
-            const severityText = suggestion?.severity || '';
-            const labelText = suggestion?.label || '';
-            commentBody += `\`kody|code-review\` \`${labelText}\` \`severity-level|${severityText}\`\n\n\n`;
-        }
-
-        if (suggestion?.suggestionContent) {
-            commentBody += `${suggestion.suggestionContent}\n\n`;
-        }
-
-        if (suggestion?.clusteringInformation?.actionStatement) {
-            commentBody += `${suggestion.clusteringInformation.actionStatement}\n\n`;
-        }
-
-        if (suggestion?.improvedCode) {
-            const lang = repository?.language?.toLowerCase() || 'javascript';
-            commentBody += `\`\`\`${lang}\n${suggestion.improvedCode}\n\`\`\`\n\n`;
-        }
-
-        if (includeFooter) {
-            commentBody +=
-                'Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n\n';
-            commentBody += `\`\`\`\n👍\n\`\`\`\n\n\`\`\`\n👎\n\`\`\``;
-        }
-
-        return Promise.resolve(commentBody.trim());
+        // No code here: on Bitbucket the fix goes in a threaded reply.
+        return Promise.resolve(
+            formatBitbucketSuggestionBody({
+                label: suggestion?.label,
+                severity: suggestion?.severity,
+                title: suggestion?.oneSentenceSummary,
+                body: suggestion?.suggestionContent,
+                actionStatement:
+                    suggestion?.clusteringInformation?.actionStatement,
+                feedback: translations.feedbackReply || translations.feedback,
+                includeHeader,
+                includeFooter,
+            }),
+        );
     }
 
     // --- Not Implemented Stubs ---

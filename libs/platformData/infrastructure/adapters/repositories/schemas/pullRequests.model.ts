@@ -86,6 +86,7 @@ export class PullRequestsModel extends CoreDocument {
             existingCode: string;
             improvedCode: string;
             oneSentenceSummary: string;
+            fullExplanation?: string;
             relevantLinesStart: number;
             relevantLinesEnd: number;
             label: string;
@@ -172,6 +173,7 @@ export class PullRequestsModel extends CoreDocument {
     public prLevelSuggestions: Array<{
         id: string;
         suggestionContent: string;
+        fullExplanation?: string;
         oneSentenceSummary: string;
         label: LabelType;
         severity?: SeverityLevel;
