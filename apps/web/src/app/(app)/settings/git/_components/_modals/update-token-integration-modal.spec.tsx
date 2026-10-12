@@ -3,6 +3,7 @@ import "@testing-library/jest-dom";
 
 import { createCodeManagementIntegration } from "@services/codeManagement/fetch";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { toast } from "@components/ui/toaster/use-toast";
 import { AuthMode, PlatformType } from "src/core/types";
 
 import { UpdateTokenIntegrationModal } from "./update-token-integration-modal";
@@ -63,6 +64,43 @@ describe("UpdateTokenIntegrationModal", () => {
     // connection must keep pointing at the same instance. The modal is the only
     // place that decides what `host` the upsert receives, so assert the payload
     // rather than the prefill alone.
+    // The endpoint answers 200 with a status that is not SUCCESS when the token
+    // validates but sees no repository. The modal used to claim success anyway.
+    it("reports a non-SUCCESS status instead of claiming the token was updated", async () => {
+        createIntegrationMock.mockResolvedValueOnce({
+            data: { status: "NO_REPOSITORIES" },
+        } as any);
+
+        renderModal();
+        fireEvent.change(screen.getByPlaceholderText("Personal Access Token"), {
+            target: { value: "glpat-new" },
+        });
+        fireEvent.click(screen.getByRole("button", { name: /update token/i }));
+
+        await waitFor(() => {
+            expect(toast).toHaveBeenCalledWith(
+                expect.objectContaining({ variant: "danger" }),
+            );
+        });
+        expect(toast).not.toHaveBeenCalledWith(
+            expect.objectContaining({ variant: "success" }),
+        );
+    });
+
+    // Azure Repos and Bitbucket are no longer offered: the payload cannot carry
+    // what their authentication needs.
+    it("renders nothing for a platform it cannot rotate", () => {
+        const { container } = render(
+            <UpdateTokenIntegrationModal
+                platformKey={"bitbucket" as any}
+                platformName="Bitbucket"
+                teamId="team-1"
+            />,
+        );
+
+        expect(container).toBeEmptyDOMElement();
+    });
+
     it("sends the stored host back when rotating a self-hosted token", async () => {
         renderModal("https://gitlab.example.com");
 

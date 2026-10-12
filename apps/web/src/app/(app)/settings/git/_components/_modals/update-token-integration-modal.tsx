@@ -32,12 +32,13 @@ import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side"
 
 // Token-based providers shown on the connected card. GitHub is excluded: its
 // connected flow is OAuth-app driven, so there is no PAT to rotate from here.
+// Azure Repos and Bitbucket are excluded too: this modal sends only a token
+// and a host, while Azure validates an org name, Bitbucket Cloud
+// authenticates with an email and Bitbucket Data Center with BASIC auth.
 const UPDATE_TOKEN_PLATFORMS: Partial<
     Record<Lowercase<PlatformType>, PlatformType>
 > = {
     gitlab: PlatformType.GITLAB,
-    bitbucket: PlatformType.BITBUCKET,
-    azure_repos: PlatformType.AZURE_REPOS,
     forgejo: PlatformType.FORGEJO,
 };
 
@@ -46,7 +47,7 @@ type UpdateTokenPlatformKey = keyof typeof UPDATE_TOKEN_PLATFORMS;
 // Providers that can point at a self-hosted instance and therefore need an
 // optional instance URL alongside the token (GitLab self-hosted, Bitbucket DC,
 // Forgejo, GitHub Enterprise share the same host field on the backend).
-const SELF_HOSTED_KEYS = new Set(["gitlab", "bitbucket", "forgejo"]);
+const SELF_HOSTED_KEYS = new Set(["gitlab", "forgejo"]);
 
 type Props = {
     /** Existing self-hosted instance URL, when this connection has one. */
@@ -88,7 +89,7 @@ export const UpdateTokenIntegrationModal = ({
         magicModal.lock();
 
         try {
-            await createCodeManagementIntegration({
+            const response = await createCodeManagementIntegration({
                 integrationType,
                 authMode: AuthMode.TOKEN,
                 token: token.trim(),
@@ -97,6 +98,27 @@ export const UpdateTokenIntegrationModal = ({
                     teamId,
                 },
             });
+
+            // The endpoint can answer 200 with a status that is not SUCCESS —
+            // the token validates but sees no repository. Claiming "token
+            // updated" over that would hide the real outcome, so check it the
+            // way the connect flow does in _providers/helpers.tsx.
+            const status = (response as { data?: { status?: string } } | undefined)
+                ?.data?.status;
+
+            if (status && status !== "SUCCESS") {
+                magicModal.unlock();
+
+                toast({
+                    variant: "danger",
+                    title: `${platformName} token not applied`,
+                    description:
+                        status === "NO_REPOSITORIES"
+                            ? "The token validated but cannot see any repository: check its scope and permissions."
+                            : "The token validated but the account is not usable as a connection: personal organizations are not supported.",
+                });
+                return;
+            }
 
             toast({
                 variant: "success",

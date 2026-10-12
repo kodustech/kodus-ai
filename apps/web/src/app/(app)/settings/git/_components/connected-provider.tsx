@@ -14,14 +14,12 @@ import { CODE_MANAGEMENT_PLATFORMS } from "../_constants";
 import { UpdateTokenIntegrationModal } from "./_modals/update-token-integration-modal";
 import { ResetIntegrationModal } from "./_modals/reset-integration-modal";
 
-// Token-rotatable platforms (GitLab, Bitbucket, Azure Repos, Forgejo). GitHub
-// is OAuth-app driven on connect, so there is no PAT to rotate from this card.
-const UPDATE_TOKEN_PLATFORMS = new Set([
-    "gitlab",
-    "bitbucket",
-    "azure_repos",
-    "forgejo",
-]);
+// Platforms this card can rotate a token for. GitHub is OAuth-app driven on
+// connect so there is no PAT to rotate; Azure Repos and Bitbucket are out too,
+// because the modal's upsert carries only a token and a host while Azure
+// validates an org name, Bitbucket Cloud authenticates with an email and
+// Bitbucket Data Center with BASIC auth - it would blank those or fail.
+const UPDATE_TOKEN_PLATFORMS = new Set(["gitlab", "forgejo"]);
 
 export const GitConnectedProvider = ({
     connection,
@@ -36,7 +34,14 @@ export const GitConnectedProvider = ({
         connection.platformName.toLowerCase() as keyof typeof CODE_MANAGEMENT_PLATFORMS;
     const platform = CODE_MANAGEMENT_PLATFORMS[platformKey];
 
-    const canUpdateToken = UPDATE_TOKEN_PLATFORMS.has(platformKey);
+    // A GitLab connection made through OAuth stays OAuth: the modal saves a
+    // token, so offering it there would swap the authentication mode.
+    const connectedWithOAuth =
+        (connection.config as { authMode?: string } | undefined)?.authMode ===
+        AuthMode.OAUTH;
+
+    const canUpdateToken =
+        UPDATE_TOKEN_PLATFORMS.has(platformKey) && !connectedWithOAuth;
 
     return (
         <Card className="min-w-68">
