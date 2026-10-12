@@ -183,7 +183,7 @@ const DEDUP_CONSERVATIVE = `BE CONSERVATIVE — when in doubt, do NOT group. Onl
 
 `;
 
-const DEDUP_CRITERIA = `There are THREE types of duplicates:
+const DEDUP_CRITERIA = `There are FOUR types of duplicates:
 
 1. **EXACT DUPLICATES** (same bug, same location): Multiple suggestions pointing to the same file and overlapping lines describing the same issue. Keep the one with the most detail, discard the rest.
 
@@ -196,8 +196,20 @@ same inverted condition in three branches. One fix (or one find-and-replace)
 would resolve all of them. GROUP them — keep the clearest instance as
 representative; the other locations will be listed on the kept comment.
 
+4. **UMBRELLA DUPLICATES** (one suggestion already covers the others): One
+suggestion describes several problems that other suggestions describe
+separately. For example:
+   - suggestion 1: a problem A in parseOrder and a problem B in parseInvoice
+   - suggestion 2: a problem C in parseRefund
+   - suggestion 3: problems A, B and C together
+Suggestion 3 already says everything 1 and 2 say. GROUP all three and keep
+suggestion 3 — the one with the most complete content — as representative,
+because it stands for the whole group. This applies even when A, B and C are
+different problems: what matters is that the kept suggestion covers each of
+them.
+
 NOT duplicates (keep both):
-- Different bugs in the same file or nearby lines (e.g., "nil pointer" and "missing validation" in the same controller — these are DIFFERENT bugs)
+- Different bugs in the same file or nearby lines (e.g., "nil pointer" and "missing validation" in the same controller — these are DIFFERENT bugs), unless another suggestion already covers both (type 4)
 - Different root causes even if they sound similar (e.g., "add nil check" vs "fix typo" — different problems)
 
 IGNORE the category label (bug/security/performance) when deciding — two agents can independently find the same issue.
@@ -207,12 +219,13 @@ Prefer keeping the suggestion with the most detail or clearest fix as the repres
 
 /** Full dedup prompt (instructions + the suggestion summaries).
  *
- *  Three merge classes, the third being the SAME systemic mistake repeated
+ *  Four merge classes, the third being the SAME systemic mistake repeated
  *  across N call sites/methods (e.g. the same wrong metric call copy-pasted in
  *  Create/Update/Delete). It was an off-by-default A/B knob; measured on the
  *  dedup gold (#1821) it is how the gold groups those repeats, and the old
  *  "different code never merges" rule kept them, and cross-file duplicates,
- *  apart. */
+ *  apart. The fourth groups the suggestions that one broader suggestion
+ *  already covers (#1821: Muse split those and left the umbrella alone). */
 export function buildDedupPrompt(
     suggestions: DedupSuggestionLike[],
     /** withCode (#1821 eval): each summary also shows the finding's existingCode. */
