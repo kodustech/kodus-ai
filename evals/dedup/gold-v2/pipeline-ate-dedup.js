@@ -13,6 +13,9 @@ require('tsconfig-paths/register');
  *                      comparar o dedup com o gold (comparar-dedup.js)
  *
  * --ate=anchoring      para antes do dedup (sem chamada de modelo)
+ * --sanitizador        tira, depois do parse, as sugestoes do gabarito do
+ *                      sanitizador (evals/suggestion-sanitizer/dataset), como o
+ *                      stage faz antes do anchoring; so com --fonte=gold
  *
  *   RECALL_MODEL=<id> node evals/dedup/gold-v2/pipeline-ate-dedup.js --model=<gold model> --fonte=... --versao=<rotulo> [--par=4] [--ate=anchoring]
  */
@@ -29,6 +32,10 @@ const { snapLinesToDiff } = require('@libs/code-review/pipeline/stages/agent-rev
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
 const GOLD = arg('model'), FONTE = arg('fonte'), VERSAO = arg('versao'), PAR = Number(arg('par', '4'));
 const SO_ANCHORING = arg('ate') === 'anchoring';
+const SANITIZA = process.argv.includes('--sanitizador');
+const SEM_PROBLEMA = SANITIZA
+    ? JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'suggestion-sanitizer', 'dataset', `${GOLD}.json`), 'utf8')).semProblema
+    : {};
 const MODELO = process.env.RECALL_MODEL || (SO_ANCHORING ? '-' : undefined);
 if (!GOLD || !FONTE || !VERSAO || !MODELO) { console.error('RECALL_MODEL=<id> --model= --fonte=pool:<pool>|gold --versao='); process.exit(2); }
 const INV = path.join(__dirname, '..', '..', 'investigation');
@@ -100,7 +107,9 @@ const conta = (lista) => lista.reduce((m, s) => { for (const k of Object.keys(s)
             const idEntrada = [];
             const descartadoAnchoring = [];
             let ajustadoAnchoring = 0;
+            const descartadoSanitizador = [];
             parsed.suggestions.forEach((s, j) => {
+                if ((SEM_PROBLEMA[cid] || []).includes(idParse[j])) { descartadoSanitizador.push(idParse[j]); return; }
                 const ranges = porArquivo.get(s.relevantFile);
                 const snapped = ranges ? snapLinesToDiff(s, ranges) : s;
                 if (snapped === null) {
@@ -121,6 +130,7 @@ const conta = (lista) => lista.reduce((m, s) => { for (const k of Object.keys(s)
                 descartadoConversor: finder.map((_, k) => k).filter((k) => !origem.includes(k)).map((k) => ids[k]),
                 camposConversor: conta(mapeado),
                 descartadoParse: parsed.discarded.map((d) => ({ id: ids[origem[d.index]], faltando: d.missing })),
+                descartadoSanitizador,
                 descartadoAnchoring,
                 ajustadoAnchoring,
                 camposDedup: conta(entrada),
