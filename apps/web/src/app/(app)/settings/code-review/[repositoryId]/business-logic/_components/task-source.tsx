@@ -70,11 +70,17 @@ export const TaskSource = ({
                             value={(field.value as string) ?? AUTO}
                             onValueChange={(value) => {
                                 field.onChange(value);
-                                form.setValue(
-                                    "businessLogic.taskSourceTool.value" as never,
-                                    "" as never,
-                                    { shouldDirty: true },
-                                );
+                                // The picked tool belongs to the old source.
+                                // Clear it only when there is one: writing ""
+                                // over an unset field left the layout's
+                                // unsaved-changes guard stuck on.
+                                const tool =
+                                    "businessLogic.taskSourceTool.value" as never;
+                                if (form.getValues(tool)) {
+                                    form.setValue(tool, "" as never, {
+                                        shouldDirty: true,
+                                    });
+                                }
                             }}
                             disabled={!canEdit || field.disabled}
                             className="gap-2">

@@ -86,12 +86,23 @@ const InstructionsChip = ({
 const BusinessLogicSummary = ({
     status,
     hasTaskMcp,
+    lookupFailed,
     configureHref,
 }: {
     status?: BusinessLogicStatus;
     hasTaskMcp: boolean;
+    /** The plugin lookup failed: we can't say whether a tracker is connected. */
+    lookupFailed?: boolean;
     configureHref: string;
 }) => {
+    if (lookupFailed) {
+        return (
+            <p className="text-text-secondary text-xs">
+                Couldn&apos;t check your plugins right now.{" "}
+                <Link href={configureHref}>Configure</Link>
+            </p>
+        );
+    }
     if (!hasTaskMcp) {
         return (
             <p className="text-warning text-xs">
@@ -364,6 +375,9 @@ export const CategoryList = ({
                                             <BusinessLogicSummary
                                                 status={businessLogicStatus}
                                                 hasTaskMcp={hasTaskMcp}
+                                                lookupFailed={
+                                                    mcpPlugins === null
+                                                }
                                                 configureHref={configureHref}
                                             />
                                         ) : undefined

@@ -3,7 +3,11 @@
 import { Card } from "@components/ui/card";
 import { Skeleton } from "@components/ui/skeleton";
 import type { BusinessLogicStatus } from "@services/business-logic/types";
-import { CircleCheckIcon, PauseCircleIcon } from "lucide-react";
+import {
+    CircleCheckIcon,
+    CircleDashedIcon,
+    PauseCircleIcon,
+} from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 const percent = (value?: number) =>
@@ -43,6 +47,7 @@ export const StatusStrip = ({
         return null;
     }
     const paused = status.state === "paused";
+    const idle = status.state === "idle";
     const why = Object.entries(status.stats.couldntReadByReason)
         .sort((a, b) => b[1] - a[1])
         .map(([reason, count]) => `${count}: ${REASONS[reason] ?? reason}`)
@@ -58,14 +63,16 @@ export const StatusStrip = ({
             <div className="flex flex-wrap items-center gap-2 text-sm">
                 {paused ? (
                     <PauseCircleIcon className="text-warning size-4" />
+                ) : idle ? (
+                    <CircleDashedIcon className="text-text-tertiary size-4" />
                 ) : (
                     <CircleCheckIcon className="text-success size-4" />
                 )}
                 <span className="text-text-primary font-medium">
                     {paused
                         ? `Paused · ${status.paused?.tracker} isn't answering since ${new Date(status.paused!.since).toLocaleString()}`
-                        : status.state === "idle"
-                          ? "Not used yet"
+                        : idle
+                          ? "No pull request checked in the last 30 days"
                           : "Working"}
                 </span>
                 {!paused && status.lastTaskRead && (
@@ -83,42 +90,55 @@ export const StatusStrip = ({
                 )}
             </div>
 
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
-                <div>
-                    <dt className="text-text-secondary text-xs">PRs checked</dt>
-                    <dd className="text-text-primary text-lg font-semibold">
-                        {status.stats.pullRequestsChecked}
-                    </dd>
-                </div>
-                <div>
-                    <dt className="text-text-secondary text-xs">
-                        Met their task
-                    </dt>
-                    <dd className="text-text-primary text-lg font-semibold">
-                        {percent(status.stats.metRate)}
-                    </dd>
-                </div>
-                <div>
-                    <dt className="text-text-secondary text-xs">
-                        Findings devs agreed with
-                    </dt>
-                    <dd className="text-text-primary text-lg font-semibold">
-                        {percent(status.stats.agreedRate)}
-                    </dd>
-                </div>
-                <div>
-                    <dt className="text-text-secondary text-xs">
-                        Couldn&apos;t read
-                    </dt>
-                    <dd
-                        className="text-text-primary text-lg font-semibold"
-                        title={why || undefined}>
-                        {status.stats.couldntRead}
-                    </dd>
-                </div>
-            </dl>
+            {idle ? (
+                <p className="text-text-secondary text-sm">
+                    Kody checks a pull request when its title, branch or
+                    description names a task, e.g. SAA-96. Try one below, or
+                    comment <code>@kody -v business-logic</code> on a pull
+                    request.
+                </p>
+            ) : (
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+                    <div>
+                        <dt className="text-text-secondary text-xs">
+                            PRs checked
+                        </dt>
+                        <dd className="text-text-primary text-lg font-semibold">
+                            {status.stats.pullRequestsChecked}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt className="text-text-secondary text-xs">
+                            Met their task
+                        </dt>
+                        <dd className="text-text-primary text-lg font-semibold">
+                            {percent(status.stats.metRate)}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt className="text-text-secondary text-xs">
+                            Findings devs agreed with
+                        </dt>
+                        <dd className="text-text-primary text-lg font-semibold">
+                            {percent(status.stats.agreedRate)}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt className="text-text-secondary text-xs">
+                            Couldn&apos;t read
+                        </dt>
+                        <dd
+                            className="text-text-primary text-lg font-semibold"
+                            title={why || undefined}>
+                            {status.stats.couldntRead}
+                        </dd>
+                    </div>
+                </dl>
+            )}
             {why && <p className="text-text-secondary text-xs">Why: {why}</p>}
-            <p className="text-text-tertiary text-xs">Last 30 days</p>
+            {!idle && (
+                <p className="text-text-tertiary text-xs">Last 30 days</p>
+            )}
         </Card>
     );
 };

@@ -80,10 +80,12 @@ export const TryIt = ({ teamId }: { teamId: string }) => {
                             </span>
                             {!result.task.acceptanceCriteria && (
                                 <span className="text-warning">
-                                    No acceptance criteria found. Kody will
+                                    No acceptance criteria found, so Kody will
                                     judge against the whole description, which
-                                    is less precise. Tell Kody where they live
-                                    under “Tune to your team”.
+                                    is less precise. Write them as a list or a
+                                    checklist in the task, or, if they already
+                                    live under a heading or in a custom field,
+                                    say where under “Tune to your team”.
                                 </span>
                             )}
                             {!result.task.canJudge && (
