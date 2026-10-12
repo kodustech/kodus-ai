@@ -96,6 +96,52 @@ describe('mapAgentFindings', () => {
         expect(r.suggestions[0].severity).toBe('medium');
     });
 
+    it('completes a path tail that matches exactly one changed file', () => {
+        const r = mapAgentFindings(
+            {
+                findings: {
+                    suggestions: [
+                        {
+                            suggestionContent: 'x',
+                            relevantFile: 'EventManager.ts',
+                        },
+                        {
+                            suggestionContent: 'y',
+                            relevantFile: 'core/EventManager.ts',
+                        },
+                        { suggestionContent: 'z', relevantFile: 'Manager.ts' },
+                    ],
+                },
+            },
+            ctx({
+                changedFiles: [
+                    file('packages/core/EventManager.ts'),
+                    file('src/a.ts'),
+                ],
+            }),
+        );
+        expect(r.suggestions.map((s) => s.relevantFile)).toEqual([
+            'packages/core/EventManager.ts',
+            'packages/core/EventManager.ts',
+        ]);
+    });
+
+    it('drops a path tail shared by more than one changed file', () => {
+        const r = mapAgentFindings(
+            {
+                findings: {
+                    suggestions: [
+                        { suggestionContent: 'x', relevantFile: 'index.ts' },
+                    ],
+                },
+            },
+            ctx({
+                changedFiles: [file('a/index.ts'), file('b/index.ts')],
+            }),
+        );
+        expect(r.suggestions).toHaveLength(0);
+    });
+
     it('kody-rules: attributes a uuid-less suggestion to the SINGLE selected rule', () => {
         // Observed live (PR #598 on the validation env): the model found the
         // violations but omitted the uuid echo, and the hard drop meant the

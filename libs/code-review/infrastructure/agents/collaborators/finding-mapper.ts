@@ -179,6 +179,35 @@ export function mapAgentFindings(
     const warn = (message: string, metadata: Record<string, unknown>) =>
         ctx.logger?.warn({ message, context: ctx.identityName, metadata });
 
+    // The model sometimes cites only the tail of the path (`EventManager.ts`
+    // for `packages/core/EventManager.ts`). Complete it when exactly one
+    // changed file ends with that tail; an ambiguous tail stays unresolved.
+    const resolvedByEmitted = new Map<string, string | undefined>();
+    const resolveChangedFile = (relevantFile?: string): string | undefined => {
+        const emitted = normalizeRepoPath(relevantFile);
+        if (!emitted) {
+            return undefined;
+        }
+        if (resolvedByEmitted.has(emitted)) {
+            return resolvedByEmitted.get(emitted);
+        }
+        let resolved = validFilesByNormalized.get(emitted);
+        if (!resolved) {
+            const tails = [...validFilesByNormalized.keys()].filter((f) =>
+                f.endsWith(`/${emitted}`),
+            );
+            if (tails.length === 1) {
+                resolved = validFilesByNormalized.get(tails[0]);
+                warn(
+                    `[AGENT] Completed partial relevantFile "${relevantFile}" → "${resolved}"`,
+                    { prNumber: ctx.prNumber },
+                );
+            }
+        }
+        resolvedByEmitted.set(emitted, resolved);
+        return resolved;
+    };
+
     const rawSuggestions = (agentResult.findings?.suggestions || []).filter(
         (s) => {
             if (!s.suggestionContent) {
@@ -240,10 +269,7 @@ export function mapAgentFindings(
                 }
                 // PR-level kody_rules omit relevantFile by design.
                 const kodyRulePathMatch =
-                    !s.relevantFile ||
-                    validFilesByNormalized.has(
-                        normalizeRepoPath(s.relevantFile),
-                    );
+                    !s.relevantFile || !!resolveChangedFile(s.relevantFile);
 
                 if (!kodyRulePathMatch) {
                     warn(
@@ -266,9 +292,7 @@ export function mapAgentFindings(
                 return kodyRulePathMatch;
             }
 
-            const pathMatch =
-                !!s.relevantFile &&
-                validFilesByNormalized.has(normalizeRepoPath(s.relevantFile));
+            const pathMatch = !!resolveChangedFile(s.relevantFile);
 
             if (!pathMatch && s.relevantFile) {
                 warn(
@@ -301,8 +325,7 @@ export function mapAgentFindings(
         // Replace the LLM-emitted relevantFile with the provider's original
         // filename so downstream comment posting uses the exact path shape.
         const canonicalRelevantFile = s.relevantFile
-            ? (validFilesByNormalized.get(normalizeRepoPath(s.relevantFile)) ??
-              s.relevantFile)
+            ? (resolveChangedFile(s.relevantFile) ?? s.relevantFile)
             : s.relevantFile;
 
         return {
