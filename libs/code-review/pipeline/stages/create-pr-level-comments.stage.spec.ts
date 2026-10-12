@@ -1,4 +1,5 @@
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CreatePrLevelCommentsStage } from './create-pr-level-comments.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
@@ -109,6 +110,22 @@ describe('CreatePrLevelCommentsStage — input contract', () => {
             'BITBUCKET', // platformType, so Bitbucket can reply with the prompt
             expect.any(Function),
         );
+    });
+
+    it("forwards the PR's own platform so the marker gate can use it", async () => {
+        // The manager cannot resolve the right platform from the org/team
+        // integration when a team runs more than one code-management
+        // integration; the pipeline context carries the PR's own (#2055 review).
+        await run(
+            buildContext({
+                validSuggestionsByPR: [{ id: 'a' }],
+                platformType: PlatformType.BITBUCKET,
+            } as any),
+        );
+
+        expect(
+            commentManagerService.createPrLevelReviewComments.mock.calls[0][6],
+        ).toBe(PlatformType.BITBUCKET);
     });
 
     it('transforms and persists the delivered comments', async () => {
