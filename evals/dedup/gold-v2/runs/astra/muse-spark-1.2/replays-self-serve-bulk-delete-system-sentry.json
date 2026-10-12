@@ -1,0 +1,107 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "aa34e855b15a8207c01e37cacfe87c0e8d8d012a",
+  "attempt": 1,
+  "ms": 34915,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S8",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "fetch_error_details pairs error IDs with nodestore dictionary values positionally, potentially assigning event data to the wrong ID.",
+        "rationale": "All four suggestions identify the same zip-based mapping and recommend looking up data by node ID. S10's testing discussion supports that same problem."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S9",
+          "S16"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The feature-flagged table visualization receives empty columns and data instead of the actual query results.",
+        "rationale": "Both suggestions identify the same placeholder props and resulting empty tables; forwarding the real results resolves both."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S11",
+        "problems": [
+          "Reports missing both age and timestamp pass validation.",
+          "Truthiness checks fail to enforce mutual exclusivity for zero-valued age and timestamp fields."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Reports missing both age and timestamp pass validation, also reported individually by S2.",
+          "Zero-valued fields bypass the presence checks, also reported individually by S6."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "problems": [
+          "Existing callers passing arrays are incompatible with the new single-string Visualize constructor.",
+          "Always setting stack to 'all' changes the previous stacking semantics."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Existing array-based constructor calls are incompatible with the new constructor.",
+          "The previous conditional stacking behavior is lost."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "problems": [
+          "Environment names are interpolated into Markdown code spans without escaping.",
+          "Issue titles are interpolated into Markdown links without escaping."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Unescaped environment names can alter PR-comment Markdown.",
+          "Unescaped issue titles can alter PR-comment Markdown links."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S15",
+        "confidence": "mid"
+      },
+      {
+        "id": "S12",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

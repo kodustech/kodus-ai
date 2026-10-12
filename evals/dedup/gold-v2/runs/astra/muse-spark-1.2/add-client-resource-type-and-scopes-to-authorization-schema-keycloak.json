@@ -1,0 +1,113 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "4e9baac03018a0b73b178e9286d1147d262de93d",
+  "attempt": 1,
+  "ms": 21635,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S10",
+          "S8",
+          "S11"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Two void requireView methods have copied boolean-return Javadoc instead of documenting when they throw ForbiddenException.",
+        "rationale": "S7 and S10 report the requireView documentation; S8 and S11 report requireViewClientScopes. Both locations repeat the same documentation mistake and need the same template correction."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S9",
+          "S15"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Client removal invokes ClientPermissionsV2.setPermissionsEnabled, which throws UnsupportedOperationException.",
+        "rationale": "Both describe the same event-listener dispatch into the throwing V2 implementation and the resulting client-deletion failure."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S14",
+        "problems": [
+          "The role-mapping test omits coverage for MAP_ROLES_CLIENT_SCOPE.",
+          "The create-client authorization test uses a null payload instead of valid input."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "MAP_ROLES_CLIENT_SCOPE lacks explicit authorization test coverage.",
+          "The null create-client payload does not isolate authorization denial from input validation."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S17",
+        "confidence": "high"
+      },
+      {
+        "id": "S19",
+        "confidence": "high"
+      },
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S16",
+        "confidence": "high"
+      },
+      {
+        "id": "S18",
+        "confidence": "high"
+      },
+      {
+        "id": "S12",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      },
+      {
+        "id": "S21",
+        "confidence": "mid"
+      },
+      {
+        "id": "S22",
+        "confidence": "mid"
+      },
+      {
+        "id": "S20",
+        "confidence": "high"
+      }
+    ]
+  }
+}

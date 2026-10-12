@@ -1,0 +1,73 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "promptSha": "bd6b76981948944df90c765b2952736de26be671",
+  "attempt": 1,
+  "ms": 48274,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S9",
+          "S6",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The retryCount cleanup branch lacks an SMS method filter and can delete non-SMS reminders.",
+        "rationale": "All four identify the same unscoped OR branch and propose restricting it to WorkflowMethods.SMS."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S5",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Reminders with an empty message or missing recipient bypass retryCount increments.",
+        "rationale": "Both report the missing outer else path, which leaves invalid payloads eligible for repeated processing. S2 mentions handling another continue only within its proposed fix."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S7",
+        "problems": [
+          "Updating retryCount from a previously read value loses increments during concurrent executions.",
+          "A failed database update inside the catch block escapes and interrupts the reminder loop."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Updating retryCount from a previously read value loses increments during concurrent executions.",
+          "A failed database update inside the catch block escapes and interrupts the reminder loop."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "problems": [
+          "The retry cleanup can delete non-SMS reminders because it lacks a method filter.",
+          "The retry cleanup can delete future-dated reminders because it lacks a date restriction.",
+          "The retry cleanup can delete already scheduled reminders because it lacks a scheduling-state restriction."
+        ],
+        "relatedGroups": [
+          "G1"
+        ],
+        "uncoveredProblems": [
+          "The retry cleanup can delete future-dated reminders because it lacks a date restriction.",
+          "The retry cleanup can delete already scheduled reminders because it lacks a scheduling-state restriction."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S3",
+        "confidence": "high"
+      }
+    ]
+  }
+}

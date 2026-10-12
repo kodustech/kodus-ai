@@ -1,0 +1,11 @@
+{
+  "judge": "opus",
+  "model": "gpt-6.1-sol",
+  "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "multiProblem": [],
+    "unique": []
+  }
+}

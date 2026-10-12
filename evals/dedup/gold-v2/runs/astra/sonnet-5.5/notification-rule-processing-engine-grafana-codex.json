@@ -1,0 +1,38 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "promptSha": "18f342b358b0f685c69188cdd5f34e1a8625f643",
+  "attempt": 1,
+  "ms": 9153,
+  "answer": {
+    "groups": [],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

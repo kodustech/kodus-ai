@@ -1,0 +1,42 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "dd58cbba807a751f6c9ea5e62cf8c5b3b4a4b380",
+  "attempt": 1,
+  "ms": 10540,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The unchecked sender metadata lookup can raise KeyError when an integration lacks sender metadata.",
+        "rationale": "Both suggestions identify the same subscripting operation at lines 500–505 and the same missing-sender condition, and propose guarding the lookup."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "48d72a934d137798f14c3c56c843a5b75b445f85",
+  "attempt": 1,
+  "ms": 11593,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S6",
+          "S3",
+          "S2"
+        ],
+        "kind": "cross_location",
+        "confidence": "high",
+        "problem": "AssignmentSource.queued evaluates timezone.now() at import time, giving every instance the same stale default timestamp.",
+        "rationale": "All five suggestions identify the same default-value expression and propose computing it per instance with a default factory. S6 lists a different file, but explicitly reports the identical declaration defect; one edit resolves all five."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

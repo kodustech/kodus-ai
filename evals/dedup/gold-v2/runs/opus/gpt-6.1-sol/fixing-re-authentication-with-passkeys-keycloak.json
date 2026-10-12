@@ -1,0 +1,16 @@
+{
+  "judge": "opus",
+  "model": "gpt-6.1-sol",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

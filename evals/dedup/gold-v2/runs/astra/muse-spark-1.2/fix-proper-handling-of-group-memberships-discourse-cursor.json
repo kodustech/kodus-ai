@@ -1,0 +1,70 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "86786c849d8e008184880e6fe35c7041281a6fcd",
+  "attempt": 1,
+  "ms": 18222,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S9",
+          "S6"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "totalPages overcounts by one when user_count is exactly divisible by limit.",
+        "rationale": "All three identify the same floor-plus-one calculation and its effect on the last-page guard. The currentPage reference in S1 is only part of its proposed fix."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S16",
+          "S15",
+          "S12",
+          "S13",
+          "S5",
+          "S2",
+          "S10"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Membership mutation actions require group_id while the reported route contract supplies id.",
+        "rationale": "These suggestions report the same parameter-key mismatch repeated in add_members and remove_member. Suggestions covering both actions describe this single repeated mistake, with the same correction required at each lookup."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S7",
+          "S8"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Offset clamping permits user_count as an offset, allowing an empty slice beyond the last member.",
+        "rationale": "The controller's next action and the model's findMembers method repeat the same incorrect upper-bound choice, each requiring its clamp to change. This differs from the totalPages arithmetic defect in G1, despite sharing the empty-page symptom."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S11",
+        "confidence": "high"
+      },
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

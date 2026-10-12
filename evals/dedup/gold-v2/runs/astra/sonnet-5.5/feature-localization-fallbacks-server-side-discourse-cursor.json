@@ -1,0 +1,16 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "4d1959268476fb8ac2c92962cef81339cba5a3a1",
+  "attempt": 1,
+  "ms": 13999,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S5"
+        ],
+        "kind": "cross_location",
+        "confidence": "high",
+        "problem": "Caching a device before successful admission lets rejected devices bypass the limit on subsequent requests.",
+        "rationale": "All three describe the same premature cache entry and resulting authentication bypass. They point to error propagation or authentication, but fixing when admission is cached resolves all three."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S6",
+          "S3",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The non-atomic count check and device insertion allow concurrent admissions to exceed the configured limit.",
+        "rationale": "All three report the same race in CreateOrUpdateDevice, including across instances, and require atomic coordination of capacity checking and insertion."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

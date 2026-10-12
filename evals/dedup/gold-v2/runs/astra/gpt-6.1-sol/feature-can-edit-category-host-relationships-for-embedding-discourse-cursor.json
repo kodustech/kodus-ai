@@ -1,0 +1,97 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "promptSha": "e62462ae17375afda3c15d9324887e984848037c",
+  "attempt": 1,
+  "ms": 49016,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S17",
+          "S15",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The save callback overwrites the server-resolved category with the blank submitted category selection.",
+        "rationale": "All three describe the same callback replacing the saved uncategorized relationship with findById(null), leaving the displayed category incorrect."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S7",
+          "S1",
+          "S13"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The migration dereferences an empty embed_category query result before reaching its fallback.",
+        "rationale": "Each reports the unchecked first row of the same category query. S1 mentions handling missing fallback settings only as part of its proposed fix."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S16",
+          "S2",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The migration inserts legacy host URLs without the normalization required by the new hostname lookup.",
+        "rationale": "All three identify the same direct SQL insertion bypassing scheme and path removal, causing migrated hosts to stop matching."
+      },
+      {
+        "id": "G4",
+        "members": [
+          "S14",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Port-qualified stored hosts cannot match lookup values extracted with URI.host.",
+        "rationale": "Both describe the same mismatch between accepted host values containing ports and the port-free lookup value."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S8",
+        "problems": [
+          "The initial embed_category query can return no rows and crash before the fallback.",
+          "The uncategorized fallback query also dereferences a missing stored setting row."
+        ],
+        "relatedGroups": [
+          "G2"
+        ],
+        "uncoveredProblems": [
+          "The uncategorized fallback query crashes when its setting row is absent."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S9",
+        "confidence": "high"
+      },
+      {
+        "id": "S11",
+        "confidence": "high"
+      },
+      {
+        "id": "S12",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

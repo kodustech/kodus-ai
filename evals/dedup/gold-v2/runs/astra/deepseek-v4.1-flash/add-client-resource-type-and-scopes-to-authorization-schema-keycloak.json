@@ -1,0 +1,67 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "f387596b98b282ef77e15ac5e48429d988046f4f",
+  "attempt": 1,
+  "ms": 33375,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S9",
+          "S6",
+          "S3"
+        ],
+        "kind": "cross_location",
+        "confidence": "high",
+        "problem": "Client removal invokes ClientPermissionsV2.setPermissionsEnabled(), which throws UnsupportedOperationException.",
+        "rationale": "These suggestions describe the same listener-to-evaluator call chain, pointing either to the removal listener or to the factory returning the V2 evaluator. Their differing feature-flag explanations do not change the reported failure."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S11",
+          "S5",
+          "S4"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "mid",
+        "problem": "The requireView and requireViewClientScopes Javadocs incorrectly describe boolean returns instead of exceptions.",
+        "rationale": "Both methods repeat the same incorrect documentation template and require the same correction. S11 reports this repeated documentation mistake together, while S4 and S5 each identify one occurrence."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S8",
+        "problems": [
+          "The enabled-feature removal listener calls unsupported V2 permission cleanup and throws.",
+          "The feature guard skips previously executed removal cleanup when the feature is disabled."
+        ],
+        "relatedGroups": [
+          "G1"
+        ],
+        "uncoveredProblems": [
+          "The feature guard skips removal cleanup when disabled; S7 also reports this, but there are insufficient single-problem suggestions to form a group."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      },
+      {
+        "id": "S10",
+        "confidence": "high"
+      }
+    ]
+  }
+}

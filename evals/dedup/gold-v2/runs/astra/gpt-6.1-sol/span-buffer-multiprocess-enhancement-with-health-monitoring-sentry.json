@@ -1,0 +1,54 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "promptSha": "3a9f57f575acd760accf21ab373546d6d95efb74",
+  "attempt": 1,
+  "ms": 19968,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S6"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The worker-restart type check fails to recognize SpawnProcess instances, leaving old workers alive when replacements start.",
+        "rationale": "All three report the same guard skipping kill() during unhealthy-worker recovery. S6's reference to the identical shutdown check extends its proposed fix."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S2",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Expiration of the shared join deadline breaks out of the worker loop and skips cleanup of remaining workers.",
+        "rationale": "Both identify the same early break and require cleanup to continue after the waiting deadline expires. S8 mentions the spawn-compatible type check only within its proposed fix."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S9",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

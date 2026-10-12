@@ -1,0 +1,57 @@
+{
+  "judge": "opus",
+  "model": "sonnet-5.5",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "promptSha": "fc85fb48c66fa5695dcb6de3b43d6160e55ce650",
+  "attempt": 1,
+  "ms": 4381,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 20004,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 134,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 20004,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 134,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 20004,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 20004
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.16291740000000002,
+  "answer": {
+    "groups": [],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

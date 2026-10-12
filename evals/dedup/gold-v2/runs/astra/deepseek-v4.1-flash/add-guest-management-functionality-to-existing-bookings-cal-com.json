@@ -1,0 +1,88 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "promptSha": "6c7104ffbbd6d1012d44caa373e6cea9bafb41a7",
+  "attempt": 1,
+  "ms": 22442,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S9",
+          "S16",
+          "S18"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The team admin-or-owner permission check uses && instead of ||, denying eligible team admins.",
+        "rationale": "All five suggestions identify the same boolean operator in the same authorization check. Differences in their descriptions of role semantics do not change the reported problem."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S17",
+          "S12",
+          "S13",
+          "S3",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Passing raw guests instead of uniqueGuests to sendAddGuestsEmails misclassifies existing attendees as newly added guests.",
+        "rationale": "All five suggestions report the same incorrect argument at the email-sending call. Passing the actual added-guest list resolves each report."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S4",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Comparing raw guest addresses against a lowercased blacklist allows case-based blacklist bypasses.",
+        "rationale": "Both suggestions identify the same unnormalized blacklist comparison. S4 mentions attendee deduplication only as an additional proposed normalization change."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S5",
+        "problems": [
+          "Case-sensitive attendee authorization can reject a legitimate attendee whose session email has different casing.",
+          "Case-sensitive comparison against existing attendees allows an address differing only by case to be added again."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Case-sensitive attendee authorization can reject a legitimate attendee whose session email has different casing.",
+          "Case-sensitive comparison against existing attendees allows an address differing only by case to be added again."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S15",
+        "confidence": "high"
+      },
+      {
+        "id": "S11",
+        "confidence": "mid"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S10",
+        "confidence": "high"
+      }
+    ]
+  }
+}

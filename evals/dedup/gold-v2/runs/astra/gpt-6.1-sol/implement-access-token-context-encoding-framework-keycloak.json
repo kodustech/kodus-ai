@@ -1,0 +1,142 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "f46c12d47f2731278271466bbb551a5a0e90ad42",
+  "attempt": 1,
+  "ms": 45714,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S17",
+          "S13",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The rawTokenId null check checks grantType instead, allowing null token identifiers.",
+        "rationale": "All three identify the same incorrect argument to Objects.requireNonNull and the resulting literal ':null' suffix."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S19",
+          "S15",
+          "S6",
+          "S14",
+          "S3"
+        ],
+        "kind": "cross_location",
+        "confidence": "high",
+        "problem": "The documented and accepted grant shortcut lengths conflict with the decoder's fixed two-character grant field.",
+        "rationale": "These suggestions describe the same round-trip incompatibility for custom grants using three-character shortcuts. They report it from either the interface contract or the registration code."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S7",
+        "problems": [
+          "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+          "The matcher rejects equality with the expected grant instead of rejecting inequality."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The matcher extracts the wrong substring for the grant.",
+          "The matcher's grant equality condition is inverted."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S18",
+        "problems": [
+          "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+          "The matcher rejects equality with the expected grant instead of rejecting inequality."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The matcher extracts the wrong substring for the grant.",
+          "The matcher's grant equality condition is inverted."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S12",
+        "problems": [
+          "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+          "The matcher rejects equality with the expected grant instead of rejecting inequality."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The matcher extracts the wrong substring for the grant.",
+          "The matcher's grant equality condition is inverted."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "problems": [
+          "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+          "The matcher rejects equality with the expected grant instead of rejecting inequality."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The matcher extracts the wrong substring for the grant.",
+          "The matcher's grant equality condition is inverted."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "problems": [
+          "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+          "The matcher rejects equality with the expected grant instead of rejecting inequality.",
+          "Malformed short prefixes can throw because the matcher slices without validating their length."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The matcher extracts the wrong substring for the grant.",
+          "The matcher's grant equality condition is inverted.",
+          "The matcher can throw on malformed short prefixes instead of returning a mismatch."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "problems": [
+          "The matcher extracts the grant from indices [3, 5) instead of [4, 6).",
+          "The matcher rejects equality with the expected grant instead of rejecting inequality."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The matcher extracts the wrong substring for the grant.",
+          "The matcher's grant equality condition is inverted."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S1",
+        "confidence": "mid"
+      },
+      {
+        "id": "S9",
+        "confidence": "high"
+      },
+      {
+        "id": "S16",
+        "confidence": "high"
+      },
+      {
+        "id": "S11",
+        "confidence": "high"
+      },
+      {
+        "id": "S10",
+        "confidence": "high"
+      }
+    ]
+  }
+}

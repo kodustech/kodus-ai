@@ -1,0 +1,94 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "promptSha": "4fda9372adae81bac9174eb73d94508b35093dc9",
+  "attempt": 1,
+  "ms": 20364,
+  "answer": {
+    "groups": [],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      },
+      {
+        "id": "S9",
+        "confidence": "high"
+      },
+      {
+        "id": "S10",
+        "confidence": "high"
+      },
+      {
+        "id": "S11",
+        "confidence": "high"
+      },
+      {
+        "id": "S12",
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "confidence": "high"
+      },
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S15",
+        "confidence": "high"
+      },
+      {
+        "id": "S16",
+        "confidence": "high"
+      },
+      {
+        "id": "S17",
+        "confidence": "high"
+      },
+      {
+        "id": "S18",
+        "confidence": "high"
+      },
+      {
+        "id": "S19",
+        "confidence": "high"
+      },
+      {
+        "id": "S20",
+        "confidence": "high"
+      }
+    ]
+  }
+}

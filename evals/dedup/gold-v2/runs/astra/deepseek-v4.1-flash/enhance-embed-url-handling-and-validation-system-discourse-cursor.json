@@ -1,0 +1,113 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "1b1b12e6f0073865b3d6527c8ca03d8773e474fb",
+  "attempt": 1,
+  "ms": 69759,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S9"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The embed template closes its conditional with invalid Ruby syntax, preventing rendering.",
+        "rationale": "Both identify the same dangling `if` in `<%- end if %>` and propose replacing it with `<%- end %>`."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S5",
+          "S19"
+        ],
+        "kind": "same_location",
+        "confidence": "mid",
+        "problem": "The message-origin check uses substring containment instead of exact origin equality.",
+        "rationale": "Both describe the same comparison at embed.js line 17. They disagree about exploitability, but identify the same underlying check."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S11",
+        "problems": [
+          "Missing feed content causes unconditional content processing to raise and abort polling.",
+          "An absent link accessor can raise before the URL fallback is reached.",
+          "An absent title accessor can raise during item import."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Missing feed content causes unconditional content processing to raise and abort polling; S3 also reports this, but has no second single-problem counterpart.",
+          "An absent link accessor can raise before the URL fallback is reached.",
+          "An absent title accessor can raise during item import."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S17",
+        "confidence": "high"
+      },
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S16",
+        "confidence": "high"
+      },
+      {
+        "id": "S18",
+        "confidence": "high"
+      },
+      {
+        "id": "S15",
+        "confidence": "high"
+      },
+      {
+        "id": "S12",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "mid"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      },
+      {
+        "id": "S10",
+        "confidence": "high"
+      },
+      {
+        "id": "S20",
+        "confidence": "high"
+      }
+    ]
+  }
+}

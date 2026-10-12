@@ -1,0 +1,146 @@
+{
+  "judge": "opus",
+  "model": "muse-spark-1.2",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "6befbc0ae36f89a3166cc0325fa9f2e145e2edfd",
+  "attempt": 1,
+  "ms": 16065,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 21083,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 953,
+    "output_tokens_details": {
+      "thinking_tokens": 214
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 21083,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 953,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 21083,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 21083
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.187732,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S22",
+          "S19",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The postMessage origin check in embed.js is reversed and uses substring matching (discourseUrl.indexOf(e.origin)), so it accepts the wrong origins.",
+        "rationale": "All three point at the same line in embed.js, describe the same reversed substring check, and propose strict origin equality."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S20",
+          "S23",
+          "S8",
+          "S24"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "parent.postMessage gets the full request.referer URL as targetOrigin instead of an origin, so the browser drops the resize message.",
+        "rationale": "All four target embed.html.erb line 11 and suggest the same fix: extract scheme://host[:port] or use '*'."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S4",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "PollFeed calls i.content.scrub when RSS items may have nil content, which raises NoMethodError and crashes the job.",
+        "rationale": "Both report the same nil.scrub crash on the same lines and give the same fix (fall back to description or an empty string)."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S21",
+        "confidence": "high"
+      },
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S16",
+        "confidence": "high"
+      },
+      {
+        "id": "S11",
+        "confidence": "mid"
+      },
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S12",
+        "confidence": "mid"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "mid"
+      },
+      {
+        "id": "S18",
+        "confidence": "high"
+      },
+      {
+        "id": "S17",
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "confidence": "high"
+      },
+      {
+        "id": "S9",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      },
+      {
+        "id": "S15",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "2765c7168e69f079a779a06008c508e99dfc81b1",
+  "attempt": 1,
+  "ms": 52337,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S17",
+          "S19",
+          "S12",
+          "S6",
+          "S2",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The Meet-location check dereferences an undefined first destination calendar when the destination list is missing or empty.",
+        "rationale": "Every suggestion identifies the same unguarded mainHostDestinationCalendar.integration access and proposes restoring optional chaining."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S7",
+          "S1",
+          "S16",
+          "S15",
+          "S11",
+          "S14",
+          "S13"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Google updateEvent and deleteEvent use a falsy externalCalendarId as the lookup key in their fallback branches, preventing destination-calendar fallback.",
+        "rationale": "The same faulty conditional lookup appears in both methods and requires the same correction at each occurrence. Suggestions covering both occurrences describe this single repeated mistake."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S9",
+          "S3",
+          "S8"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "mid",
+        "problem": "Calendar implementations retain one-parameter createEvent signatures after the interface adds a required credentialId parameter.",
+        "rationale": "These suggestions report the same alleged signature-contract mismatch across implementations. S8 mentions credential-based selection only within its proposed fix; S3 broadly describes consequences of the alleged mismatch."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S18",
+        "problems": [
+          "Office365 createEvent lacks the credentialId parameter required by the updated interface.",
+          "Office365 creates events using the first destination calendar instead of the destination belonging to the current credential."
+        ],
+        "relatedGroups": [
+          "G3"
+        ],
+        "uncoveredProblems": [
+          "Office365 selects destinationCalendar[0] instead of matching the current credential."
+        ],
+        "confidence": "mid"
+      },
+      {
+        "id": "S20",
+        "problems": [
+          "Lark createEvent lacks the credentialId parameter required by the updated interface.",
+          "Lark creates events using the first destination calendar instead of the destination belonging to the current credential."
+        ],
+        "relatedGroups": [
+          "G3"
+        ],
+        "uncoveredProblems": [
+          "Lark selects destinationCalendar[0] instead of matching the current credential."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S21",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "multiProblem": [],
+    "unique": []
+  }
+}

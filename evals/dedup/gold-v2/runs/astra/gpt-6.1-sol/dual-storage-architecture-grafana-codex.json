@@ -1,0 +1,91 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "290a03eca7329933dad3e1d4a22ec6e79d47bec9",
+  "attempt": 1,
+  "ms": 31365,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S14",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Asynchronous legacy writes inherit request cancellation and can be canceled before their intended timeout.",
+        "rationale": "All three identify the same context lifetime mismatch at the Create goroutine and explicitly extend it to the other asynchronous legacy operations."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S9",
+          "S16",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Legacy.Update recomputes the original update against legacy state instead of receiving the result committed to Storage.",
+        "rationale": "Each reports the removal of the canonical-result updateWrapper at the same call and proposes restoring it with res."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S11",
+          "S10"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Storage Create and Update failures are recorded through the legacy duration recorder.",
+        "rationale": "The same incorrect recorder is repeated in both Storage error branches; each needs replacement with recordStorageDuration."
+      },
+      {
+        "id": "G4",
+        "members": [
+          "S12",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Legacy.DeleteCollection measurements are incorrectly emitted into the Storage histogram.",
+        "rationale": "Both identify the same recorder call and the same resulting duplicate Storage observations and missing legacy observations."
+      },
+      {
+        "id": "G5",
+        "members": [
+          "S13",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Successful Storage.Delete measurements use the resource name as the kind label.",
+        "rationale": "Both report the same incorrect argument; inconsistent label series and excessive cardinality are consequences of that single mistake."
+      },
+      {
+        "id": "G6",
+        "members": [
+          "S7",
+          "S6"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Successful write tests configure legacy expectations without waiting for or verifying the asynchronous legacy calls.",
+        "rationale": "Create and Update repeat the same testing omission, allowing either legacy goroutine to be removed without failing its test. Both require synchronization and explicit legacy-call verification."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S15",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      }
+    ]
+  }
+}

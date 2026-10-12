@@ -1,0 +1,60 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "promptSha": "62075e6227b17826b3fdad317e7bb8d894ccef48",
+  "attempt": 1,
+  "ms": 13530,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Opening a missing English counterpart file throws RuntimeException and aborts verification.",
+        "rationale": "All three report the same unconditional file-opening failure. The regex and naming examples explain how the counterpart can be missing rather than reporting separate problems."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S9",
+          "S5"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The Simplified Chinese account totpStep1 translation was replaced with Traditional Chinese.",
+        "rationale": "Both identify the same replacement on line 112 and request Simplified Chinese text."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S6",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Overlapping common-prefix and common-suffix scans can produce invalid substring bounds and crash verification.",
+        "rationale": "Both describe the same bounds error in the diagnostic construction and propose limiting the suffix scan by the prefix length."
+      },
+      {
+        "id": "G4",
+        "members": [
+          "S3",
+          "S4",
+          "S8"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "The same Italian OTP setup instruction was copied into the Lithuanian account and login translations.",
+        "rationale": "S3 and S4 identify the two instances of the same copied translation mistake; S8 explicitly reports both. Each location needs the same translation correction."
+      }
+    ],
+    "multiProblem": [],
+    "unique": []
+  }
+}

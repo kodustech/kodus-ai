@@ -1,0 +1,52 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "promptSha": "352a23f27368759637c007c7b13e349bf1eecac6",
+  "attempt": 1,
+  "ms": 14889,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Narrowing the cache lock allows concurrent builds for the same key, producing competing index instances and possible on-disk directory collisions.",
+        "rationale": "Both suggestions identify the removed build serialization as the cause and describe the same cache overwrite and divergent-index consequences. Both propose serializing builds for each key."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S5",
+        "problems": [
+          "Eager initialization makes construction wait for all search indexes and fail entirely on an index initialization error.",
+          "Calling Init inside the constructor consumes sync.Once, preventing subsequent callers from supplying the initialization context."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Eager initialization makes construction wait for all search indexes and fail entirely on an index initialization error.",
+          "Calling Init inside the constructor consumes sync.Once, preventing subsequent callers from supplying the initialization context."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

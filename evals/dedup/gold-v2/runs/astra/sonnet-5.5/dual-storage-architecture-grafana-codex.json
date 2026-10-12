@@ -1,0 +1,96 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "095d6c862dacbe073e7a869b5d5ca77e377d2b4f",
+  "attempt": 1,
+  "ms": 25537,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S17",
+          "S18",
+          "S11",
+          "S6",
+          "S10"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Storage Create and Update failures are recorded using the legacy duration metric.",
+        "rationale": "These suggestions identify the same incorrect recorder copied into two storage error paths. Both locations require replacing recordLegacyDuration with recordStorageDuration; S6 explicitly covers both occurrences."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S19",
+          "S12",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The successful Delete metric uses the object name instead of options.Kind for its kind label.",
+        "rationale": "All three identify the same argument at line 106. Label inconsistency, high cardinality and broken aggregation are consequences of that single mistake."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S7",
+          "S1",
+          "S15"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "The asynchronous legacy operations inherit request cancellation through their timeout contexts.",
+        "rationale": "All three report the same context-parent mistake across Create, Delete, Update and DeleteCollection. Each recommends detaching request cancellation before applying the timeout."
+      },
+      {
+        "id": "G4",
+        "members": [
+          "S9",
+          "S16",
+          "S5"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Legacy DeleteCollection duration and errors are recorded using the storage metric.",
+        "rationale": "All three identify the same incorrect recordStorageDuration call at line 166 and recommend recordLegacyDuration."
+      },
+      {
+        "id": "G5",
+        "members": [
+          "S14",
+          "S2",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Legacy Update receives the original objInfo instead of a wrapper containing the object returned by Storage.Update.",
+        "rationale": "All three describe recomputing the update against legacy state and the resulting potential divergence. Restoring the wrapper around res resolves every report."
+      },
+      {
+        "id": "G6",
+        "members": [
+          "S13",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Delete places d.Log in the context instead of the enriched per-call logger.",
+        "rationale": "Both identify the logger choice at line 97, which drops the name, kind and method context fields."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S21",
+        "confidence": "high"
+      },
+      {
+        "id": "S20",
+        "confidence": "high"
+      }
+    ]
+  }
+}

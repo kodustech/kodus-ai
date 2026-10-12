@@ -1,0 +1,61 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "promptSha": "e947d57394e4bdecedcf0b210161259a7a4d1c78",
+  "attempt": 1,
+  "ms": 16391,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S5",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The order mixin passes zero-based order values directly to the one-based legacy box-ordinal-group properties.",
+        "rationale": "All four suggestions identify the same assignments in the order mixin and propose adding 1 to the legacy WebKit and Mozilla values."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S6",
+        "problems": [
+          "The align-items mixin emits the invalid -ms-align-items property.",
+          "The mixin forwards flex-start and flex-end unchanged to legacy properties that require start and end."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The align-items mixin emits the invalid -ms-align-items property.",
+          "The mixin forwards flex-start and flex-end unchanged to legacy properties that require start and end."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "problems": [
+          "The align-items mixin emits the invalid -ms-align-items property.",
+          "The mixin omits -moz-box-align for legacy Firefox flex containers.",
+          "The baseline alignment used by badges is unsupported by legacy box-align."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The align-items mixin emits the invalid -ms-align-items property.",
+          "The mixin omits -moz-box-align for legacy Firefox flex containers.",
+          "The baseline alignment used by badges is unsupported by legacy box-align."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S3",
+        "confidence": "high"
+      }
+    ]
+  }
+}

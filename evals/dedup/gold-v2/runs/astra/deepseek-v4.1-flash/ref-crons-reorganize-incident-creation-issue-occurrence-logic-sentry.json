@@ -1,0 +1,34 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+  "promptSha": "a51a6a48c6c8cd54e737979461fcec696eb5afcc",
+  "attempt": 1,
+  "ms": 7605,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "get_monitor_environment_context returns the original config instead of the transformed copy, losing the human-readable schedule_type.",
+        "rationale": "Both suggestions identify the same returned dictionary value and propose returning the local config variable."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

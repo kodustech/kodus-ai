@@ -1,0 +1,54 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "aeec5fed97baefc2a9d17db16e9e9f37e2188ae3",
+  "attempt": 1,
+  "ms": 13885,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S5",
+          "S4",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The totalPages calculation overcounts exact multiples of the page size, enabling navigation to an empty extra page.",
+        "rationale": "All four report the same calculation and resulting phantom page. S2's reference to currentPage is part of its explanation and proposed correction, not a separate reported problem."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S1",
+          "S9"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The membership handlers require group_id while their routes supply id, causing add/remove requests to fail.",
+        "rationale": "Both identify the identical parameter mismatch in the same two handlers and explain why controller specs miss it."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S6",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Unconditional pagination limits the public membership list to 50 members without controls to access subsequent pages.",
+        "rationale": "Both report the same endpoint contract change and the same public template's missing pagination controls."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S8",
+        "confidence": "high"
+      }
+    ]
+  }
+}

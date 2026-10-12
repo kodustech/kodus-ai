@@ -1,0 +1,27 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "promptSha": "2fcb43cd173ecb7ef5a2a25132546d82061d10da",
+  "attempt": 1,
+  "ms": 8571,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S2",
+          "S3",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The order($val) mixin forwards a 0-based order value unchanged to legacy 1-based box-ordinal-group properties.",
+        "rationale": "All four suggestions identify the same value-conversion problem in the same mixin and propose adding 1 for legacy ordinal properties. Differences in examples and coverage of the Mozilla prefix do not constitute separate problems."
+      }
+    ],
+    "multiProblem": [],
+    "unique": []
+  }
+}

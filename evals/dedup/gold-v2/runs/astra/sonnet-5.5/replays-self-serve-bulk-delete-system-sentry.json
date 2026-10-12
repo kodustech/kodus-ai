@@ -1,0 +1,48 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "46c75a454f3604718788fee89eeea7659e341f55",
+  "attempt": 1,
+  "ms": 10401,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S3",
+          "S4",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "fetch_error_details pairs error IDs with nodestore dictionary values by position, which can associate IDs with the wrong event data when nodes are missing or reordered.",
+        "rationale": "All four suggestions identify the same zip(error_ids, events.values()) operation and the same positional-pairing problem. Each proposes looking up event data by its corresponding node ID."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S9",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "7dea11bb90ead75ff3ffa422d0288be7f93ba3ff",
+  "attempt": 1,
+  "ms": 9321,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S6",
+          "S5",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The second downsize definition replaces the width/height version, breaking compatibility with existing callers.",
+        "rationale": "All five suggestions identify the same method redefinition in optimized_image.rb. S8 describes the compatibility failure more generally, while the others identify the affected emoji resizing caller."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

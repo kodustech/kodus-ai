@@ -1,0 +1,37 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "promptSha": "31ca3ec249a49546dfd2cdd379346323c77e0e42",
+  "attempt": 1,
+  "ms": 8331,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S6",
+          "S5",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "MetricAlertDetectorHandler leaves inherited abstract members unimplemented, causing instantiation through Detector.detector_handler to raise TypeError.",
+        "rationale": "All five suggestions identify the same empty subclass and resulting instantiation failure. Differences in the listed abstract members and proposed fallback do not change the problem."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

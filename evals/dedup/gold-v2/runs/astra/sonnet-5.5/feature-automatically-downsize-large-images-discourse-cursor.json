@@ -1,0 +1,28 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "55d18ba838bb68f76396f66f082d904dbc6f013d",
+  "attempt": 1,
+  "ms": 6733,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The second downsize definition overrides the first, causing the existing five-argument emoji resizing call to raise ArgumentError.",
+        "rationale": "All five suggestions identify the same method override at the same lines and the same incompatible caller. Their alternative fixes address that single problem."
+      }
+    ],
+    "multiProblem": [],
+    "unique": []
+  }
+}

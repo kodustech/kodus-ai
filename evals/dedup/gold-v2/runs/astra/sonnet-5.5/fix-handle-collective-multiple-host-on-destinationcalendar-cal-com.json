@@ -1,0 +1,59 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "8d365e845d651932cc629f0ded33b679654e511d",
+  "attempt": 1,
+  "ms": 16379,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S9",
+          "S11",
+          "S5",
+          "S4",
+          "S2"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Google Calendar updateEvent and deleteEvent lose destination-calendar fallback by searching for an externalId equal to an already-falsy externalCalendarId.",
+        "rationale": "These suggestions describe the identical fallback mistake repeated in updateEvent and deleteEvent. Both occurrences need the same change in how the fallback destination is selected."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S1",
+          "S6",
+          "S3",
+          "S8",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "EventManager dereferences an undefined mainHostDestinationCalendar for Google Meet bookings with a null or empty destination-calendar array.",
+        "rationale": "All five report the missing optional chaining on the same integration access and propose the same guard."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S14",
+          "S13"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The destination branch without a credentialId omits externalId when calling createEvent, leaving booking references without externalCalendarId.",
+        "rationale": "Both suggestions identify the same omitted third argument and its effect on the externalId returned by CalendarManager and saved in booking references."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S12",
+        "confidence": "high"
+      }
+    ]
+  }
+}

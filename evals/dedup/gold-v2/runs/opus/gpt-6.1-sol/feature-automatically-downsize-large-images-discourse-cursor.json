@@ -1,0 +1,76 @@
+{
+  "judge": "opus",
+  "model": "gpt-6.1-sol",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "16dfd77c91def41eb58622e00ed21363b170e704",
+  "attempt": 1,
+  "ms": 4799,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 4936,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 353,
+    "output_tokens_details": {
+      "thinking_tokens": 58
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 4936,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 353,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 4936,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 4936
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.0467534,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S5",
+          "S6",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The second self.downsize definition replaces the width/height version, so existing five-argument callers (e.g. ResizeEmoji) break with ArgumentError.",
+        "rationale": "All five point to the same redefinition of downsize in optimized_image.rb overriding the earlier signature and breaking older callers."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      }
+    ]
+  }
+}

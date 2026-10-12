@@ -1,0 +1,60 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "7b15576a394e827db74f2be8d23ad69d74d32ec0",
+  "attempt": 1,
+  "ms": 17366,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S11",
+          "S6",
+          "S14",
+          "S13",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The Google Meet fallback dereferences an undefined first destination calendar when the destination array is empty or absent.",
+        "rationale": "All seven suggestions identify the unguarded integration access at EventManager.ts:119. They describe the same failure and are resolved by guarding that access."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S9",
+          "S12",
+          "S2",
+          "S10"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Google calendar update and delete fallbacks search for the already-falsy externalCalendarId, losing the intended destination-calendar fallback.",
+        "rationale": "The identical faulty selection pattern occurs in updateEvent and deleteEvent and requires correction at both locations. S9 and S10 report individual occurrences; S12 and S2 report the same repeated defect across both."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S15",
+        "confidence": "low"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

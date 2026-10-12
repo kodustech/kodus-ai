@@ -1,0 +1,65 @@
+{
+  "judge": "opus",
+  "model": "sonnet-5.5",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "promptSha": "9929adbbf095f78597e98cd5ec18eb5a946f3f7a",
+  "attempt": 1,
+  "ms": 4172,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 3087,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 230,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 3087,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 230,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 3087,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 3087
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.0295014,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The cache is not checked again after the write lock is taken, so concurrent callers each rebuild the manifest one after another.",
+        "rationale": "Both point at lines 48-49 and report the same missing double-checked locking, with the same fix."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

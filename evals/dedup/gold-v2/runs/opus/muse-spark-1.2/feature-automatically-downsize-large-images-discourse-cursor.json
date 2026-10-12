@@ -1,0 +1,109 @@
+{
+  "judge": "opus",
+  "model": "muse-spark-1.2",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "promptSha": "d4cd2f9c1c170037563d54acccad70ed43ee03f6",
+  "attempt": 1,
+  "ms": 12467,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 6763,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 1213,
+    "output_tokens_details": {
+      "thinking_tokens": 366
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 6763,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1213,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 6763,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 6763
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.07856940000000001,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S4",
+          "S7",
+          "S1",
+          "S5",
+          "S6",
+          "S13",
+          "S15"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The second `def self.downsize(from,to,dimensions,opts)` overwrites the first `downsize(from,to,max_width,max_height,opts)`, which breaks callers that pass width and height.",
+        "rationale": "All of them report the same duplicate method definition at lines 145-151 and suggest merging the two or renaming one."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S14",
+        "problems": [
+          "The duplicate downsize definition overwrites the width/height version, which breaks 4-arg callers.",
+          "Passing \"80%\" as dimensions makes downsize_instructions append the \\> suffix, so it produces \"-resize 80%\\>\" instead of a plain percentage resize."
+        ],
+        "relatedGroups": [
+          "G1"
+        ],
+        "uncoveredProblems": [
+          "downsize_instructions appends the '>' suffix to percentage dimensions such as \"80%\", which produces an invalid or unintended resize geometry."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S10",
+        "confidence": "mid"
+      },
+      {
+        "id": "S11",
+        "confidence": "mid"
+      },
+      {
+        "id": "S12",
+        "confidence": "mid"
+      },
+      {
+        "id": "S8",
+        "confidence": "mid"
+      },
+      {
+        "id": "S9",
+        "confidence": "mid"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      }
+    ]
+  }
+}

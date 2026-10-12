@@ -1,0 +1,16 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

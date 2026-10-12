@@ -1,0 +1,68 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "promptSha": "e006a9c364c8f6d01696fb319be5cd564cd1f465",
+  "attempt": 1,
+  "ms": 20964,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "FallbackLocaleList#[] calls to_sym on a potentially nil default_locale before compact can remove it.",
+        "rationale": "Both suggestions identify the same unguarded conversion and resulting exception, and propose guarding the value before conversion."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S9",
+          "S6"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Translations outside ApplicationController#set_locale do not ensure fallback locales are loaded.",
+        "rationale": "Both identify controller-only fallback preloading while translate loads only the current locale. Loading the fallback chain within the translation path addresses both reports; S9's cached missing result is a consequence of this same problem."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S1",
+        "problems": [
+          "An unguarded default_locale.to_sym can raise when default_locale is nil.",
+          "Mixed string and symbol locale values defeat deduplication and loaded-locale checks, causing redundant loads."
+        ],
+        "relatedGroups": [
+          "G1"
+        ],
+        "uncoveredProblems": [
+          "Mixed string and symbol locale values cause redundant loads; S8 also reports this, but there are not two single-problem suggestions to form a group."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      }
+    ]
+  }
+}

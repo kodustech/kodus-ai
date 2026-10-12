@@ -1,0 +1,52 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "promptSha": "f4d4cf947e74bd167d11d8c62bb0ba4ac6d7b8d5",
+  "attempt": 1,
+  "ms": 10887,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S5"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The totalPages calculation adds an extra empty page when user_count is a positive exact multiple of limit.",
+        "rationale": "All three suggestions identify the same off-by-one calculation in the admin controller and propose using Math.ceil."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S9",
+          "S4",
+          "S2",
+          "S10"
+        ],
+        "kind": "cross_location",
+        "confidence": "high",
+        "problem": "The public group-members page loads only the first 50 members without a way to access subsequent pages.",
+        "rationale": "These suggestions describe the same endpoint-consumer mismatch from the server, route, and template. Adding public pagination or loading the remaining pages resolves all four reports."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      }
+    ]
+  }
+}

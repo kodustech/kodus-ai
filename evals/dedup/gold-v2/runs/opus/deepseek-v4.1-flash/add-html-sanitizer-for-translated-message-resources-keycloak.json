@@ -1,0 +1,103 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "promptSha": "ed69888b8ebf9c1a78b3295f6ec1d349695cc2ce",
+  "attempt": 1,
+  "ms": 12874,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 39401,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 845,
+    "output_tokens_details": {
+      "thinking_tokens": 249
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 39401,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 845,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 39401,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 39401
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.3323134,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S3",
+          "S4"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "The Lithuanian totpStep1/loginTotpStep1 translations were replaced with Italian text in the lt account and login message files.",
+        "rationale": "All three report the same wrong-language replacement in the lt files. S1 names both files, and S3 and S4 each name one of them."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S8",
+          "S9",
+          "S10",
+          "S11"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "mid",
+        "problem": "In the admin-ui and account-ui JS bundles, error-invalid-multivalued-size was changed from i18next {{0}} placeholders to Java MessageFormat/ICU choice syntax, which i18next cannot interpolate.",
+        "rationale": "It is the same broken contract in the two JS bundles, and one change of approach fixes both: keep the double-brace form for the JS bundles."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S2",
+          "S6",
+          "S12"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The prefix/suffix trimming in the difference report can make start exceed length-end, so substring() throws StringIndexOutOfBoundsException.",
+        "rationale": "All three point at the same unclamped substring computation on lines 99-111."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "confidence": "high"
+      },
+      {
+        "id": "S14",
+        "confidence": "high"
+      }
+    ]
+  }
+}

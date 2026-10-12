@@ -1,0 +1,61 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "219776998a3fb25ca14ac8c69057b13d159ee02d",
+  "attempt": 1,
+  "ms": 14496,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S9",
+          "S5"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Error IDs are paired positionally with nodestore mapping values, which can associate IDs with the wrong event data.",
+        "rationale": "All three identify the same positional zip and recommend lookup by node ID. Reordering, deduplication, and missing results are different triggers for the same identity-pairing problem."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S3",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The age/timestamp mutual-exclusion validators use truthiness instead of field presence, allowing zero values to bypass checks.",
+        "rationale": "Both report the same guards in the same validators and propose explicit key-presence checks."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S2",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The feature-flagged table visualization receives hardcoded empty columns and data instead of actual query results.",
+        "rationale": "Both identify the same placeholder props as the cause of empty dashboard tables when the feature flag is enabled."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S10",
+        "confidence": "high"
+      }
+    ]
+  }
+}

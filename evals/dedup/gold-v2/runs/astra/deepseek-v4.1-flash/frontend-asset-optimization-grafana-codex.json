@@ -1,0 +1,32 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "promptSha": "978c65732f730eae5c5ac8f514f34b2ee36ebb6f",
+  "attempt": 1,
+  "ms": 13286,
+  "answer": {
+    "groups": [],
+    "multiProblem": [
+      {
+        "id": "S1",
+        "problems": [
+          "Holding the exclusive lock across blocking I/O serializes concurrent loads, including every request in Dev mode.",
+          "Failing to re-check the cache after acquiring the write lock causes concurrent cold-cache callers to perform redundant loads."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Holding the exclusive lock across blocking I/O serializes concurrent loads, including every request in Dev mode.",
+          "The missing cache re-check causes redundant loads; S2 also reports this, but there are insufficient single-problem suggestions to form a group."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

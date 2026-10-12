@@ -1,0 +1,80 @@
+{
+  "judge": "opus",
+  "model": "gpt-6.1-sol",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "bff31cc1a80a20d211f2e53557e07dce55c51d8b",
+  "attempt": 1,
+  "ms": 7120,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 36464,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 592,
+    "output_tokens_details": {
+      "thinking_tokens": 162
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 36464,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 592,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 36464,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 36464
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.3037574,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S5"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "canView(ClientModel) returns true on the global/all-clients VIEW grant before evaluating client-specific permissions, so a client-specific negative permission is bypassed (also in listing).",
+        "rationale": "Both point at the same lines in ClientPermissionsV2.canView(client) and describe the same short-circuit that bypasses per-client denials, with the same fix."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S3",
+          "S4"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "mid",
+        "problem": "Javadoc of void require* methods incorrectly states they return true instead of documenting that they throw ForbiddenException.",
+        "rationale": "Same copy-pasted Javadoc mistake on adjacent void methods (requireView and requireViewClientScopes), fixed by the same documentation change."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S2",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      }
+    ]
+  }
+}

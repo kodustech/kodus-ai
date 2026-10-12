@@ -1,0 +1,30 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "promptSha": "20e6bd836e6f9cab1129d0a1672f3362afc7bb24",
+  "attempt": 1,
+  "ms": 7118,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The cache is not re-checked after acquiring the write lock, causing concurrent cache misses to rebuild the manifest serially.",
+        "rationale": "Both suggestions identify the same missing check at lines 48–49 and propose the same early return under the write lock."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

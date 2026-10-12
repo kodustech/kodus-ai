@@ -1,0 +1,55 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "promptSha": "4ef7c5d7b19a919b97f038a6d1777b343a16fb53",
+  "attempt": 1,
+  "ms": 14752,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Retry bookkeeping can throw inside the catch block, aborting the handler and leaving subsequent reminders unprocessed.",
+        "rationale": "Both report the same unprotected database update in the error handler. S1 emphasizes concurrent deletion, while S3 also gives persistent database failure as a trigger for the same problem."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S6",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Retry counts are written from stale snapshots, allowing concurrent failures to overwrite each other's increments.",
+        "rationale": "Both identify the same read-modify-write race in both failure branches and recommend atomic increments."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S5",
+        "problems": [
+          "Retry-limit cleanup can delete successfully scheduled future reminders whose retry counts were not reset.",
+          "The retry-limit deletion branch lacks an SMS method restriction."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Retry-limit cleanup can delete successfully scheduled future reminders whose retry counts were not reset.",
+          "The retry-limit deletion branch lacks an SMS method restriction."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

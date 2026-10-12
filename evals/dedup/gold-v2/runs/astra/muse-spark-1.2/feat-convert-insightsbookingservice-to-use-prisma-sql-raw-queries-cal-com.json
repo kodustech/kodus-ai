@@ -1,0 +1,53 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "promptSha": "1cb9b6b96a2a946d3e68acc0cbc8c4be82eadfb5",
+  "attempt": 1,
+  "ms": 10813,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "getBaseConditions contains unreachable fallback branches because authorization conditions are always a truthy Prisma.Sql object.",
+        "rationale": "Both suggestions identify the same unreachable else-if and else branches and attribute them to the truthiness of authorization conditions, including NOTHING_CONDITION."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S2",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "InsightsBookingServicePublicOptions permits team scope without teamId although runtime validation requires it.",
+        "rationale": "Both report the same mismatch between the public type and the validated schema, causing accepted TypeScript inputs to fail validation and silently produce empty results."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      }
+    ]
+  }
+}

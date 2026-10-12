@@ -1,0 +1,78 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "promptSha": "4c5485dda6dc9b2326c37c7f944d8f9f9690f1e4",
+  "attempt": 1,
+  "ms": 19450,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S3",
+          "S4"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "The Lithuanian login and account TOTP instructions were replaced with the same Italian sentence.",
+        "rationale": "All three report the same wrong-language replacement repeated in two bundles. Each affected entry needs the corresponding Lithuanian text."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S9",
+          "S11",
+          "S8",
+          "S10"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "The account and admin JavaScript bundles replace i18next-compatible interpolation with unsupported Java MessageFormat syntax.",
+        "rationale": "All four describe the same formatting-contract mistake applied to the same message in two JS bundles. Restoring compatible message syntax in each bundle addresses these reports."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S12",
+          "S6",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Independent common-prefix and common-suffix scans can overlap, causing invalid substring bounds when reporting sanitizer differences.",
+        "rationale": "These suggestions identify the same unbounded trimming logic and resulting exception. Their different examples and proposed clamps address the same problem."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S7",
+        "problems": [
+          "The English-file substitution regex can rewrite directory components instead of only the locale suffix in the filename.",
+          "A missing English counterpart aborts verification with a raw RuntimeException instead of being handled gracefully."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The English-file substitution regex can rewrite directory components instead of only the locale suffix in the filename.",
+          "A missing English counterpart aborts verification with a raw RuntimeException instead of being handled gracefully."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      }
+    ]
+  }
+}

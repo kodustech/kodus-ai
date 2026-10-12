@@ -1,0 +1,114 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "4b82f3a89767997b75132288477742dcf68dd56c",
+  "attempt": 1,
+  "ms": 43062,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S11"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The incomplete `end if` in the embed template causes a Ruby syntax error.",
+        "rationale": "Both identify the same malformed closing tag and propose replacing it with `end`."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S2",
+          "S12"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Feed entries without content cause the unconditional `i.content.scrub` call to abort polling.",
+        "rationale": "Both report the same missing-content failure and recommend selecting an available body field before calling scrub."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S3",
+          "S6"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Imported feed HTML bypasses sanitization through raw_html cooking and can execute when rendered.",
+        "rationale": "Both identify the same unsanitized import path and the same resulting executable cooked HTML."
+      },
+      {
+        "id": "G4",
+        "members": [
+          "S10",
+          "S15"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The controller test expects synchronous retrieval even though the controller now enqueues a retrieval job.",
+        "rationale": "Both report the same obsolete mock expectations and recommend asserting Jobs.enqueue instead."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S14",
+        "problems": [
+          "Ordinary relative href/src paths remain unresolved and consequently resolve against the forum.",
+          "Protocol-relative href/src URLs are incorrectly rewritten onto the article host."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Ordinary relative href/src paths remain unresolved and consequently resolve against the forum.",
+          "Protocol-relative href/src URLs are incorrectly rewritten onto the article host; S4 also reports this, but no group has two single-problem suggestions."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S16",
+        "problems": [
+          "The missing-embed_url test is rejected by embeddability checks before reaching required-parameter validation.",
+          "The test asserts only non-success rather than the specific missing-parameter response it claims to verify."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Invalid host/referer setup prevents the missing-embed_url test from exercising parameter validation.",
+          "The broad non-success assertion does not verify the intended missing-parameter response."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S17",
+        "confidence": "high"
+      },
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S9",
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "mid"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      }
+    ]
+  }
+}

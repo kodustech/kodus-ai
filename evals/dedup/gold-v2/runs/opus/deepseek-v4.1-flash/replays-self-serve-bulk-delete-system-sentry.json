@@ -1,0 +1,96 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "promptSha": "d1a3bb14cf8a22b189294c161ef72d304e526b0d",
+  "attempt": 1,
+  "ms": 7508,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 67208,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 670,
+    "output_tokens_details": {
+      "thinking_tokens": 107
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 67208,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 670,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 67208,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 67208
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.5512694,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S3",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "validate_timestamp/validate_age check the other field by truthiness, so a value of 0 slips past the age/timestamp mutual-exclusion check.",
+        "rationale": "Both point at the same validators and describe the same falsy-0 bypass. Both suggest the same key-presence fix."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S1",
+          "S5",
+          "S9"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "fetch_error_details pairs error_ids with nodestore get_multi results by position using zip, so error ids can end up matched with the wrong event data.",
+        "rationale": "All three flag the same zip(error_ids, events.values()) line. Whether the cause is reordering, dedupe or missing entries, each fixes it the same way: look up the data by node id."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S2",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The feature-flagged TableWidgetVisualization branch is rendered with hardcoded empty columns and tableData, so the real query results are thrown away.",
+        "rationale": "Both describe the same placeholder props in chart.tsx (lines 164-174) that give an empty table."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S10",
+        "confidence": "high"
+      },
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      }
+    ]
+  }
+}

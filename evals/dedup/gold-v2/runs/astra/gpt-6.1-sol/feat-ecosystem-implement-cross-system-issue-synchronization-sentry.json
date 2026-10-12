@@ -1,0 +1,31 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "30eb3d4da63aabaed52d63c2f7f53010ed875c3c",
+  "attempt": 1,
+  "ms": 7751,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S3",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "AssignmentSource.queued defaults to the module import time instead of each instance's creation time.",
+        "rationale": "All three suggestions identify the same eagerly evaluated timezone.now() default on line 18 and propose using a default factory."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

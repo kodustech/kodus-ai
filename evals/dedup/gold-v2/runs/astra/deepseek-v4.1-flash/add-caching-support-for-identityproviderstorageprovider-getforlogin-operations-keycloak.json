@@ -1,0 +1,53 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "promptSha": "a1ec59668dc25359063ac8a97a0fe098c2ed9e16",
+  "attempt": 1,
+  "ms": 13736,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S6"
+        ],
+        "kind": "cross_location",
+        "confidence": "high",
+        "problem": "Login-cache invalidation excludes non-public organization IDPs even though organization-specific login caches can contain them.",
+        "rationale": "Both identify the same overly restrictive BROKER_PUBLIC predicate as the reason membership changes leave organization-specific caches stale. S6 points to the predicate definition, while S7 points to the invalidation methods using it."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S4",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The test registers cleanup with the literal alias \"alias\" instead of the actual aliases of the created providers.",
+        "rationale": "Both report the identical incorrect cleanup registrations at lines 381 and 425 and the resulting leakage of the test providers."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

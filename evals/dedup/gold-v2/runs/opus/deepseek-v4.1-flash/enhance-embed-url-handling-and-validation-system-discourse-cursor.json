@@ -1,0 +1,136 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "dbc81320cf0abd2a30aa74f5c7d6acb7dc0d053f",
+  "attempt": 1,
+  "ms": 11567,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 19171,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 1087,
+    "output_tokens_details": {
+      "thinking_tokens": 480
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 19171,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1087,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 19171,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 19171
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1753134,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S9"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The ERB block in best.html.erb is closed with `<%- end if %>`, which is invalid Ruby and breaks template compilation.",
+        "rationale": "Both point at line 6 of the same view and report the same syntax error with the same fix."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S11",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "PollFeed calls `i.content.scrub` without a nil guard, so a feed item without <content> raises and aborts the whole feed import.",
+        "rationale": "Both report the same nil dereference at the same line, and both propose falling back to description/to_s and skipping blank items."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S20",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S10",
+        "confidence": "high"
+      },
+      {
+        "id": "S16",
+        "confidence": "high"
+      },
+      {
+        "id": "S7",
+        "confidence": "mid"
+      },
+      {
+        "id": "S19",
+        "confidence": "mid"
+      },
+      {
+        "id": "S12",
+        "confidence": "mid"
+      },
+      {
+        "id": "S5",
+        "confidence": "mid"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S18",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "mid"
+      },
+      {
+        "id": "S17",
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "confidence": "mid"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      },
+      {
+        "id": "S15",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

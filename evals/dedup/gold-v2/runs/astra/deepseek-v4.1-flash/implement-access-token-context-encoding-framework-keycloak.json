@@ -1,0 +1,111 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "promptSha": "becfd9810972c5339af7dc770874edf0238a63d0",
+  "attempt": 1,
+  "ms": 20398,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S17",
+          "S7",
+          "S13",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The access-token ID matcher extracts the grant shortcut with substring(3, 5) instead of substring(4, 6).",
+        "rationale": "All four report the same incorrect slice in AssertEvents.isAccessTokenId. The incorrect comment describes that same offset mistake; S17 mentions the inverted comparison only as context."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S1",
+          "S15",
+          "S11",
+          "S5",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The AccessTokenContext constructor checks grantType twice and leaves rawTokenId unchecked.",
+        "rationale": "All five identify the same wrong argument to requireNonNull on line 73. Their observations about the mismatched message and accepted null raw ID stem from that single copy-paste error."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S9",
+          "S16",
+          "S12"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The access-token ID matcher rejects a matching grant shortcut instead of rejecting a mismatch.",
+        "rationale": "All three report the inverted equality condition in the same failure branch. S9 also changes the substring offset in its proposed fix, but does not independently report the offset problem."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S14",
+        "problems": [
+          "The matcher extracts the grant shortcut from the wrong substring offset.",
+          "The matcher rejects matching grant shortcuts instead of mismatches."
+        ],
+        "relatedGroups": [
+          "G1",
+          "G3"
+        ],
+        "uncoveredProblems": [],
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "problems": [
+          "The matcher rejects matching grant shortcuts instead of mismatches.",
+          "The matcher extracts the grant shortcut one character too early."
+        ],
+        "relatedGroups": [
+          "G1",
+          "G3"
+        ],
+        "uncoveredProblems": [],
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "problems": [
+          "The matcher extracts the grant shortcut from the wrong substring offset.",
+          "The matcher rejects matching grant shortcuts instead of mismatches."
+        ],
+        "relatedGroups": [
+          "G1",
+          "G3"
+        ],
+        "uncoveredProblems": [],
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "problems": [
+          "The matcher extracts the grant shortcut from the wrong substring offset.",
+          "The matcher rejects matching grant shortcuts instead of mismatches."
+        ],
+        "relatedGroups": [
+          "G1",
+          "G3"
+        ],
+        "uncoveredProblems": [],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S6",
+        "confidence": "high"
+      }
+    ]
+  }
+}

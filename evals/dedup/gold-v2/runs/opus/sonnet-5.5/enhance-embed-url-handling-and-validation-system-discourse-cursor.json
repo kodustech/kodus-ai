@@ -1,0 +1,139 @@
+{
+  "judge": "opus",
+  "model": "sonnet-5.5",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "bd9f166fadd0f87ef9057b4a847568c7c4dbec0c",
+  "attempt": 1,
+  "ms": 15702,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 17938,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 1602,
+    "output_tokens_details": {
+      "thinking_tokens": 746
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 17938,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1602,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 17938,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 17938
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1757494,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S6",
+          "S9"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "absolutize_urls rewrites protocol-relative URLs ('//cdn...') into broken site-relative URLs.",
+        "rationale": "Both describe the same start_with?('/') check mangling '//' URLs in absolutize_urls, and both propose the same fix."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S15",
+          "S16"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Host comparison against embeddable_host is case-sensitive, so mixed-case hosts are wrongly rejected.",
+        "rationale": "The same case-sensitive host comparison appears in embed_controller.rb and topic_retriever.rb, and S15 says it applies to both. One approach (downcasing both sides) fixes each place."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S3",
+        "problems": [
+          "Imported HTML is stored as raw_html and rendered with raw, skipping the sanitizer (stored XSS).",
+          "The url is put into the href without escaping."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Imported feed/remote HTML is not sanitized before being stored as raw_html and rendered raw (stored XSS).",
+          "The url is interpolated into the imported-from link without escaping (also reported by S8, which has no group)."
+        ],
+        "confidence": "mid"
+      },
+      {
+        "id": "S7",
+        "problems": [
+          "The Disqus import drops the category option and the thread's created_at date.",
+          "The live HTTP fetch via open(url) can raise and abort the whole import, so fetch errors need to be rescued per thread."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The Disqus import no longer applies the category and created_at.",
+          "Fetch failures in import_remote abort the whole Disqus import."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S10",
+        "confidence": "high"
+      },
+      {
+        "id": "S11",
+        "confidence": "high"
+      },
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S12",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "mid"
+      },
+      {
+        "id": "S13",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

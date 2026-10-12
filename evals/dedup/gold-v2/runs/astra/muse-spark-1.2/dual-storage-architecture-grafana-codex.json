@@ -1,0 +1,139 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "c0d8a3cc3c4e290c504f92697357e07173994a58",
+  "attempt": 1,
+  "ms": 48950,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S17",
+          "S7"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Delete puts the base logger into the context instead of the logger enriched with request fields.",
+        "rationale": "Both identify the same incorrect argument to klog.NewContext at line 97 and propose the same replacement."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S19",
+          "S1",
+          "S11",
+          "S2",
+          "S10",
+          "S20"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Create and Update record Storage failures using the legacy duration recorder.",
+        "rationale": "The same incorrect recorder call appears in both Storage error branches. Each requires replacing recordLegacyDuration with recordStorageDuration."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S9",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Delete records successful Storage operations with the object name in the kind metric label.",
+        "rationale": "Both identify the name argument at line 106 and require replacing it with options.Kind."
+      },
+      {
+        "id": "G4",
+        "members": [
+          "S16",
+          "S15",
+          "S14",
+          "S13"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "The write tests do not synchronize with and verify their asynchronous legacy operations.",
+        "rationale": "All four tests assert only the Storage result and would pass if their legacy operation were removed. Each needs synchronization and an assertion that the legacy call occurred."
+      },
+      {
+        "id": "G5",
+        "members": [
+          "S18",
+          "S12",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "DeleteCollection records the legacy operation using the Storage duration recorder.",
+        "rationale": "All three identify the same recorder call after Legacy.DeleteCollection and propose recordLegacyDuration."
+      },
+      {
+        "id": "G6",
+        "members": [
+          "S6",
+          "S21"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Logging and metrics dereference potentially nil options pointers without guards across the Mode3 methods.",
+        "rationale": "Both report the repeated unguarded access to options fields and propose guarding or defaulting those accesses."
+      },
+      {
+        "id": "G7",
+        "members": [
+          "S5",
+          "S22"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Asynchronous legacy operations inherit request-context cancellation despite their ten-second timeout.",
+        "rationale": "Both report the same context-parenting mistake across the four asynchronous write paths and propose detaching cancellation."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S24",
+        "problems": [
+          "Create and Update attribute Storage failures to legacy metrics.",
+          "Delete uses the object name as the kind label for successful Storage operations.",
+          "DeleteCollection attributes its legacy operation to Storage metrics."
+        ],
+        "relatedGroups": [
+          "G2",
+          "G3",
+          "G5"
+        ],
+        "uncoveredProblems": [],
+        "confidence": "high"
+      },
+      {
+        "id": "S25",
+        "problems": [
+          "Fire-and-forget replication returns success before legacy persistence completes, changing the completion contract.",
+          "Legacy failures lose their previous error logging and are recorded only as metrics.",
+          "Asynchronous legacy operations inherit cancellation from the request context."
+        ],
+        "relatedGroups": [
+          "G7"
+        ],
+        "uncoveredProblems": [
+          "Fire-and-forget replication no longer guarantees legacy persistence before returning success.",
+          "Legacy failures are no longer logged and are visible only through metrics."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S23",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      }
+    ]
+  }
+}

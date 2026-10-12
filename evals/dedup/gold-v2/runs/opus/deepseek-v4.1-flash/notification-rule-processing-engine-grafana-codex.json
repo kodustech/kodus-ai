@@ -1,0 +1,82 @@
+{
+  "judge": "opus",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "promptSha": "d401225c290520bf10907bbb1d8e9531ee4f4964",
+  "attempt": 1,
+  "ms": 8494,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 29817,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 780,
+    "output_tokens_details": {
+      "thinking_tokens": 70
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 29817,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 780,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 29817,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 29817
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.2543414,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S4",
+          "S5",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Federated rule detection was dropped: isFederated is hardcoded to false instead of using isFederatedRuleGroup, so federated rules are no longer treated as immutable.",
+        "rationale": "All three point at the same hardcoded isFederated=false in useAbilities.ts replacing isFederatedRuleGroup(rule.group), with the same consequence for Update/Delete/Pause abilities."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      }
+    ]
+  }
+}

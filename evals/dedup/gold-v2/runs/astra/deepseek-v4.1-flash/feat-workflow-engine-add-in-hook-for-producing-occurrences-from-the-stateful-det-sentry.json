@@ -1,0 +1,43 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "promptSha": "1338e193cedc938f0cce89b4e0f35e663b0d3c5e",
+  "attempt": 1,
+  "ms": 11630,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S3",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "MetricAlertDetectorHandler inherits unimplemented abstract methods from StatefulDetectorHandler and can no longer be instantiated.",
+        "rationale": "All four suggestions identify the same inheritance change and empty class body as causing TypeError when the detector handler is constructed. Differences in the enumerated abstract methods and proposed fixes do not change the reported problem."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S6",
+          "S5"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The occurrence-building test helper ignores value, allowing tests to pass when the wrong group value is supplied.",
+        "rationale": "Both suggestions identify the unused value parameter in the same helper as preventing verification of the value passed to occurrence construction. The mismatched expected values illustrate this shared testing gap."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

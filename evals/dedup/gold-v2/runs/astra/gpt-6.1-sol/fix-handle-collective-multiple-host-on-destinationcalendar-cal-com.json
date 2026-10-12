@@ -1,0 +1,89 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "promptSha": "a59889f245c00f09eaa3164867bc361ef1005892",
+  "attempt": 1,
+  "ms": 21778,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S17",
+          "S1",
+          "S18",
+          "S14",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The Google Meet fallback dereferences an undefined first destination when destinationCalendar is null or empty.",
+        "rationale": "All five suggestions identify the same unguarded integration access and the resulting exception instead of falling back to Cal Video."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S19",
+          "S9",
+          "S16",
+          "S15",
+          "S11",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Office365 event creation selects the first destination instead of the destination associated with the current credential.",
+        "rationale": "All six describe secondary collective hosts using their own tokens against the first host's calendar. Selecting the destination by the current credential resolves every report."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S7",
+          "S20"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Recurring collective cancellation repeatedly deletes the first host's events while leaving secondary hosts' events intact.",
+        "rationale": "Both identify the inner deletion loop's organizer-only credentials and first-reference selection despite the new outer loop over all host references."
+      },
+      {
+        "id": "G4",
+        "members": [
+          "S12",
+          "S5"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Optional push discards collective hosts' destination calendars when the organizer's destinationCalendar is null.",
+        "rationale": "Both report the same skipped append and propose initializing the destination array so secondary hosts' calendars are retained."
+      },
+      {
+        "id": "G5",
+        "members": [
+          "S13",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The booking reference mapping discards credentialId for video integration results.",
+        "rationale": "Both identify the same conditional assignment replacing video credentials with undefined. Cancellation failure is a consequence of that lost association."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      }
+    ]
+  }
+}

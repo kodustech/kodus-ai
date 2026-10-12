@@ -1,0 +1,95 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "promptSha": "dd3c81af63d256895643cc22eeda93f6a957259e",
+  "attempt": 1,
+  "ms": 36004,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S19",
+          "S7",
+          "S1",
+          "S18",
+          "S11",
+          "S12",
+          "S6",
+          "S13",
+          "S3",
+          "S5",
+          "S2",
+          "S20"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Duration and error metrics use the recorder for the wrong storage backend.",
+        "rationale": "Create and Update storage failures call recordLegacyDuration, while the legacy DeleteCollection calls recordStorageDuration. These repeat the same backend-recorder mismatch; S19 and S18 report multiple instances of this single systemic mistake."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S9",
+          "S8",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Delete's successful storage metric passes the object name into the kind label.",
+        "rationale": "All three identify the same argument at line 106. Label inconsistency and excessive cardinality are consequences of that same mistake."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S16",
+        "problems": [
+          "Asynchronous legacy writes remove the synchronous completion behavior that callers depended on.",
+          "Legacy goroutines inherit request cancellation and can lose their writes when the handler returns."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Returning before the legacy operation completes changes the contract for existing consumers.",
+          "Request-derived contexts can cancel legacy writes prematurely; S4 also reports this, but there are insufficient single-problem suggestions to form a group."
+        ],
+        "confidence": "mid"
+      },
+      {
+        "id": "S15",
+        "problems": [
+          "Tests never await or assert that the asynchronous legacy operations occur.",
+          "Sharing one mock between both backends prevents assertions from distinguishing legacy calls from storage calls."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Legacy expectations are never verified and asynchronous legacy operations are never awaited.",
+          "The shared mock obscures which backend received a call."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S17",
+        "confidence": "high"
+      },
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "mid"
+      },
+      {
+        "id": "S21",
+        "confidence": "high"
+      },
+      {
+        "id": "S22",
+        "confidence": "low"
+      }
+    ]
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "promptSha": "7adba87035161c9aeb8f97d646bcf8c30065ac01",
+  "attempt": 1,
+  "ms": 28491,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S17",
+          "S6",
+          "S4",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The test asserts on caughtExceptions before waiting for the background reader thread to terminate.",
+        "rationale": "All four report the missing join and the resulting possibility that reader failures are recorded after the assertion. The thread outliving the test is another consequence of the same missing synchronization."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S21",
+          "S22"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "mid",
+        "problem": "The intro and base Bovis paragraphs lack the intended 15% width constraint.",
+        "rationale": "Both propose the identical width constraint on repeated Bovis paragraph elements in the same template. Each occurrence requires its own edit."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S1",
+        "problems": [
+          "getSubGroupsCount returns null despite its non-null contract, potentially causing downstream null dereferences.",
+          "The three getSubGroupsStream overloads still dereference a potentially null model supplier result during concurrent deletion."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "getSubGroupsCount returns null despite its non-null contract.",
+          "The getSubGroupsStream overloads lack guards for a null delegate during concurrent deletion."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S19",
+        "confidence": "mid"
+      },
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S23",
+        "confidence": "mid"
+      },
+      {
+        "id": "S9",
+        "confidence": "high"
+      },
+      {
+        "id": "S16",
+        "confidence": "high"
+      },
+      {
+        "id": "S18",
+        "confidence": "high"
+      },
+      {
+        "id": "S15",
+        "confidence": "high"
+      },
+      {
+        "id": "S11",
+        "confidence": "high"
+      },
+      {
+        "id": "S12",
+        "confidence": "high"
+      },
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "confidence": "high"
+      },
+      {
+        "id": "S24",
+        "confidence": "mid"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      },
+      {
+        "id": "S10",
+        "confidence": "high"
+      },
+      {
+        "id": "S20",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

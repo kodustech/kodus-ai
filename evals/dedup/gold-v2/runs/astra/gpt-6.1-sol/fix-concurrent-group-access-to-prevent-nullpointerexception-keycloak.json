@@ -1,0 +1,52 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "promptSha": "0329efe0d4f7143a1abcda5b97ae9acdaa2dd8ca",
+  "attempt": 1,
+  "ms": 13289,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S3",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The test asserts collected exceptions before the reader thread finishes, allowing an in-flight request failure to escape the assertion.",
+        "rationale": "All three describe the same race between the assertion and the reader appending an exception. Each proposes joining the reader before inspecting the results."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S5",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "A deletion failure skips stop signaling and leaves the reader thread running indefinitely.",
+        "rationale": "Both identify the missing cleanup on the exceptional deletion path and propose stopping and awaiting the reader in a finally block."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S6",
+        "problems": [
+          "The exception assertion can run before an in-flight reader request finishes and records its failure.",
+          "The reader may first run after deletion finishes and perform no reads, leaving the concurrency regression untested."
+        ],
+        "relatedGroups": [
+          "G1"
+        ],
+        "uncoveredProblems": [
+          "Missing startup coordination allows deletion to finish before the reader performs any reads."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": []
+  }
+}

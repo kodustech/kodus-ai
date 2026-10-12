@@ -1,0 +1,48 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "promptSha": "093f16683e2acee902263411e4a94b3ced481bff",
+  "attempt": 1,
+  "ms": 16085,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S3",
+          "S5"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "The Lithuanian login and account bundles both replace the OTP setup instruction with an Italian sentence.",
+        "rationale": "All three suggestions identify the same copied Italian instruction in both Lithuanian bundles. Each location needs its value translated into Lithuanian."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S1",
+          "S9",
+          "S6",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The diagnostic prefix and suffix scans can overlap, causing invalid substring ranges and aborting HTML verification.",
+        "rationale": "These suggestions describe the same unbounded suffix scan at lines 107–111. Their different examples all require bounding the suffix by the lengths remaining after the matched prefix."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

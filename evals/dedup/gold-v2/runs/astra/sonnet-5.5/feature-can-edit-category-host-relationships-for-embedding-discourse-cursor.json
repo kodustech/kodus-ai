@@ -1,0 +1,100 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "promptSha": "428e31cbc6309079f98fae4c16904a7114baef40",
+  "attempt": 1,
+  "ms": 35506,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S1",
+          "S14"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Host lookup lowercases the stored value but not the incoming hostname, causing mixed-case hostnames to fail matching.",
+        "rationale": "All three identify the same asymmetric normalization in record_for_host and propose downcasing the query argument."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S12",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Updating or deleting an unknown embeddable host dereferences nil instead of returning a 404.",
+        "rationale": "Both report the unchecked .first results in the same two controller actions and propose using find."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S13",
+          "S8",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The migration dereferences missing category-setting query results and aborts when no row exists.",
+        "rationale": "All three report unchecked first-row access in the category selection and fallback queries."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S5",
+        "problems": [
+          "The migration dereferences a missing category-setting query result.",
+          "The migration interpolates unquoted host strings into SQL.",
+          "The migration inserts host strings without removing schemes or paths."
+        ],
+        "relatedGroups": [
+          "G3"
+        ],
+        "uncoveredProblems": [
+          "The migration interpolates unquoted host strings into SQL.",
+          "The migration inserts host strings without removing schemes or paths."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S11",
+        "problems": [
+          "Host normalization calls sub! on nil and raises instead of producing a validation error.",
+          "Host normalization mutates the supplied string in place."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Host normalization calls sub! on nil; S2 also reports this, but no group has two eligible single-problem suggestions.",
+          "Host normalization mutates the supplied string in place."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S9",
+        "confidence": "high"
+      },
+      {
+        "id": "S15",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "mid"
+      }
+    ]
+  }
+}

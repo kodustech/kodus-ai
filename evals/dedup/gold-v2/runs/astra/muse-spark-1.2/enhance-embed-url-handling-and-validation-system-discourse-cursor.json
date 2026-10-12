@@ -1,0 +1,152 @@
+{
+  "judge": "astra",
+  "model": "muse-spark-1.2",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "promptSha": "a83b1ec602a28dc0b0a0132ea14a57e322371407",
+  "attempt": 1,
+  "ms": 51292,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S19",
+          "S3",
+          "S22"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The postMessage receiver validates origins using substring containment instead of exact origin equality.",
+        "rationale": "All three identify the same discourseUrl.indexOf(e.origin) check and propose validating the sender against the Discourse origin."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S23",
+          "S24",
+          "S20"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The resize message uses the full referrer URL as targetOrigin instead of extracting its origin.",
+        "rationale": "Each reports the same postMessage argument and the resulting failure to deliver resize messages."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S4",
+          "S10"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Feed importing calls scrub on potentially nil item content, aborting imports for description-only entries.",
+        "rationale": "Both identify the same nil dereference and suggest falling back to description or an empty string. S4's additional title handling appears only in its proposed fix."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S6",
+        "problems": [
+          "Feed and article fetching lack SSRF safeguards against internal destinations and unsafe redirects.",
+          "Feed and article fetching lack timeouts, allowing slow responses to occupy workers."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Remote fetching lacks SSRF destination and redirect validation.",
+          "Remote fetching lacks timeouts to bound worker occupation."
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "problems": [
+          "The resize message uses the full referrer URL as targetOrigin, causing delivery failures and alleged referrer exposure.",
+          "The targetOrigin construction does not handle a nil referrer."
+        ],
+        "relatedGroups": [
+          "G2"
+        ],
+        "uncoveredProblems": [
+          "The resize message does not guard against a nil referrer."
+        ],
+        "confidence": "mid"
+      },
+      {
+        "id": "S12",
+        "problems": [
+          "Remote article fetching leaves network and OpenURI failures unhandled.",
+          "URL absolutization leaves URI parsing failures unhandled for malformed URLs that pass the prefix check."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "Remote article fetching can terminate retrieval jobs with unhandled network exceptions.",
+          "URL absolutization can raise unhandled URI parsing exceptions."
+        ],
+        "confidence": "mid"
+      },
+      {
+        "id": "S21",
+        "problems": [
+          "The feed_key method computes a cache key that is never used.",
+          "Feed polling fetches unchanged feeds without conditional requests or a cache check."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The feed_key method is unused dead computation.",
+          "Feed polling lacks caching or conditional fetching to avoid redundant downloads."
+        ],
+        "confidence": "mid"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S17",
+        "confidence": "high"
+      },
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S9",
+        "confidence": "high"
+      },
+      {
+        "id": "S16",
+        "confidence": "high"
+      },
+      {
+        "id": "S18",
+        "confidence": "high"
+      },
+      {
+        "id": "S15",
+        "confidence": "high"
+      },
+      {
+        "id": "S11",
+        "confidence": "mid"
+      },
+      {
+        "id": "S14",
+        "confidence": "high"
+      },
+      {
+        "id": "S13",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

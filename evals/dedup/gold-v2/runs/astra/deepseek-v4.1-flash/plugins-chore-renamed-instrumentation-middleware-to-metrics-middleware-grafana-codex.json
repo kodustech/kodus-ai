@@ -1,0 +1,61 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "promptSha": "cc55faaa68d6573bdb7c4bdebeb5befe8491098f",
+  "attempt": 1,
+  "ms": 18049,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S9",
+          "S5",
+          "S8"
+        ],
+        "kind": "cross_location",
+        "confidence": "high",
+        "problem": "The contextual logging migration drops traceID from plugin request completion logs.",
+        "rationale": "All three report the same missing traceID enrichment, pointing either to the consumer in LoggerMiddleware or to instrumentContext. Restoring the field at either location addresses all three reports."
+      }
+    ],
+    "multiProblem": [
+      {
+        "id": "S6",
+        "problems": [
+          "checkHistogram does not reset foundLabels for each metric.",
+          "checkHistogram returns an error on a mismatching series instead of searching subsequent series."
+        ],
+        "relatedGroups": [],
+        "uncoveredProblems": [
+          "The foundLabels counter persists between metrics; S2 also reports this, but no group has two eligible single-problem suggestions.",
+          "A label-value mismatch prematurely terminates the search for a matching metric."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "unique": [
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

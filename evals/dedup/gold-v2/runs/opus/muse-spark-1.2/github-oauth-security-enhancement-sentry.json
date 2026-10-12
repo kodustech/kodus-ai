@@ -1,0 +1,92 @@
+{
+  "judge": "opus",
+  "model": "muse-spark-1.2",
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "promptSha": "8a1d359caef987448e300a2690c9140e0294e235",
+  "attempt": 1,
+  "ms": 5989,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 11765,
+    "cache_read_input_tokens": 987,
+    "output_tokens": 419,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 11765,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 419,
+        "cache_read_input_tokens": 987,
+        "cache_creation_input_tokens": 11765,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 11765
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.1027054,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S5",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "safe_urlopen and get_user_info in OAuthLoginView are not wrapped in exception handling, so network/API failures surface as unhandled 500s.",
+        "rationale": "Both point to the same lines and report the same missing try/except, with the same fix."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S6",
+          "S3"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Direct indexing of integration.metadata[\"sender\"][\"login\"] can raise KeyError when sender metadata is missing.",
+        "rationale": "Both cover the same lines, describe the same KeyError risk and propose .get() guards."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S4",
+        "confidence": "high"
+      },
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      },
+      {
+        "id": "S9",
+        "confidence": "high"
+      }
+    ]
+  }
+}

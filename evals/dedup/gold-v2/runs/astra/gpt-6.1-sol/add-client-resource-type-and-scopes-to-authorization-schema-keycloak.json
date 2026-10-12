@@ -1,0 +1,45 @@
+{
+  "judge": "astra",
+  "model": "gpt-6.1-sol",
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "promptSha": "e050caee3774c7265fbe835ac87173c4260b3a3c",
+  "attempt": 1,
+  "ms": 14366,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S5"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Global fine-grained VIEW grants bypass client-specific VIEW denials in client viewing and listing.",
+        "rationale": "Both identify the same short-circuit in canView(ClientModel) and the same listing consequence, requesting that client-specific permissions take precedence over global grants."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S3",
+          "S4"
+        ],
+        "kind": "systemic_pattern",
+        "confidence": "high",
+        "problem": "Javadoc on void require-methods incorrectly describes a boolean return value instead of guard behavior.",
+        "rationale": "The same documentation mistake appears on requireView() and requireViewClientScopes(); each needs its own edit using the same guard-documentation approach."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S2",
+        "confidence": "high"
+      }
+    ]
+  }
+}

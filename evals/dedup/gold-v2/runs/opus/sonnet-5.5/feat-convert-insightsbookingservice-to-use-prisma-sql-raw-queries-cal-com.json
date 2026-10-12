@@ -1,0 +1,16 @@
+{
+  "judge": "opus",
+  "model": "sonnet-5.5",
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "trivial": true,
+  "answer": {
+    "groups": [],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S1",
+        "confidence": "high"
+      }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "promptSha": "a47e079d1465d5abc3ac918f0154e38cf4d6fc1f",
+  "attempt": 1,
+  "ms": 12479,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S5",
+          "S4",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Consolidating the ability hooks drops federated-rule detection, causing federated rules to lose their immutability restrictions.",
+        "rationale": "All three suggestions identify the delegation to useAllRulerRuleAbilities and its hardcoded isFederated=false as the same regression. Restoring federation detection resolves all three reports."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S7",
+        "confidence": "high"
+      },
+      {
+        "id": "S1",
+        "confidence": "high"
+      },
+      {
+        "id": "S6",
+        "confidence": "high"
+      },
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      }
+    ]
+  }
+}

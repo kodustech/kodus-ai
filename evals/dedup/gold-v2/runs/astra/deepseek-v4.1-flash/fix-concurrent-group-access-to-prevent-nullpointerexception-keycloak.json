@@ -1,0 +1,49 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "promptSha": "09873fb3919de6ddfcd6e1fc7d85f9e7fed90ac0",
+  "attempt": 1,
+  "ms": 15103,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S7",
+          "S3",
+          "S8"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Returning null from getSubGroupsCount() breaks its non-null expectation and can cause consumer-side unboxing NPEs.",
+        "rationale": "All three report the same newly nullable return at lines 274-275. Contract documentation, caller behavior, and sibling defaults provide different supporting arguments for that single problem."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S1",
+          "S5",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The test asserts the exception list before joining the reader thread, allowing failures to be recorded after the assertion.",
+        "rationale": "S1 and S4 explicitly describe the same assertion race caused by the missing join. S5 names that same thread-join/race weakness."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S6",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "mid",
+        "problem": "An exception during deletion skips setting the stop flag, leaving the reader thread running indefinitely.",
+        "rationale": "S2 explains the deletion-loop abort and missed termination signal. S6's terse 'mid-loop abort hazard' most naturally identifies that same failure path in the supplied diff."
+      }
+    ],
+    "multiProblem": [],
+    "unique": []
+  }
+}

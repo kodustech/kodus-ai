@@ -1,0 +1,53 @@
+{
+  "judge": "astra",
+  "model": "deepseek-v4.1-flash",
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "promptSha": "27dfffeb722fe5aace41686734a4e04b2f08b3e7",
+  "attempt": 1,
+  "ms": 13894,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S2",
+          "S5"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The queued timestamp default is evaluated at module import instead of separately for each AssignmentSource instance.",
+        "rationale": "All three report the same timezone.now() field default and resulting stale timestamp. S2's test observation supports this problem rather than reporting a separate defect."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S3",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "test_from_dict_empty_array exercises an empty dictionary despite naming an empty-array case.",
+        "rationale": "Both identify the same mismatch between the test name and its input, with the same alternatives of renaming the test or changing the input."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S7",
+          "S6"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "AssignmentSource serialization lacks an explicit datetime representation and reconstruction for queued across the task queue boundary.",
+        "rationale": "Both flag asdict retaining a raw datetime and describe encoding failure or string reconstruction as possible consequences of the same serialization problem."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S8",
+        "confidence": "high"
+      }
+    ]
+  }
+}

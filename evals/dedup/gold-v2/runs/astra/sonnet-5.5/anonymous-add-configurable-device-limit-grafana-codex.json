@@ -1,0 +1,60 @@
+{
+  "judge": "astra",
+  "model": "sonnet-5.5",
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "promptSha": "39c8ec3a523a776e609b1389340caeea9129bdea",
+  "attempt": 1,
+  "ms": 30841,
+  "answer": {
+    "groups": [
+      {
+        "id": "G1",
+        "members": [
+          "S1",
+          "S6"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "The changed store constructor requires an int64 that the existing Wire provider registration cannot supply.",
+        "rationale": "Both identify the same constructor and stale provider/binding entries in wire.go. Updating that registration or making the constructor Wire-compatible resolves both."
+      },
+      {
+        "id": "G2",
+        "members": [
+          "S9",
+          "S2"
+        ],
+        "kind": "same_location",
+        "confidence": "high",
+        "problem": "Separate count and insert operations allow concurrent new devices to exceed the configured limit.",
+        "rationale": "Both describe the same race in CreateOrUpdateDevice and require atomic enforcement of the count-and-insert decision."
+      },
+      {
+        "id": "G3",
+        "members": [
+          "S7",
+          "S4"
+        ],
+        "kind": "same_location",
+        "confidence": "mid",
+        "problem": "Synchronous device tagging couples anonymous authentication to database latency and request cancellation.",
+        "rationale": "Both report the consequences of replacing background tagging with a synchronous call using the request context. S7's limit-refusal discussion supplies context and an alternative proposed response, rather than clearly reporting a separate defect."
+      }
+    ],
+    "multiProblem": [],
+    "unique": [
+      {
+        "id": "S3",
+        "confidence": "high"
+      },
+      {
+        "id": "S5",
+        "confidence": "high"
+      },
+      {
+        "id": "S8",
+        "confidence": "high"
+      }
+    ]
+  }
+}
