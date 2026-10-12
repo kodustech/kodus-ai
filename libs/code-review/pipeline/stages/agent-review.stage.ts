@@ -6,6 +6,7 @@ import { tracedEmbed as embed } from '@libs/llm/llm-call';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
+import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engine/parse-finder-schema';
 import {
     DEDUP_SCHEMA,
     DEDUP_CONTENT_THRESHOLD,
@@ -1068,9 +1069,28 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 allKodyRules,
                 prNumber,
             );
-            const nonKodyRulesForDedup = severityNormalized.filter(
-                (s) => s.label !== 'kody_rules',
+            // Parse schema (#1821): from here on a finder suggestion carries
+            // only the five lean fields; code snippets come back at enrichment.
+            const parsed = parseFinderSchema(
+                severityNormalized.filter((s) => s.label !== 'kody_rules') as Array<
+                    Record<string, unknown>
+                >,
             );
+            if (parsed.discarded.length > 0) {
+                this.logger.warn({
+                    message: `[PARSE-SCHEMA] PR#${prNumber}: discarded ${parsed.discarded.length} finder suggestions missing lean fields`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        teamId: context.organizationAndTeamData?.teamId,
+                        prNumber,
+                        discarded: parsed.discarded,
+                    },
+                });
+            }
+            const nonKodyRulesForDedup =
+                parsed.suggestions as unknown as Partial<CodeSuggestion>[];
 
             let dedupedNonRules = nonKodyRulesForDedup;
             let dedupTrace: DedupTraceSummary = {

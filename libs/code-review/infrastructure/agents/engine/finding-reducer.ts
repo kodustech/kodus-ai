@@ -45,7 +45,9 @@ const SEVERITY_SCALE: Record<string, number> = {
  * verify+dedup, que descartava 30 de 178 grupos (13%) e deixava 91 dos 148
  * comentarios postados sem nenhum golden correspondente.
  */
-export const REDUCER_ENABLED = true;
+// Off (#1821): the pipeline is finder -> parse schema -> dedup; the reducer
+// comes back once it is reworked for the lean finder output.
+export const REDUCER_ENABLED = false;
 
 /** Sobrescreve `REDUCER_ENABLED` — existe SO para teste.
  *

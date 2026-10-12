@@ -40,7 +40,9 @@ jest.mock('@libs/llm/managed-slot', () => {
  * quando o reducer quebra. Um reducer que explode devolvendo zero comentario e
  * pior que um que nao corta nada.
  */
-describe('AgentReviewStage — o reducer no fluxo', () => {
+// Desligado (#1821): o reducer saiu do fluxo (finder -> parse schema -> dedup)
+// e depende do `reason`, que o parse schema remove. Volta quando for refeito.
+describe.skip('AgentReviewStage — o reducer no fluxo', () => {
     let runSpy: jest.SpyInstance;
     afterEach(() => {
         runSpy?.mockRestore();

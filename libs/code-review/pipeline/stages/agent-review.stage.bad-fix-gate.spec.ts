@@ -27,11 +27,14 @@ jest.mock('@libs/llm/managed-slot', () => {
  * `BAD_FIX_DOWNGRADED` review warning is attached to the context.
  */
 
+// Kody Rules: since the lean finder output (#1821) the finder sends no code,
+// so only a Kody Rule finding reaches this gate with an improvedCode.
 const sugg = (over: Record<string, unknown> = {}) => ({
     relevantFile: 'src/user.ts',
     relevantLinesStart: 10,
     relevantLinesEnd: 12,
-    label: 'bug',
+    label: 'kody_rules',
+    brokenKodyRulesIds: ['rule-gate'],
     severity: 'high',
     oneSentenceSummary: 'user object can be null and is dereferenced',
     suggestionContent: 'user object can be null and is dereferenced here',
@@ -215,6 +218,7 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
             happyEnvelope([
                 sugg({ relevantLinesStart: 10, relevantLinesEnd: 12 }),
                 sugg({
+                    brokenKodyRulesIds: ['rule-gate-2'],
                     relevantLinesStart: 20,
                     relevantLinesEnd: 22,
                     existingCode: 'const x = compute();',
