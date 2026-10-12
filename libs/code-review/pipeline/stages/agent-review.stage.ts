@@ -8,6 +8,11 @@ import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engine/parse-finder-schema';
 import {
+    buildSanitizerPrompt,
+    SANITIZER_SCHEMA,
+    sanitizerDiscardIndices,
+} from '@libs/code-review/infrastructure/agents/engine/suggestion-sanitizer-prompt';
+import {
     DEDUP_SCHEMA,
     DEDUP_CONTENT_THRESHOLD,
     DEDUP_EMBEDDING_LOW,
@@ -952,8 +957,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     },
                 });
             }
+            // Sanitizer (#1821): drops the finder suggestions that report no
+            // problem ("no sensitive data exposed") before anything else reads them.
+            const sanitized = await this.sanitizeSuggestions(
+                parsed.suggestions as unknown as Partial<CodeSuggestion>[],
+                prNumber,
+                context.codeReviewConfig?.resolvedModelSlot,
+                telemetryMeta,
+            );
+            for (const s of sanitized.discarded) {
+                allDiscarded.push({
+                    ...s,
+                    priorityStatus: PriorityStatus.DISCARDED_BY_SAFEGUARD,
+                    deliveryStatus: DeliveryStatus.NOT_SENT,
+                });
+            }
             const anchoringInput: Partial<CodeSuggestion>[] = [
-                ...(parsed.suggestions as unknown as Partial<CodeSuggestion>[]),
+                ...sanitized.kept,
                 ...result.suggestions.filter((s) => s.label === 'kody_rules'),
             ];
 
@@ -2111,6 +2131,77 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
      * Deduplicate suggestions that describe the same issue using LLM.
      * Groups by file, then asks Gemini Flash which suggestions are duplicates.
      */
+    /** Removes the suggestions that report no problem. Keeps everything when
+     *  there is no model or the call fails: a missed discard only costs a
+     *  useless comment, a wrong one would cost a finding. */
+    private async sanitizeSuggestions(
+        suggestions: Partial<CodeSuggestion>[],
+        prNumber: number,
+        resolvedSlot?: NormalizedModel,
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<{
+        kept: Partial<CodeSuggestion>[];
+        discarded: Partial<CodeSuggestion>[];
+    }> {
+        if (!suggestions.length || (!resolvedSlot && !hasManagedModelKey())) {
+            return { kept: suggestions, discarded: [] };
+        }
+        try {
+            const out = await LLM.run({
+                byokConfig: resolvedSlot,
+                schema: jsonSchema(SANITIZER_SCHEMA as any),
+                user: buildSanitizerPrompt(suggestions),
+                runName: 'code-review-suggestion-sanitizer',
+                spanName: 'code-review::suggestion-sanitizer',
+                organizationId: telemetryMeta?.organizationId,
+                telemetryMetadata: telemetryMeta,
+                attrs: {
+                    type: resolvedSlot ? 'byok' : 'system',
+                    prNumber,
+                    ...(telemetryMeta?.teamId
+                        ? { teamId: telemetryMeta.teamId }
+                        : {}),
+                },
+            });
+            const drop = new Set(
+                sanitizerDiscardIndices(suggestions.length, out),
+            );
+            const discarded = suggestions.filter((_, i) => drop.has(i));
+            if (discarded.length > 0) {
+                this.logger.log({
+                    message: `[SANITIZER] PR#${prNumber}: discarded ${discarded.length} of ${suggestions.length} suggestions that report no problem`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationId: telemetryMeta?.organizationId,
+                        teamId: telemetryMeta?.teamId,
+                        prNumber,
+                        discarded: discarded.map((d) => ({
+                            relevantFile: d.relevantFile,
+                            relevantLinesStart: d.relevantLinesStart,
+                            suggestionContent: (d.suggestionContent || '').slice(0, 200),
+                        })),
+                    },
+                });
+            }
+            return {
+                kept: suggestions.filter((_, i) => !drop.has(i)),
+                discarded,
+            };
+        } catch (error) {
+            this.logger.warn({
+                message: `[SANITIZER] PR#${prNumber}: failed, keeping all suggestions`,
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationId: telemetryMeta?.organizationId,
+                    teamId: telemetryMeta?.teamId,
+                    prNumber,
+                },
+            });
+            return { kept: suggestions, discarded: [] };
+        }
+    }
+
     private async deduplicateSuggestions(
         suggestions: Partial<CodeSuggestion>[],
         prNumber: number,
