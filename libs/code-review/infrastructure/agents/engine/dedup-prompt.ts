@@ -155,68 +155,65 @@ export function collapseNearDuplicates<T extends DedupSuggestionLike>(
 }
 
 /**
- * Build the per-suggestion summary block the dedup model sees. No severity:
- * the finder's self-declared severity is unreliable, and severity is assigned
- * later, at enrichment.
+ * Build the per-suggestion block the dedup model sees. No severity: the
+ * finder's self-declared severity is unreliable, and severity is assigned
+ * later, at enrichment. The whole suggestionContent goes in: the finder no
+ * longer writes a oneSentenceSummary, and a 200-char cut usually stopped
+ * before the problem itself (#1821).
  */
 export function buildDedupSummaries(
     suggestions: DedupSuggestionLike[],
     opts?: { withCode?: boolean },
 ): string {
     return suggestions
-        .map(
-            (s, i) =>
-                `[${i}] ${s.relevantFile || 'unknown'}:${s.relevantLinesStart}-${s.relevantLinesEnd} [${s.label || 'unknown'}]: ${s.oneSentenceSummary || s.suggestionContent?.substring(0, 200)}${s.improvedCode ? `\n    fix: ${s.improvedCode.substring(0, 100)}` : ''}${opts?.withCode && s.existingCode ? `\n    code: ${s.existingCode.substring(0, 400)}` : ''}`,
-        )
+        .map((s, i) => {
+            const text = (s.suggestionContent || s.oneSentenceSummary || '')
+                .trim()
+                .replace(/\n+/g, '\n    ');
+            return `[${i}] ${s.relevantFile || 'unknown'}:${s.relevantLinesStart}-${s.relevantLinesEnd} [${s.label || 'unknown'}]: ${text}${s.improvedCode ? `\n    fix: ${s.improvedCode.substring(0, 100)}` : ''}${opts?.withCode && s.existingCode ? `\n    code: ${s.existingCode.substring(0, 400)}` : ''}`;
+        })
         .join('\n');
 }
 
 /** Full dedup prompt (instructions + the suggestion summaries).
  *
- *  `mergeRootCause` (A/B knob, default off = production behavior unchanged):
- *  adds a third merge class — the SAME systemic mistake repeated across N
- *  call sites/methods (e.g. the same wrong metric call copy-pasted in
- *  Create/Update/Delete). Measured motivation (30-PR scout run, 2026-09-16):
- *  ~40 of 107 false positives were paraphrase/per-call-site variants of a
- *  root cause the golden comment states ONCE, generically — the conservative
- *  default keeps them apart, so every extra variant scores as a false
- *  positive and reads as N redundant comments to the user. */
+ *  Three merge classes, the third being the SAME systemic mistake repeated
+ *  across N call sites/methods (e.g. the same wrong metric call copy-pasted in
+ *  Create/Update/Delete). It was an off-by-default A/B knob; measured on the
+ *  dedup gold (#1821) it is how the gold groups those repeats, and the old
+ *  "different code never merges" rule kept them, and cross-file duplicates,
+ *  apart. */
 export function buildDedupPrompt(
     suggestions: DedupSuggestionLike[],
     /** withCode (#1821 eval): each summary also shows the finding's existingCode. */
-    opts?: { mergeRootCause?: boolean; withCode?: boolean },
+    opts?: { withCode?: boolean },
 ): string {
     const summaries = buildDedupSummaries(suggestions, { withCode: opts?.withCode });
-    const rootCauseClass = opts?.mergeRootCause
-        ? `
+    return `You have ${suggestions.length} code review suggestions across multiple files in a PR. Identify duplicates and group them.
+
+BE CONSERVATIVE — when in doubt, do NOT group. Only group when you are highly confident they describe the exact same bug or the exact same systemic mistake.
+
+There are THREE types of duplicates:
+
+1. **EXACT DUPLICATES** (same bug, same location): Multiple suggestions pointing to the same file and overlapping lines describing the same issue. Keep the one with the most detail, discard the rest.
+
+2. **CROSS-LOCATION DUPLICATES** (same bug pattern, different locations): Suggestions describing the EXACT SAME code pattern/bug but applied in different files (e.g., "forEach with async callback" found in 3 different files, or "missing null check on the same API call" in 2 files). These should be GROUPED — keep the best one as representative, list the others as duplicates.
 
 3. **SYSTEMIC ROOT-CAUSE DUPLICATES** (same underlying mistake, repeated): The
 same wrong pattern applied at several call sites, methods or files — e.g. the
 same incorrect metric call copy-pasted into Create, Update and Delete, or the
 same inverted condition in three branches. One fix (or one find-and-replace)
 would resolve all of them. GROUP them — keep the clearest instance as
-representative; the other locations will be listed on the kept comment.`
-        : '';
-    const differentCodeRule = opts?.mergeRootCause
-        ? `- Suggestions about different code, UNLESS they are the same systemic root cause (type 3 above)`
-        : `- Suggestions about different code even if the description sounds similar`;
-    return `You have ${suggestions.length} code review suggestions across multiple files in a PR. Identify duplicates and group them.
-
-BE CONSERVATIVE — when in doubt, do NOT group. Only group when you are highly confident they describe the exact same bug${opts?.mergeRootCause ? ' or the exact same systemic mistake' : ''}.
-
-There are ${opts?.mergeRootCause ? 'THREE' : 'TWO'} types of duplicates:
-
-1. **EXACT DUPLICATES** (same bug, same location): Multiple suggestions pointing to the same file and overlapping lines describing the same issue. Keep the one with the most detail, discard the rest.
-
-2. **CROSS-LOCATION DUPLICATES** (same bug pattern, different locations): Suggestions describing the EXACT SAME code pattern/bug but applied in different files (e.g., "forEach with async callback" found in 3 different files, or "missing null check on the same API call" in 2 files). These should be GROUPED — keep the best one as representative, list the others as duplicates.${rootCauseClass}
+representative; the other locations will be listed on the kept comment.
 
 NOT duplicates (keep both):
 - Different bugs in the same file or nearby lines (e.g., "nil pointer" and "missing validation" in the same controller — these are DIFFERENT bugs)
 - Different root causes even if they sound similar (e.g., "add nil check" vs "fix typo" — different problems)
-${differentCodeRule}
 
 IGNORE the category label (bug/security/performance) when deciding — two agents can independently find the same issue.
 Prefer keeping the suggestion with the most detail or clearest fix as the representative.
+
+Every index from 0 to ${suggestions.length - 1} must appear EXACTLY ONCE in your answer: as a group's keep, inside a group's duplicates, or in unique. Do not skip any index and do not repeat one.
 
 ${summaries}`;
 }
