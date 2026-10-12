@@ -1,0 +1,2084 @@
+{
+ "model": "muse-spark-1.2",
+ "dedupModel": "muse-spark-1.2",
+ "prs": {
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "n": 9,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S4",
+      "S6",
+      "S8",
+      "S9"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S5"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S7"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S4",
+     "keep": "S1",
+     "lex": 0.3157894736842105,
+     "cos": 0.8427626073131292,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.2727272727272727,
+     "cos": 0.8848551683328983,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S1",
+     "lex": 0.26666666666666666,
+     "cos": 0.8300245013989181,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S1",
+     "lex": 0.23076923076923078,
+     "cos": 0.8452804027484783,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S2",
+     "lex": 0.3582089552238806,
+     "cos": 0.8209285498357565,
+     "tb": true
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "n": 21,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S7",
+      "S11",
+      "S13",
+      "S14",
+      "S15",
+      "S16"
+     ]
+    },
+    {
+     "duplicates": [
+      "S6",
+      "S10",
+      "S12",
+      "S17",
+      "S19"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S8",
+      "S9",
+      "S18",
+      "S20"
+     ]
+    }
+   ],
+   "unique": [
+    "S4",
+    "S5",
+    "S21"
+   ],
+   "unmentioned": [
+    "S2"
+   ],
+   "pares": [
+    {
+     "dup": "S7",
+     "keep": "S1",
+     "lex": 0.32786885245901637,
+     "cos": 0.881285794193529,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S1",
+     "lex": 0.30357142857142855,
+     "cos": 0.9019687518883248,
+     "tb": true
+    },
+    {
+     "dup": "S13",
+     "keep": "S1",
+     "lex": 0.421875,
+     "cos": 0.8405368639812325,
+     "tb": true
+    },
+    {
+     "dup": "S14",
+     "keep": "S1",
+     "lex": 0.3448275862068966,
+     "cos": 0.793275936395111,
+     "tb": true
+    },
+    {
+     "dup": "S15",
+     "keep": "S1",
+     "lex": 0.288135593220339,
+     "cos": 0.8803967487417388,
+     "tb": true
+    },
+    {
+     "dup": "S16",
+     "keep": "S1",
+     "lex": 0.23728813559322035,
+     "cos": 0.7830930534847104,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "lex": 0,
+     "cos": 0.13944814085447343,
+     "tb": false
+    },
+    {
+     "dup": "S10",
+     "lex": 0,
+     "cos": 0.15311896111028483,
+     "tb": false
+    },
+    {
+     "dup": "S12",
+     "lex": 0,
+     "cos": 0.1437970030049411,
+     "tb": false
+    },
+    {
+     "dup": "S17",
+     "lex": 0,
+     "cos": 0.16007379840646388,
+     "tb": false
+    },
+    {
+     "dup": "S19",
+     "lex": 0,
+     "cos": 0.13474040526786144,
+     "tb": false
+    },
+    {
+     "dup": "S8",
+     "keep": "S3",
+     "lex": 0.25396825396825395,
+     "cos": 0.7689835507794899,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S3",
+     "lex": 0.18333333333333332,
+     "cos": 0.7465248748959249,
+     "tb": true
+    },
+    {
+     "dup": "S18",
+     "keep": "S3",
+     "lex": 0.2,
+     "cos": 0.7678891672862591,
+     "tb": true
+    },
+    {
+     "dup": "S20",
+     "keep": "S3",
+     "lex": 0.21621621621621623,
+     "cos": 0.7322199396471658,
+     "tb": true
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "n": 18,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S11"
+     ]
+    },
+    {
+     "keep": "S12",
+     "duplicates": [
+      "S3",
+      "S18"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S9"
+     ]
+    },
+    {
+     "keep": "S15",
+     "duplicates": [
+      "S13"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S10",
+    "S14",
+    "S16",
+    "S17"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S11",
+     "keep": "S1",
+     "lex": 0.3018867924528302,
+     "cos": 0.8372524166159804,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S12",
+     "lex": 0.2786885245901639,
+     "cos": 0.7983264426330317,
+     "tb": true
+    },
+    {
+     "dup": "S18",
+     "keep": "S12",
+     "lex": 0.19298245614035087,
+     "cos": 0.6872859910490456,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S8",
+     "lex": 0.2777777777777778,
+     "cos": 0.7037526398235435,
+     "tb": false
+    },
+    {
+     "dup": "S13",
+     "keep": "S15",
+     "lex": 0.17073170731707318,
+     "cos": 0.613890859415161,
+     "tb": true
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "n": 8,
+   "groups": [
+    {
+     "duplicates": [
+      "S7"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S2"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S5",
+    "S6"
+   ],
+   "unmentioned": [
+    "S1"
+   ],
+   "pares": [
+    {
+     "dup": "S7",
+     "lex": 0,
+     "cos": 0.15010234047669518,
+     "tb": false
+    },
+    {
+     "dup": "S2",
+     "keep": "S8",
+     "lex": 0.3037974683544304,
+     "cos": 0.819174453814732,
+     "tb": true
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "n": 29,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S16",
+      "S20",
+      "S23"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S28"
+     ]
+    },
+    {
+     "keep": "S22",
+     "duplicates": [
+      "S3",
+      "S19"
+     ]
+    },
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S13"
+     ]
+    },
+    {
+     "keep": "S25",
+     "duplicates": [
+      "S5",
+      "S14"
+     ]
+    },
+    {
+     "keep": "S24",
+     "duplicates": [
+      "S27",
+      "S29"
+     ]
+    },
+    {
+     "keep": "S21",
+     "duplicates": [
+      "S6",
+      "S15"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S11"
+     ]
+    },
+    {
+     "keep": "S9",
+     "duplicates": [
+      "S12"
+     ]
+    }
+   ],
+   "unique": [
+    "S7",
+    "S10",
+    "S17",
+    "S18",
+    "S26"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S16",
+     "keep": "S1",
+     "lex": 0.3037974683544304,
+     "cos": 0.8730014230618931,
+     "tb": true
+    },
+    {
+     "dup": "S20",
+     "keep": "S1",
+     "lex": 0.15789473684210525,
+     "cos": 0.7752964674899765,
+     "tb": true
+    },
+    {
+     "dup": "S23",
+     "keep": "S1",
+     "lex": 0.22093023255813954,
+     "cos": 0.7995925151137558,
+     "tb": true
+    },
+    {
+     "dup": "S28",
+     "keep": "S2",
+     "lex": 0.3269230769230769,
+     "cos": 0.8267018222577095,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S22",
+     "lex": 0.273972602739726,
+     "cos": 0.8140907867391521,
+     "tb": true
+    },
+    {
+     "dup": "S19",
+     "keep": "S22",
+     "lex": 0.2727272727272727,
+     "cos": 0.7758136156139543,
+     "tb": true
+    },
+    {
+     "dup": "S13",
+     "keep": "S4",
+     "lex": 0.32,
+     "cos": 0.7795691546431126,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S25",
+     "lex": 0.2087912087912088,
+     "cos": 0.7018757816502451,
+     "tb": true
+    },
+    {
+     "dup": "S14",
+     "keep": "S25",
+     "lex": 0.18085106382978725,
+     "cos": 0.6494725142172738,
+     "tb": true
+    },
+    {
+     "dup": "S27",
+     "keep": "S24",
+     "lex": 0.43859649122807015,
+     "cos": 0.8116809909753487,
+     "tb": true
+    },
+    {
+     "dup": "S29",
+     "keep": "S24",
+     "lex": 0.2835820895522388,
+     "cos": 0.710170684146723,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S21",
+     "lex": 0.29508196721311475,
+     "cos": 0.7581898003450034,
+     "tb": true
+    },
+    {
+     "dup": "S15",
+     "keep": "S21",
+     "lex": 0.24324324324324326,
+     "cos": 0.687875987661003,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S8",
+     "lex": 0.10666666666666667,
+     "cos": 0.7082938231169429,
+     "tb": false
+    },
+    {
+     "dup": "S12",
+     "keep": "S9",
+     "lex": 0.13333333333333333,
+     "cos": 0.7745901279487967,
+     "tb": false
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "n": 12,
+   "groups": [
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S10"
+     ]
+    },
+    {
+     "keep": "S9",
+     "duplicates": [
+      "S12"
+     ]
+    },
+    {
+     "keep": "S5",
+     "duplicates": [
+      "S6"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S3",
+    "S4",
+    "S7",
+    "S8",
+    "S11"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S10",
+     "keep": "S2",
+     "lex": 0.2727272727272727,
+     "cos": 0.7055362962679902,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S9",
+     "lex": 0.4864864864864865,
+     "cos": 0.8771410495496587,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S5",
+     "lex": 0.52,
+     "cos": 0.9214893784392045,
+     "tb": true
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "n": 24,
+   "groups": [
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S19",
+      "S22"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S20",
+      "S23",
+      "S24"
+     ]
+    },
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S10"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S2",
+    "S5",
+    "S6",
+    "S7",
+    "S9",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S21"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S19",
+     "keep": "S3",
+     "lex": 0.3673469387755102,
+     "cos": 0.9052617663428658,
+     "tb": true
+    },
+    {
+     "dup": "S22",
+     "keep": "S3",
+     "lex": 0.21153846153846154,
+     "cos": 0.8752497908482626,
+     "tb": true
+    },
+    {
+     "dup": "S20",
+     "keep": "S8",
+     "lex": 0.2833333333333333,
+     "cos": 0.8087655447863775,
+     "tb": true
+    },
+    {
+     "dup": "S23",
+     "keep": "S8",
+     "lex": 0.34,
+     "cos": 0.8556524140379156,
+     "tb": true
+    },
+    {
+     "dup": "S24",
+     "keep": "S8",
+     "lex": 0.27586206896551724,
+     "cos": 0.7341085299837182,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S4",
+     "lex": 0.38095238095238093,
+     "cos": 0.8594162358974198,
+     "tb": true
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "n": 7,
+   "groups": [
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S1",
+      "S4",
+      "S5"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S6"
+     ]
+    }
+   ],
+   "unique": [
+    "S3"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S7",
+     "lex": 0.3888888888888889,
+     "cos": 0.8742617312894881,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S7",
+     "lex": 0.30612244897959184,
+     "cos": 0.8643834973506258,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S7",
+     "lex": 0.3617021276595745,
+     "cos": 0.8870479149052146,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S2",
+     "lex": 0.30666666666666664,
+     "cos": 0.8423254069078814,
+     "tb": true
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "n": 15,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S4",
+      "S5",
+      "S6",
+      "S7",
+      "S13",
+      "S14",
+      "S15"
+     ]
+    },
+    {
+     "keep": "S11",
+     "duplicates": [
+      "S12"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S3",
+    "S8",
+    "S9",
+    "S10"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S4",
+     "keep": "S1",
+     "lex": 0.2926829268292683,
+     "cos": 0.7740916121797284,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S1",
+     "lex": 0.1827956989247312,
+     "cos": 0.7850372969310396,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.2717391304347826,
+     "cos": 0.8220713883152293,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S1",
+     "lex": 0.23595505617977527,
+     "cos": 0.763234709069639,
+     "tb": true
+    },
+    {
+     "dup": "S13",
+     "keep": "S1",
+     "lex": 0.3,
+     "cos": 0.8233718594427386,
+     "tb": true
+    },
+    {
+     "dup": "S14",
+     "keep": "S1",
+     "lex": 0.25,
+     "cos": 0.79487768265188,
+     "tb": true
+    },
+    {
+     "dup": "S15",
+     "keep": "S1",
+     "lex": 0.32222222222222224,
+     "cos": 0.8093264718997932,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S11",
+     "lex": 1,
+     "cos": 1,
+     "tb": true
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "n": 22,
+   "groups": [
+    {
+     "keep": "S5",
+     "duplicates": [
+      "S1",
+      "S16",
+      "S20"
+     ]
+    },
+    {
+     "keep": "S21",
+     "duplicates": [
+      "S2",
+      "S6"
+     ]
+    },
+    {
+     "keep": "S22",
+     "duplicates": [
+      "S3",
+      "S15",
+      "S19"
+     ]
+    },
+    {
+     "keep": "S17",
+     "duplicates": [
+      "S7"
+     ]
+    },
+    {
+     "keep": "S18",
+     "duplicates": [
+      "S12",
+      "S13"
+     ]
+    }
+   ],
+   "unique": [
+    "S4",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S14"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S5",
+     "lex": 0.35714285714285715,
+     "cos": 0.8480719517232812,
+     "tb": true
+    },
+    {
+     "dup": "S16",
+     "keep": "S5",
+     "lex": 0.42857142857142855,
+     "cos": 0.8946682457616368,
+     "tb": true
+    },
+    {
+     "dup": "S20",
+     "keep": "S5",
+     "lex": 0.34146341463414637,
+     "cos": 0.8821605015632487,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S21",
+     "lex": 0.3617021276595745,
+     "cos": 0.8901051110569302,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S21",
+     "lex": 0.2727272727272727,
+     "cos": 0.8651429525800135,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S22",
+     "lex": 0.11904761904761904,
+     "cos": 0.7247972313140706,
+     "tb": false
+    },
+    {
+     "dup": "S15",
+     "keep": "S22",
+     "lex": 0.5166666666666667,
+     "cos": 0.8538589519757914,
+     "tb": true
+    },
+    {
+     "dup": "S19",
+     "keep": "S22",
+     "lex": 0.4927536231884058,
+     "cos": 0.94001947789173,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S17",
+     "lex": 0.06382978723404255,
+     "cos": 0.4493567026237513,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S18",
+     "lex": 0.3333333333333333,
+     "cos": 0.8825258596257212,
+     "tb": true
+    },
+    {
+     "dup": "S13",
+     "keep": "S18",
+     "lex": 0.2647058823529412,
+     "cos": 0.8358070758717018,
+     "tb": true
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "n": 16,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S6",
+      "S9"
+     ]
+    },
+    {
+     "keep": "S5",
+     "duplicates": [
+      "S2",
+      "S10",
+      "S12",
+      "S13",
+      "S15",
+      "S16"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S7",
+    "S8",
+    "S11",
+    "S14"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.3829787234042553,
+     "cos": 0.9117165666310648,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S1",
+     "lex": 0.3541666666666667,
+     "cos": 0.8458437235612902,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S5",
+     "lex": 0.3088235294117647,
+     "cos": 0.8569133423808498,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S5",
+     "lex": 0.2857142857142857,
+     "cos": 0.8020970182814003,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S5",
+     "lex": 0.2711864406779661,
+     "cos": 0.8152964238965658,
+     "tb": true
+    },
+    {
+     "dup": "S13",
+     "keep": "S5",
+     "lex": 0.2830188679245283,
+     "cos": 0.8102468703882035,
+     "tb": true
+    },
+    {
+     "dup": "S15",
+     "keep": "S5",
+     "lex": 0.41818181818181815,
+     "cos": 0.8254177559560355,
+     "tb": true
+    },
+    {
+     "dup": "S16",
+     "keep": "S5",
+     "lex": 0.21311475409836064,
+     "cos": 0.8096551423068742,
+     "tb": true
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "n": 9,
+   "groups": [
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S4",
+      "S7"
+     ]
+    },
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S6",
+      "S9"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S2",
+    "S3",
+    "S5",
+    "S8"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S4",
+     "keep": "S7",
+     "lex": 0.2727272727272727,
+     "cos": 0.8427829849954168,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S6",
+     "lex": 0.26373626373626374,
+     "cos": 0.8446513007776885,
+     "tb": true
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "n": 16,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S5"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S15"
+     ]
+    },
+    {
+     "keep": "S13",
+     "duplicates": [
+      "S4"
+     ]
+    },
+    {
+     "keep": "S11",
+     "duplicates": [
+      "S12"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S14",
+    "S16"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S5",
+     "keep": "S1",
+     "lex": 0.2753623188405797,
+     "cos": 0.7902132726790958,
+     "tb": true
+    },
+    {
+     "dup": "S15",
+     "keep": "S2",
+     "lex": 0.15,
+     "cos": 0.7859979359528051,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S13",
+     "lex": 0.2631578947368421,
+     "cos": 0.8391256149341548,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S11",
+     "lex": 0.11320754716981132,
+     "cos": 0.6408265209584765,
+     "tb": true
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "n": 13,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S10"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S2",
+      "S9"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S11",
+    "S12",
+    "S13"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S10",
+     "keep": "S1",
+     "lex": 0.3181818181818182,
+     "cos": 0.8218947206408204,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S8",
+     "lex": 0.3508771929824561,
+     "cos": 0.8501434630578829,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S8",
+     "lex": 0.4222222222222222,
+     "cos": 0.9045670611666835,
+     "tb": true
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "n": 7,
+   "groups": [
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S4"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S2",
+    "S5",
+    "S6",
+    "S7"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S4",
+     "keep": "S3",
+     "lex": 0.24285714285714285,
+     "cos": 0.8191402256869593,
+     "tb": true
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "n": 9,
+   "groups": [
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S1"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S8"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S5",
+    "S7",
+    "S9"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S6",
+     "lex": 0.27692307692307694,
+     "cos": 0.7125553190608113,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S2",
+     "lex": 0.2558139534883721,
+     "cos": 0.825065310189219,
+     "tb": true
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "n": 25,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S10",
+      "S19"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S11",
+      "S20"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S12",
+      "S18"
+     ]
+    },
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S9"
+     ]
+    },
+    {
+     "keep": "S5",
+     "duplicates": [
+      "S22"
+     ]
+    },
+    {
+     "keep": "S21",
+     "duplicates": [
+      "S6"
+     ]
+    },
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S17"
+     ]
+    },
+    {
+     "keep": "S13",
+     "duplicates": [
+      "S14",
+      "S15",
+      "S16"
+     ]
+    }
+   ],
+   "unique": [
+    "S8",
+    "S23",
+    "S24",
+    "S25"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S10",
+     "keep": "S1",
+     "lex": 0.26,
+     "cos": 0.7513604232364886,
+     "tb": true
+    },
+    {
+     "dup": "S19",
+     "keep": "S1",
+     "lex": 0.3469387755102041,
+     "cos": 0.8013104512073319,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S2",
+     "lex": 0.3170731707317073,
+     "cos": 0.8020599683510217,
+     "tb": true
+    },
+    {
+     "dup": "S20",
+     "keep": "S2",
+     "lex": 0.34146341463414637,
+     "cos": 0.7674379388494504,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S3",
+     "lex": 0.27906976744186046,
+     "cos": 0.8411522245873579,
+     "tb": true
+    },
+    {
+     "dup": "S18",
+     "keep": "S3",
+     "lex": 0.3404255319148936,
+     "cos": 0.8237011929776558,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S4",
+     "lex": 0.32142857142857145,
+     "cos": 0.8195553034499778,
+     "tb": true
+    },
+    {
+     "dup": "S22",
+     "keep": "S5",
+     "lex": 0.3157894736842105,
+     "cos": 0.7881254714285483,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S21",
+     "lex": 0.30357142857142855,
+     "cos": 0.7876839378914798,
+     "tb": true
+    },
+    {
+     "dup": "S17",
+     "keep": "S7",
+     "lex": 0.18181818181818182,
+     "cos": 0.6035591506276228,
+     "tb": true
+    },
+    {
+     "dup": "S14",
+     "keep": "S13",
+     "lex": 0.3,
+     "cos": 0.8052600396919015,
+     "tb": false
+    },
+    {
+     "dup": "S15",
+     "keep": "S13",
+     "lex": 0.2876712328767123,
+     "cos": 0.7746534791938082,
+     "tb": false
+    },
+    {
+     "dup": "S16",
+     "keep": "S13",
+     "lex": 0.20512820512820512,
+     "cos": 0.7724041432590226,
+     "tb": false
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "n": 16,
+   "groups": [
+    {
+     "keep": "S10",
+     "duplicates": [
+      "S11",
+      "S12"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S13",
+    "S14",
+    "S15",
+    "S16"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S11",
+     "keep": "S10",
+     "lex": 1,
+     "cos": 0.9930239347789905,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S10",
+     "lex": 1,
+     "cos": 0.9936332840579281,
+     "tb": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "n": 24,
+   "groups": [
+    {
+     "duplicates": [
+      "S2",
+      "S4",
+      "S17"
+     ]
+    },
+    {
+     "keep": "S6",
+     "duplicates": []
+    },
+    {
+     "keep": "S6",
+     "duplicates": []
+    }
+   ],
+   "unique": [],
+   "unmentioned": [
+    "S1",
+    "S3",
+    "S5",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24"
+   ],
+   "pares": [
+    {
+     "dup": "S2",
+     "lex": 0,
+     "cos": 0.15987477166882377,
+     "tb": false
+    },
+    {
+     "dup": "S4",
+     "lex": 0,
+     "cos": 0.16516839989566312,
+     "tb": false
+    },
+    {
+     "dup": "S17",
+     "lex": 0,
+     "cos": 0.16349517103159353,
+     "tb": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "n": 20,
+   "groups": [
+    {
+     "keep": "S20",
+     "duplicates": [
+      "S1",
+      "S7",
+      "S11",
+      "S12"
+     ]
+    },
+    {
+     "keep": "S19",
+     "duplicates": [
+      "S2",
+      "S8",
+      "S10",
+      "S16",
+      "S17"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S15"
+     ]
+    },
+    {
+     "keep": "S13",
+     "duplicates": [
+      "S4"
+     ]
+    }
+   ],
+   "unique": [
+    "S5",
+    "S6",
+    "S9",
+    "S14",
+    "S18"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S20",
+     "lex": 0.2962962962962963,
+     "cos": 0.8381296516818603,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S20",
+     "lex": 0.3469387755102041,
+     "cos": 0.8512214260977367,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S20",
+     "lex": 0.2641509433962264,
+     "cos": 0.730316865964505,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S20",
+     "lex": 0.28,
+     "cos": 0.8316487106498107,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S19",
+     "lex": 0.23214285714285715,
+     "cos": 0.7135136046744726,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S19",
+     "lex": 0.25,
+     "cos": 0.724469957327733,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S19",
+     "lex": 0.24528301886792453,
+     "cos": 0.6589772865937105,
+     "tb": true
+    },
+    {
+     "dup": "S16",
+     "keep": "S19",
+     "lex": 0.24528301886792453,
+     "cos": 0.6132879676314347,
+     "tb": false
+    },
+    {
+     "dup": "S17",
+     "keep": "S19",
+     "lex": 0.1568627450980392,
+     "cos": 0.5560291381050743,
+     "tb": false
+    },
+    {
+     "dup": "S15",
+     "keep": "S3",
+     "lex": 0.25,
+     "cos": 0.8858919131843779,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S13",
+     "lex": 0.2835820895522388,
+     "cos": 0.8544717568353423,
+     "tb": true
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "n": 3,
+   "groups": [],
+   "unique": [
+    "S1",
+    "S2",
+    "S3"
+   ],
+   "unmentioned": [],
+   "pares": []
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "n": 17,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S5"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S3",
+    "S4",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S5",
+     "keep": "S1",
+     "lex": 0.25396825396825395,
+     "cos": 0.7039013868717001,
+     "tb": true
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "n": 22,
+   "groups": [
+    {
+     "keep": "S10",
+     "duplicates": [
+      "S7"
+     ]
+    },
+    {
+     "keep": "S11",
+     "duplicates": [
+      "S8"
+     ]
+    },
+    {
+     "keep": "S15",
+     "duplicates": [
+      "S9"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S12",
+    "S13",
+    "S14",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S7",
+     "keep": "S10",
+     "lex": 0.5757575757575758,
+     "cos": 0.9189831639990131,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S11",
+     "lex": 0.4444444444444444,
+     "cos": 0.9102812362028523,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S15",
+     "lex": 0.3,
+     "cos": 0.8722813352991893,
+     "tb": true
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "n": 9,
+   "groups": [
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S1"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S8",
+    "S9"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S7",
+     "lex": 0.35443037974683544,
+     "cos": 0.9171308120118691,
+     "tb": true
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "n": 12,
+   "groups": [
+    {
+     "keep": "S9",
+     "duplicates": [
+      "S6"
+     ]
+    },
+    {
+     "keep": "S10",
+     "duplicates": [
+      "S4"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S2",
+    "S3",
+    "S5",
+    "S7",
+    "S8",
+    "S11",
+    "S12"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S6",
+     "keep": "S9",
+     "lex": 0.391304347826087,
+     "cos": 0.8212778827974412,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S10",
+     "lex": 0.2112676056338028,
+     "cos": 0.7798558187817163,
+     "tb": true
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "n": 9,
+   "groups": [
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S5"
+     ]
+    },
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S3"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S4",
+    "S7",
+    "S8",
+    "S9"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S5",
+     "keep": "S2",
+     "lex": 0.2727272727272727,
+     "cos": 0.7713248171174648,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S6",
+     "lex": 0.25,
+     "cos": 0.7772182810845284,
+     "tb": true
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "n": 16,
+   "groups": [
+    {
+     "keep": "S10",
+     "duplicates": [
+      "S1",
+      "S7",
+      "S8",
+      "S10"
+     ]
+    },
+    {
+     "keep": "S11",
+     "duplicates": [
+      "S2",
+      "S6",
+      "S11"
+     ]
+    },
+    {
+     "keep": "S16",
+     "duplicates": [
+      "S9",
+      "S16"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S5",
+    "S12",
+    "S13",
+    "S14",
+    "S15"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S10",
+     "lex": 0.2839506172839506,
+     "cos": 0.7645503456343802,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S10",
+     "lex": 0.2839506172839506,
+     "cos": 0.7902588688010291,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S10",
+     "lex": 0.2753623188405797,
+     "cos": 0.75208357929531,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S11",
+     "lex": 0.27631578947368424,
+     "cos": 0.8249827827996282,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S11",
+     "lex": 0.2054794520547945,
+     "cos": 0.674392720662771,
+     "tb": false
+    },
+    {
+     "dup": "S9",
+     "keep": "S16",
+     "lex": 0.27586206896551724,
+     "cos": 0.6911869179903666,
+     "tb": true
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "n": 8,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S5",
+      "S7",
+      "S8"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S3"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S3",
+    "S4",
+    "S6"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S5",
+     "keep": "S1",
+     "lex": 0.40625,
+     "cos": 0.9022038124349554,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S1",
+     "lex": 0.3582089552238806,
+     "cos": 0.8686679674050992,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S1",
+     "lex": 0.4603174603174603,
+     "cos": 0.9187118662910356,
+     "tb": true
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "n": 11,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S11"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S6"
+     ]
+    },
+    {
+     "keep": "S10",
+     "duplicates": [
+      "S5"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S7",
+    "S8",
+    "S9"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S11",
+     "keep": "S1",
+     "lex": 0.296875,
+     "cos": 0.8416900890814364,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S2",
+     "lex": 0.23636363636363636,
+     "cos": 0.7720636323041593,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S10",
+     "lex": 0.3194444444444444,
+     "cos": 0.8726013124921631,
+     "tb": true
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "n": 11,
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S2"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11"
+   ],
+   "unmentioned": [],
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S1",
+     "lex": 0.28888888888888886,
+     "cos": 0.7957734735139388,
+     "tb": true
+    }
+   ]
+  }
+ }
+}

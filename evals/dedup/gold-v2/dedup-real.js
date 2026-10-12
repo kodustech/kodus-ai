@@ -48,6 +48,7 @@ fs.mkdirSync(path.dirname(OUT), { recursive: true });
                 groups: (r.groups || []).map((g) => ({ keep: id(g.keep), duplicates: (g.duplicates || []).map(id).filter(Boolean) })),
                 unique: (r.unique || []).map(id).filter(Boolean),
                 unmentioned: (r.unmentioned || []).map(id),
+                followup: r.followup ? { leftOut: r.followup.leftOut.map(id), stillLeftOut: (r.followup.stillLeftOut || []).map(id), ...(r.followup.erro ? { erro: r.followup.erro } : {}) } : null,
                 pares: (op.pairs || []).map((p) => ({ dup: id(p.idx), keep: id(p.keptInto), lex: p.lex, cos: p.cos, tb: p.tb })),
             };
         } catch (e) {

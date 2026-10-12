@@ -60,7 +60,8 @@ for (const model of MODELS) {
             const gGold = {};
             for (const [id, s] of Object.entries(pr)) if (s.grupo) (gGold[s.grupo] = gGold[s.grupo] || []).push(id);
             const G = particao(ids, Object.values(gGold));
-            const gruposD = (d.groups || []).map((g) => {
+            // keep invalido: a producao mantem as duplicatas como independentes.
+            const gruposD = (d.groups || []).filter((g) => g.keep).map((g) => {
                 if (modo === 'LLM') return [g.keep, ...g.duplicates];
                 const ok = g.duplicates.filter((x) => {
                     const p = (d.pares || []).find((q) => q.dup === x && q.keep === g.keep);
