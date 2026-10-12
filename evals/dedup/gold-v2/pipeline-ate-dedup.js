@@ -5,13 +5,16 @@ require('tsconfig-paths/register');
  * #1821: a saida do finder pelo caminho de producao ate o dedup, conferindo os
  * campos em cada etapa:
  *   finder (pool do eval) -> mapAgentFindings (poe o llmPrompt) ->
- *   parseFinderSchema -> dedup (dedup-prompt.ts via LLM.run, com o follow-up)
+ *   parseFinderSchema -> anchoring (snapLinesToDiff) ->
+ *   dedup (dedup-prompt.ts via LLM.run, com o follow-up)
  *
  * --fonte=pool:<pool>  saida nova do finder (pools/<pool>/*.raw.txt)
  * --fonte=gold         as sugestoes do gold v2 do modelo (ids S1..Sn), para
  *                      comparar o dedup com o gold (comparar-dedup.js)
  *
- *   RECALL_MODEL=<id> node evals/dedup/gold-v2/pipeline-ate-dedup.js --model=<gold model> --fonte=... --versao=<rotulo> [--par=4]
+ * --ate=anchoring      para antes do dedup (sem chamada de modelo)
+ *
+ *   RECALL_MODEL=<id> node evals/dedup/gold-v2/pipeline-ate-dedup.js --model=<gold model> --fonte=... --versao=<rotulo> [--par=4] [--ate=anchoring]
  */
 const fs = require('fs');
 const path = require('path');
@@ -21,10 +24,12 @@ const { TIER0 } = require('../../shared/tier0-models');
 const { mapAgentFindings } = require('@libs/code-review/infrastructure/agents/collaborators/finding-mapper');
 const { parseFinderSchema, LEAN_FINDER_FIELDS } = require('@libs/code-review/infrastructure/agents/engine/parse-finder-schema');
 const { buildDedupPrompt } = require('@libs/code-review/infrastructure/agents/engine/dedup-prompt');
+const { snapLinesToDiff } = require('@libs/code-review/pipeline/stages/agent-review.stage');
 
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
 const GOLD = arg('model'), FONTE = arg('fonte'), VERSAO = arg('versao'), PAR = Number(arg('par', '4'));
-const MODELO = process.env.RECALL_MODEL;
+const SO_ANCHORING = arg('ate') === 'anchoring';
+const MODELO = process.env.RECALL_MODEL || (SO_ANCHORING ? '-' : undefined);
 if (!GOLD || !FONTE || !VERSAO || !MODELO) { console.error('RECALL_MODEL=<id> --model= --fonte=pool:<pool>|gold --versao='); process.exit(2); }
 const INV = path.join(__dirname, '..', '..', 'investigation');
 const OUT = path.join(__dirname, 'dedup-real', VERSAO, `${GOLD}.json`);
@@ -39,15 +44,31 @@ for (const f of fs.readdirSync(path.join(INV, 'datasets'))) {
         if (c?.vars?.caseId) {
             // O diff completo (changedFilesFull), o mesmo que o finder do eval recebe.
             const cf = c.vars.changedFilesFull || c.vars.changedFiles || [];
-            arquivos[c.vars.caseId] = (typeof cf === 'string' ? JSON.parse(cf) : cf).map((x) => ({ filename: x.filename }));
+            arquivos[c.vars.caseId] = (typeof cf === 'string' ? JSON.parse(cf) : cf).map((x) => ({ filename: x.filename, ranges: validRanges(x.patchWithLinesStr) }));
         }
     }
 }
+// Linhas do lado direito do diff, como extractValidDiffLines tira do patch cru;
+// o dataset traz o patchWithLinesStr (mesma conversao de evals/anchoring).
+function validRanges(patchWithLinesStr) {
+    const ranges = [];
+    let cur = null;
+    for (const ln of String(patchWithLinesStr || '').split('\n')) {
+        const m = /^(__old hunk__|__new hunk__|@@ |## file:)/.test(ln) ? null : ln.match(/^\s*(\d+)\s/);
+        if (!m) { if (cur) { ranges.push(cur); cur = null; } continue; }
+        const n = +m[1];
+        if (cur && n === cur[1] + 1) cur[1] = n;
+        else { if (cur) ranges.push(cur); cur = [n, n]; }
+    }
+    if (cur) ranges.push(cur);
+    return ranges;
+}
+const distancia = (s, ranges) => Math.min(...ranges.map(([a, b]) => (s.relevantLinesEnd < a ? a - s.relevantLinesEnd : s.relevantLinesStart > b ? s.relevantLinesStart - b : 0)));
 const LABEL_POLICY = { categoryLabel: 'generalist', allowedLabels: ['bug', 'security', 'performance'], supportsMixed: true };
 const conta = (lista) => lista.reduce((m, s) => { for (const k of Object.keys(s)) m[k] = (m[k] || 0) + 1; return m; }, {});
 
 (async () => {
-    const assinatura = ['codex_subscription', 'claude_agent_sdk'].includes(TIER0[MODELO]?.provider);
+    const assinatura = !SO_ANCHORING && ['codex_subscription', 'claude_agent_sdk'].includes(TIER0[MODELO]?.provider);
     const prebuilt = assinatura ? buildModel(MODELO) : undefined;
     const L30 = JSON.parse(fs.readFileSync(path.join(INV, 'light-30.json'), 'utf8'));
     const gold = FONTE === 'gold' ? JSON.parse(fs.readFileSync(path.join(__dirname, `09.10.26_${GOLD}.json`), 'utf8')).prs : null;
@@ -72,10 +93,26 @@ const conta = (lista) => lista.reduce((m, s) => { for (const k of Object.keys(s)
             });
             const parsed = parseFinderSchema(mapeado);
             const descParse = new Set(parsed.discarded.map((d) => d.index));
-            const entrada = parsed.suggestions;
-            const idEntrada = origem.filter((_, j) => !descParse.has(j)).map((k) => ids[k]);
+            const idParse = origem.filter((_, j) => !descParse.has(j)).map((k) => ids[k]);
+            // Anchoring como no stage: arquivo fora do diff ou sem trecho passa igual.
+            const porArquivo = new Map(arquivos[cid].map((f) => [f.filename, f.ranges]));
+            const entrada = [];
+            const idEntrada = [];
+            const descartadoAnchoring = [];
+            let ajustadoAnchoring = 0;
+            parsed.suggestions.forEach((s, j) => {
+                const ranges = porArquivo.get(s.relevantFile);
+                const snapped = ranges ? snapLinesToDiff(s, ranges) : s;
+                if (snapped === null) {
+                    descartadoAnchoring.push({ id: idParse[j], arquivo: s.relevantFile, linhas: [s.relevantLinesStart, s.relevantLinesEnd], distancia: distancia(s, ranges) });
+                    return;
+                }
+                if (snapped.relevantLinesStart !== s.relevantLinesStart || snapped.relevantLinesEnd !== s.relevantLinesEnd) ajustadoAnchoring++;
+                entrada.push(snapped);
+                idEntrada.push(idParse[j]);
+            });
             const op = { guard: 'record', prebuiltModel: prebuilt };
-            const r = entrada.length ? await runDedup(entrada, MODELO, op) : { groups: [], unique: [], unmentioned: [] };
+            const r = SO_ANCHORING || !entrada.length ? { groups: [], unique: [], unmentioned: [] } : await runDedup(entrada, MODELO, op);
             const id = (k) => idEntrada[k];
             const promptDedup = buildDedupPrompt(entrada);
             res.prs[cid] = {
@@ -84,9 +121,12 @@ const conta = (lista) => lista.reduce((m, s) => { for (const k of Object.keys(s)
                 descartadoConversor: finder.map((_, k) => k).filter((k) => !origem.includes(k)).map((k) => ids[k]),
                 camposConversor: conta(mapeado),
                 descartadoParse: parsed.discarded.map((d) => ({ id: ids[origem[d.index]], faltando: d.missing })),
+                descartadoAnchoring,
+                ajustadoAnchoring,
                 camposDedup: conta(entrada),
                 llmPromptNoPromptDoDedup: entrada.some((s) => s.llmPrompt && s.llmPrompt !== s.suggestionContent && promptDedup.includes(s.llmPrompt)),
                 entradaDedup: entrada.length,
+                idsEntradaDedup: idEntrada,
                 groups: (r.groups || []).map((g) => ({ keep: id(g.keep), duplicates: (g.duplicates || []).map(id).filter(Boolean) })),
                 unique: (r.unique || []).map(id).filter(Boolean),
                 unmentioned: (r.unmentioned || []).map(id),
