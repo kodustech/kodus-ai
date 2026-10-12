@@ -1,0 +1,74 @@
+{
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "bleve.go:88-98: sem o lock na função inteira, builds concorrentes da mesma chave rodam em paralelo (bleve.New no mesmo dir falha; em memória vaza índice). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "bleve.go:137-139 com search.go:216: TotalDocs (bleve.go:144-154) itera b.cache sem RLock enquanto o watcher pode disparar BuildIndex. É o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "server.go:303-311 só move s.initWatcher(), o broadcaster para Watch de clientes (server.go:752-771), para depois de search.init. O índice assina eventos pelo próprio s.storage.WatchWriteEvents dentro de search.init (search.go:201-213), sem depender desse watcher. A conclusão de que a reordenação deixa o índice permanentemente desatualizado não procede.",
+      "confianca": "media",
+      "observacao": "A janela entre o build e WatchWriteEvents dentro de search.init existe, mas já existia antes do PR (seria bug_preexistente), e não é o que a sugestão atribui à mudança."
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "bleve.go:88-140: mesmo problema do S1, o lock só cobre a escrita final. Golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

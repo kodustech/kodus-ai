@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S5",
+ "golden": 2,
+ "promptSha": "2792f2219bcf0a950ff2acd319fd6cd8544f2a9c",
+ "sameProblem": true,
+ "reason": "Both identify the same faulty externalId lookup in the destination-calendar fallback, and replacing it as suggested would fix the golden issue at the same location."
+}

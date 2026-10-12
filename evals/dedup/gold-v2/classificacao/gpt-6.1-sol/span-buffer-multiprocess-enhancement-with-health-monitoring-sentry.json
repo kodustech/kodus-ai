@@ -1,0 +1,159 @@
+{
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:253-255 condiciona kill() a isinstance(process, multiprocessing.Process), mas os workers vêm de get_context('spawn').Process (SpawnProcess), então o kill é pulado. É o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:337-341 dá break quando o deadline estoura, pulando o término dos processos restantes. É o golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:299-301 chama get_memory_info() em cada buffer, e SpansBuffer.get_memory_info (buffer.py:375-376) consulta o cluster inteiro; com P processos são P consultas idênticas no thread do consumer. Regressão de custo introduzida pelo PR; sem golden.",
+      "confianca": "media",
+      "observacao": "A razão used/available não muda (ambos multiplicados por P); o impacto é só custo extra no Redis."
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:31 docstring diz 'one process per shard', mas o número é limitado por max_processes (default 1 na CLI). Doc imprecisa, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:51 'max_processes or len(...)' trata 0 como não informado; 0 não é valor válido, é validação de entrada. Sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:253-255 condiciona kill() a isinstance(process, multiprocessing.Process), mas os workers vêm de get_context('spawn').Process (SpawnProcess), então o kill é pulado. É o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:253-255 condiciona kill() a isinstance(process, multiprocessing.Process), mas os workers vêm de get_context('spawn').Process (SpawnProcess), então o kill é pulado. É o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:337-341 dá break quando o deadline estoura, pulando o término dos processos restantes. É o golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "test_consumer.py:119-121 só soma o tamanho das listas de shards; lacuna de teste real, mas não é o golden 1/3 (sleep monkeypatched).",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

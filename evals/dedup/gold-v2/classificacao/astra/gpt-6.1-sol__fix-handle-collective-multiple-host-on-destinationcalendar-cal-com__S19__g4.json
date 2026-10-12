@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S19",
+ "golden": 4,
+ "promptSha": "738c02a10793a59a30586a4a1cf55ffeae635520",
+ "sameProblem": false,
+ "reason": "The review reports incorrect destination selection, whereas the golden comment reports a missing credentialId parameter in the createEvent signature; fixing selection does not necessarily fix that signature mismatch."
+}

@@ -1,0 +1,288 @@
+{
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 7,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 7,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "app/views/layouts/embed.html.erb:11 interpola request.referer sem escape dentro do script; golden 7 (tambem toca o golden 2 ao sugerir usar a origem).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic_embed.rb:48 usa open(url) sem checar esquema, mas a url vem de import_remote apos invalid_host? (topic_retriever.rb:14-19, URI(\"|cmd\") lanca InvalidURIError) ou de link do disqus; o vetor de comando nao e alcancavel. Nao e o golden 0 (open de feed_polling_url em poll_feed.rb:29).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic_embed.rb:22 + post.rb#cook raw_html sem sanitizacao, renderizado com raw em best.html.erb:19; problema principal nao e golden.",
+      "confianca": "media",
+      "observacao": "Menciona de passagem a url sem escape no href (parte do golden 4), mas o foco e sanitizar o conteudo."
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic_embed.rb:13 muta contents com <<, mas os chamadores passam strings novas (CGI.unescapeHTML, doc.content), entao FrozenError/duplicacao nao ocorre; golden 4 fala de contents nil, nao de mutacao.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embed.js:17 indexOf(e.origin); golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic_embed.rb:62-73 reescreve \"//cdn...\" como prefix/cdn...; introduzido pelo PR, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "disqus.thor:148 perde created_at e agora faz fetch HTTP por thread sem rescue; a remocao de --category e intencional no diff, mas a perda de data e o abort por erro de rede sao regressoes reais. Sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "topic_embed.rb:13 interpola url sem escape em <a href=...> e o post e raw_html; corresponde a parte de XSS do golden 4.",
+      "confianca": "media",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "4": {
+            "mesmoProblema": false,
+            "motivo": "The review identifies the unescaped URL XSS, but fixing it would not address the golden comment’s additional NoMethodError when contents is nil."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "revisao_junior"
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo de S6: topic_embed.rb:64-71 com URL protocol-relative.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "poll_feed.rb:31-37 i.content.scrub sem fallback; golden 6.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic_embed.rb:32-36 usa embed.post sem nil-check; post apagado (default scope trashable) gera PostRevisor com nil e NoMethodError em should_revise?. Caso de borda introduzido pelo PR, sem golden.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "poll_feed_spec.rb:18-28 nao habilita feed_polling_enabled (default false); lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embed_controller_spec.rb:8-11 sem embeddable_host, falha antes do params.require; lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic_retriever_spec.rb:21-25 nao estuba embeddable_host; o teste passa por motivo diferente do nomeado; lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embed_controller.rb:26 compara host sem downcase; falha fechada, a propria sugestao reconhece que nao e bypass; melhoria opcional.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic_retriever.rb:15 compara host sem downcase; falha fechada, melhoria opcional.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

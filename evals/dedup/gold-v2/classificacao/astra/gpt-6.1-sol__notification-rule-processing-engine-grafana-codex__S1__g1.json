@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "id": "S1",
+ "golden": 1,
+ "promptSha": "e17581a6a867a8fb4abdc07be05934d4f3bf4cb2",
+ "sameProblem": false,
+ "reason": "The review reports missing Pause/Resume menu actions, while the golden comment reports a Silence notifications action that fails to render its drawer; fixing the pause action would not fix the silence drawer."
+}

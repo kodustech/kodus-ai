@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S11",
+ "golden": 4,
+ "promptSha": "364fb569b601a79bbb78ac8f9d8f1064943c3382",
+ "sameProblem": true,
+ "reason": "Selecting the destination by the passed credential requires Office365’s createEvent to accept credentialId, fixing the missing parameter identified by the golden comment at the same location."
+}

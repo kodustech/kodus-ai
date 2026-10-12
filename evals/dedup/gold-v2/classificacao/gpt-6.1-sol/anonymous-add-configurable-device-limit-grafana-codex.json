@@ -1,0 +1,142 @@
+{
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "tagDeviceUI (impl.go:83-90 no head) faz localCache.SetDefault antes de CreateOrUpdateDevice; com o retorno do erro em impl.go:147 o device rejeitado fica no cache e passa no retry. Mesmo problema do golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "impl.go:118-121 retorna nil quando X-Grafana-Device-Id está vazio e client.go:44-50 segue autenticando; omitindo o header o cliente obtém identidade anônima mesmo com o limite cheio. O limite é novo neste PR, então o bypass nasce aqui. Não casa com golden.",
+      "confianca": "media",
+      "observacao": "Pode ser lido como limitação de design (o limite conta devices identificados), não defeito."
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:109-118 faz CountDevices e depois o INSERT/upsert sem lock nem transação; requisições concorrentes de devices distintos passam o check. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "conf/defaults.ini [auth.anonymous] no head não tem device_limit, e applyEnvVariableOverrides (setting.go:686-698) só percorre chaves existentes no INI; GF_AUTH_ANONYMOUS_DEVICE_LIMIT sozinho é ignorado. Não casa com golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "tagDeviceUI (impl.go:83-90 no head) faz localCache.SetDefault antes de CreateOrUpdateDevice; com o retorno do erro em impl.go:147 o device rejeitado fica no cache e passa no retry. Mesmo problema do golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:109-118 faz CountDevices e depois o INSERT/upsert sem lock nem transação; requisições concorrentes de devices distintos passam o check. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "tagDeviceUI (impl.go:83-90 no head) faz localCache.SetDefault antes de CreateOrUpdateDevice; com o retorno do erro em impl.go:147 o device rejeitado fica no cache e passa no retry. Mesmo problema do golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:109-118 faz CountDevices e depois o INSERT/upsert sem lock nem transação; requisições concorrentes de devices distintos passam o check. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

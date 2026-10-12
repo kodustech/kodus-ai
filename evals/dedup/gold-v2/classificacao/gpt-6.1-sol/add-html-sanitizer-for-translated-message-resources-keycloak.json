@@ -1,0 +1,159 @@
+{
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "VerifyMessageProperties.java:102-111: prefixo (start) e sufixo (end) são calculados de forma independente; com valor '<b>x</b></b>' e sanitizado '<b>x</b>' dá start=8,end=4 e substring(8,4) lança StringIndexOutOfBoundsException, não capturada por verify() (só IOException). Código novo do PR; não corresponde a nenhum golden (o golden 2 trata de santizeAnchors).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "account-ui messages_en.properties:188 (e admin-ui :3138) trocou {{0}} por {0} + choice; a account-ui usa i18next com interpolação padrão {{ }} (js/apps/account-ui/src/i18n.ts) e o restante do bundle usa {{0}}, então os placeholders aparecem literais. No origin/main a linha voltou a {{0}}. Nenhum golden cobre.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "login/messages_lt.properties:71 recebeu texto italiano ('Installa una delle seguenti applicazioni...'), exatamente o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "VerifyMessageProperties.java:124-126 substitui o bloco {n,choice,...} inteiro por '...' antes de sanitizar, então HTML/anchor dentro dos ramos do choice nas chaves isentas não é validado. Lacuna real introduzida pelo PR, mas restrita a duas chaves; não casa com golden.",
+      "confianca": "baixa",
+      "observacao": "Pode ser lido como nit (lacuna do linter, não do produto)."
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "account/messages_lt.properties:101 com texto italiano; mesmo problema do golden 0 (italiano no arquivo lituano), também citando login:71.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo problema de sobreposição prefixo/sufixo em VerifyMessageProperties.java:107-111 (grupo F1). O exemplo concreto citado ('aaa<div></div>aaa' -> start=end=6) está errado (dá start=3,end=3), mas o defeito existe.",
+      "confianca": "media",
+      "observacao": "Exemplo numérico incorreto, conclusão correta."
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "login/messages_lt.properties:71 com texto italiano; golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Grupo F1: com '<b>x</b></b>' -> '<b>x</b>' start=8,end=4, substring(8,4) lança exceção (VerifyMessageProperties.java:107-111); conferido manualmente. Não é golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Grupo F1, mesmo exemplo '<b>x</b></b>' (start=8,end=4) que gera StringIndexOutOfBoundsException em VerifyMessageProperties.java:111. Não é golden.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

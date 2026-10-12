@@ -1,0 +1,40 @@
+{
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "OrganizationCacheTest.java:381 e 425 usam get(\"alias\")::remove; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo problema do cleanup com alias literal no testCacheIDPForLogin (OrganizationCacheTest.java:381/425); golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.72
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "AdminPermissionsSchema.getResourceTypeResource (linha 116-133) nao cria o recurso de forma preguicosa: so faz resourceStore.findByName(server, type), equivalente ao findByName de ClientPermissionsV2.java:244. A premissa da sugestao e falsa, e ela nao trata do NPE do G3 (null em findByResource na linha 219).",
+      "confianca": "media",
+      "observacao": "O juiz casou com G3 (0.72), mas G3 e o NPE quando getResourceTypeResource retorna null em hasPermission(client, scope); a sugestao fala de hasPermission(scope) e de criacao lazy inexistente.",
+      "astra": {
+        "respostas": {
+          "3": {
+            "mesmoProblema": false,
+            "motivo": "The review addresses incorrect access denial from findByName and recommends getResourceTypeResource, whereas the golden issue requires handling a null return from getResourceTypeResource to prevent a NullPointerException in findByResource."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionEvaluator.java:95-98: Javadoc de requireView() (void) diz 'Returns true'. Erro de documentacao real, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionEvaluator.java:100-103: Javadoc de requireViewClientScopes() (void) diz 'Returns true'. Mesmo problema do grupo F1, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientResource.getManagementPermissions (linha 706) chama ProfileHelper.requireFeature(ADMIN_FINE_GRAINED_AUTHZ), e Profile.java:56/58 define V1 e V2 como versoes da mesma feature (mutuamente exclusivas); com V2 ativo o endpoint nunca chega em isPermissionsEnabled.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AdminPermissions.java:77 e de fato guardado pela flag V1 (local do G0), mas o cenario da sugestao (V1 e V2 ativos ao mesmo tempo, setPermissionsEnabled lancando) e impossivel: Profile.java:56/58 torna V1 e V2 versoes exclusivas da mesma feature. O G0 diz o oposto (com V2 o listener nao roda e deixa permissoes orfas) e a correcao proposta (pular em V2) agrava o G0.",
+      "confianca": "media",
+      "observacao": "Mesmo local do G0 com conclusao e correcao opostas; o juiz tambem nao casou. Candidato a revisao: poderia ser lido como TP G0 por apontar a guarda de flag errada."
+    }
+  ]
+}

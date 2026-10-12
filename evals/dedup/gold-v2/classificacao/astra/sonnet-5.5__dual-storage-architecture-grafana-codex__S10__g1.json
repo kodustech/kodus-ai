@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "id": "S10",
+ "golden": 1,
+ "promptSha": "78665f9426899131cfd43092c0cb58918b932a0e",
+ "sameProblem": false,
+ "reason": "The review comment identifies the incorrect duration recorder in Update, while the golden comment identifies it in DeleteCollection, so fixing the reported location would not fix the golden issue."
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "id": "S14",
+ "golden": 2,
+ "promptSha": "48cdb8d046ee17fcff169bb651826a00b504a66c",
+ "sameProblem": true,
+ "reason": "The review comment identifies the same mismatch between the Javadoc’s three-letter recommendation and two-letter shortcut usage, and its proposed documentation correction would resolve the golden issue at the same location."
+}

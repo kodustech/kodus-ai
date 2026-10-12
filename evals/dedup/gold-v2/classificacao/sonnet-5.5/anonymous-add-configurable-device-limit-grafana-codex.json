@@ -1,0 +1,179 @@
+{
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "pkg/server/wire.go:374-375 no head ainda registra anonstore.ProvideAnonDBStore e o Bind de AnonStore, mas a assinatura passou a exigir deviceLimit int64 (database.go:52) e impl.go:43 constrói o store direto; o wire set fica com provider sem fonte de int64 / não usado e a geração do wire quebra. Não casa com golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:109-118 faz CountDevices e depois o INSERT/upsert sem lock nem transação; requisições concorrentes de devices distintos passam o check. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.72
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "O único caller de TagDevice é client.go:44-50, que só propaga ErrDeviceLimitReached e loga os demais erros; não existem 'places that previously ignored these failures' que agora recebam erros de DB. Não é o golden 1 (que trata da recusa de auth pelo limite).",
+      "confianca": "media",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review comment asks to preserve propagation of ErrDeviceLimitReached while suppressing other errors, so its proposed fix would leave the golden authentication failure unchanged."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "client.go:44-50 trocou o goroutine assíncrono por TagDevice síncrono no ctx da requisição; a sugestão trata da latência (COUNT + upsert) e do cancelamento pelo ctx, problema real introduzido pelo PR. O golden 1 completo é sobre a autenticação anônima ser recusada quando o limite é atingido, consequência que S4 não cita (S7 cita).",
+      "confianca": "media",
+      "observacao": "Diverge de S7 do mesmo grupo F3: S7 inclui a recusa por ErrDeviceLimitReached (golden 1), S4 só fala de latência/cancelamento.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review identifies latency and cancellation from synchronous tagging, but fixing those would not necessarily prevent ErrDeviceLimitReached from blocking anonymous authentication."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database_test.go:51-70 não reenvia o device existente no limite; lacuna de teste real, sem golden de teste neste PR.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "pkg/server/wire.go:374-375 no head ainda registra anonstore.ProvideAnonDBStore e o Bind de AnonStore, mas a assinatura passou a exigir deviceLimit int64 (database.go:52) e impl.go:43 constrói o store direto; o wire set fica com provider sem fonte de int64 / não usado e a geração do wire quebra. Não casa com golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "client.go:44-50: tagging virou síncrono e ErrDeviceLimitReached faz Authenticate retornar erro, recusando acesso anônimo; é o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "tagDeviceUI (impl.go:83-90 no head) faz localCache.SetDefault antes de CreateOrUpdateDevice; com o retorno do erro em impl.go:147 o device rejeitado fica no cache e passa no retry. Mesmo problema do golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:109-118 faz CountDevices e depois o INSERT/upsert sem lock nem transação; requisições concorrentes de devices distintos passam o check. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "id": "S7",
+ "golden": 2,
+ "promptSha": "5e5db9e2e240c8c90ebd85d458df520f0b138ad2",
+ "sameProblem": true,
+ "reason": "Both identify that using the unfiltered guests input misclassifies existing attendees as new guests, causing them to receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail."
+}

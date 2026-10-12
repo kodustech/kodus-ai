@@ -1,0 +1,40 @@
+{
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "translate_accelerator.rb: chave do cache e key+config.locale+backend.object_id, sem default_locale/site; FallbackLocaleList (config/initializers/i18n.rb:17) depende de SiteSetting.default_locale, entao em multisite o resultado de fallback de um site vaza para outro. Introduzido pelos fallbacks do PR; nao e G0 (concorrencia em @loaded_locales) nem G1 (String vs Symbol).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Os locales de fallback so sao carregados em application_controller.rb:159 (I18n.fallbacks.ensure_loaded!); translate (translate_accelerator.rb) carrega apenas config.locale, entao jobs/mailers ficam sem o catalogo de fallback. Sem golden correspondente.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

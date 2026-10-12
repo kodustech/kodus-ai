@@ -1,0 +1,23 @@
+{
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "insightsBooking.ts:83-88 getAuthorizationConditions retorna sempre Prisma.Sql (NOTHING_CONDITION no pior caso, :125-132), então os ramos :76-79 de getBaseConditions são inalcançáveis. Golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

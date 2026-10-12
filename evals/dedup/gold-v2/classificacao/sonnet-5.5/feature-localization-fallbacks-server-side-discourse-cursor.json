@@ -1,0 +1,23 @@
+{
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "translate_accelerator.rb:67-68 carrega so config.locale; o ensure_loaded! da cadeia de fallback so roda no controller (application_controller.rb:159), entao fora de requests o fallback cai em locale nao carregado e o LRU guarda o resultado. Nao e G0 nem G1.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

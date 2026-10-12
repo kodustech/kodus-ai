@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "id": "S3",
+ "golden": 2,
+ "promptSha": "fae0f58993feb88b4e7d79b6d70d9d83f43014b9",
+ "sameProblem": true,
+ "reason": "The review explicitly identifies the misleading three-character shortcut documentation and requests documenting the two-character format, which would also fix the golden issue."
+}

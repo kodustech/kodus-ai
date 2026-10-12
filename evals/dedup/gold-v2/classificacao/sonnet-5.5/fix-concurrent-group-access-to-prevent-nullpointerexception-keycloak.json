@@ -1,0 +1,23 @@
+{
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GroupTest.java:136-157: leitora não é sincronizada nem tem join antes do assert; leitura com falha pode cair depois do assert. Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

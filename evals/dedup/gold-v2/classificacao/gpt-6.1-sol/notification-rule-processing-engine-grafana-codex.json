@@ -1,0 +1,169 @@
+{
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.75
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "AlertRuleMenu.tsx:83 só renderiza MenuItemPauseRule se rulerRuleType.grafana.rule(rulerRule), e GrafanaRuleListItem.tsx:47 passa só promRule, então Pause/Resume somem na lista. Mesma causa raiz do golden 1, mas o golden trata do drawer de Silence, não do Pause.",
+      "confianca": "media",
+      "observacao": "Juiz casou com o golden 1 (0.75); é sintoma diferente da mesma remoção do rulerRule.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review reports missing Pause/Resume menu actions, while the golden comment reports a Silence notifications action that fails to render its drawer; fixing the pause action would not fix the silence drawer."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AlertRuleMenu.tsx:85-87 ainda exige rulerRule para o item Delete; na lista só há promRule, então Delete some. Introduzido pelo PR; nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GrafanaRuleListItem.tsx:47 passa só promRule a RuleActionsButtons, cujo SilenceGrafanaRuleDrawer exige rulerRuleType.grafana.alertingRule(rule); o item Silence não abre nada. É o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:222-228: useAllAlertRuleAbilities agora delega a useAllRulerRuleAbilities, que fixa isFederated=false (linha 242-245); antes usava isFederatedRuleGroup(rule.group), então grupos federados do Mimir deixam de ser imutáveis. Regressão do PR; nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GrafanaGroupLoader.test.tsx:95-101 o teste não abre o menu nem verifica opções; lacuna de teste sem golden correspondente.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:390-404 com skipToken passa rule undefined; useIsGrafanaPromRuleEditable devolve loading=false, então MaybeSupported=AlwaysSupported e Duplicate=[true, permissão create de grafana]; AlertRuleMenu.tsx faz OR com a habilidade do ruler, exibindo Duplicate em regras de datasource. Nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:222-228: useAllAlertRuleAbilities agora delega a useAllRulerRuleAbilities, que fixa isFederated=false (linha 242-245); antes usava isFederatedRuleGroup(rule.group), então grupos federados do Mimir deixam de ser imutáveis. Regressão do PR; nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Grupo F1: só promRule em GrafanaRuleListItem.tsx:47 e o drawer de silêncio depende do ruler rule; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:222-228: useAllAlertRuleAbilities agora delega a useAllRulerRuleAbilities, que fixa isFederated=false (linha 242-245); antes usava isFederatedRuleGroup(rule.group), então grupos federados do Mimir deixam de ser imutáveis. Regressão do PR; nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

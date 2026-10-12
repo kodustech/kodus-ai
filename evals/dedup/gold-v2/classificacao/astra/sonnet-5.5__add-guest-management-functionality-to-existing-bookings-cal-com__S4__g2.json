@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "id": "S4",
+ "golden": 2,
+ "promptSha": "e3ad92ff217adec86069754234baf6176a067cd8",
+ "sameProblem": true,
+ "reason": "The review identifies the same unfiltered guests input used for email classification; passing uniqueGuests fixes which attendees receive AttendeeScheduledEmail versus AttendeeAddGuestsEmail."
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "id": "S5",
+ "golden": 1,
+ "promptSha": "94d62908429445b124bbb135668769ba196338ca",
+ "sameProblem": true,
+ "reason": "The review explicitly identifies the missing SMS method restriction in the retry-limit deletion arm, which causes the unintended deletion of non-SMS reminders described by the golden comment."
+}

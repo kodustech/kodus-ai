@@ -1,0 +1,284 @@
+{
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e acessa mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null/[] (handleNewBooking produz null) lança TypeError. É o null reference do golden 0 (o golden cita o GoogleCalendarService, mas lá o acesso usa ?.; o único acesso sem guarda é este).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o fallback roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca encontra o destino; é o erro de lógica do golden 2.",
+      "confianca": "alta",
+      "observacao": "Juiz não casou; mesmo grupo F2 de S4/S7 casados com o golden 2.",
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "Both comments identify the faulty lookup by externalCalendarId in the same code, and correcting the fallback or matching by credentialId would address the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e acessa mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null/[] (handleNewBooking produz null) lança TypeError. É o null reference do golden 0 (o golden cita o GoogleCalendarService, mas lá o acesso usa ?.; o único acesso sem guarda é este).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o fallback roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca encontra o destino; é o erro de lógica do golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o fallback roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca encontra o destino; é o erro de lógica do golden 2. Esta aponta o deleteEvent (315-317).",
+      "confianca": "media",
+      "observacao": "Juiz não casou; mesmo padrão, golden não restringe ao update.",
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "Both identify the same faulty externalId lookup in the destination-calendar fallback, and replacing it as suggested would fix the golden issue at the same location."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e acessa mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null/[] (handleNewBooking produz null) lança TypeError. É o null reference do golden 0 (o golden cita o GoogleCalendarService, mas lá o acesso usa ?.; o único acesso sem guarda é este).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.72
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o fallback roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca encontra o destino; é o erro de lógica do golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e acessa mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null/[] (handleNewBooking produz null) lança TypeError. É o null reference do golden 0 (o golden cita o GoogleCalendarService, mas lá o acesso usa ?.; o único acesso sem guarda é este).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o fallback roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca encontra o destino; é o erro de lógica do golden 2.",
+      "confianca": "alta",
+      "observacao": "Juiz não casou; grupo F2.",
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "Both comments identify the same faulty externalId lookup in the destination-calendar fallback, and fixing that lookup would address the golden issue at the same location."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e acessa mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null/[] (handleNewBooking produz null) lança TypeError. É o null reference do golden 0 (o golden cita o GoogleCalendarService, mas lá o acesso usa ?.; o único acesso sem guarda é este).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o fallback roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca encontra o destino; é o erro de lógica do golden 2.",
+      "confianca": "alta",
+      "observacao": "Juiz não casou; grupo F2.",
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": false,
+            "motivo": "The review addresses the fallback when externalCalendarId is absent, while the golden comment addresses lookup logic when it is provided; fixing the fallback would not fix that lookup."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "revisao_junior"
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:145-154 agora escolhe o calendário só por credentialId; antes usava destinationCalendar.externalId. Destinos sem credentialId (ramo por integração em EventManager.ts:375-381) caem em 'primary'. Regressão do PR; nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:375-381 chama createEvent(c, event) sem externalId; CalendarManager.createEvent devolve externalId só quando recebido e o EventManager agora grava result.externalId como externalCalendarId (antes evt.destinationCalendar.externalId). Nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Grupo F3: mesmo problema de EventManager.ts:375-381 sem externalId, referência salva com externalCalendarId undefined. Nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

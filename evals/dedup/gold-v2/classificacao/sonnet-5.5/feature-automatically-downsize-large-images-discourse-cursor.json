@@ -1,0 +1,91 @@
+{
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151: self.downsize é definido duas vezes, e a segunda (from,to,dimensions,opts) substitui a primeira; resize_emoji.rb:14 ainda chama downsize(path,path,100,100,opts) e passa a levantar ArgumentError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151: self.downsize é definido duas vezes, e a segunda (from,to,dimensions,opts) substitui a primeira; resize_emoji.rb:14 ainda chama downsize(path,path,100,100,opts) e passa a levantar ArgumentError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151: self.downsize é definido duas vezes, e a segunda (from,to,dimensions,opts) substitui a primeira; resize_emoji.rb:14 ainda chama downsize(path,path,100,100,opts) e passa a levantar ArgumentError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151: self.downsize é definido duas vezes, e a segunda (from,to,dimensions,opts) substitui a primeira; resize_emoji.rb:14 ainda chama downsize(path,path,100,100,opts) e passa a levantar ArgumentError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151: self.downsize é definido duas vezes, e a segunda (from,to,dimensions,opts) substitui a primeira; resize_emoji.rb:14 ainda chama downsize(path,path,100,100,opts) e passa a levantar ArgumentError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

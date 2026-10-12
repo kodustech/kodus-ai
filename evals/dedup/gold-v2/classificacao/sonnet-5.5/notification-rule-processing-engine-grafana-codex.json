@@ -1,0 +1,108 @@
+{
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:390-404 com skipToken passa rule undefined; useIsGrafanaPromRuleEditable devolve loading=false, então MaybeSupported=AlwaysSupported e Duplicate=[true, permissão create de grafana]; AlertRuleMenu.tsx faz OR com a habilidade do ruler, exibindo Duplicate em regras de datasource. Nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:301-302 o comentário 'todas as GrafanaPromRuleDTO são Grafana-managed' precede isAlertingRule; inconsistência de comentário/nome, sem defeito próprio.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:308-309 comentário diz 'sem estado de loading' mas a linha usa loading; comentário impreciso.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GrafanaGroupLoader.test.tsx:85-101 só verifica a existência do botão More; lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:222-228: useAllAlertRuleAbilities agora delega a useAllRulerRuleAbilities, que fixa isFederated=false (linha 242-245); antes usava isFederatedRuleGroup(rule.group), então grupos federados do Mimir deixam de ser imutáveis. Regressão do PR; nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:301-328 usa prometheusRuleType.grafana.alertingRule para Pause/Restore/ModifyExport/DeletePermanently; o caminho do ruler usava rulerRuleType.grafana.rule (inclui recording). Na lista, sem rulerRule, regras de gravação Grafana perdem essas ações. Nenhum golden.",
+      "confianca": "baixa",
+      "observacao": "Pause na lista também já está bloqueado pela exigência de rulerRule em AlertRuleMenu.tsx:83."
+    }
+  ]
+}

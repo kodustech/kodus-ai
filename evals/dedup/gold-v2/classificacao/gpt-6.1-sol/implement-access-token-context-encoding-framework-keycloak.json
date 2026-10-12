@@ -1,0 +1,359 @@
+{
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GRANT_TYPE só é setado em OAuth2GrantTypeBase.java:109, TokenManager.java:248, ROPC, PreAuthorized e token exchange; ClientCredentialsGrantType.java:122-141 gera o token sem setar, então DefaultTokenContextEncoderProvider.java:57-60 cai em 'na' apesar do shortcut 'cc' registrado. Introduzido pelo PR, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:481-484 usa substring(3,5) e retorna false na igualdade; grant fica em [4,6) (DefaultTokenContextEncoderProvider.java:81). Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "Registro em DefaultTokenContextEncoderProviderFactory.java:73-76 não valida tamanho, e a sugestão aponta que a doc de OAuth2GrantTypeFactory sugere 3 letras enquanto o decoder (:74-81 do provider) exige 2; pede documentar o formato de 2 caracteres. Mesmo problema do golden 2 (doc de 3 letras vs uso de 2).",
+      "confianca": "media",
+      "observacao": "Foco em validação no registro, mas o defeito de base é o mesmo do grupo F2 (doc de 3 letras); juiz não casou.",
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "The review explicitly identifies the misleading three-character shortcut documentation and requests documenting the two-character format, which would also fix the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 faz requireNonNull(grantType, \"Null rawTokenId...\"). Golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:480-484 lê [3,5) e rejeita igualdade. Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "OAuth2GrantTypeFactory.java:30-31 Javadoc diz 'usually 3-letters shortcut' mas o formato exige 2. Golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:482-483 substring(3,5) e return false na igualdade. Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:482-484 mesmo erro de índice e condição invertida. Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "DefaultTokenContextEncoderProviderTest.java:82 captura RuntimeException; a fixture (:40-49) não chama postInit, então 'ac' cai em sessionFactory nulo (Factory :125) e dá NPE. Golden 3 (catch genérico).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 lê [3,5) em vez de [4,6). Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 igualdade invertida. Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:482-483 índice e condição invertidos. Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 valida grantType duas vezes. Golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "OAuth2GrantTypeFactory.java:29-33 recomenda 3 letras, mas o decoder exige prefixo de 6 com grant de 2. Mesmo problema do golden 2.",
+      "confianca": "alta",
+      "observacao": "Juiz não casou, mas é o mesmo texto de S6/S19 que ele casou com o golden 2.",
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "The review comment identifies the same mismatch between the Javadoc’s three-letter recommendation and two-letter shortcut usage, and its proposed documentation correction would resolve the golden issue at the same location."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "DefaultTokenContextEncoderProviderFactory.java:73-76 + contrato de OAuth2GrantTypeFactory que descreve 3 letras vs decoder de 2. Mesmo defeito do golden 2, com pedido de validação.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F2; foco na validação, mas cita a doc de 3 letras como causa.",
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": false,
+            "motivo": "The review requests runtime validation of grant shortcut lengths, while the golden comment requests correcting inaccurate Javadoc; adding validation would not fix the documentation."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "revisao_junior"
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "DefaultTokenContextEncoderProviderFactory.java:110-115: o registro lazy sobrescreve grantsByShortcuts sem a checagem de duplicata que postInit faz (:81-85). Só ocorre com grant implantado a quente com shortcut repetido; sem golden.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 checa grantType de novo. Golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:480-484 lê [3,5) e rejeita igualdade. Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S19",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.72
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "OAuth2GrantTypeFactory.java:29-33 descreve 3 letras; decoder exige 2. Golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

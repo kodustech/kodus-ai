@@ -1,0 +1,125 @@
+{
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 troca o handler concreto por StatefulDetectorHandler com só pass; o base declara get_dedupe_value/get_group_key_values e o novo build_occurrence_and_event_data (detector.py:166-170) como abstratos, então instanciar dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 troca o handler concreto por StatefulDetectorHandler com só pass; o base declara get_dedupe_value/get_group_key_values e o novo build_occurrence_and_event_data (detector.py:166-170) como abstratos, então instanciar dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 troca o handler concreto por StatefulDetectorHandler com só pass; o base declara get_dedupe_value/get_group_key_values e o novo build_occurrence_and_event_data (detector.py:166-170) como abstratos, então instanciar dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "detector.py:229-230 (docstring de evaluate) ainda diz lista de DetectorEvaluationResult, mas o retorno virou dict por DetectorGroupKey. É o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:10 mantém o TODO 'will be a stateful detector' já desatualizado; comentário obsoleto, sem defeito e sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "test_gap",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "test_detector.py:177 e 190-191: o pacote tem group_2=10 mas a ocorrência esperada é montada com 6; a sugestão cita exatamente isso. É o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 troca o handler concreto por StatefulDetectorHandler com só pass; o base declara get_dedupe_value/get_group_key_values e o novo build_occurrence_and_event_data (detector.py:166-170) como abstratos, então instanciar dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

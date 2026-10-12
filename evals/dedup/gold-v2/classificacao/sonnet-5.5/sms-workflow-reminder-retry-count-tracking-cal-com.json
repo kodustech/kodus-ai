@@ -1,0 +1,125 @@
+{
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:189-197: o prisma.workflowReminder.update dentro do catch não tem proteção; se falhar (registro apagado em paralelo ou banco fora), a exceção escapa do loop e o cron aborta, quando antes o erro era só logado. Introduzido pelo PR; nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:158-188: sem sendTo ou mensagem o if é pulado e retryCount não sobe, então o lembrete volta a ser lido a cada cron até a data; isso já acontecia antes do PR e não envia nada, é só cobertura incompleta da nova contagem.",
+      "confianca": "media",
+      "observacao": "Poderia ser bug_preexistente; sem efeito danoso além de reprocessamento."
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:38-42: o ramo retryCount > 1 do OR no deleteMany não filtra method SMS, então apaga lembretes de email/WhatsApp; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:38-42: o ramo retryCount > 1 do OR no deleteMany não filtra method SMS, então apaga lembretes de email/WhatsApp; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:38-42: o ramo retryCount > 1 do OR no deleteMany não filtra method SMS, então apaga lembretes de email/WhatsApp; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:189-197: o prisma.workflowReminder.update dentro do catch não tem proteção; se falhar (registro apagado em paralelo ou banco fora), a exceção escapa do loop e o cron aborta, quando antes o erro era só logado. Introduzido pelo PR; nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:38-42: o ramo retryCount > 1 do OR no deleteMany não filtra method SMS, então apaga lembretes de email/WhatsApp; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

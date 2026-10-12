@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S3",
+ "golden": 4,
+ "promptSha": "fee850b2f4a427ea4680e4db142141738b581d8c",
+ "sameProblem": true,
+ "reason": "The review explicitly asks Office365’s createEvent to accept the credentialId supplied by CalendarManager, which would fix the missing parameter and interface contract issue identified by the golden comment at the same location."
+}

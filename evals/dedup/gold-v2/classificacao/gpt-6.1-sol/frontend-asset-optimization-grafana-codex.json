@@ -1,0 +1,23 @@
+{
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "pkg/api/webassets/webassets.go:48-49 adquire Lock sem rechecar o cache; golden 0 (double-checked locking incompleto).",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S16",
+ "golden": 4,
+ "promptSha": "5b8b7570e344340f1564cada9077b092a6cbbc8a",
+ "sameProblem": true,
+ "reason": "The review explicitly asks Office365’s createEvent to accept credentialId, which would fix the missing parameter in the interface contract at the same location while also correcting destination selection."
+}

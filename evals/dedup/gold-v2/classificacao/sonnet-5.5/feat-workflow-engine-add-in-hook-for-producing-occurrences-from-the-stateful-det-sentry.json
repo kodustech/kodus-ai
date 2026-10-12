@@ -1,0 +1,125 @@
+{
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 troca o handler concreto por StatefulDetectorHandler com só pass; o base declara get_dedupe_value/get_group_key_values e o novo build_occurrence_and_event_data (detector.py:166-170) como abstratos, então instanciar dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "detector.py:229-230: docstring de evaluate diz lista, retorno agora é dict. É o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:10 TODO desatualizado; comentário, sem defeito e sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 troca o handler concreto por StatefulDetectorHandler com só pass; o base declara get_dedupe_value/get_group_key_values e o novo build_occurrence_and_event_data (detector.py:166-170) como abstratos, então instanciar dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 troca o handler concreto por StatefulDetectorHandler com só pass; o base declara get_dedupe_value/get_group_key_values e o novo build_occurrence_and_event_data (detector.py:166-170) como abstratos, então instanciar dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 troca o handler concreto por StatefulDetectorHandler com só pass; o base declara get_dedupe_value/get_group_key_values e o novo build_occurrence_and_event_data (detector.py:166-170) como abstratos, então instanciar dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 troca o handler concreto por StatefulDetectorHandler com só pass; o base declara get_dedupe_value/get_group_key_values e o novo build_occurrence_and_event_data (detector.py:166-170) como abstratos, então instanciar dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

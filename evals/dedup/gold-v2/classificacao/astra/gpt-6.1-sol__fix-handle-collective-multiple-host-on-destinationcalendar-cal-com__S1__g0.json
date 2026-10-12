@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S1",
+ "golden": 0,
+ "promptSha": "e372caded9d066433f9b51c1ff540ad27462e75a",
+ "sameProblem": false,
+ "reason": "The review comment identifies an unchecked dereference in EventManager’s Google Meet fallback, while the golden issue concerns separate dereferences in GoogleCalendarService.createEvent() and updateEvent(), which that fix would not address."
+}

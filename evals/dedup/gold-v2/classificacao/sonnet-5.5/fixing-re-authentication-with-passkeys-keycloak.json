@@ -1,0 +1,40 @@
+{
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "PasskeysUsernamePasswordFormTest.java:281-283: o comentário \"set passwordless policy for discoverable keys\" está desatualizado, porque o bloco só desabilita passkeys. Comentário de teste, sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "passkeys.ftl:11-17 lista authn_use_chk com credentialIds quando authenticators existe; WebAuthnAuthenticator.fillContextForm:100-108 só preenche com usuário identificado (username digitado). Exposição real, mas é o mesmo padrão do fluxo WebAuthn identificado que o Keycloak já usa (allowCredentials), e enumeração por username já existe. Endurecimento de privacidade, não defeito claro.",
+      "confianca": "baixa",
+      "observacao": "Pode ser lido como bug_real de enumeração/exposição introduzida pelo PR na tela de senha."
+    }
+  ]
+}

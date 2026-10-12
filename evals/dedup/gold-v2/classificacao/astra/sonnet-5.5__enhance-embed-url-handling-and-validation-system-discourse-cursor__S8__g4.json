@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "id": "S8",
+ "golden": 4,
+ "promptSha": "b791538ca94ec2c7dff10370718fed8060981ced",
+ "sameProblem": false,
+ "reason": "The review identifies the unescaped URL XSS, but fixing it would not address the golden comment’s additional NoMethodError when contents is nil."
+}

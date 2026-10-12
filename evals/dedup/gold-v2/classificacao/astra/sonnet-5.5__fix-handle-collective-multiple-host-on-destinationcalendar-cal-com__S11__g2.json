@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S11",
+ "golden": 2,
+ "promptSha": "b77d2ddd5653723266b3b7881dfcea5f56a38ddb",
+ "sameProblem": false,
+ "reason": "The review addresses the fallback when externalCalendarId is absent, while the golden comment addresses lookup logic when it is provided; fixing the fallback would not fix that lookup."
+}

@@ -1,0 +1,281 @@
+{
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:46-48 usa && entre isTeamAdmin e isTeamOwner. Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:52-56 permite attendee (email da sessão) adicionar convidados; é o desenho pretendido da feature, não um defeito. Sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:71 lowercase só na blacklist, :76-77 comparações case-sensitive. Foco no bypass da blacklist por caixa = golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "Além das credenciais do chamador (addGuests.handler.ts:158-163, bug real sem golden), diz explicitamente que sendAddGuestsEmails recebe guests cru em :168 e manda passar uniqueGuests, que é o golden 2.",
+      "confianca": "media",
+      "observacao": "Sugestão composta: problema principal é credenciais do ctx.user (sem golden, bug_real); a segunda metade casa com o golden 2, como os demais membros do grupo F3. Juiz não casou.",
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "The review identifies the same unfiltered guests input used for email classification; passing uniqueGuests fixes which attendees receive AttendeeScheduledEmail versus AttendeeAddGuestsEmail."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:71 vs :77: guest não normalizado contra blacklist em minúsculas. Golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:168 passa guests; email-manager.ts:541 usa newGuests.includes e manda AttendeeScheduledEmail ao attendee existente. Golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "Mesmo problema: addGuests.handler.ts:168 com guests cru e email-manager.ts:541 tratando attendee existente como novo. Golden 2.",
+      "confianca": "alta",
+      "observacao": "Juiz não casou, mas é idêntica a S6/S14 do mesmo grupo, que ele casou com o golden 2.",
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "Both identify that using the unfiltered guests input misclassifies existing attendees as new guests, causing them to receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:46-48 && em vez de ||. Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "MultiEmail.tsx:46 Tooltip \"Remove email\" sem t(). i18n, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AddGuestsDialog.tsx:43-44: template string é sempre truthy, o fallback t(\"unable_to_add_guests\") nunca roda e pode exibir \"undefined: ...\". Introduzido pelo PR, impacto pequeno, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:46-48 nome diz OR, código faz AND. Golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:74-78 não deduplica o input (nem por caixa) e createMany insere linhas duplicadas; foco principal = golden 3 (cita também a blacklist, golden 0).",
+      "confianca": "alta",
+      "observacao": "Grupo F2 é o da blacklist/caixa (golden 0); este membro tem como foco o dedupe do input (golden 3) e cobre o 0 de passagem."
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:92-106 grava os attendees e :165 chama updateCalendarAttendees fora do try; se lançar, a mutation erra com guests já persistidos e retry cai em emails_must_be_unique_valid (:80-81). Introduzido pelo PR, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:168 passa guests cru; email-manager.ts:541 manda AttendeeScheduledEmail ao attendee existente. Golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo problema de S13: addGuests.handler.ts:165 fora de try/catch após o commit em :92. Sem golden.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic.scss:29-30 aplica order(2) em .extra-info-wrapper, que está dentro do div raiz do componente Ember header-extra-info (header-extra-info.hbs:1, componente sem tagName). O flex item real de .contents (header.hbs:93-95) é o div ember-view, então order não tem efeito e o min-width:auto com topic-link nowrap (desktop/topic-post.scss:533-537) impede o encolhimento. O golden 0 é sobre float+flex e a .panel no header noscript.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:117-123: align-items emite -webkit-box-align mas não -moz-box-align, embora flexbox() emita display:-moz-box; no Firefox legado o alinhamento não se aplica. É da mesma família dos goldens 1 e 2 (prefixos legados errados), mas é outra propriedade.",
+      "confianca": "media",
+      "observacao": "Afeta só Firefox muito antigo (só -moz-box); dá para ler como nit."
+    }
+  ]
+}

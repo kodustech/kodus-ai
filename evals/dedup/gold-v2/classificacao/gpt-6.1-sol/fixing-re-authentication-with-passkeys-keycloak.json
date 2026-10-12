@@ -1,0 +1,23 @@
+{
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "PasswordForm.java:63 agora aceita usuário só com passkey; só keycloak.v2/login/login-password.ftl ganhou <@passkeys.conditionalUIData/>, enquanto base/login/login-password.ftl (herdado pelo tema legado \"keycloak\", que não tem login-password.ftl próprio) não tem UI de passkey nem em origin/main. Usuário sem senha no tema legado fica numa tela só de senha. Os goldens tratam de isConditionalPasskeysEnabled sem/nulo user em UsernameForm.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

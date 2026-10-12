@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "id": "S1",
+ "golden": 3,
+ "promptSha": "6c8a9aa7e481b3c4488b9430fead24d3341d36f9",
+ "sameProblem": false,
+ "reason": "The review addresses incorrect access denial from findByName and recommends getResourceTypeResource, whereas the golden issue requires handling a null return from getResourceTypeResource to prevent a NullPointerException in findByResource."
+}

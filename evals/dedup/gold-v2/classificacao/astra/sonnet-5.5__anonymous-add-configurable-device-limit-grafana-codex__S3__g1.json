@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "id": "S3",
+ "golden": 1,
+ "promptSha": "773c6646838d96c4fa828a4da45a80be0c767f65",
+ "sameProblem": false,
+ "reason": "The review comment asks to preserve propagation of ErrDeviceLimitReached while suppressing other errors, so its proposed fix would leave the golden authentication failure unchanged."
+}

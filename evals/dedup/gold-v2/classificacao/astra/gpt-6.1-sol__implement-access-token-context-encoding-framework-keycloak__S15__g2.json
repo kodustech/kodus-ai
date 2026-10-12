@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "id": "S15",
+ "golden": 2,
+ "promptSha": "29cd05214ae63304b6509677e9beeb1a87060c31",
+ "sameProblem": false,
+ "reason": "The review requests runtime validation of grant shortcut lengths, while the golden comment requests correcting inaccurate Javadoc; adding validation would not fix the documentation."
+}

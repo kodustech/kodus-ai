@@ -1,0 +1,91 @@
+{
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "InfinispanIdentityProviderStorageProvider.java:89-93 passa o original vindo de getById (wrapper org-aware, linha 139/434) para registerIDPLoginInvalidationOnUpdate (405); com a org desabilitada o predicado do original e falso e, com BROKER_PUBLIC=false (predicado novo em IdentityProviderStorageProvider.java:254), o early return mantem o ID em cache; nada invalida o login cache ao reabilitar a org. Nao e o golden 0 (recursao via session.identityProviders()).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "OrganizationCacheTest.java:381/425 registra cleanup com get(\"alias\")::remove em vez de \"idp-alias-\"+i; mesmo problema do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "OrganizationCacheTest.java:401-414 de fato descarta o stream de getForLogin e so verifica o IdentityProviderListQuery; lacuna de teste, sem golden correspondente.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "InfinispanIdentityProviderStorageProvider.java:234-240 copia o query antigo (lido antes) para a nova entrada revisionada sem checar se a revisao ainda vale; corrida teorica introduzida pelo PR, de dificil alcance. Nao casa com golden.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesma linha 381 (e 425) do OrganizationCacheTest: cleanup com alias literal \"alias\"; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

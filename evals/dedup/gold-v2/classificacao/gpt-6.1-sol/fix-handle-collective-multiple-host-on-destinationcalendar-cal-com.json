@@ -1,0 +1,406 @@
+{
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e acessa mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null/[] (handleNewBooking produz null) lança TypeError. É o null reference do golden 0 (o golden cita o GoogleCalendarService, mas lá o acesso usa ?.; o único acesso sem guarda é este).",
+      "confianca": "media",
+      "observacao": "Juiz não casou este membro, mas os demais do grupo F1 foram casados com o golden 0.",
+      "astra": {
+        "respostas": {
+          "0": {
+            "mesmoProblema": false,
+            "motivo": "The review comment identifies an unchecked dereference in EventManager’s Google Meet fallback, while the golden issue concerns separate dereferences in GoogleCalendarService.createEvent() and updateEvent(), which that fix would not address."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "revisao_junior"
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:170 passou a gravar credentialId só para resultados de calendário (antes usava result.credentialId para vídeo); handleCancelBooking.ts só apaga a reunião de vídeo se a referência tiver credentialId, então a reunião fica órfã no cancelamento. Não casa com golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "office365calendar/lib/CalendarService.ts:71-76 declara createEvent(event) sem credentialId e sempre usa o primeiro destino, embora CalendarManager.ts:236 chame createEvent(calEvent, credential.id) por host; é o descumprimento do contrato createEvent(event, credentialId) do golden 4, aqui descrito pela consequência (segundo host grava no calendário do primeiro).",
+      "confianca": "media",
+      "observacao": "Juiz casou com o golden 4 só o S15; o grupo F3 descreve o mesmo problema.",
+      "astra": {
+        "respostas": {
+          "4": {
+            "mesmoProblema": true,
+            "motivo": "The review explicitly asks Office365’s createEvent to accept the credentialId supplied by CalendarManager, which would fix the missing parameter and interface contract issue identified by the golden comment at the same location."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256: no ramo em que externalCalendarId é falso, faz find(cal.externalId === externalCalendarId), que nunca acha o calendário de destino; é a lógica do golden 2 (a busca compara com o próprio valor).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "handleNewBooking.ts:1063-1078: destinationCalendar fica null quando nem o event type nem o organizador têm destino, e evt.destinationCalendar?.push(...teamDestinationCalendars) descarta os calendários dos demais hosts. Introduzido pelo PR; nenhum golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:208-209 updateLocation usa result.externalId/result.credentialId, mas CalendarManager.updateEvent (CalendarManager.ts:312-321) não retorna esses campos; antes vinham de evt.destinationCalendar. Referências recriadas perdem calendário/credencial. Não casa com golden (o 5 é sobre credential undefined).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "handleCancelBooking.ts:421-460: o novo loop por referência executa o ramo de recorrência para cada host, mas o ramo itera só bookingToDelete.user.credentials e pega a primeira referência de calendário de cada ocorrência; eventos dos hosts secundários ficam. Nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "organizations/create.handler.ts:151 inverteu a condição do slug com IS_TEAM_BILLING_ENABLED; golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "office365calendar/lib/CalendarService.ts:71-76 declara createEvent(event) sem credentialId e sempre usa o primeiro destino, embora CalendarManager.ts:236 chame createEvent(calEvent, credential.id) por host; é o descumprimento do contrato createEvent(event, credentialId) do golden 4, aqui descrito pela consequência (segundo host grava no calendário do primeiro).",
+      "confianca": "media",
+      "observacao": "Grupo F3; juiz não casou.",
+      "astra": {
+        "respostas": {
+          "4": {
+            "mesmoProblema": true,
+            "motivo": "The review explicitly asks Office365’s createEvent to accept the credentialId passed by CalendarManager, which would fix the missing parameter identified by the golden comment at the same location."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e acessa mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null/[] (handleNewBooking produz null) lança TypeError. É o null reference do golden 0 (o golden cita o GoogleCalendarService, mas lá o acesso usa ?.; o único acesso sem guarda é este).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "office365calendar/lib/CalendarService.ts:71-76 declara createEvent(event) sem credentialId e sempre usa o primeiro destino, embora CalendarManager.ts:236 chame createEvent(calEvent, credential.id) por host; é o descumprimento do contrato createEvent(event, credentialId) do golden 4, aqui descrito pela consequência (segundo host grava no calendário do primeiro).",
+      "confianca": "media",
+      "observacao": "Grupo F3; juiz não casou.",
+      "astra": {
+        "respostas": {
+          "4": {
+            "mesmoProblema": true,
+            "motivo": "Selecting the destination by the passed credential requires Office365’s createEvent to accept credentialId, fixing the missing parameter identified by the golden comment at the same location."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Grupo F4: handleNewBooking.ts:1077-1079 optional push em destinationCalendar null descarta teamDestinationCalendars. Nenhum golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Grupo F2: EventManager.ts:170 zera credentialId para resultados de vídeo (antes result.credentialId), quebrando o cancelamento da reunião. Nenhum golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e acessa mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null/[] (handleNewBooking produz null) lança TypeError. É o null reference do golden 0 (o golden cita o GoogleCalendarService, mas lá o acesso usa ?.; o único acesso sem guarda é este).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "office365calendar/lib/CalendarService.ts:71-76 declara createEvent(event) sem credentialId e sempre usa o primeiro destino, embora CalendarManager.ts:236 chame createEvent(calEvent, credential.id) por host; é o descumprimento do contrato createEvent(event, credentialId) do golden 4, aqui descrito pela consequência (segundo host grava no calendário do primeiro).",
+      "confianca": "media",
+      "observacao": "Juiz também deu 0.85 para o golden 2, que não se aplica (o 2 é o fallback do Google)."
+    },
+    {
+      "id": "S16",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "office365calendar/lib/CalendarService.ts:71-76 declara createEvent(event) sem credentialId e sempre usa o primeiro destino, embora CalendarManager.ts:236 chame createEvent(calEvent, credential.id) por host; é o descumprimento do contrato createEvent(event, credentialId) do golden 4, aqui descrito pela consequência (segundo host grava no calendário do primeiro).",
+      "confianca": "media",
+      "observacao": "Grupo F3; juiz não casou.",
+      "astra": {
+        "respostas": {
+          "4": {
+            "mesmoProblema": true,
+            "motivo": "The review explicitly asks Office365’s createEvent to accept credentialId, which would fix the missing parameter in the interface contract at the same location while also correcting destination selection."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e acessa mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null/[] (handleNewBooking produz null) lança TypeError. É o null reference do golden 0 (o golden cita o GoogleCalendarService, mas lá o acesso usa ?.; o único acesso sem guarda é este).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e acessa mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null/[] (handleNewBooking produz null) lança TypeError. É o null reference do golden 0 (o golden cita o GoogleCalendarService, mas lá o acesso usa ?.; o único acesso sem guarda é este).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S19",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "office365calendar/lib/CalendarService.ts:71-76 declara createEvent(event) sem credentialId e sempre usa o primeiro destino, embora CalendarManager.ts:236 chame createEvent(calEvent, credential.id) por host; é o descumprimento do contrato createEvent(event, credentialId) do golden 4, aqui descrito pela consequência (segundo host grava no calendário do primeiro).",
+      "confianca": "media",
+      "observacao": "Grupo F3; juiz não casou.",
+      "astra": {
+        "respostas": {
+          "4": {
+            "mesmoProblema": false,
+            "motivo": "The review reports incorrect destination selection, whereas the golden comment reports a missing credentialId parameter in the createEvent signature; fixing selection does not necessarily fix that signature mismatch."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "revisao_junior"
+    },
+    {
+      "id": "S20",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Grupo F5: handleCancelBooking.ts:449-457 dentro do loop por referência repete a exclusão da primeira referência de cada ocorrência recorrente com as credenciais do organizador; hosts secundários não são apagados. Nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionsV2.java:78 faz canView() (VIEW global em all-clients) antes de avaliar o recurso do cliente, entao uma permissao especifica negativa nunca e avaliada; UserPermissionsV2.canView(user) nao faz esse atalho. Nao corresponde a nenhum golden (G1-G3 tratam de lookup/NPE/getClientsWithPermission).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionsV2.java:86-87 canView() ignora MANAGE em all-clients enquanto canView(ClientScopeModel) (linha 121) aceita; com MANAGE sem VIEW, ClientsResource.getClients:131-133 busca todos os clientes sem paginacao. Inconsistencia real com impacto de desempenho; sem golden correspondente.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionEvaluator.java: Javadoc novo de requireView() diz 'Returns true' mas o metodo e void. Erro de documentacao real, sem golden correspondente.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionEvaluator.java: Javadoc de requireViewClientScopes() (void) diz 'Returns true'. Mesmo problema de documentacao do grupo F2; nenhum golden de documentacao.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo problema de S1 (grupo F1): ClientPermissionsV2.java:78 curto-circuita pelo VIEW global antes de avaliar a negacao especifica do cliente. Sem golden correspondente.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "PermissionClientTest.java:147-152: getDefaultClientScopes() ja lanca ForbiddenException antes de removeDefaultClientScope, entao o teste nao isola o check de remocao. Lacuna de teste real, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}
