@@ -716,8 +716,8 @@ describe('D. input variants', () => {
         );
         const bigFiles = Array.from({ length: 6 }, (_, i) => ({
             filename: `src/f${i}.ts`,
-            patch: 'x'.repeat(12_000),
-            patchWithLinesStr: 'x'.repeat(12_000),
+            patch: 'x'.repeat(30_000),
+            patchWithLinesStr: 'x'.repeat(30_000),
         })) as any;
         await newAgent().execute(
             makeInput({ changedFiles: bigFiles, reviewMode: 'deep' }),

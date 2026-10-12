@@ -320,6 +320,10 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/code-review/pipeline/stages/agent-review.stage.ts', // DEDUP_SCHEMA, DEDUP_TIEBREAK_SCHEMA via jsonSchema() — AI-SDK Schema, passes through untouched (exempt from strict-wire conversion)
         // Second-doors → LLM.run migration.
         'libs/cli-review/infrastructure/services/public-pr-grouping.service.ts', // GroupingSchema — all-required zod (no `.optional()`), so strict-wire conversion is a no-op; public-demo path on a fixed Gemini default, never OpenAI-strict.
+        // Finder side passes (#1821), inline zod schemas.
+        'libs/code-review/infrastructure/agents/core/micro-agents.ts', // PLANNER_SCHEMA — all-required
+        'libs/code-review/infrastructure/agents/core/selector-shard.ts', // PLAN_SCHEMA — all-required
+        'libs/code-review/infrastructure/agents/core/scout-investigator.ts', // SCOUT_SCHEMA — `line` optional, converted by zodToStrictWireSchema
     ]);
 
     it('every runStructuredReviewCall call site is registered (schema is under test)', () => {
