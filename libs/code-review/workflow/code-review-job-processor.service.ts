@@ -1,6 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable, Inject, Optional } from '@nestjs/common';
 import os from 'os';
+import { randomUUID } from 'crypto';
 
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import {
@@ -40,7 +41,34 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
     // Stamp for the job-ownership lease: distinguishes "this worker is alive
     // and renewing" from "the worker died", letting the stale-job reaper
     // reclaim by expired lease (#1830).
+    // The instance prefix of a lease owner: it keeps log lines searchable by
+    // host, but it is never the owner itself - see `ownerForAttempt`.
     private readonly instanceId = os.hostname();
+
+    // The lease owner of the attempt that is processing a job. `process` writes
+    // it, `markCompleted` reads it: the router calls that one from outside
+    // `process`, so the owner cannot travel as a parameter.
+    private readonly attemptOwnerByJob = new Map<string, string>();
+
+    /**
+     * One owner per attempt, not per worker (#1902): if a lease lapses without
+     * this process dying - a renewal that hangs, a freeze like the 106s one in
+     * #1830 - the reaper republishes the job and this same worker can claim it
+     * again. With a per-worker owner both attempts write the same name, so the
+     * first attempt's guarded renewal and terminal writes still match the
+     * second one's claim and both runs post the review. On a single
+     * self-hosted worker that is the only possible outcome.
+     */
+    private ownerForAttempt(): string {
+        return `${this.instanceId}:${randomUUID()}`;
+    }
+
+    /** Forget an attempt's owner, unless a later attempt owns the job now. */
+    private forgetAttemptOwner(jobId: string, owner: string): void {
+        if (this.attemptOwnerByJob.get(jobId) === owner) {
+            this.attemptOwnerByJob.delete(jobId);
+        }
+    }
 
     constructor(
         @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
@@ -58,6 +86,11 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
     ) {}
 
     async process(jobId: string, signal?: AbortSignal): Promise<void> {
+        // The owner of THIS attempt, written into every guarded statement
+        // below (#1902).
+        const leaseOwner = this.ownerForAttempt();
+        this.attemptOwnerByJob.set(jobId, leaseOwner);
+
         const job = await this.jobRepository.findOne(jobId);
 
         if (!job) {
@@ -262,7 +295,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 // Acquire the job-ownership lease so the stale-job reaper can
                 // tell an actively-processing job (renewed lease) from a dead
                 // worker (expired lease → reclaimed in ~90s, #1830).
-                leaseOwner: this.instanceId,
+                leaseOwner,
                 leaseExpiresAt: new Date(Date.now() + JOB_LEASE_TTL_MS),
                 metadata: this.removeByokConcurrencyGateMetadata(job.metadata),
             });
@@ -304,12 +337,12 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     this.jobRepository.update(
                         jobId,
                         {
-                            leaseOwner: this.instanceId,
+                            leaseOwner,
                             leaseExpiresAt: new Date(
                                 Date.now() + JOB_LEASE_TTL_MS,
                             ),
                         },
-                        { leaseOwner: this.instanceId },
+                        { leaseOwner },
                     ),
                 onRenewError: (error) =>
                     this.logger.warn({
@@ -319,7 +352,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                         error: error instanceof Error ? error : undefined,
                         metadata: {
                             jobId,
-                            instanceId: this.instanceId,
+                            instanceId: leaseOwner,
                         },
                     }),
                 onLeaseLost: (error) => {
@@ -334,7 +367,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                                 : new Error(String(error)),
                         metadata: {
                             jobId,
-                            instanceId: this.instanceId,
+                            instanceId: leaseOwner,
                             organizationId:
                                 organizationAndTeamData?.organizationId,
                         },
@@ -435,7 +468,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     return;
                 }
 
-                await this.abandonBusyReview(job, error);
+                await this.abandonBusyReview(job, error, leaseOwner);
                 return;
             }
 
@@ -452,14 +485,14 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                             eventKey: (error as any).eventKey,
                         },
                     },
-                    { leaseOwner: this.instanceId },
+                    { leaseOwner },
                 );
                 if (stillOwned === false) {
                     this.logger.warn({
                         message:
                             'Job lease no longer owned when pausing for an event — leaving the row to the worker that took it over',
                         context: CodeReviewJobProcessorService.name,
-                        metadata: { jobId, instanceId: this.instanceId },
+                        metadata: { jobId, instanceId: leaseOwner },
                     });
                 }
                 return;
@@ -487,7 +520,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 // lands, which is what stamps the FAILED status and lets the
                 // rethrow below reach the consumer's error handler for a
                 // republish (#1830 review).
-                ownedBy: leaseClaimed ? this.instanceId : undefined,
+                ownedBy: leaseClaimed ? leaseOwner : undefined,
                 requireNoLiveOwner: !leaseClaimed,
                 organizationId: this.organizationIdFor(job),
             });
@@ -512,6 +545,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             }
             throw error;
         } finally {
+            this.forgetAttemptOwner(jobId, leaseOwner);
             if (acquiredLock && !acquiredLock.isReleased()) {
                 try {
                     await acquiredLock.release();
@@ -542,6 +576,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
     private async abandonBusyReview(
         job: IWorkflowJob,
         error: Error & { target?: unknown; gate?: string },
+        leaseOwner: string,
     ): Promise<void> {
         this.logger.error({
             message: `Giving up on a code review command for job ${job.id} — the PR stayed busy`,
@@ -564,7 +599,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         // notice on the write is the same fence as everywhere else, applied to
         // the notification instead of to the status (#1830 review).
         const recorded = await this.handleFailure(job.id, error, {
-            ownedBy: this.instanceId,
+            ownedBy: leaseOwner,
             organizationId: this.organizationIdFor(job),
         });
 
@@ -575,7 +610,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 context: CodeReviewJobProcessorService.name,
                 metadata: {
                     jobId: job.id,
-                    instanceId: this.instanceId,
+                    instanceId: leaseOwner,
                     organizationId: this.organizationIdFor(job),
                 },
             });
@@ -720,6 +755,12 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         // to someone else, or that retry would be swallowed and the row would
         // look finished while the other worker is still reviewing (#1830
         // review).
+        // The router calls this from outside `process`, so the owner comes
+        // from the attempt that claimed the job. With none recorded, this call
+        // never held the lease: a fresh owner is used, which cannot match the
+        // row and leaves it to whoever holds it (#1902).
+        const leaseOwner =
+            this.attemptOwnerByJob.get(jobId) ?? this.ownerForAttempt();
         const stillOwned = await this.jobRepository.update(
             jobId,
             {
@@ -727,7 +768,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 completedAt: new Date(),
                 result: result,
             },
-            { leaseOwner: this.instanceId },
+            { leaseOwner },
         );
 
         if (stillOwned === false) {
@@ -737,7 +778,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 context: CodeReviewJobProcessorService.name,
                 metadata: {
                     jobId,
-                    instanceId: this.instanceId,
+                    instanceId: leaseOwner,
                 },
             });
         }
