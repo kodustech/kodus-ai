@@ -2,7 +2,7 @@
 
 > - **Answers:** When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?
 > - **Runs:** every engine PR on the scripted model (`evals/wiring-smoke.js`, one case); on demand with a real model.
-> - **Run it:** `node evals/review-rounds/run.js --model=deepseek-v4-flash --reps=3` · `node evals/review-rounds/run.js --model=eval-fake --case=R2,K1`
+> - **Run it:** `node evals/review-rounds/run.js --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=5` · `node evals/review-rounds/run.js --model=eval-fake --case=R2,K1`
 > - **Gate:** none yet (report-only). Floors per problem are set in the PR that fixes it, from two runs of the same commit.
 > - **Cost:** one review per selected case in `cases.js` and rep, plus one judge call per delivered finding and claim.
 
@@ -19,7 +19,10 @@ verifier, evidence gate) — or, for `agent: 'kody-rules'` cases, the production
 `KodyRulesAgentProvider` — → `classifySeverity` → `formatSuggestionContent` → the revision link
 (`engine/revision-link.ts`). Tools
 go through the production registry. Only `RemoteCommands` — the sandbox — is
-replaced. Modes, each a shape seen in production:
+replaced. The agents get what `build-orchestrator-input.ts` gives them in
+production: the PR's commits (`commits` in a case), and the history through
+`capDecisions` (most recent first, capped at `MAX_PR_DECISIONS`). Modes, each a
+shape seen in production:
 
 - `alive` answers from the case's repository;
 - `dead` throws what the E2B SDK throws once the sandbox is gone
@@ -73,6 +76,46 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | R13 | the open suggestion's code moved to another file unchanged | repeat → `not_deliver` |
 | R14 | the earlier comment was a declined Kody Rule; the bug finder sees the same problem | repeat → `not_deliver` |
 | K4 | the bug finder raised it earlier and it was declined; the developer touched that code without fixing it; the rule judge sees the same problem, plus a new site | repeat → `not_deliver`; new → `deliver` |
+| K5 | a rule comment stored `implemented` while the violation is still on a line the developer touched, plus a new site | repeat → `not_deliver`; new → `deliver` |
+| K6 | K5 with the comment stored `not_implemented` | same |
+| K7 | K5 with a production round's volume: 44 rules, 10 earlier comments, 7 commits | same |
+| K9 | K5 at the volume of the production DeepSeek reposts: 80 rules, each with the repository convention its `sourcePath` points at (~500K characters), 15 earlier comments | same |
+| K10 | K5 on a file new in the PR, so every round shows the whole file as added | same |
+| K12 | the developer answered with a fix that does not fix it (still UTC) and a comment claiming it does | same |
+| R15 | an earlier bug stored `implemented` because its line changed; the bug is still there | repeat → `not_deliver` |
+| R16 | an earlier fix undone by this diff | `deliver_linked` (one problem, one thread: #2097) |
+| R17 | R15 with 10 earlier comments and 7 commits, most answering review | repeat → `not_deliver` |
+
+K5–K12 and R15–R17 reproduce repost shapes from a production sample (500
+later-round comments, 2026-10-05→12, #2114) with invented code; the volumes are
+that sample's medians (`fixtures/prod-profile.js`,
+`fixtures/rule-conventions.js`). Each has a `-control` twin without the
+earlier comment: the problem must ship there, or the twin's absence means only
+that the agent never saw it. A repeat case counts only next to its control.
+
+### Production shapes (`prod-shapes/`)
+
+`prod-shapes/cases/` holds one case per repost found in that sample (42 of
+them; the two concurrent reviews and the one review whose history failed to
+load are out: one review per case cannot reproduce them), plus guards. A spec
+gives the files before and at the reviewed head, the comment already on the PR
+and the claims; `prod-shapes/build.js` derives the diff in the engine's format,
+a history of the production size (`'out-of-40'` puts the comment behind 45
+newer ones, which `capDecisions` drops), the rule set and commits, and the
+`-control` twin. `prod-shapes/check.js` (and `prod-shapes.spec.ts` in CI) refuse
+a spec whose claims fall outside the file or, for the rule judge, on lines the
+diff does not add. Ids are `P01`–`P42`; the guards (`P33`–`P42`) must be posted:
+the same rule at a new place, a fixed bug that came back, a bug the earlier fix
+caused.
+
+### Reasoning effort
+
+Production reviews run through the customer's BYOK model with the reasoning
+effort the customer configured; the eval's default route is the env/managed
+model at the family's default effort. `--byok-reasoning=<none|low|medium|high>`
+routes both agents through a BYOK slot with that effort, as production does.
+Repeat measurements use `--byok-reasoning=none`, the configuration under which
+the production reposts reproduce; a higher effort hides them.
 
 The U cases belong to #2040, which this branch does not fix: they stay red on
 purpose until that issue's design is decided.
@@ -99,7 +142,8 @@ One rate per problem, over every rep × claim with that expectation:
   real bugs. On the unfixed engine this is plain finder recall.
 
 `results/` keeps the runs referenced from PRs; the baseline on the unfixed
-engine is `results/baseline-main-*.json`.
+engine is `results/baseline-main-*.json`, and the production repost shapes'
+baseline is `results/2026-10-13/`.
 
 ## Known limits
 
@@ -113,8 +157,14 @@ engine is `results/baseline-main-*.json`.
 - The history shown to the review is the `MAX_PR_DECISIONS` most recent
   suggestions sent on the PR, across all files, each clipped to 600
   characters. A suggestion older than that window can be raised again.
+- Two reviews of the same PR running at once each load the history at their
+  start, so the second cannot see what the first posts. A single review per
+  case cannot reproduce that.
 - When the history cannot be loaded the review runs without it (fail open,
   as before), so that round can repeat an earlier suggestion.
+- On DeepSeek with reasoning off, the bug-finder repost shapes (P23–P32) do
+  not repost; in production those reposts came mostly from other models. They
+  need a tier-0 run on those models before they say anything about them.
 - `--rescore=<run.json>` re-applies the current expectations to a saved run
   without a model; use it when a design decision flips a `proposed` one.
 
