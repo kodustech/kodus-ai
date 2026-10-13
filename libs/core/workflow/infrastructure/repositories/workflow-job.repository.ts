@@ -16,6 +16,17 @@ import { IJobExecutionHistory } from '@libs/core/workflow/domain/interfaces/job-
 import { WorkflowJobModel } from './schemas/workflow-job.model';
 import { stripNulCharsWithReport } from './strip-nul';
 
+/**
+ * How long a PROCESSING row without a `leaseExpiresAt` still counts as live.
+ *
+ * Those rows predate the lease (#1830) or never wrote one; the reaper treats
+ * them as running until their `updatedAt` ages past this window
+ * (`DEFAULT_STALE_JOB_TIMEOUT_MINUTES`), and the `noLiveOwner` guard has to
+ * agree with it, or the guard is wider than the death it is looking for
+ * (#1902 review).
+ */
+const LEGACY_PROCESSING_STALE_MS = 180 * 60_000;
+
 @Injectable()
 export class WorkflowJobRepository implements IWorkflowJobRepository {
     private readonly logger = createLogger(WorkflowJobRepository.name);
@@ -245,11 +256,22 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                     .update(WorkflowJobModel)
                     .set(updateData)
                     .where('uuid = :uuid', { uuid: id })
+                    // A PROCESSING row with no lease is only dead once its own
+                    // `updatedAt` has aged past the window the reaper applies to
+                    // those legacy rows. Reading it as ownerless the moment it
+                    // appears is broader than the premise, and it is how a
+                    // second delivery could tear a live lease away (#1902
+                    // review).
                     .andWhere(
-                        '(status <> :processing OR "leaseExpiresAt" IS NULL OR "leaseExpiresAt" < :now)',
+                        '(status <> :processing' +
+                            ' OR ("leaseExpiresAt" IS NOT NULL AND "leaseExpiresAt" < :now)' +
+                            ' OR ("leaseExpiresAt" IS NULL AND "updatedAt" < :legacyCutoff))',
                         {
                             processing: JobStatus.PROCESSING,
                             now: new Date(),
+                            legacyCutoff: new Date(
+                                Date.now() - LEGACY_PROCESSING_STALE_MS,
+                            ),
                         },
                     );
                 const result = await qb.execute();

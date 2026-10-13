@@ -260,9 +260,16 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
         expect(predicate).toContain('"leaseExpiresAt"');
         expect(predicate).not.toMatch(/[^"]leaseExpiresAt/);
         expect(predicate).toContain('status <> :processing');
+        // A PROCESSING row with no lease is only ownerless once it has aged
+        // past the reaper's window, so the predicate carries a staleness cutoff
+        // for those legacy rows too (#1902 review).
+        expect(predicate).toContain(
+            '"leaseExpiresAt" IS NULL AND "updatedAt" < :legacyCutoff',
+        );
         expect(qb.andWhere.mock.calls[0][1]).toEqual({
             processing: JobStatus.PROCESSING,
             now: expect.any(Date),
+            legacyCutoff: expect.any(Date),
         });
         // No row matched, i.e. a live worker owns the job.
         expect(landed).toBe(false);

@@ -289,16 +289,40 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 acquiredLock = admission.lock;
             }
 
-            await this.jobRepository.update(jobId, {
-                status: JobStatus.PROCESSING,
-                startedAt: new Date(),
-                // Acquire the job-ownership lease so the stale-job reaper can
-                // tell an actively-processing job (renewed lease) from a dead
-                // worker (expired lease → reclaimed in ~90s, #1830).
-                leaseOwner,
-                leaseExpiresAt: new Date(Date.now() + JOB_LEASE_TTL_MS),
-                metadata: this.removeByokConcurrencyGateMetadata(job.metadata),
-            });
+            // Guarded like every other ownership write in this class: a second
+            // delivery of the same jobId must not overwrite a row whose lease
+            // is still live, which strips the running worker of its lease while
+            // the use-case it already started keeps going - the double
+            // execution this fence exists to prevent (#1902 review).
+            const claimed = await this.jobRepository.update(
+                jobId,
+                {
+                    status: JobStatus.PROCESSING,
+                    startedAt: new Date(),
+                    // Acquire the job-ownership lease so the stale-job reaper
+                    // can tell an actively-processing job (renewed lease) from
+                    // a dead worker (expired lease → reclaimed in ~90s, #1830).
+                    leaseOwner,
+                    leaseExpiresAt: new Date(Date.now() + JOB_LEASE_TTL_MS),
+                    metadata: this.removeByokConcurrencyGateMetadata(
+                        job.metadata,
+                    ),
+                },
+                { noLiveOwner: true },
+            );
+
+            if (claimed === false) {
+                // A live lease owner is already running this job. Acking this
+                // delivery is the honest outcome: there is nothing left to do
+                // and the owner will complete it (#1902 review).
+                this.logger.warn({
+                    message:
+                        'Job already has a live lease owner — leaving it to the worker running it',
+                    context: CodeReviewJobProcessorService.name,
+                    metadata: { jobId },
+                });
+                return;
+            }
 
             // Past this line the row is ours: every failure from here on has a
             // lease to lose, which is what the guarded failure write assumes.

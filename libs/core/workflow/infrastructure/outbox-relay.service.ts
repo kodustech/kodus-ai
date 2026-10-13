@@ -709,7 +709,17 @@ export class OutboxRelayService
                         failResult.reason instanceof Error
                             ? failResult.reason
                             : new Error(String(failResult.reason)),
-                    metadata: { uuids: deadUuids },
+                    metadata: {
+                        uuids: deadUuids,
+                        // Tenant-scoped rows: without the organization ids a
+                        // batch failure cannot be correlated to a customer in
+                        // the log system (#1902 review).
+                        organizationIds: [
+                            ...new Set(
+                                dead.map((job) => job.organizationId),
+                            ),
+                        ],
+                    },
                 });
             }
 
