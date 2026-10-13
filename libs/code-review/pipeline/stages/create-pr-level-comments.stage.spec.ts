@@ -144,6 +144,7 @@ describe('CreatePrLevelCommentsStage — input contract', () => {
         expect(pullRequestsService.addPrLevelSuggestions).toHaveBeenCalledWith(
             42,
             'r1',
+            'repo',
             [{ id: 'x' }],
             ORG,
         );
