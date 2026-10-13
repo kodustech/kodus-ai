@@ -1,0 +1,693 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "high",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "b58687f24e5d36cf5f30a62a77621c668dfa73f3",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-13T23:18:59.487Z",
+  "updatedAt": "2026-10-13T23:22:16.854Z",
+  "complete": true,
+  "selectedCases": [
+    "P13-rule-log-operation-still-missing",
+    "P13-rule-log-operation-still-missing-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P13-rule-log-operation-still-missing · log-operation-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P13-rule-log-operation-still-missing · success-log-operation-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P13-rule-log-operation-still-missing-control · log-operation-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P13-rule-log-operation-still-missing-control · success-log-operation-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18027,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "The new `notifySettled` log call emits `payout_id` and `bank_ref` but no `operation` field, so it cannot be grouped with the rest of the payout settle flow in the log dashboards. Add `slog.String(\"operation\", \"payout.settle\")` as the first attribute of the `InfoContext` call, using the same operation name as the settle flow."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18329,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an `operation` attribute, the `payout settled` event logged by `notifySettled` cannot be grouped with the rest of the payout flow in log dashboards, so per-payout settlement traces will be incomplete and the `Log calls name the operation` rule is violated. Add `slog.String(\"operation\", \"payout.settle\")` as the first attribute of the `InfoContext` call, using the same operation name as the settle flow so this line is filterable alongside the other payout logs."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13516,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an operation attribute, this settlement line cannot be grouped with the rest of the payout flow in the log dashboards, so operators cannot filter the settle pipeline by operation. Add `slog.String(\"operation\", \"payout.settle\")` as the first attribute of the `InfoContext` call in `notifySettled`, matching the operation name used by the settle flow."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14801,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an operation field, the `InfoContext` call in `notifySettled` can't be grouped in the log dashboards or correlated with the rest of the payout flow. Add `slog.String(\"operation\", \"payout.notify_settled\")` as the first attribute of that call, using the same operation name as the settle flow if the notification is considered part of it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19278,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an `operation` field, the `\"payout settled\"` log call in `notifySettled` cannot be grouped with the rest of the payout flow in the log dashboards. Add `slog.String(\"operation\", \"payout.notify_settled\")` to the `InfoContext` call to satisfy the rule that log calls name the operation, matching naming used by other payout logs such as `\"payout.settle\"`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P13-rule-log-operation-still-missing-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 33741,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/settle.go",
+          "line": 28,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "The `amount_cents` attribute is being added to an `ErrorContext(ctx, \"bank transfer failed\", ...)` call that has no `operation` field, so rule [1] is violated and this error log cannot be grouped in the log dashboards. Add `slog.String(\"operation\", \"payout.settle\")` to that call, matching the operation name used by the `InfoContext` call at the top of `Settle`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "The structured `InfoContext` call in `notifySettled` emits no `operation` attribute, so rule 1 is violated and this log line is ungroupable in the log dashboards. Add `slog.String(\"operation\", \"payout.settle\")` as the first attribute of that call, matching the operation this method performs."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P13-rule-log-operation-still-missing-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 21338,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/settle.go",
+          "line": 28,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an `operation` field on this `ErrorContext` \"bank transfer failed\" call, the log dashboards cannot group it, unlike the `InfoContext` call above it. Add `slog.String(\"operation\", \"payout.settle\")` alongside the new `amount_cents` field so every structured log call names the operation."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an `operation` field, the `notifySettled` log entry cannot be grouped by operation in the log dashboards. Add `slog.String(\"operation\", \"payout.settle\")` as the first attribute of the `InfoContext` call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P13-rule-log-operation-still-missing-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 20369,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/settle.go",
+          "line": 28,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "The `ErrorContext` call at lines 26-30 logs only `payout_id`, `amount_cents` and `error`, so this bank-transfer failure cannot be grouped with the rest of the payout settlement logs in dashboards even though the success log at line 17 carries an `operation`. Add `slog.String(\"operation\", \"payout.settle\")` to the same log call, matching the value used by the success log."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "The `InfoContext` call in `notifySettled` emits `payout_id` and `bank_ref` but no `operation` field, so these records cannot be grouped in the log dashboards as the \"Log calls name the operation\" rule requires. Add `slog.String(\"operation\", \"payout.settle\")` as the first attribute of the call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P13-rule-log-operation-still-missing-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 21082,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/settle.go",
+          "line": 28,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an `operation` field on this `ErrorContext` call, the entry logs only `payout_id`, `amount_cents`, and `error` and cannot be grouped with the rest of the `payout.settle` logs in dashboards. Add `slog.String(\"operation\", \"payout.settle\")` to the call so the failure is attributable to the settle operation."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "The new structured log call in `notifySettled` lacks an `operation` field, so these events cannot be grouped in the log dashboards as required. Add `slog.String(\"operation\", \"payout.settle\")` as the first attribute of the `InfoContext` call to name the operation in progress."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P13-rule-log-operation-still-missing-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 15721,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/settle.go",
+          "line": 28,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Failures from a failed bank transfer cannot be grouped with the rest of the `payout.settle` logs in the dashboards because this error log call carries no `operation` field, unlike the success log at the top of `Settle`. Add `slog.String(\"operation\", \"payout.settle\")` alongside the `amount_cents` attribute."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Entries emitted by `notifySettled` cannot be grouped in the log dashboards because the structured log call omits the required `operation` field. Add `slog.String(\"operation\", \"payout.settle\")` alongside the existing `payout_id` and `bank_ref` attributes."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

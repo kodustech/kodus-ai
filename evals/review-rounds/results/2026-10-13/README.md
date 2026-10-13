@@ -38,6 +38,22 @@ the problem at least 4 times in 5.
 
 ## Reasoning high
 
-The same rule cases with reasoning `high`: see `byok-high/` and the PR. On
-the date-rule cases K1, K4–K7, K10 and K12 there were 0 reposts, with the
-controls posting 5 in 5.
+These are the same rule cases through the same slot with reasoning `high`, in
+`byok-high/`. Every control posted its problem 5 times in 5.
+
+- **The earlier comment is in the history (P01–P17):** no repost on any case
+  measured, 0 in 5. P11 had 2 measured runs, both with no repost.
+  - P15 was not measured. With its 40-entry history the rule judge timed out on
+    all 5 runs (`KODY_RULES_PARTIAL`), while the control, which has no
+    history, answered on all 5.
+  - The date-rule cases K1, K4–K7, K10 and K12 also posted nothing again.
+- **The earlier comment is beyond the 40 most recent (P18–P21):** the repost
+  still happens 5 times in 5, because the comment never reaches the prompt.
+- **Ping-pong between two earlier comments (P22):** the repost still happens 5
+  times in 5.
+- **Rule guards (P33, P34, P40, P42):** all posted 5 times in 5. P40 was
+  posted 3 times in 5 with reasoning off.
+
+Unmeasured runs are kept in the files, as `error` rows. `p13.json` dropped
+P13, which was re-run after its spec was fixed (`re-p13.json`), and P15 and
+P16, which were re-run after shard timeouts (`re-p15.json`, `re-p16.json`).
