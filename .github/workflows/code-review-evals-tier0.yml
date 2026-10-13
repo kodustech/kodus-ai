@@ -14,7 +14,7 @@ name: "Evals: tier-0 smoke (Friday release)"
 #
 # Models: tier0() in evals/shared/tier0-models.js.
 # Secrets (repo-level): BYOK_OPENAI_API_KEY, BYOK_ANTHROPIC_API_KEY,
-# BYOK_GOOGLE_API_KEY, BYOK_MOONSHOT_API_KEY, BYOK_ZHIPU_API_KEY,
+# BYOK_GOOGLE_API_KEY, BYOK_MOONSHOT_API_KEY, BYOK_ZHIPU_API_KEY, BYOK_FIREWORKS_API_KEY,
 # DISCORD_WEBHOOK_TESTS (falls back to DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK).
 # BYOK_ANTHROPIC_API_KEY answered 401 until it was rotated on 2026-09-17; the
 # smoke reported claude-sonnet-4-6 as infra the whole time, which is it working.
@@ -32,7 +32,7 @@ on:
     workflow_dispatch:
         inputs:
             only_model:
-                description: "One tier-0 model id (e.g. gpt-5.4); empty = all tier-0"
+                description: "One tier-0 model id (e.g. gpt-6-sol); empty = all tier-0"
                 required: false
                 default: ""
                 type: string
@@ -96,6 +96,7 @@ jobs:
                   BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
                   BYOK_MOONSHOT_API_KEY: ${{ secrets.BYOK_MOONSHOT_API_KEY }}
                   BYOK_ZHIPU_API_KEY: ${{ secrets.BYOK_ZHIPU_API_KEY }}
+                  BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
               run: node evals/tier0-smoke.js --model="${{ matrix.model }}"
             - name: Tier-0 result (for the quality signal)
               id: t0
