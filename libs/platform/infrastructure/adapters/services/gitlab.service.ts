@@ -1698,10 +1698,13 @@ export class GitlabService implements Omit<
                     hasRepositories: hasRepositories,
                     status: gitlabRepositories?.installationStatus,
                     host: gitlabOrg?.authIntegration?.authDetails?.host ?? '',
-                    // The settings card hides the token action when this is
-                    // OAuth: saving through that modal would swap the
-                    // connection to token auth.
-                    authMode,
+                    // What the settings card reads: the STORED mode, not the
+                    // default applied above. A connection from before the
+                    // field existed authenticates with a token, and reporting
+                    // it as OAuth would hide its rotation and leave only the
+                    // destructive reset.
+                    authMode:
+                        gitlabOrg?.authIntegration?.authDetails?.authMode,
                 },
                 category: IntegrationCategory.CODE_MANAGEMENT,
             };

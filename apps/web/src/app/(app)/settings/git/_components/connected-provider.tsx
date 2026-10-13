@@ -8,6 +8,7 @@ import { Action, ResourceType } from "@services/permissions/types";
 import type { getConnections } from "@services/setup/fetch";
 import { KeyRoundIcon, RefreshCcwIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+import { AuthMode } from "src/core/types";
 import type { AwaitedReturnType } from "src/core/types";
 
 import { CODE_MANAGEMENT_PLATFORMS } from "../_constants";

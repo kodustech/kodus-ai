@@ -109,13 +109,24 @@ export const UpdateTokenIntegrationModal = ({
             if (status && status !== "SUCCESS") {
                 magicModal.unlock();
 
+                // Name only the cause the server reported: an unexpected
+                // status must not blame the account on its own.
+                let description: string;
+                if (status === "NO_REPOSITORIES") {
+                    description =
+                        "The token validated but cannot see any repository: check its scope and permissions.";
+                } else if (status === "NO_ORGANIZATION") {
+                    description =
+                        "The token validated but the account is not usable as a connection: personal organizations are not supported.";
+                } else {
+                    description =
+                        "The token validated but the account is not usable as a connection.";
+                }
+
                 toast({
                     variant: "danger",
                     title: `${platformName} token not applied`,
-                    description:
-                        status === "NO_REPOSITORIES"
-                            ? "The token validated but cannot see any repository: check its scope and permissions."
-                            : "The token validated but the account is not usable as a connection: personal organizations are not supported.",
+                    description,
                 });
                 return;
             }
