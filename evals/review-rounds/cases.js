@@ -1078,6 +1078,8 @@ const cases = [
         claims: [localDayClaim('rangeLabel-start-control', 'deliver'), dayKeyNewSiteClaim],
     },
     // Same, entry stored not_implemented (the developer did not apply it).
+    // Its control is K5-control: the same files, and a control carries no
+    // earlier comment, so the stored status cannot change it.
     {
         id: 'K6-rule-repost-not-implemented', family: 'rounds', agent: 'kody-rules', repo: rangeRepo, changedFiles: rangeDiff, sandbox: 'alive',
         kodyRules: [localDayRule],

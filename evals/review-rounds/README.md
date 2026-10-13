@@ -90,8 +90,10 @@ K5–K12 and R15–R17 reproduce repost shapes from a production sample (500
 later-round comments, 2026-10-05→12, #2114) with invented code; the volumes are
 that sample's medians (`fixtures/prod-profile.js`,
 `fixtures/rule-conventions.js`). Each has a `-control` twin without the
-earlier comment: the problem must ship there, or the twin's absence means only
-that the agent never saw it. A repeat case counts only next to its control.
+earlier comment (K6 shares K5's: same files, and a twin has no earlier comment
+whose status could differ): the problem must ship there, or the twin's absence
+means only that the agent never saw it. A repeat case counts only next to its
+control.
 
 ### Production shapes (`prod-shapes/`)
 
