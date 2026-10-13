@@ -4,7 +4,7 @@ import { userGetCurrent } from '@llamaduck/forgejo-ts';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { BitbucketDataCenterService } from './bitbucket/bitbucket-data-center.service';
 import { ForgejoService } from './forgejo.service';
-import { GitlabService } from './gitlab.service';
+import { GitlabService, deriveGitlabAuthMode } from './gitlab.service';
 
 jest.mock('@libs/mcp-server/services/mcp-manager.service', () => ({
     MCPManagerService: jest.fn(),
@@ -118,5 +118,34 @@ describe('self-hosted connection status', () => {
             host: 'https://forgejo.example.com',
         });
         expect(status.config).not.toHaveProperty('accessToken');
+    });
+});
+
+describe('gitlab auth mode derivation (#1926 review)', () => {
+    it('reads a record that predates the field from its credentials', () => {
+        // A PAT never carries a refresh token, an OAuth record always does.
+        expect(deriveGitlabAuthMode({ accessToken: 'raw' })).toBe(
+            AuthMode.TOKEN,
+        );
+        expect(
+            deriveGitlabAuthMode({ accessToken: 'raw', refreshToken: 'r' }),
+        ).toBe(AuthMode.OAUTH);
+    });
+
+    it('keeps a stored mode over the shape of the credentials', () => {
+        expect(
+            deriveGitlabAuthMode({ authMode: AuthMode.OAUTH, accessToken: 'x' }),
+        ).toBe(AuthMode.OAUTH);
+        expect(
+            deriveGitlabAuthMode({
+                authMode: AuthMode.TOKEN,
+                accessToken: 'x',
+                refreshToken: 'r',
+            }),
+        ).toBe(AuthMode.TOKEN);
+    });
+
+    it('reads a record that is not there as a token connection', () => {
+        expect(deriveGitlabAuthMode(undefined)).toBe(AuthMode.TOKEN);
     });
 });
