@@ -34,17 +34,22 @@ export class GetWebhookCreationFailuresUseCase implements IUseCase {
     public async execute(params: {
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<{ failures: Record<string, WebhookCreationFailure> }> {
-        try {
-            const { organizationAndTeamData } = params ?? {};
+        const { organizationAndTeamData } = params ?? {};
 
-            if (
-                !organizationAndTeamData?.organizationId ||
-                !organizationAndTeamData?.teamId
-            ) {
-                throw new BadRequestException(
-                    'organizationId and teamId are required.',
-                );
-            }
+        // Validated BEFORE the try: caught inside it, this rejection was folded
+        // into an empty result, so a caller that forgot the tenant ids read "no
+        // failures" instead of being told its request was invalid (#2003
+        // review).
+        if (
+            !organizationAndTeamData?.organizationId ||
+            !organizationAndTeamData?.teamId
+        ) {
+            throw new BadRequestException(
+                'organizationId and teamId are required.',
+            );
+        }
+
+        try {
 
             const stored =
                 await this.integrationConfigService.findIntegrationConfigFormatted<{
