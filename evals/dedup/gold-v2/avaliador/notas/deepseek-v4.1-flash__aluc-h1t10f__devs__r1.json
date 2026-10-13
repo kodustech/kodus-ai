@@ -1,0 +1,4112 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "atribuidor": "deepseek-v4.1-flash@together",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 60,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Case-sensitive identity and dedup checks are inconsistent with the lowercased blacklist right below; worth normalizing toLowercase()."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Stored email casing almost always matches the session email, so this is a narrow edge case we can log for later."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Real inconsistency that could wrongly FORBID an attendee, but it is rare enough to fix in a follow-up."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Merge it; email casing mismatches are unlikely in practice."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Authorization should not depend on casing; I'd normalize before comparing."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cheap to normalize and improves correctness, though impact is small."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "This is a theoretical concern; I'd not block the PR over it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The dedup mismatch could add a duplicate attendee; worth fixing but not blocking."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Most databases store emails lowercase anyway; low priority."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Consistent normalization is the right call, fixable after merge."
+      }
+     ]
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 50,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Every other string in this component uses t(), so the tooltip should too."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A tooltip is minor; I would not hold the PR for it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "We enforce i18n by convention, so I'd add a translation key."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Nice-to-have; not worth a blocking comment."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Bypassing t() breaks localisation, easy fix."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Read past it — it's just an English tooltip."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd fix for consistency with the surrounding t() usage."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Merge and open a trivial follow-up."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not blocking; the string is only shown on hover."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Translation coverage matters to us; use a key."
+      }
+     ]
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 30,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cosmetic dead-code fallback; the error still surfaces, so not blocking."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Showing the code prefix is acceptable, merge as is."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The unreachable fallback and raw code prefix are sloppy but minor; fix post-merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd read past this; the error path works."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth blocking over the exact wording of an error toast."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Users shouldn't see a raw code prefix; worth a quick cleanup."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The message is still shown; the fallback being dead is harmless."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor; can be tidied later."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd fix the fallback so the intended translated message can appear."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Merge; the glaring UX flaw is small."
+      }
+     ]
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 60,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Server must not trust client uniqueness; duplicate input would create duplicate attendee rows."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "We should dedup server-side, but I'd not block if it's an internal-only dialog."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The only caller validates uniqueness client-side, so follow-up is fine."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Any client can call the mutation, so relying on the UI is unsafe."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Edge case for direct API calls; merge and note it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Cheap to dedup with a Set; worth doing."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Duplicate attendee rows corrupt state; add server-side dedup."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The client guards it; I'd allow a follow-up."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Defensive server validation is a good call here."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Low likelihood; not worth blocking this PR."
+      }
+     ]
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Concurrent double-submit is unlikely for this dialog; follow-up is acceptable."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A transaction or unique constraint is the right fix, but not strictly blocking."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Race is theoretical; I'd merge and note it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "We don't typically guard against this here; read past it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Wrapping the insert in a transaction is cheap insurance."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Low probability, can wait."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A unique constraint on (bookingId,email) would be the robust fix."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "This pattern is common in the codebase; not blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Worth a follow-up ticket rather than blocking."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not realistic enough to hold the merge."
+      }
+     ]
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 80,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "&& instead of || means team admins are wrongly forbidden; clear bug that must be fixed."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The variable name and intent contradict the operator; fix to || before merge."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This breaks authorization for admins, a real functional regression."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Obvious logic error; I'd block the PR over it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd want confirmation of isTeamAdmin semantics, but likely fix anyway."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Only OWNERs pass today; admins hit FORBIDDEN — must correct."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Clear operator bug, high impact on team admins."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Definitely fix; the combined check is meaningless as written."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd flag it but maybe confirm before calling it a bug."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Must use || so admins and owners both pass."
+      }
+     ]
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 60,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The blacklist is lowercased on one side only; a differently-cased email bypasses it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Real bypass but easy to normalize; I'd fix, maybe after merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Blacklist emails are usually entered lowercase; follow-up."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Security filter must normalize input casing; fix before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Edge case; not worth blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Normalizing toLowerCase() is trivial and correct."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "A bypass of a guest blacklist is worth fixing now."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Niche config; I'd merge and note."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Consistent normalization avoids a silent bypass."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Low real-world likelihood; can wait."
+      }
+     ]
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 60,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Passing raw guests misclassifies who is actually new, sending wrong emails — pass uniqueGuests."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Real mismatch between the handler and the email manager's expectation; fix it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Only affects which template an already-existing attendee gets; minor."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Emails should reflect actually-added guests; worth correcting."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Subtle, low user impact; follow-up."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The newGuests set is meant to be the added guests; passing raw input is wrong."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd need to confirm the email template intent before blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Inconsistent filtering; use uniqueGuests for accuracy."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Merge and open a follow-up for the email selection logic."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Small correctness improvement; fix after merge is fine."
+      }
+     ]
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The retryCount arm matches only a handful of rows, so the planner cost is negligible and I would not block the PR on it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Other crons already scan this table without a matching index, so this change does not make it meaningfully worse."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Adding retryCount to the WHERE with no index forces a seq scan on every cron tick, and the index is a one-line migration add."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Postgres can still BitmapOr the SMS/dates arm; the unindexed arm is rare enough to be a follow-up at most."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "As the DB owner I would want the retryCount index added in this same migration before the column sees production traffic."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Table size does not justify another index yet, and I would rather wait for evidence than speculate."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The claim is plausible but unmeasured; I would merge and revisit if query plans show a problem."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "A two-way OR over an unindexed column is a known scan trap and the fix is trivial, so I would include it now."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "This is a speculative performance note, not a correctness defect, and I do not add indexes on speculation."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would rather ship the feature and add the index later if profiling shows it matters."
+      }
+     ]
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 10,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Two three-line calls are readable as-is and do not warrant a helper on their own."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would fold the increment into a small helper to keep the retry logic in one place, but it is not blocking."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Duplication this small is not worth the indirection of a shared function."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The two sites are obviously parallel; a reader sees the intent immediately."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Premature abstraction; leave it duplicated until a third caller appears."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Pure style, and the repo has plenty of this shape already."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No behavioral difference, so I would not spend review cycles on it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor DRY nit; I would mention it at most, not change code before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth the churn; the duplication is harmless."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I read past this one; both branches are clear."
+      }
+     ]
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Reading retryCount once and writing N+1 loses increments under overlap, and `increment: 1` is the idiomatic one-line fix."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The whole point of retryCount is accurate accounting, so I would use the atomic Prisma increment here."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The cron runs sequentially in our infra, so simultaneous processing of the same reminder is not realistic today."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Atomic increments cost nothing and remove the race entirely; no reason to keep the read-modify-write."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Retries undercounted means the `retryCount > 1` cleanup may never fire; use `increment: 1`."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Given the reminder is selected per-run and the run is serialized, I would accept the simpler write form."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Prisma provides the atomic op for exactly this and I would insist on it for a counter column."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The race requires overlapping crons that we do not schedule, so I would leave it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Theoretically correct but practically unreachable; I would not block the PR."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Valid concern, but I would take it as a follow-up rather than a merge blocker."
+      }
+     ]
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 60,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "A throwing update inside the catch aborts the loop and skips every remaining reminder, so it must be guarded."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "P2025 or a transient DB error here should not fail the whole cron run; wrap it or use updateMany."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Previously a bad reminder was isolated by the console.log; now one failure can kill the batch, so I would protect it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The catch already swallows scheduling errors; a rare update failure propagating is unlikely enough to defer."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Adding a second failure point in the error path without its own handling is a straightforward robustness bug."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I would note it, but the cron is retried and idempotent enough that I would not block merge."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Best-effort bookkeeping should never take down the batch; I would wrap the update in try/catch."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Real but edge-case; I would take it as a fast follow-up after merge."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Cron reliability matters and one poison reminder skipping the rest is a genuine regression."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I see the risk but the outer handler already fails loudly, so a follow-up pointer is enough."
+      }
+     ]
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 70,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The delete is no longer SMS-scoped, so any non-SMS row with retryCount > 1 would be silently deleted by the SMS cron."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The comment says SMS reminders but the second OR arm is method-agnostic; keep method at the top level."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Unscoped deletes are a data-loss hazard and I would fix the predicate before merging."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Only this SMS path increments retryCount, so no other method can currently produce a matching row."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Relying on 'no other method sets retryCount today' is fragile; scope the delete to SMS now."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The intent is clearly SMS-only and the query does not express that, so I would correct it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Since only SMS rows can have retryCount > 1, the practical behavior is unchanged; I would leave it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "A future email/WhatsApp retry would be silently purged by the SMS job; that is worth fixing now."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Genuine scoping smell, but the invariant holds today so I would raise it as a follow-up."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "As the workflows owner I want deletes scoped exactly as the comment says, so method stays top-level."
+      }
+     ]
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The whole point of the new refresh block is defeated if the Connection is built with the old token; pass the refreshed access_token."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "jsforce auto-refreshes from the refresh_token, so the stale access token still works."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "DB and connection state diverge; better to use the token we just fetched and stored."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Use accessTokenParsed.data.access_token in the Connection to avoid a second refresh round trip."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Behavior is behaviorally correct; this is a cleanup that can be a follow-up."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Functionally nothing breaks, jsforce handles the refresh internally."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Either use the freshly refreshed token or the refresh block is dead weight."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Clear inconsistency between persisted token and the token used for the request."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Wasteful but not blocking; a follow-up ticket is fine."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Should pass the refreshed token into the Connection."
+      }
+     ]
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 30,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Timing recovery of a secret over the network on a JS string compare is impractical."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "timingSafeEqual is a cheap defensive change, worth doing for a secret comparison."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Theoretical attack, not reliably exploitable here; skip."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "High-entropy secret makes iterative timing recovery unrealistic."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doubles as hygiene, would swap in a constant-time compare."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Overblown for a self-hosted webhook; not changing."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not a real recovery vector in practice."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Secret compromise would let anyone forge credential writes; fix before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not block the merge over this."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Matches existing conventions elsewhere in the repo; leave it."
+      }
+     ]
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Pure documentation nit, not worth touching before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "JSDoc typo, cosmetic only."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Docs don't affect behavior; ignore."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Trivial and non-blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Quick one-line doc fix, would correct the misleading @param."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth a comment."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cosmetic, skip."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doc-only, can wait indefinitely."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No behavior impact."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Trivial nit."
+      }
+     ]
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 40,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Pass credential.userId like every other app does in the sync path."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Only hits self-hosters with credential sharing on; can be a follow-up."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Clear argument mismatch that syncs the wrong user."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Unsure zoho-bigin is even wired into sharing yet; would verify first."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Sends credential id as calcomUserId, so Bigin sync targets the wrong user."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Self-host-only edge case, not blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Fix the third argument to credential.userId."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Opt-in feature, defer."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not block merge over a single app's sync arg."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Consistency nit for a niche path."
+      }
+     ]
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 80,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Storing the safeParse wrapper breaks the schema on next load; Google Calendar would fail."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Must store parsed.data, not the {success,data} object."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Credential key no longer matches googleCredentialSchema, definitely fix."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This is a functional regression that breaks the integration."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Would verify whether the schema strips unknown keys before deciding."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Clear type/shape bug, fix before merge."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Persisted key fails schema parse on reload."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Should be accessTokenParsed.data, not the parse result."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Might be moot if the schema passes data through; would test first."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Breaks Google Calendar credentials, must fix."
+      }
+     ]
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 60,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": false,
+       "justify": "Callers read .data/expiresIn; a raw Response yields undefined."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The sharing path is broken; parse the response before returning."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Feature is opt-in and half-built; track as a follow-up."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": false,
+       "justify": "Return type is inconsistent; must match what callers expect."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Callers cast loosely anyway; low practical impact."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Inconsistent return between branches is a real defect."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Would merge and open a follow-up for the sync path."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Should parse the token response before handing it back."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": false,
+       "justify": "Same return contract is violated in the sharing branch."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Opt-in path, not blocking this PR."
+      }
+     ]
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 50,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The rewritten test is named 'should combine' yet a broken AND yields the same single row, so the combination is untested and misleading."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Real gap, but I'd add a second non-matching booking in a follow-up rather than block this port."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The test still exercises the new raw-SQL path and passes; the fixture limitation is minor."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "An extra booking matching only auth or only the filter would make the assertion actually discriminate."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Testing every combination branch is scope creep for a mechanical migration PR."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The auth+filter combination is the core boundary; a test that can't catch its regression is worth fixing now."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "This is ported existing test data; strengthening it is a nice-to-have, not required here."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I agree the assertion is weak but it only bites on future edits, so it can be a fast follow."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Passes and covers the happy path; I wouldn't dig into what it can't fail on."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would merge; the test data change is a refinement, not a correctness issue."
+      }
+     ]
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "getAuthorizationConditions is typed Promise<Prisma.Sql> and always returns NOTHING_CONDITION, so authConditions is never falsy and this branch is unreachable."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The non-nullable return type makes the else-if dead code, so no authorization bypass can occur."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Even if dead today, I'd guard the fallback so an auth-less WHERE can never leak; defensive but cheap."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The claim doesn't hold: buildAuthorizationConditions never returns null, so filter-only is never reached."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Tracing the code, authConditions is always a Sql object; the described bypass is impossible."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Would delete or harden the unreachable branch for clarity, not because it's an active defect."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Unreachable given current types; nothing to fix before merging."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads past it; the invariant is enforced by the return type."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Purely theoretical given the code as written."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No real bypass; would merge as is."
+      }
+     ]
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 90,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The enable actually succeeded server-side, so dropping onEnable() means ESC/overlay dismissal leaves the security page showing 2FA as off — a visible state bug worth fixing before merge."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "State desync between backend and the section toggle is exactly the kind of thing our settings page regressions come from; fix it now."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "onEnable() should fire once the server confirms enabling, independent of which button closes the dialog."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Moving the success callback into the close button is fragile; any non-button dismissal skips it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "I'd either call onEnable() in handleEnable or move the refresh into onOpenChange so ESC is covered."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Silent stale UI on a security setting is bad; this needs to refresh regardless of dismissal path."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Simple guard: keep onEnable() in the 200 branch; the extra DisplayBackupCodes step shouldn't own the callback."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Real issue, but I'd accept it as a follow-up if the main flow works — still lean to fixing."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Dismissing with ESC is common; users would think 2FA stayed off while it's on."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The section may re-fetch on open anyway; I'd verify before changing, so not blocking."
+      }
+     ]
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 90,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This lets a request with a valid backup code and any garbage totpCode skip both password and TOTP checks — a genuine auth bypass, fix before merge."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The password gate on !credentials.totpCode plus the new backup branch creates a bypass; gate the backup branch on the same password-verified condition."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Backup codes are a second factor, not a password replacement; supplying totpCode to dodge password verification must not work."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Security-critical path; the branch ordering clearly allows skipping password verification and none of us would merge that."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "I'd restructure so password is required whenever 2FA is on, regardless of which factor is supplied."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Auth bypass through a client-controlled field is a hard no; fix the gating now."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Even if exploitation needs a backup code, losing the password check is unacceptable and trivial to close."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This is the kind of thing our security review flags immediately; the password check must not be conditional on totpCode."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Clear logic hole; verify password whenever 2FA is enabled and a factor is provided."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd want to trace the full authorize flow before changing, but I doubt it's actually reachable — lean toward leaving."
+      }
+     ]
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Pure naming; the import alias already disambiguates and nothing breaks — not worth blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd rename it to BackupCode for clarity since the mismatch will confuse the next reader."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cosmetic; fine to merge as-is, maybe a nit in review."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Copy-paste name, harmless; I wouldn't spend a review cycle on it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Names don't affect behavior; leave for a cleanup pass."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cheap fix, improves readability; I'd mention it but not hold the merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth it — aliasing at import sites is enough."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Trivial style; merge and move on."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I read past this; the component works correctly."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Naming nit only, no functional consequence."
+      }
+     ]
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The test claims to cover copy but the toast fires unconditionally, so it can't detect breakage — worth tightening."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "It's a best-effort e2e; the TODO acknowledges it; I'd leave it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A test that passes with the feature removed is worse than no assertion; make it check content."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Clipboard assertions are flaky cross-browser; not worth the maintenance now."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The download test is the meaningful one; copy coverage can wait."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Assert the actual effect or drop the misleading step; I'd push for a real check."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Marginal; the toast at least confirms the click wired up."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd fix it to match its name, but it's not merge-blocking."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Test-only nit; the FIXME already flags follow-ups."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Low value versus flakiness risk; leave as-is."
+      }
+     ]
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 70,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "expect(promise).toBeTruthy() is always true, so the assertion is dead — the PR's own FIXME admits it; fix to toBeChecked()."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A broken assertion in a 2FA test is a real gap; I'd correct it, though not necessarily block."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Missing await on isChecked makes the check vacuous; easy and worth doing now."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Yes, it should be awaited, but the second test already covers the checked state."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Tests that can never fail erode trust; I'd fix it before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The FIXME documents it; accept as a known follow-up."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd change it to the locator-based matcher since the PR already knows it's wrong."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Test-only; the neighboring test validates the same thing properly."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Cheap correction that makes the test meaningful."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not blocking given the second test covers the behavior."
+      }
+     ]
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The single-use guarantee breaks under concurrent requests; I'd make the consumption atomic, but it's a follow-up."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Race needs two simultaneous logins with the same code; rate limiting makes it impractical now."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "True in theory, but the window is tiny and we don't currently do CAS anywhere; accept the risk."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A read-modify-write on a security credential is worth a transaction; I'd fix it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Edge case; the code is deleted on reuse eventually and it's not worth complicating the flow now."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Correct observation about the invariant; I'd want at least a TODO and probably a CAS."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Theoretical concurrency; other endpoints have the same pattern, so not PR-blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Single-use is the whole point of backup codes; I'd tighten it, though not urgently."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Realistically unreachable given login rate limits; leave it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd note it but merge; the atomic fix touches auth broadly and deserves its own PR."
+      }
+     ]
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 30,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "indexOf on a 10-char hex code; timing leakage is impractical here and rate limiting dominates — no change."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Constant-time comparison of auth credentials is good practice; I'd switch to timingSafeEqual."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Overkill for a one-time code with limited attempts; not worth the code.",
+       "urgency": false
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Sound in principle but not exploitable given the short code and throttling; skip."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "We don't do constant-time compares for TOTP either; consistency argues against."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cheap to do right; I'd mention timingSafeEqual but wouldn't block."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Timing side-channel is theoretical here; merge as-is."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not a practical concern for this credential model; leave it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd tighten it since it's an auth path, but it's low priority."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads as security theater for this case; no change."
+      }
+     ]
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Silently dropping other hosts' destination calendars defeats the multi-host support this PR exists to add."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "COLLECTIVE bookings would lose the other hosts' calendar invites; evt.destinationCalendar must be an array before push."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "push on null is a no-op, so initialize to [] first to avoid a silent data loss."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Correct fix, but a quick follow-up is acceptable."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Easy to miss and directly breaks team booking; guard it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor but right to push into an initialized array."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Only triggers when the organizer has no DC, and team DCs may be merged elsewhere."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Plausible, but I'd verify the null assignment before changing anything."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Most teams set an organizer DC, so I'd merge and watch."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I don't see the null path happening in practice; leave as follow-up."
+      }
+     ]
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Video references losing credentialId can break later cancellation lookups; keep result.credentialId."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "It is inconsistent with the parallel block that still keeps result.credentialId."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Looks like an accidental drop; fix in a follow-up."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Restore the non-calendar fallback before this merges."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The video credential is derivable from the reference type, so no real loss."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The cancel path filters by type, not credentialId, so I'd merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Needs investigation; not convinced the credentialId is required."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Probably intentional cleanup of a value that made no sense for non-calendar."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I don't see a consumer relying on it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Might matter, but not something to block this PR over."
+      }
+     ]
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Worth batching the DB lookups, but not blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Fallback path only; optimize with Promise.all later."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Credentials are usually cached, so the per-destination query rarely fires."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Acceptable for a fallback; no change now."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Perf nit; I'd open a follow-up only."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Sequential lookups only on cache misses; fine."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "N is the host count, so not concerned."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't change it pre-merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Read past it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No measurable impact."
+      }
+     ]
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 70,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Reading .integration off undefined throws whenever Meet is chosen without a DC; the optional chain must come back."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Clear crash regression introduced by removing `?.`."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Callers now emit [], so the destructured value is undefined in exactly the fallback case."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "TypeScript won't catch it without noUncheckedIndexedAccess; needs the guard."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Real crash but narrow; fix it in this PR if quick."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "I'd block the merge until it's guarded."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Restore `?.` since we now produce empty arrays."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Only when there's no Google Cal, which is rare in our setups."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Plausible, but I'd confirm the evt shape first."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Merge; not our typical configuration."
+      }
+     ]
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 50,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The find compares cal.externalId against a falsy externalCalendarId, so it can never match—logic is simply wrong."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "It should match by credentialId, not externalId; fix before merge."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "update/delete without an externalCalendarId now resolve to undefined calendarId instead of the host's DC."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Duplicated in deleteEvent too; fix both, follow-up is fine."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Buggy but rarely hit; still worth correcting."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "externalCalendarId is always passed from EventManager in practice."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Won't reach that branch; merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Might matter; needs verification, not blocking."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd merge and file a ticket."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Looks like effectively dead code to me."
+      }
+     ]
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 40,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The 2009 flexbox spec's -webkit-box-ordinal-group is 1-based while order is 0-based, so the mixin is wrong; it's cheap to add +1 here and stop it being a footgun."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Autoprefixer emits N+1 for exactly this reason, so the mixin as written diverges from the canonical conversion and should be corrected before other callers land."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A shared foundation mixin needs to be right in isolation; I'd fix the offset now rather than debug it when someone first writes order(0) or order(1)."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "It's a one-character change in the mixin and it removes a real, documented off-by-one for old WebKit engines."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The callers use 2 and 3, and a uniform +1 shift preserves relative ordering for every value above 1, so there's no observable bug in this PR."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Ordering among the two flex items and the defaults is identical in both models for these values, so this is theoretical and can wait."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "We don't ship to browsers that need -webkit-box-ordinal-group, so the prefix line is dead weight either way and not worth a cycle."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Relative order is what matters and it's preserved; I'd merge and note it as a follow-up if we ever add a low-valued order()."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "This is a nit at most; the visual result is unchanged, so blocking the merge on it isn't justified."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd want to see an actual page that orders wrong before touching it; for order(2)/order(3) nothing breaks."
+      }
+     ]
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 50,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "lower(host) without downcasing the bound param means mixed-case hosts silently never match, so the promised case-insensitivity is broken."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Genuine correctness gap; downcasing the parameter is the obvious one-line fix."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The /i regex permits mixed case but real hosts are effectively lowercase, so I'd merge and move on."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The format regex explicitly allows uppercase, so the lookup failing for those hosts is a real bug, not a nit."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Won't be hit in practice and the format check is loose anyway, so it's cosmetic."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Downcase is a one-liner and makes the query actually match its stated intent."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Migration data is already lowercase so I'd leave the query alone."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Case-insensitive matching is advertised but not delivered; that's worth correcting before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Lowercased inputs dominate, so I doubt this matters enough to block."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Agreed the param should be downcased but it's not worth holding the PR for."
+      }
+     ]
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 40,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "execute(...)[0] is nil when the join matches no row, so nil['id'] raises and aborts the whole migration."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The intended category_id==0 fallback is unreachable because the crash happens first; the lookup needs a nil guard."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "embed_category exists on any real install, so this path won't trigger in practice."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "A migration must never blow up mid-run; nil-safe lookup by name is required."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "This is the standard pattern used elsewhere in the repo; I wouldn't block on it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Worth guarding, but I'd accept a follow-up rather than hold merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worried; the setting is always present."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Crashing migrate on a fresh or upgraded install is bad enough to fix now."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads past it; the row is expected to exist."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Probably fine and not worth the churn."
+      }
+     ]
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "A nil host raises NoMethodError and 500s instead of returning the intended validation error."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The controller assigns params straight through, so any request omitting host crashes the before_validation."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Small guard (`return if host.blank?`) is worth adding for robustness."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The frontend always supplies host, so this isn't blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "We must return json_error for bad input, not a 500."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't change it; the form validates before submit."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cheap nil guard improves the model's contract."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Edge case; merge is fine."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Don't care enough."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Leave it as is."
+      }
+     ]
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The example name claims to test a blank embeddable host but no longer sets it up, so it's misleading."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Harmless; the assertion still passes and nobody's blocked."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The test passes for the wrong reason, so it should be renamed or the setup restored."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cosmetic test naming, not worth a review comment."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth raising."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads past it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Fine as is."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No."
+      }
+     ]
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 60,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Migrated rows keep the scheme/path and never match the parsed host, silently breaking embedding for existing installs."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Normalization must happen during the migration, not only in the model callback."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Storing 'http://discourse.org' means host_allowed? returns false forever; strip it on insert."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd test it first and perhaps take it as a follow-up rather than block."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This is a silent regression for every upgraded install; must fix before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The migration does bypass the callback, but I'd file it rather than hold the PR."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Strip the scheme in the INSERT so migrated data matches."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not convinced existing installs hit it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Breaking embedding on upgrade is serious enough to require the normalization."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd want a regression test before changing the migration."
+      }
+     ]
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 30,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The rest_serializer includes embedded objects, so the ids-only payload still hydrates; the claim is likely wrong."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Without include:true the admin list would render nothing, so I'd verify and add the sideload."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "It works as written; no change needed."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Worth confirming the sideload and adding include if the objects are missing."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Author presumably tested the page; leave it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads past it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The client consumes full objects and store hydration can't resolve ids that were never sent."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No."
+      }
+     ]
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "A missing id makes host nil and the first method call 500s; add a nil/404 guard."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Ids come from the client, so this isn't a realistic path worth guarding."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cheap nil check on update/destroy is worth adding."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Unlikely; fine as a follow-up."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Return a json error when the record is gone."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Standard pattern across these controllers."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No."
+      }
+     ]
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Storing feed HTML as cooked and emitting it with `raw` on our own embed origin is a stored-XSS hole we do not ship."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The Readability path whitelists tags but the PollFeed path does not, and that asymmetry is a real gap I'd close now."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd want sanitization here, but I'd likely land it as a quick follow-up rather than block the feature."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The feed is admin-configured from the embeddable host, so the trust boundary makes this tolerable for now."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "raw_html is deliberate for imported content from a configured source; I read past this as by design."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Untrusted raw HTML rendered on the forum's own domain is exactly the class of bug that gets a PR blocked."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Only reachable through a feed URL an admin owns, so I'd merge and revisit if third-party feeds are ever supported."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Worth adding a sanitizer to the PollFeed intake path; cheap enough that I'd ask for it before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Given the configured-feed threat model this is a low priority for me and not a blocker."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "I'd block on this — raw untrusted HTML on the embed origin is a genuine security regression."
+      }
+     ]
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The rest of this view is localized via I18n, so the hard-coded strftime sticks out and should use the localized date helper."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Embed dates are a minor cosmetic detail; English month names are fine here."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth holding the PR; plenty of places still format dates literally."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "We care about i18n consistency, so I'd switch this to l() before merge, but it's minor."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A one-off embed view date format isn't something I'd change the code for."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cosmetic and self-contained; I'd merge as-is."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Read straight past it — the localized strings around it are what matter."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not a defect that affects behavior; leave it for a cleanup pass."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Locale-pinned dates exist all over; not this PR's job to fix all of them."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Diverges from our conventions only slightly and doesn't break anything."
+      }
+     ]
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Downcasing both sides is a cheap correctness fix for a case-insensitive comparison."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Browser referers are effectively lowercased in practice, so the mismatch is theoretical."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Rare edge case, not something I'd change the code for before merging."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Hosts are case-insensitive by spec, so normalizing is correct, though low impact."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd read past it; the configured host is admin-entered and typically lowercase."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth the churn; no user-visible failure in practice."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Marginal hardening at best; I wouldn't block on it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Theoretical only; merge it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Fine as written for our purposes."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Low-value nit; skip."
+      }
+     ]
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "These tests pass for the wrong reason since feed_polling_enabled defaults false and short-circuits the guard; I'd stub it true to make them meaningful."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A test that would still pass if the checked condition were deleted is worse than useless; fix the setup."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The code path is covered elsewhere; I wouldn't hold the PR over the stub setup."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I care about tests actually asserting what they name, so I'd correct the stubs."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Test quality matters but this can be a follow-up; not a merge blocker."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The two named conditions aren't exercised at all; I'd fix the spec before merging."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads as green tests; I'd merge and not notice the false coverage."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A spec refinement, not a code defect; leave it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not something I'd change before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would let it pass and maybe tidy later."
+      }
+     ]
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The 404 test passes because ensure_embeddable rejects on the blank host, so it never proves the embed_url requirement; stub a valid host."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A test that would survive deletion of the requirement is mislabeled; worth fixing."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Behavior is still covered by the other cases; not worth blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd set a valid embeddable_host so the failure is attributable to the missing param."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor test hygiene; follow-up is fine."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Merges fine; I'd not chase this."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Read past it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Low value; skip."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not a blocker."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Leave as-is for now."
+      }
+     ]
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 20,
+     "devs": [
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The unique index will just raise on a rare double-insert; the throttle makes it unlikely and I wouldn't restructure for it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Check-then-insert without rescuing the unique violation is a real race; I'd at least handle the exception."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Concurrency window is tiny and non-destructive; merge and follow up."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Staff bypass and slow retrieval make it possible but not worth blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd add a rescue around the insert to tolerate the unique index rather than 500 the job."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Edge case; the DB constraint protects integrity, failing loudly is acceptable."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not a merge blocker."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Read past it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Fine with the loud failure."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Low priority."
+      }
+     ]
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 70,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "`end if` is not valid Ruby, so this template raises a SyntaxError on every render and breaks the whole embed feature — must fix."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This compiles to a syntax error and the embed view is unusable; change it to `<%- end %>` before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "high",
+       "urgent": true,
+       "justify": "I don't think Erubis emits it literally like that; I'd verify by rendering the view rather than assume a break."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "A modifier `if` after `end` can't parse, so the page would never load; fix now."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Obvious syntax error gating the entire feature; blocking."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd double-check in console first, but if it truly fails it's a one-character fix I'd expect the author to make."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This can't render; must correct."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Syntax error on the main embed template — no question, fix before merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd assume the templating layer tolerates it and only investigate if the view errored."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The `if` modifier cannot attach to `end`, so this is broken Ruby; change the tag."
+      }
+     ]
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "RSS 2.0 items often carry only description, so `i.content.scrub` will blow up and kill the whole hourly job; guard and skip bad items."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A single malformed item aborting the entire poll is a real fragility; I'd make each item defensive."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The feed is chosen by an admin; if it's malformed they can fix it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The code already anticipates a blank link but not a blank content/title — inconsistent and worth hardening."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd merge and only harden if we see failures."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "One bad item shouldn't stop all imports; add nil-safety around the item fields."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Edge case for atypical feeds; not a blocker."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Read past it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Nice-to-have robustness, can wait."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not blocking; follow-up."
+      }
+     ]
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Substring matching accepts any origin that is a prefix of our URL; compare origins exactly instead."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The attacker only gets to resize an iframe; low impact, not blocking."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Origin checks should be exact equality; this one is trivially bypassable and worth correcting."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Best practice, but the practical impact here is negligible."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Post-message resize is cosmetic; merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Read past it."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Low severity; not worth holding the PR."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't change the code for this."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor; skip."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Leave for later."
+      }
+     ]
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The new call site passes a temp path with no .GIF extension, so animated uploads get flattened despite allow_animated_thumbnails being on."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "We clearly meant to preserve animation, and the extension-based check silently fails on tempfiles."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Real but narrow; worth detecting gif by mime or content in a follow-up tweak."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd at least pass the original filename so the animated branch can actually engage."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Animated gifs over the size cap are an edge case, and flattening is acceptable for now."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd merge and handle the gif path in a separate change."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The mechanism is plausible but I'm not convinced this path even handles gifs today."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth blocking the PR; note it for later."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The over-limit gif path is rare enough that this can wait."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads as a theoretical concern rather than a shipped regression."
+      }
+     ]
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The comment overpromises, so either make the loop converge or reword it."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A misleading comment invites wrong assumptions later, so fix the wording."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "It's a best-effort heuristic and devs know it; the comment is cosmetic."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Words, not behavior — I'd merge and tweak the comment in passing."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The mechanism works well enough for typical images."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not blocking; a comment nit at most."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Most oversized images converge within five halvings anyway."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Purely prose, no functional impact."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No code change needed here."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads as a nitpick about wording."
+      }
+     ]
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 30,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Hardcoding 10MB in JS throws away the site setting admins rely on to cap uploads."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Both client and server now hardcode, so the limit is no longer configurable anywhere."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "At minimum read SiteSetting so both sides stay consistent with admin config."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "This may be intentional to allow large uploads that then get auto-downsized."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The behavior change is deliberate for the feature; revisit when settings are unified."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Outside this file's remit; maintainers can decide."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd question it but wouldn't block the merge."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The Ruby side hardcodes too, so at least it's consistent."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would open a follow-up rather than change it here."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not clearly wrong given the PR's goal."
+      }
+     ]
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 20,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "If the geometry ever reaches gifsicle it rejects a percentage, so pass explicit WxH to be safe."
+      },
+      {
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Better to compute a real target size than feed '80%' through geometry consumers."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "convert -resize accepts percentages, so the silent no-op claim doesn't hold."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The animated path isn't even reached here, so the concern doesn't apply."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The percentage works fine for the common convert path."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Speculative; the downsizing does reduce files in practice."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads as an incorrect premise about the consumer's contract."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would need a repro; I don't buy the no-op."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Geometry handling is debatable but not blocking."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Likely wrong about what the geometry argument accepts."
+      }
+     ]
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 70,
+     "devs": [
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Two downsize definitions mean the 5-arg contract is silently dead and any caller of it breaks."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Ruby keeps only the last def, so the old (width, height) signature is unreachable and callers misfire."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Merging two conflicting signatures is a clear defect to resolve before merge."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "At minimum delete the now-dead wrapper so the contract is unambiguous."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": false,
+       "justify": "Would fix, though I'd first grep for callers to size the blast radius."
+      },
+      {
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The redundant definition is confusing; clean it up before merge."
+      },
+      {
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This is exactly the kind of redefinition that breaks subtly, so it must be fixed."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "If nothing calls the old form it's harmless dead code to tidy later."
+      },
+      {
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd verify callers first and may merge with a follow-up."
+      },
+      {
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Depends whether callers exist; I'd raise it but not necessarily block."
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,811 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "atribuidor": "deepseek-v4.1-flash@together",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "scheduleSMSReminders.ts:31-43 — the OR arm on retryCount has no supporting index, but the delete is bounded by the cron and retryCount>1 is a tiny, new population; most owners would treat an index as a follow-up, not a merge blocker.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 10,
+     "porque": "scheduleSMSReminders.ts:178-197 — same increment written twice; pure duplication, a reviewer might suggest a helper but nine owners would merge as-is.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "scheduleSMSReminders.ts:179-197 — read-modify-write on reminder.retryCount instead of { increment: 1 } genuinely undercounts under overlapping runs, though it needs concurrency to bite.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 40,
+     "porque": "scheduleSMSReminders.ts:190-197 — the new update inside catch is unprotected, so a P2025 or transient error now aborts the whole cron instead of just logging; plausible but an edge case owners may accept.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 60,
+     "porque": "scheduleSMSReminders.ts:28-45 — method: SMS was folded into only the first OR arm, so the second arm deletes reminders of any method with retryCount>1, contradicting the 'all scheduled sms reminders' comment; a clear scope bug most owners would tighten.",
+     "impacto": "medium"
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "Adds a token refresh at packages/app-store/salesforce/lib/CalendarService.ts:75-99 but returns the jsforce.Connection built from the stale credentialKey.access_token, so the refreshed token is persisted yet unused.",
+     "impacto": "high"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 30,
+     "porque": "Non-constant-time secret compare at apps/web/pages/api/webhook/app-credential.ts:24-29 is a genuine timing leak, but most owners treat a shared webhook secret comparison as acceptable and would merge.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "JSDoc at packages/app-store/_utils/oauth/createOAuthAppCredential.ts:12-14 mislabels appData.type as 'the app slug'; purely a docs nit against correct code.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 60,
+     "porque": "packages/app-store/zoho-bigin/lib/CalendarService.ts passes credentialId where refreshOAuthTokens expects userId, so the sync payload sends calcomUserId: <credential id> unlike every other caller.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 60,
+     "porque": "packages/app-store/googlecalendar/lib/CalendarService.ts:97-101 stores the {success,data} safeParse wrapper from parseRefreshTokenResponse.ts:29 as credential.key, breaking the next load.",
+     "impacto": "high"
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 50,
+     "porque": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15 returns the raw fetch Response in the sharing branch while callers (google/hubspot/zoho) read .data/token fields off it.",
+     "impacto": "high"
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "handleNewBooking.ts:1077 silently no-ops on `?.push` when destinationCalendar is null; for a COLLECTIVE booking with no eventType/organizer destination calendar, the other hosts' teamDestinationCalendars are dropped and those hosts never get invited — the exact feature this PR adds.",
+     "impacto": "high"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "EventManager.ts:169-170 changes the non-calendar branch from `result.credentialId` to `undefined`, so video references lose the credentialId they previously persisted; this is an unrelated regression introduced by the destinationCalendar refactor.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "EventManager.ts:344 and 517 add a per-destination `prisma.credential.findUnique` on the booking hot path, turning one in-memory lookup into N sequential round-trips for collective bookings; a real but capacity-only concern most reviewers would defer.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 60,
+     "porque": "EventManager.ts:118-119 destructures the array and dereferences `mainHostDestinationCalendar.integration` without `?.`; with the empty arrays this PR now produces, a Meet location throws instead of falling back to Daily — exactly the fallback case the block exists for.",
+     "impacto": "high"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 60,
+     "porque": "CalendarService.ts:254-256 (duplicated at 315-317) runs the `find` fallback only when externalCalendarId is falsy, so it matches `cal.externalId === undefined` and resolves to undefined instead of the host's destination calendar; update/delete then send an invalid/empty calendarId.",
+     "impacto": "medium"
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 40,
+     "porque": "Case-sensitive identity/dedup checks (addGuests.handler.ts:52,76) contradict the lowercasing convention used for the blacklist at line 71, wrongly FORBIDDEN-ing attendees and re-adding existing ones with different casing.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 30,
+     "porque": "Hard-coded \"Remove email\" at MultiEmail.tsx:46 bypasses t() used elsewhere in the same file (line 69), so it never localises.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 30,
+     "porque": "At AddGuestsDialog.tsx:43 the template is always truthy, so `|| t(\"unable_to_add_guests\")` is dead and the user sees a raw `BAD_REQUEST:` code prefix.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "ZAddGuestsInputSchema (addGuests.schema.ts:3) has no uniqueness refine and the handler (addGuests.handler.ts:74) never dedups the input, so duplicate emails in one request persist duplicate attendees.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "Read-filter-insert in addGuests.handler.ts:92 has no transaction/unique guard, so concurrent calls can both insert the same guest.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 70,
+     "porque": "isTeamAdminOrOwner at addGuests.handler.ts:46-48 is built with && while its name and the auth intent require ||, so team ADMINs are wrongly FORBIDDEN.",
+     "impacto": "high"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 50,
+     "porque": "Blacklist lowercases the list (addGuests.handler.ts:71) but compares raw input (line 77), so any casing variant of a blacklisted email is persisted, defeating BLACKLISTED_GUEST_EMAILS.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 20,
+     "porque": "addGuests.handler.ts:168 passes raw `guests` rather than `uniqueGuests` to sendAddGuestsEmails, so `newGuests.includes` in email-manager.ts:541 can mis-select the template for pre-existing attendees — minor mislabeling.",
+     "impacto": "low"
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "insightsBooking.integration-test.ts:480-491 — the rewritten 'combine' test has one fixture row that satisfies auth and filter independently, so it passes even if getBaseConditions drops either predicate; a real but test-only coverage gap, and the same limitation existed before the rewrite.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 0,
+     "porque": "insightsBooking.ts:76-77 — the premise is wrong: getAuthorizationConditions is typed Promise<Prisma.Sql> and buildAuthorizationConditions returns NOTHING_CONDITION on every failure path, so authConditions is never falsy and the else-if branch is dead; no auth bypass exists.",
+     "impacto": "low"
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 40,
+     "porque": "mixins.scss:126 emits -webkit-box-ordinal-group: $val verbatim while the legacy -webkit-box model is 1-based (autoprefixer emits order+1), so callers like header.scss:39 and topic.scss:30 get a wrong ordinal on old WebKit — but that engine is effectively unsupported, so it is a real one-line fix only a few would insist on before merge.",
+     "impacto": "low"
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 30,
+     "porque": "app/models/embeddable_host.rb:17 compares lower(host) against an un-lowercased param while before_validation (5-8) never downcases, so mixed-case hosts don't match; real but an edge most devs would treat as a nitpick follow-up.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 40,
+     "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11 indexes execute()[0]['id'] without checking for a zero-row result, so the migration raises on installs where the embed_category join is empty; several owners would harden this.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 20,
+     "porque": "app/models/embeddable_host.rb:5 calls self.host.sub! unconditionally, so a nil host from a missing param 500s instead of validating — real but an uncommon admin-only path.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "spec/models/topic_spec.rb:1403 example still says 'embeddable_host is blank' but no longer exercises that condition and only passes via the embed_truncate default; a test-hygiene note, not a code defect.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 50,
+     "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:24-26 inserts legacy values like 'http://discourse.org' raw, bypassing the model's scheme/path stripping, so record_for_host (record_for_host/host_allowed?) never matches them and existing installs lose embedding.",
+     "impacto": "high"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 40,
+     "porque": "app/serializers/embedding_serializer.rb:3 emits embed: :ids with no include/sideload, so the client's embedding.embeddable_hosts resolves to nulls while embedding.hbs/embeddable-host.hbs use full records; if the payload really lacks them the admin page breaks.",
+     "impacto": "high"
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "app/controllers/admin/embeddable_hosts_controller.rb:9-18 uses where(id).first with no nil check before save_host/host.destroy, so a stale id gives an unhandled 500 — cheap guard, uncommon path.",
+     "impacto": "medium"
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "uploads_controller.rb:67 passes tempfile.path (no .GIF suffix) so optimized_image.rb:155 never appends _animated and the downsize_instructions path keeps only frame [0], flattening oversized animated GIFs.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 30,
+     "porque": "The comment at uploads_controller.rb:63 promises a guarantee that the 5x 80% loop at 66-69 cannot provide; reword or make it converge — mostly prose, low real defect.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 50,
+     "porque": "utilities.js:182 and 246 hardcode 10*1024, silently ignoring the admin-configured max_*_size_kb site settings that the old code read.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 25,
+     "porque": "uploads_controller.rb:67 feeds \"80%\" to optimized_image.rb:146, but ImageMagick -resize accepts percentages, so the 'silently no-ops' premise is likely wrong; only the (unreachable) gifsicle path would reject it.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 85,
+     "porque": "optimized_image.rb:145-151 defines downsize twice, so Ruby keeps only the new (from,to,dimensions,opts) version and the (from,to,max_width,max_height,opts) contract used elsewhere binds width into dimensions and height into opts.",
+     "impacto": "high"
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "EnableTwoFactorModal.tsx:135 defers onEnable() to the DisplayBackupCodes close button (line 269); dismissing via ESC/overlay relies on onOpenChange and never calls onEnable() nor resetState(), leaving the security section stale and reopening on the backup-codes step.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 70,
+     "porque": "next-auth-options.ts:131 triggers the new backup branch on any truthy credentials.backupCode while password verification is wrapped in `if (!credentials.totpCode)` (closed at line 129), so supplying a valid backup code plus any non-empty totpCode yields a session without the password check.",
+     "impacto": "high"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 40,
+     "porque": "BackupCode.tsx:7 names the default export TwoFactor even though the file, its imports, and its rendered field are all BackupCode.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "login.2fa.e2e.ts:119-122 only waits for toast-success, so it passes even if navigator.clipboard.writeText in EnableTwoFactorModal fails; no clipboard content is asserted.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "login.2fa.e2e.ts:52 asserts expect(page.locator(...).isChecked()).toBeTruthy(), which is always true for the returned Promise; should be `await expect(locator).toBeChecked()`.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "next-auth-options.ts:144-156 consumes the code via read-modify-write (indexOf then prisma.user.update) with no transaction/compare-and-swap, so two concurrent logins with the same code can both succeed, violating the single-use guarantee.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "porque": "next-auth-options.ts:144 matches the credential with backupCodes.indexOf(...), a short-circuiting comparison rather than crypto.timingSafeEqual; the timing signal on 10-hex-char codes is marginal and rate-limited.",
+     "impacto": "low"
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "app/models/post.rb:133 skips all sanitization for cook_method raw_html, and app/jobs/scheduled/poll_feed.rb:35-36 feeds unescaped external HTML through TopicEmbed.import into cooked, which app/views/embed/best.html.erb:19 emits with raw on the forum's own origin — a genuine stored-XSS path.",
+     "impacto": "high"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "app/views/embed/best.html.erb:14 hardcodes strftime \"%e %b %Y\", which always emits English month names while the rest of the view is I18n'd; a cosmetic locale bug most would leave alone.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "porque": "app/controllers/embed_controller.rb:26 and lib/topic_retriever.rb:15 compare hosts case-sensitively, so an uppercase referer host fails to match; real but browsers normally send lowercase hosts, so most would merge.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "spec/jobs/poll_feed_spec.rb:18-28 never stubs feed_polling_enabled? to true, so the guard short-circuits at the first clause and both tests pass vacuously, not proving what they name.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "spec/controllers/embed_controller_spec.rb:8 never sets embeddable_host, so the blank-host check in ensure_embeddable rejects the request before params.require(:embed_url) is reached — a test passing for the wrong reason.",
+     "impacto": "low"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "app/models/topic_embed.rb:15-30 does check-then-create! on a column with a unique index (db/migrate/20131217174004:11) and no rescue, so interleaved retrievals, including staff-bypassed or slow PollFeed runs, can raise on the constraint.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 90,
+     "porque": "app/views/embed/best.html.erb:6 closes the if from line 2 with `<%- end if %>`, which is a Ruby SyntaxError, so every render of the best view (and the success cases in embed_controller_spec) fails.",
+     "impacto": "high"
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "app/jobs/scheduled/poll_feed.rb:31-36 reads i.link/i.title/i.content unconditionally; SimpleRSS raises on absent elements (content is missing in many RSS 2.0 feeds), and the line-33 blank-link fallback shows the case was only half-handled, so one bad item aborts the hourly job.",
+     "impacto": "medium"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 30,
+     "porque": "app/assets/javascripts/embed.js:17 uses indexOf substring matching to validate e.origin, so an origin that is merely a prefix/substring of discourseUrl is accepted; the correct check is an exact origin comparison.",
+     "impacto": "low"
+    }
+   ]
+  }
+ }
+}

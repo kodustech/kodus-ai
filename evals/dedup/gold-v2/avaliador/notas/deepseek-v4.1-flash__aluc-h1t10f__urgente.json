@@ -1,0 +1,811 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "atribuidor": "deepseek-v4.1-flash@together",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "Premise is wrong: schema.prisma:1002-1003 only declares indexes on bookingUid/workflowStepId, there is no (method, scheduledDate) index the comment claims, so the delete was already unindexed and the OR changes little.",
+     "urgente": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 10,
+     "porque": "scheduleSMSReminders.ts:178-197 duplicates the same retryCount update in two arms; a cosmetic DRY nit, not a defect owners would block on.",
+     "urgente": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "scheduleSMSReminders.ts:184 uses `reminder.retryCount + 1`; switching to `{ increment: 1 }` is idiomatic and avoids lost updates, plausibly worth a fix but overlapping cron runs are unlikely.",
+     "urgente": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 40,
+     "porque": "scheduleSMSReminders.ts:190-197 awaits an update inside the catch with no guard, so a thrown error (e.g. P2025) now rejects the handler and skips remaining reminders; real regression, cheap to wrap.",
+     "urgente": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 70,
+     "porque": "scheduleSMSReminders.ts:31-43 moved `method: SMS` into only the first OR arm, so `{ retryCount: { gt: 1 } }` matches any method; the delete is no longer SMS-scoped despite the comment.",
+     "urgente": true
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 30,
+     "porque": "Real minor inconsistency at addGuests.handler.ts:52,76 — strict equality vs lowercased blacklist — but stored emails are typically already normalized, so most owners would merge and defer.",
+     "urgente": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 40,
+     "porque": "MultiEmail.tsx:46 hard-codes \"Remove email\" while line 69 uses t(); clear convention violation and a trivial fix, so several owners would change it.",
+     "urgente": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 40,
+     "porque": "AddGuestsDialog.tsx:43-44 — the fallback is genuinely unreachable and users see a raw code prefix; correct, small, and worth fixing.",
+     "urgente": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "addGuests.handler.ts:74-90 — server schema has no uniqueness refine so duplicates within one request can persist; a real server-side validation gap.",
+     "urgente": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "addGuests.handler.ts:92-106 — the check-then-insert race is real but low-probability and would likely be a follow-up rather than a merge blocker.",
+     "urgente": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 70,
+     "porque": "addGuests.handler.ts:46-48 — `&&` where the variable clearly means admin-or-owner makes team ADMINs unauthorized; a plain logic bug most owners would fix before merge.",
+     "urgente": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 40,
+     "porque": "addGuests.handler.ts:71,77 — list lowercased but input compared raw, so casing bypasses BLACKLISTED_GUEST_EMAILS; real and cheap to fix.",
+     "urgente": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 40,
+     "porque": "addGuests.handler.ts:168 passes raw `guests` instead of the deduped set, misrouting the email template for already-existing attendees; a real but narrow bug.",
+     "urgente": false
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 70,
+     "porque": "handleNewBooking.ts:1077 — pushing teamDestinationCalendars into a null evt.destinationCalendar is a silent no-op, so co-hosts' calendars are dropped for the very collective case this PR targets.",
+     "urgente": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "EventManager.ts:170 changes the non-calendar branch from result.credentialId to undefined, dropping the persisted credentialId for video references; owners may argue video refs don't depend on it.",
+     "urgente": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "EventManager.ts:344 (and :517) add a per-destination prisma.credential.findUnique only on cache miss; a perf nit on the booking hot path, reasonable as a follow-up.",
+     "urgente": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 70,
+     "porque": "EventManager.ts:119 reads mainHostDestinationCalendar.integration with no optional chaining; with the [] now produced by many callers it throws for a Meet location instead of falling back.",
+     "urgente": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 60,
+     "porque": "googlecalendar/lib/CalendarService.ts:255 runs the find only when externalCalendarId is falsy, so it compares cal.externalId against null and always yields undefined instead of the host calendar.",
+     "urgente": true
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "CalendarService.ts:96-106 refreshes and persists a new access token but builds the jsforce.Connection from stale credentialKey.access_token.",
+     "urgente": true
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 40,
+     "porque": "app-credential.ts:24-29 compares the webhook secret with !==; timing-safe compare is defensible but this pattern is common in the codebase.",
+     "urgente": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "createOAuthAppCredential.ts:12-14 duplicates the same JSDoc text for type and appId; docs-only nit.",
+     "urgente": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 40,
+     "porque": "zoho-bigin CalendarService.ts:85-94 passes credential.id where refreshOAuthTokens expects userId, syncing against the wrong id if the call exists.",
+     "urgente": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 70,
+     "porque": "googlecalendar CalendarService.ts:97-101 stores the safeParse wrapper {success,data} as credential.key instead of .data, breaking the next googleCredentialSchema.parse.",
+     "urgente": true
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 60,
+     "porque": "refreshOAuthTokens.ts:8-15 returns a raw fetch Response in the sharing branch while callers (hubspot, zoho, google res?.data) expect a parsed token object.",
+     "urgente": true
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "EnableTwoFactorModal.tsx:134-136 stops calling onEnable() on 200, so dismissing the dialog (ESC/overlay) leaves 2FA enabled server-side but the UI stale; real but a narrow edge case.",
+     "urgente": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 70,
+     "porque": "next-auth-options.ts:131-156 — the backup branch fires on any truthy backupCode regardless of the `!credentials.totpCode` password gate at :121, so a valid backup code plus any totpCode skips both password and TOTP validation; genuine auth bypass.",
+     "urgente": true
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "BackupCode.tsx:7 exports a function literally named TwoFactor, mismatching the file and all importers; a cosmetic rename most reviewers would wave through.",
+     "urgente": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "login.2fa.e2e.ts:119-122 only waits for the toast, which fires unconditionally, so the copy assertion passes even if clipboard.writeText is broken.",
+     "urgente": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "login.2fa.e2e.ts:50-53 asserts a Promise is truthy via expect(locator.isChecked()).toBeTruthy(), which can never fail — though it is pre-existing and already flagged by the PR's own FIXME.",
+     "urgente": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "next-auth-options.ts:144-156 read-modify-write of backupCodes without a transaction lets two concurrent logins reuse the same single-use code; real but typically deferred as a follow-up.",
+     "urgente": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "porque": "next-auth-options.ts:143-145 uses indexOf/string eq on a 10-hex-char code; a timing side channel that most owners would dismiss as theoretical for this credential.",
+     "urgente": false
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "insightsBooking.integration-test.ts:480-491: o fixture cria um único booking que satisfaz auth e filter isoladamente, então getBaseConditions retornando só auth, só filter ou o AND ainda passa; o teste não prova a combinação (embora a fraqueza já existisse no findMany anterior).",
+     "urgente": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 10,
+     "porque": "insightsBooking.ts:76-77: o branch é inalcançável, pois buildAuthorizationConditions (linha 125) sempre retorna um Prisma.Sql, nunca falsy, então não há bypass de autorização; a alegação está errada.",
+     "urgente": false
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 30,
+     "porque": "mixins.scss:125-131: -webkit-box-ordinal-group really is 1-based (default 1) vs 0-based order, so the fallback is off by one — but at the actual call sites (topic.scss:30 order(2), header.scss:39 order(3)) both values exceed the default and relative order is preserved, so nothing visibly breaks here.",
+     "urgente": false
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "uploads_controller.rb:67 passes tempfile.path (no .GIF extension) into optimize, so the /\\\\.GIF$/i animated branch never fires and downsize_instructions flattens animated GIFs.",
+     "urgente": true
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "uploads_controller.rb:66 does re-check size each iteration; only the final 5-attempt cutoff makes the comment overpromise, so this is largely a wording nit.",
+     "urgente": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 40,
+     "porque": "utilities.js:182 hardcodes 10*1024 in place of the max_'+type+'_size_kb setting, removing admin control and diverging from the server's SiteSetting check.",
+     "urgente": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 30,
+     "porque": "uploads_controller.rb:67 passes \"80%\" as geometry; ImageMagick's -resize accepts percentages, so the 'silently no-ops' claim is mostly wrong, leaving only the gifsicle edge.",
+     "urgente": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 70,
+     "porque": "optimized_image.rb:145 and :149 define downsize twice, so the (max_width, max_height) version is overridden and existing width/height callers bind height into opts.",
+     "urgente": true
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 40,
+     "porque": "app/models/embeddable_host.rb:17 lowercases only the column while before_validation (lines 5-8) never downcases self.host, so a host stored with any uppercase (allowed by the /i regex at line 2) can never match at lookup time — a real but narrow edge case.",
+     "urgente": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 40,
+     "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11 indexes execute(...)[0]['id'] and raises NoMethodError if the join returns no row (missing/unmatched embed_category), which can abort the whole migration before the fallback at lines 14-16 runs; plausible but only bites installs where embed_category has no matching category.",
+     "urgente": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "app/models/embeddable_host.rb:5-8 calls self.host.sub! unconditionally, so a nil host from Admin::EmbeddableHostsController#save_host (app/controllers/admin/embeddable_hosts_controller.rb:23) raises NoMethodError/500 instead of a format validation error; the admin form always supplies a host, so most owners would shrug.",
+     "urgente": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "spec/models/topic_spec.rb:1403-1405 still names 'is false if embeddable_host is blank' but the setup was removed and expandable_first_post? (app/models/topic.rb:868) no longer consults hosts, so the example is vacuous — a test-hygiene nit, not a product bug.",
+     "urgente": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 60,
+     "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:24-26 inserts legacy values (e.g. 'http://discourse.org/1234') raw, bypassing the scheme/path stripping in EmbeddableHost#before_validation (app/models/embeddable_host.rb:5-8), so after upgrade host_allowed? (line 20) matches nothing and embedding silently breaks for existing installs.",
+     "urgente": true
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 20,
+     "porque": "app/serializers/embedding_serializer.rb:3 — the claim that embed: :ids never sideloads the records is dubious for this AMS/rest_serializer setup, and the admin UI demonstrably resolves embedding.embeddable_hosts, so most owners would read this as a false positive.",
+     "urgente": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "app/controllers/admin/embeddable_hosts_controller.rb:10-16 uses .first without a nil check, so a stale/deleted id makes save_host/destroy blow up with NoMethodError/500; real robustness gap but only reachable via stale ids, so many owners would merge and fix later.",
+     "urgente": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "app/models/post.rb:133 returns `raw` unsanitized, and Jobs::PollFeed (app/jobs/scheduled/poll_feed.rb:35-36) feeds untrusted feed HTML through TopicEmbed.import with cook_method raw_html, unlike the Readability-whitelisted import_remote at topic_embed.rb:44-53; that cooked value is emitted with `raw post.cooked` at app/views/embed/best.html.erb:19 from the forum origin (and in normal topic views) — a real stored-XSS regression.",
+     "urgente": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "app/views/embed/best.html.erb:14 hardcodes strftime(\"%e %b %Y\"), pinning the month to English while the same view localizes other strings via I18n.t; a genuine but cosmetic i18n nit most owners would merge and fix later.",
+     "urgente": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "porque": "app/controllers/embed_controller.rb:26 (and lib/topic_retriever.rb:15) compare hosts case-sensitively, so a referer like http://EVILTROUT.COM/... is wrongly rejected; real but only a false-negative on a pre-existing trust check, low impact.",
+     "urgente": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "spec/jobs/poll_feed_spec.rb:18-28 never stub feed_polling_enabled? to true, and it defaults to false (config/site_settings.yml:355), so the `feed_polling_enabled? && ...` guard short-circuits and both tests pass vacuously even if the URL/username checks were deleted.",
+     "urgente": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "spec/controllers/embed_controller_spec.rb:8-11 leaves embeddable_host at its '' default, so ensure_embeddable raises at the blank-host check (embed_controller.rb:25) before params.require(:embed_url) is reached, making the '404 without an embed_url' test pass for the wrong reason.",
+     "urgente": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 20,
+     "porque": "app/models/topic_embed.rb:15-30 does check-then-create on embed_url against the unique index (db/migrate/20131217174004_create_topic_embeds.rb:11) with no rescue, and the only throttle is bypassed for staff (app/jobs/regular/retrieve_topic.rb:17); plausible but a rare race most owners would defer.",
+     "urgente": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 90,
+     "porque": "app/views/embed/best.html.erb:6 closes the line-2 `if` with `<%- end if %>`, which compiles to Ruby `end if` with no condition and raises a SyntaxError on every render, breaking the whole embed view; must be `<%- end %>`.",
+     "urgente": true
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "app/jobs/scheduled/poll_feed.rb:31-36 consumes item fields unconditionally; SimpleRSS items without a <content> element give nil, so `i.content.scrub` raises NoMethodError and, with sidekiq_options retry: false, one malformed item aborts the whole hourly import instead of being skipped.",
+     "urgente": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "porque": "app/assets/javascripts/embed.js:17 uses `discourseUrl.indexOf(e.origin) === -1`, a substring test that accepts any origin contained in discourseUrl (e.g. https://discourse for https://discourse.example.com); real but only lets a hostile page trigger a resize postMessage, low impact.",
+     "urgente": false
+    }
+   ]
+  }
+ }
+}

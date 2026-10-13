@@ -1,0 +1,1552 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "h4",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "comment_holds",
+     "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:134-136 `if (response.status === 200) { setStep(SetupStep.DisplayBackupCodes); return; }` never calls onEnable; the sole call is the Close button at :269 `onEnable();`. The Dialog is wired `:166 <Dialog open={open} onOpenChange={onOpenChange}>`, and the settings modal is rendered at apps/web/pages/settings/security/two-factor-auth.tsx:62-68 with `onOpenChange={() => setEnableModalOpen(!enableModalOpen)}` and `onEnable={() => { setEnableModalOpen(false); utils.viewer.me.invalidate(); }}`. Radix (packages/ui/components/dialog/Dialog.tsx:70/89) forwards ESC/overlay dismiss to this onOpenChange, so the invalidate/onEnable callback is skipped on dismiss.",
+     "reason": "The refutation attacks a different file (apps/web/components/security/EnableTwoFactorModal.tsx) than the comment's target (apps/web/components/settings/EnableTwoFactorModal.tsx), whose dismiss path genuinely skips onEnable (only the Close button at line 269 calls it, while Dialog onOpenChange at line 166 is a plain toggle at two-factor-auth.tsx:64), so the bug claim stands.",
+     "passos": 8
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "Comment cites apps/web/components/security/DisableTwoFactorModal.tsx:38 as an un-updated caller of the settings API. But that file imports its own sibling module: security/DisableTwoFactorModal.tsx:10 `import TwoFactorAuthAPI from \"./TwoFactorAuthAPI\";`, and security/TwoFactorAuthAPI.ts:22 defines `async disable(password: string, code: string)` (body `{ password, code }`), so the two-arg call at line 38 type-checks. The changed API apps/web/components/settings/TwoFactorAuthAPI.ts:22 `async disable(password: string, code: string, backupCode: string)` is consumed only by settings/DisableTwoFactorModal.tsx:11 importing `./TwoFactorAuthAPI` and calling at line 58 `TwoFactorAuthAPI.disable(password, totpCode, backupCode)` — three args. grep for `.disable(` in apps/web/components returns exactly these two calls.",
+     "reason": "The named caller uses the security-local two-parameter TwoFactorAuthAPI, and every caller of the modified settings API already passes three arguments, so the comment's claim of a missing-argument type error is false.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-187 — the failed-send (`else`, scheduledSMS falsy) branch is `await prisma.workflowReminder.update({ where: { id: reminder.id }, data: { retryCount: reminder.retryCount + 1 } })` (increment at line 184); the catch block also increments at line 195. Same file/function the comment targets (lines 175-200).",
+     "reason": "The failed-send branch in the cited code does increment retryCount at line 184, so the comment's statement that it does not increment is false; the refutation quotes the correct file, function and branch.",
+     "passos": 8
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:83-90 `const guestsFullDetails = uniqueGuests.map((guest) => { return { name: \"\", email: guest, ...` ; 100-105 stores those via `attendees: { createMany: { data: guestsFullDetails } }`; 168 `await sendAddGuestsEmails(evt, guests);`. Since `uniqueGuests = guests.filter(...)` (line 74) is a subset of `guests`, each freshly added guest's stored `attendee.email` is the exact same string as its entry in `newGuests`. packages/prisma/schema.prisma:528 `email String` (plain column) and no lowercasing extension (packages/prisma/index.ts:25-28) confirm no normalization.",
+     "reason": "For a freshly added guest the stored attendee email is byte-identical to its newGuests entry (same source array), so the casing-difference the comment relies on cannot occur and the refutation's premise is correct.",
+     "passos": 8
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "nit": false,
+     "verdict": "comment_holds",
+     "evidence": "app/models/embeddable_host.rb:5-8 `before_validation do self.host.sub!(/^https?:\\/\\//, ''); self.host.sub!(/\\/.*$/, '') end`; :10-17 `record_for_host` uses `host = uri.host; where(\"lower(host) = ?\", host)`. db/migrate/20150818190757_create_embeddable_hosts.rb:24-25 inserts raw `'#{h}'` via SQL, bypassing the model. spec/models/embeddable_host_spec.rb:5-21 (\"trims http/https/paths\") and spec/controllers/embed_controller_spec.rb:69-70 fabricating `host: 'http://discourse.org'` and `'https://example.com/1234'` show scheme/path-bearing values are real, expected input that only the model's callback normalizes.",
+     "reason": "The refutation rests on a localized UI string (documentation), not code; the repository's own specs prove scheme/path-typed host values are normal input that only the model's before_validation strips, so raw-inserted migrated rows can indeed mismatch record_for_host's `lower(host) = ?` lookup.",
+     "passos": 8
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "packages/lib/server/service/insightsBooking.ts:45 `export class InsightsBookingService` has no `findMany` method (whole class, lines 45-220, only exposes getBaseConditions/getAuthorizationConditions/getFilterConditions/build* and private helpers). Repo-wide grep for `InsightsBookingService` and for `service/insightsBooking` matches only the class definition and packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:8 `import { InsightsBookingService } from \"../../service/insightsBooking\";`. That test is already migrated: line 480 `const baseConditions = await service.getBaseConditions();` then line 481 `await prisma.$queryRaw<...>` with `${baseConditions}` (lines 480-484). No production caller uses `service.findMany(...)` or spreads these conditions into a Prisma `where`. (insightsRouting.ts:63 has its own separate `InsightsRoutingService.findMany`, an unrelated class not imported by these paths.)",
+     "reason": "The comment's stated un-migrated consumers do not exist: the sole user of InsightsBookingService is the integration test, already updated to getBaseConditions + $queryRaw, and the class has no findMany to call.",
+     "passos": 8
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "packages/lib/server/service/insightsBooking.ts:83 `async getAuthorizationConditions(): Promise<Prisma.Sql>`; :85 `this.cachedAuthConditions = await this.buildAuthorizationConditions();`; :125-142 all returns are `NOTHING_CONDITION` (line 43 `Prisma.sql\\`1=0\\``) or a constructed `Prisma.sql`; :171-174 and :204-207 reduce to `Prisma.sql` objects. Thus authConditions is never falsy and lines 76-77 (`else if (filterConditions) { return filterConditions; }`) are unreachable.",
+     "reason": "Every return path of buildAuthorizationConditions yields a truthy Prisma.Sql object (or NOTHING_CONDITION), so authConditions is never falsy and the auth-dropping branch the comment worries about never executes.",
+     "passos": 5
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "app/jobs/base.rb:153-173 `def self.enqueue(job_name, opts={}) ... if SiteSetting.queue_jobs? ... else opts[:sync_exec] = true; klass.new.perform(opts) end`; app/jobs/base.rb:85-89 `if opts.delete(:sync_exec) ... return execute(opts)`; app/jobs/regular/retrieve_topic.rb:17 `TopicRetriever.new(args[:embed_url], no_throttle: user.try(:staff?)).retrieve`; config/site_settings.yml:348-351 `queue_jobs: default: test: false`. Spec at spec/controllers/embed_controller_spec.rb:41-45 uses `TopicEmbed.expects(:topic_id_for_embed).returns(nil)`, `TopicRetriever.expects(:new).returns(retriever)`, `retriever.expects(:retrieve)`.",
+     "reason": "In the test environment `queue_jobs` defaults to false, so `Jobs.enqueue` runs the job inline (sync_exec -> execute), invoking `TopicRetriever.new(...).retrieve`, which satisfies the spec mocks; the comment's claim that the job is never executed inline and TopicRetriever.new is never called is false.",
+     "passos": 4
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "comment_holds",
+     "evidence": "app/views/embed/best.html.erb:2 `<%- if @topic_view.posts.present? %>` opened an if/else whose line 6 is literally `<%- end if %>` (no condition). The refutation's counterexample at chef/cookbooks/windows/providers/task.rb:99 is `end if task_hash.respond_to? :[]` — an `end` followed by `if <condition>`, i.e. a modifier if WITH a condition, which is not the construct the comment flags.",
+     "reason": "The refutation attacks the \"if\" modifier syntax using a different construct (`end if <expr>`), but the comment's line 6 compiles to bare `end if` with no condition, so the cited chef code does not show the comment's statement false.",
+     "passos": 8
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S5",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "comment_holds",
+     "evidence": "uploads_controller.rb:58 `tempfile = file.tempfile` (browser/multipart uploads) feeds a Rack tempfile with no source extension into the auto-downsize at line 67 `OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: ...)`; optimized_image.rb:155 `method_name += \"_animated\" if !!opts[:allow_animation] && from =~ /\\.GIF$/i` then never matches, so downsize_instructions (`convert #{from}[0]`, optimized_image.rb:129) flattens the GIF. The codebase itself treats the path as extension-less for type detection: upload.rb:69 `fix_image_orientation(file.path) unless filename =~ /\\.GIF$/i`, upload.rb:49 `File.extname(original_filename)`. The refutation only covers the separate API URL branch (uploads_controller.rb:55, gated by `is_api?`), where FileHelper.download's Tempfile happens to preserve the URL extension.",
+     "reason": "The refutation addresses only the API-URL branch; the ordinary multipart upload path (file.tempfile, no extension) still hits the animated branch never matching, so the bug the comment describes is real for the main upload path.",
+     "passos": 8
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "comment_holds",
+     "evidence": "app/controllers/uploads_controller.rb:63-69: comment \"automatically reduced to allowed size\"; `attempt = 5` / `while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes` / `OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", ...)` / `attempt -= 1`. app/models/optimized_image.rb:153-169 confirms each call resizes to \"80%\" and `convert_with` returns a boolean the loop ignores. After 5 iterations the loop simply ends even if size is still > max; upload is then created at app/controllers/uploads_controller.rb:72 with no re-check or rejection (no post-loop validation on this path).",
+     "reason": "The loop is only a best-effort 5×80% attempt whose exit condition can be exhausted while the file still exceeds max_image_size_kb, so the prose \"automatically reduced to allowed size\" does promise a guarantee the code does not provide; the refutation merely re-reads the loop condition as a \"check\" and never shows the code guarantees the result meets the limit.",
+     "passos": 5
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "comment_holds",
+     "evidence": "app/controllers/uploads_controller.rb:67 `OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)` combined with app/models/optimized_image.rb:155 `method_name += \"_animated\" if !!opts[:allow_animation] && from =~ /\\.GIF$/i` and :120 `--resize-fit #{dimensions}` means the literal string \"80%\" is handed to gifsicle on the animated path; and app/models/optimized_image.rb:145-146 `def self.downsize(from, to, max_width, max_height, opts={})` / `optimize(\"downsize\", from, to, \"#{max_width}x#{max_height}\", opts)` (the WxH/geometry-building consumer, as also used by app/jobs/regular/resize_emoji.rb:14 `OptimizedImage.downsize(path, path, 100, 100, opts)`) shows geometry, not percentages, is the intended consumer contract.",
+     "reason": "The refutation only argues the non-animated `-resize` path tolerates \"80%\" (a library-behaviour claim, not repo code) and never addresses the animated `gifsicle --resize-fit \"80%\"` path the comment names, so it does not show the comment's premise to be false.",
+     "passos": 8
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "config/initializers/i18n.rb:17 `[locale, SiteSetting.default_locale.to_sym, :en].uniq.compact`; app/controllers/application_controller.rb:153-159 assigns `I18n.locale = current_user.effective_locale` / `SiteSetting.default_locale` then calls `I18n.fallbacks.ensure_loaded!`, whose `[]` (i18n.rb:21) passes `I18n.locale`. spec/controllers/application_controller_spec.rb:97 `expect(I18n.locale).to eq(:fr)` and :106 `to eq(:en)` confirm that after assignment the getter returns a Symbol, not the raw String (user.locale / default_locale are Strings). Hence `[]` yields `[:en, :en, :en]` and `.uniq` deduplicates.",
+     "reason": "The comment's premise that the incoming `locale` is a String is contradicted by repo code/specs showing `I18n.locale` (the argument source) is a Symbol, so there is no \"en\"/:en type mixing and `.uniq` deduplicates.",
+     "passos": 8
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "lib/freedom_patches/translate_accelerator.rb:67-76 — `def translate(key, *args)` / `load_locale(config.locale) unless @loaded_locales.include?(config.locale)` (line 68) runs before the cache read/write at 71-76 (`@cache.getset(k)` with `k = \"#{key}#{config.locale}#{config.backend.object_id}\"`). lib/freedom_patches/translate_accelerator.rb:46-60 — `load_locale` loads the requested locale's yml and only then appends it to `@loaded_locales`. Only `translate` writes `@cache`, and it always loads `config.locale` (the same locale as the cache key) first.",
+     "reason": "The accelerator's `translate` loads the requested `config.locale` (the very locale used in the cache key) before any backend lookup or cache write, so the \"not-yet-loaded locale returns a fallback that is cached and later goes stale\" scenario the comment depends on cannot occur on the caching path.",
+     "passos": 8
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S11",
+      "S15"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S3",
+      "S7",
+      "S8",
+      "S9",
+      "S10",
+      "S12",
+      "S13",
+      "S14",
+      "S16",
+      "S17"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:100,116 (storage result returned directly), pkg/apiserver/rest/dualwriter_mode3_test.go:202,230,237 (mock returns exampleObj; obj,_,err := dw.Delete; assert.Equal(t,obj,exampleObj)), pkg/apiserver/rest/dualwriter_mode1_test.go:19 (exampleObj is a non-nil *example.Pod), pkg/apiserver/rest/storage_mocks_test.go:130-134 (storageMock.Delete returns args.Get(0)).",
+     "reason": "The comment's claim that both assertions would still pass if Delete returned nil is false: obj would be nil, and assert.Equal(t, nil, non-nil exampleObj) fails, so the assertion does exercise result propagation rather than being an unfailable tautology.",
+     "passos": 4
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6",
+      "S7",
+      "S11",
+      "S12",
+      "S13",
+      "S18",
+      "S19",
+      "S20"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S4",
+      "S16"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9",
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "public/app/features/alerting/unified/utils/rules.ts:133 `rule: (rule?: Rule) => isGrafanaPromAlertingRule(rule) || isGrafanaPromRecordingRule(rule)`, with rules.ts:103-104 `isGrafanaPromAlertingRule(rule?: Rule): rule is GrafanaPromAlertingRuleDTO { return isAlertingRule(rule) && 'folderUid' in rule && 'uid' in rule; }` and rules.ts:95-96 `isAlertingRule(...) => typeof rule === 'object' && rule.type === PromRuleType.Alerting` — a runtime property check that a GrafanaPromRuleDTO (unified-alerting-dto.ts:130-136 has uid/folderUid, and type) satisfies. The only V2 consumers are rule-list files: GrafanaRuleListItem.tsx:19/47 passes a GrafanaPromRuleDTO; DataSourceGroupLoader.tsx:196, DataSourceRuleLoader.tsx:60, StateView.tsx:132 pass prom/ruler DTOs. RulesTable.tsx:30 instead imports the V1 `./RuleActionsButtons` (signature `{compact,rule,rulesSource}`, no `promRule`).",
+     "reason": "The guard is a runtime property check that GrafanaPromRuleDTO passes, and V2's only callers pass GrafanaPromRuleDTO while the named RulesTable path uses the separate V1 component, so the comment's claimed combined-rule/RulesTable failure and hidden Grafana abilities rest on false statements.",
+     "passos": 8
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "comment_holds",
+     "evidence": "public/app/features/alerting/unified/hooks/useAbilities.ts:222-228 shows useAllAlertRuleAbilities (the old CombinedRule-based hook) now just delegates: \"return useAllRulerRuleAbilities(rule.rulerRule, groupIdentifierV2);\". The target new function at :243-245 hardcodes \"// TODO: Add support for federated rules\\n// const isFederated = isFederatedRuleGroup();\\nconst isFederated = false;\" and :250-254 feeds it into \"immutableRule = isProvisioned || isFederated || isPluginProvided\" -> \"MaybeSupportedUnlessImmutable\", exactly as the comment describes for Update/Delete/Pause/Restore/DeletePermanently. Elsewhere in the same repo the federated check is applied to combined/ruler rules via the group: RuleViewer.tsx:101 \"const isFederatedRule = isFederatedRuleGroup(rule.group);\", RuleDetailsButtons.tsx:38, Query.tsx:41, ExistingRuleEditor.tsx:103, GroupDetailsPage.tsx:180. The new signature (RulerRuleDTO + RuleGroupIdentifierV2) lost the CombinedRule group object that the old hook had, which is exactly the condition the comment describes; the argument-less \"isFederatedRuleGroup()\" is a placeholder for that lost group, not evidence federated handling never existed.",
+     "reason": "The refutation only cites the new function's TODO placeholder, which does not show the pre-consolidation useAllAlertRuleAbilities lacked the group-based isFederatedRuleGroup(rule.group) check; the code confirms the consolidation dropped group access and hardcodes isFederated=false into the immutable branch.",
+     "passos": 8
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "AdminPermissions.java:77 gates the cleanup on ADMIN_FINE_GRAINED_AUTHZ (the V1 flag); MgmtPermissions.java:85 shows the V1 AuthorizationProvider (authz) is only created when ADMIN_FINE_GRAINED_AUTHZ (or V2) is enabled, and RolePermissions.disablePermissions (RolePermissions.java:91-98) / ClientPermissions.setPermissionsEnabled → deletePermissions operate only through that authz provider. So V1 authorization resources/permissions only exist when the gating feature is on, and the cleanup runs precisely then.",
+     "reason": "The non-V2 (V1) permission model's authorization resources are created/removed only through MgmtPermissions.authz, which is built only when ADMIN_FINE_GRAINED_AUTHZ is enabled — the same flag guarding the cleanup — so the comment's premise that disabled-feature V1 realms are left with orphans is false.",
+     "passos": 8
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "grep \"def should_sync\" -> only src/sentry/integrations/mixins/issues.py:66 `def should_sync(self, attribute, sync_source: AssignmentSource | None = None):` and :382 `def should_sync(self, attribute: str, sync_source: AssignmentSource | None = None) -> bool:`. Whole-repo grep \"should_sync\" (callers only) shows no other definition/override anywhere, including tests.",
+     "reason": "The only two `should_sync` definitions in the repo are the already-updated base methods; no concrete integration overrides it, so the claimed TypeError cannot occur.",
+     "passos": 4
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "src/sentry/conf/server.py:739-741: `CELERY_TASK_SERIALIZER = \"pickle\"`, `CELERY_RESULT_SERIALIZER = \"pickle\"`, `CELERY_ACCEPT_CONTENT = {\"pickle\"}`. src/sentry/celery.py:127-128 `app.config_from_object(settings)`, and SentryTask.apply_async (celery.py:103-114) forwards kwargs straight to Task.apply_async with no JSON coercion. The pickle path is genuinely active in-repo (celery.py:13-26 LEGACY_PICKLE_TASKS; celery.py:61-72 good_use_of_pickle_or_bad_use_of_pickle; sentry/testutils/pytest/sentry.py:180 sets CELERY_COMPLAIN_ABOUT_BAD_USE_OF_PICKLE=True). src/sentry/integrations/utils/sync.py:136-145 enqueues `assignment_source.to_dict()` and src/sentry/integrations/tasks/sync_assignee_outbound.py:53-54 reconstructs via `AssignmentSource.from_dict` (assignment_source.py:30-35 `cls(**input_dict)`).",
+     "reason": "The comment's premise that the kwargs dict is JSON-serialized is false: the repo configures Celery's task serializer as \"pickle\" (an actively exercised path), which preserves the datetime so `from_dict` receives a real datetime and no serialization failure or string coercion occurs.",
+     "passos": 8
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/organization/InfinispanOrganizationProvider.java:47 `orgDelegate = session.getProvider(OrganizationProvider.class, \"jpa\");` and :249-256 delegate addIdentityProvider/removeIdentityProvider to the JPA provider. model/jpa/src/main/java/org/keycloak/organization/jpa/JpaOrganizationProvider.java:342 `session.identityProviders().update(identityProvider);` (add) and :371 same (remove). In a cached session session.identityProviders() is the Infinispan provider (InfinispanIdentityProviderStorageProviderFactory.order()=10 beats JPA default), whose update() (idp/InfinispanIdentityProviderStorageProvider.java:89-95) calls registerIDPLoginInvalidationOnUpdate (lines 403-417), which registers cacheKeyForLogin invalidation for all FetchMode values whenever getOrganizationId() changes (lines 415-417).",
+     "reason": "Org-link mutations do route through IdentityProviderStorageProvider.update() via the JPA delegate, so the comment's premise that linking/unlinking never invalidates the login cache is false.",
+     "passos": 8
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "InfinispanIdentityProviderStorageProvider.java:122-142: the overridden `getById` (lines 135, 139, 141) returns `createOrganizationAwareIdentityProviderModel(...)` on every path, including the plain cache-hit path (`return createOrganizationAwareIdentityProviderModel(cached.getIdentityProvider())`). The loop at lines 245-251 obtains models via `session.identityProviders().getById(id)`; `IdentityProviderStorageProvider` is the SPI served by this same factory (InfinispanIdentityProviderStorageProviderFactory, PROVIDER_ID \"infinispan\", order 10, delegating to \"jpa\"), and DefaultDatastoreProvider.java:216-221 resolves `session.identityProviders()` through `session.getProvider(IdentityProviderStorageProvider.class)`, i.e. the default (caching) provider. So the loop receives wrapped, organization-aware models, contradicting the comment's premise that raw models are added.",
+     "reason": "`getById` in this same caching provider always wraps with createOrganizationAwareIdentityProviderModel, and session.identityProviders() resolves to this provider, so the cache-hit loop does not add a raw model as the comment claims.",
+     "passos": 8
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S4",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:173-181 — the org branch of getForLogin unconditionally adds the public filter: `if (mode == FetchMode.ORG_ONLY || mode == FetchMode.ALL) { ... if (organizationId != null) { searchOptions.put(IdentityProviderModel.ORGANIZATION_ID, organizationId); } searchOptions.put(OrganizationModel.BROKER_PUBLIC, \"true\"); result = Stream.concat(result, getAllStream(searchOptions, null, null)); }`. This applies to a specific organization too, so org-scoped ORG_ONLY/ALL views only return public org brokers. services/src/main/java/org/keycloak/organization/forms/login/freemarker/model/OrganizationAwareIdentityProviderBean.java:66-68 confirms the same for the org's own broker list: `organization.getIdentityProviders().filter(idp -> idp.isEnabled() && !idp.isLinkOnly() && !idp.isHideOnLogin() && Boolean.parseBoolean(idp.getConfig().get(OrganizationModel.BROKER_PUBLIC)))`, and :99-107 `isPublicOrganizationBroker` also requires BROKER_PUBLIC. The PR's own test testsuite/.../organization/cache/OrganizationCacheTest.java:369-414 sets BROKER_PUBLIC=true on the org-linked IDPs to make them appear in ORG_ONLY/ALL results.",
+     "reason": "Repository code shows the org-specific FetchMode.ORG_ONLY/ALL login views also require BROKER_PUBLIC=true, so a non-public org-linked IDP never appears in those caches and the comment's premise (that they include it regardless of BROKER_PUBLIC) is false.",
+     "passos": 8
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "src/sentry/pipeline/base.py:132-133 \"pipe_ids = [f\\\"{type(v).__module__}.{type(v).__name__}\\\" for v in self.pipeline_views]\\nself.signature = md5_text(*pipe_ids).hexdigest()\"; src/sentry/integrations/github/integration.py:343-344 \"return [OAuthLoginView(), GitHubInstallation()]\"; integration.py:402 \"state = pipeline.signature\" and 412 \"if request.GET.get(\\\"state\\\") != pipeline.signature:\". No override of signature exists (only base.py:133).",
+     "reason": "pipeline.signature is a static MD5 of the pipeline view class names (not a secret per-flow nonce), so the comment's premise of leaking a secret state nonce via timing is false.",
+     "passos": 6
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "verdict": "refutation_holds",
+     "evidence": "src/sentry/integrations/github/integration.py:344 `return [OAuthLoginView(), GitHubInstallation()]` and :442 `class GitHubInstallation(PipelineView)`. A full-repo grep for `GitHubInstallation` returns only these two lines. The only subclass, src/sentry/integrations/github_enterprise/integration.py:294 `class GitHubEnterpriseIntegrationProvider(GitHubIntegrationProvider)` overrides `get_pipeline_views` at :328-336 to return `[InstallationConfigView(), GitHubEnterpriseInstallationRedirect(), lambda: self._make_identity_pipeline_view()]`, and imports only `GitHubIntegrationProvider, build_repository_query` (line 20). `github_authenticated_user` is bound only at integration.py:438 (inside OAuthLoginView) and read at :502.",
+     "reason": "The comment's actionable premise — an existing subclass/related provider or caller that drives GitHubInstallation without the preceding OAuthLoginView — is false: GitHubInstallation is instantiated only once, paired with OAuthLoginView, and the sole related provider overrides get_pipeline_views without it, so the described unconditional rejection cannot occur for any code in the repo.",
+     "passos": 8
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "comment_holds",
+     "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74-80 — `String englishFile = file.getAbsolutePath().replaceAll(\"resources-community\", \"resources\") .replaceAll(\"_[a-zA-Z-_]*\\\\.properties\", \"_en.properties\"); try (FileInputStream fis = new FileInputStream(englishFile)) { bundleEnglish = new PropertyResourceBundle(fis); } catch (IOException e) { throw new RuntimeException(\"unable to read file \" + englishFile, e); }` — the English sibling is opened unconditionally and a raw RuntimeException is thrown on failure, exactly as the comment states. ThemeVerifierMojo.java:48-52 feeds every file matching `messages_*.properties` into this method, and verify() is declared to throw MojoExecutionException (line 46) while the IOException path throws unchecked RuntimeException (lines 78-79).",
+     "reason": "The refutation only disputes the regex character-class semantics (a Java-engine behavior, not code in this repo) and never addresses the comment's independent, code-verified claim that the English sibling is opened unconditionally and a raw RuntimeException is thrown on failure, so the comment is not shown false and still identifies a real code path.",
+     "passos": 8
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "comment_holds",
+     "evidence": "VerifyMessageProperties.java:91 `PolicyFactory policy = containsHtml(englishValue) ? POLICY_SOME_HTML : POLICY_NO_HTML;` and :58-61 allowElements(\"br\",\"p\",\"strong\",\"b\"). Fixture illegalHtmlTag_en.properties:17 `key=Some <div>tag</div` (rejected by all policies). Only allowed-tag fixture noHtml_de.properties:17 `key=Some <b>HTML</b>` pairs with noHtml_en.properties:17 `key=No HTML`, so it uses POLICY_NO_HTML. changedAnchor_de.properties pairs with changedAnchor_en.properties:17 `key=Some <a href=\"http://example.com\">link</a>` (POLICY_SOME_HTML) but the value is an anchor stripped by santizeAnchors (lines 150-162), not an allow-listed tag. No fixture pairs an HTML-containing English source with an allowed tag in the translation.",
+     "reason": "The refutation only disproves the comment's overstatement that verifyIllegalHtmlTagDetected is the \"only\" test reaching the POLICY_SOME_HTML branch (changedAnchor also does), but that test uses an anchor that santizeAnchors strips and is not allow-listed; no test exercises an allow-listed tag under POLICY_SOME_HTML, so the reported bug (emptying the allow-list keeps the suite green) is genuine.",
+     "passos": 5
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S6",
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "comment_holds",
+     "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:103 `while (start < sanitized.length() && start < value.length() && value.charAt(start) == sanitized.charAt(start))` and :107 `while (end < sanitized.length() && end < value.length() && value.charAt(value.length() - end - 1) == sanitized.charAt(sanitized.length() - end - 1))`, then :111 `messages.add(... value.substring(start, value.length() - end) + \"' vs. '\" + sanitized.substring(start, sanitized.length() - end) ...)`. For value=\"a<p>\" (len 4), sanitized=\"a<p></p>\" (len 8): prefix loop matches all 4 chars so start=4; suffix loop matches '>' then 'p' so end=2. start+end=6 > 4, so value.substring(4, 2) has begin>end and throws StringIndexOutOfBoundsException. Lines 94-97 confirm the sanitizer can lengthen the string. POLICY_SOME_HTML at :58 allows `<p>`.",
+     "reason": "The refutation only corrects two illustrative numbers (start=4, end=2 instead of 3, 1) but the code still computes start and end independently against different-length strings and slices value with an unclamped range; with those corrected values value.substring(4, 2) still throws, so the comment's bug claim and prescribed fix are supported by the repository.",
+     "passos": 3
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S8",
+      "S9",
+      "S10",
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "not_refuted"
+    }
+   ]
+  }
+ }
+}

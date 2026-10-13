@@ -1,0 +1,2391 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "u1f",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts:13-14 ` * @param appData.type the app slug` / ` * @param appData.appId the app slug`; body at lines 49/63 `type: appData.type` and 52/66 `appId: appData.appId`.",
+       "reason": "The JSDoc text is genuinely inaccurate (both params say \"the app slug\" while `appData.type` is used as the credential type), but the fix is only a documentation/comment wording change with no runtime effect, so it is optional."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment identifies documentation that states something false about the code: the JSDoc describes `appData.type` as \"the app slug\", but the body uses `appData.type` as the credential `type` and only `appData.appId` as the slug. False documentation is explicitly listed as a concrete failure, so the nit can be kept regardless of it being a comment-only change."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:83-90 builds the new attendees as `{ name: \"\", email: guest, ... }` and 100-105 persists them via `createMany: { data: guestsFullDetails }`; line 168 calls `sendAddGuestsEmails(evt, guests)` with that same raw `guests` array. In packages/emails/email-manager.ts:541 the comparison is `if (newGuests.includes(attendee.email))`. The persisted `attendee.email` is the verbatim input `guest` string, i.e. the very same string element present in `newGuests`, so their casing cannot differ (no lowercasing occurs: `formatCalEvent` only strips `+clientId` and `addGuests.schema.ts` merely does `z.string().email()`).",
+       "reason": "The described case-mismatch cannot occur because the newly added attendee's stored email is inserted verbatim from the same input string that is passed in `newGuests`, so the strict `includes` match always succeeds for newly added guests."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's premise is that a newly added guest's email can have different casing than the stored `attendee.email`, so the strict `newGuests.includes(attendee.email)` check misroutes. The checker refutes this with concrete repository code: `addGuests.handler.ts` builds the new guests as `{ name: \"\", email: guest, ... }`, persists them verbatim via `createMany`, and passes that same raw `guests` array to `sendAddGuestsEmails(evt, guests)`. So the persisted `attendee.email` is literally the same string element contained in `newGuests`, and no lowercasing/normalization occurs (formatCalEvent only strips `+clientId`; the schema only validates `z.string().email()`). This is a direct data-flow fact about what the named code stores and passes, showing the case-mismatch scenario the comment describes cannot occur — not an appeal to library/type behavior. Hence the comment rests on a false factual statement about the code."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/ui/form/MultiEmail.tsx:46 `<Tooltip content=\"Remove email\">` and line 69 `{t(\"add_another\")}`",
+       "reason": "The cited code does contain a hardcoded string while line 69 uses `t()`, so the facts hold, but this is a localisation/consistency concern with no crash, wrong result, data loss, security hole or broken caller, making the change optional."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment flags a hard-coded English user-facing string that bypasses the translation mechanism. While factually true, it describes a localisation/consistency concern, not a concrete failure: there is no crash, wrong result, data loss, security hole, race condition, broken caller contract, performance cost, or false documentation. It asks for an optional improvement (routing the string through a translation key), so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:43-44 `const message = `${err.data?.code}: ${t(err.message)}`; showToast(message || t(\"unable_to_add_guests\"), \"error\");` — the template is always non-empty, so the fallback is dead; addGuests.handler.ts:81 `throw new TRPCError({ code: \"BAD_REQUEST\", message: \"emails_must_be_unique_valid\" })` shows err.message is a translation key that t() still translates, so the user still gets a valid translated error.",
+       "reason": "The facts hold (the fallback is unreachable dead code), but this is an optional dead-code/message-cosmetic fix — nothing crashes, no wrong result or data loss — so it is a nit, not a confirmed bug."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment flags a dead fallback branch and a cosmetic message-formatting concern (an extra error-code prefix). Per the checker, the user still receives the translated error text via t(err.message), so nothing crashes, no wrong result or data loss occurs, and no contract is broken — it is a dead-code/message-cosmetic cleanup. That is an optional improvement, so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/core/EventManager.ts:341-355 `let credential = this.calendarCredentials.find((c) => c.id === destination.credentialId); if (!credential) { const credentialFromDB = await prisma.credential.findUnique({ ... where: { id: destination.credentialId } });` and packages/core/EventManager.ts:512-528 the analogous lookup in updateAllCalendarEvents.",
+       "reason": "The cited code matches the comment's description (a per-destination `findUnique` fallback inside the loop, and the same pattern at line 517), and the credential is still used correctly, so the statement is true; but the fallback only fires on a cache miss and batching it is an optional performance optimization that causes no crash, wrong result, or broken caller, making it a nit."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment names a concrete performance cost: on a cache miss the loop issues one `prisma.credential.findUnique` per destination, turning a single in-memory lookup into up to N sequential DB round-trips added to the booking-creation hot path, scaling with host count (and duplicated at line 517). That is a \"real performance cost\" of the changed code, not a mere style/naming/refactor request or a speculative \"just in case\" check, so it cannot be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "insightsBooking.ts:72-80 combines branches; auth at :135 `(\"userId\" = ${this.options.userId}) AND (\"teamId\" IS NULL)`; test creates `userBooking` with userId=testData.user.id and eventTypeId=userEventType.id (test lines 456-466), and userEventType.teamId=null (:451), while the denormalized teamId comes from et.\"teamId\" (migration 20250502130843 line 58).",
+       "reason": "The facts hold (all three branches return the same single row), but the requested change only strengthens test coverage with no production impact, which is optional."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment describes a test-coverage gap: the existing test cannot distinguish between auth-only, filter-only, and the AND combination because its fixture yields the same single row either way. It asks to add fixture data and an assertion to strengthen the test. That is a request for a better test / optional improvement with no production failure, crash, wrong result, data loss, security issue, race, or broken contract. Under the stated rules, requests for tests or optional improvements are removable nits."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "insightsBooking.ts:45-95 (class has no findMany; getAuthorizationConditions/getFilterConditions return Prisma.Sql). Only consumer repo-wide: __tests__/insightsBooking.integration-test.ts:8, and it already uses the new contract at lines 480-484: `const baseConditions = await service.getBaseConditions(); const results = await prisma.$queryRaw... WHERE ${baseConditions}`. No other InsightsBookingService.findMany/where: <conditions> call sites exist (grep over the repo returns only the service file and this test).",
+       "reason": "The code facts hold (findMany removed, methods now return Prisma.Sql), but the claim that other un-migrated callers exist is speculative — the service's only consumer is the already-updated integration test — so the requested migration is optional, not a concrete break."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's stated failure depends on callers that do not exist. The checker verified that the only repo-wide consumer of InsightsBookingService is the integration test, and it already uses the new getBaseConditions() + $queryRaw contract. So the alleged break (\"a caller doing service.findMany(...) now hits an undefined method\", \"a caller that spread the returned conditions into a Prisma where\") is speculative — no concrete call site is actually broken. The request is a conditional \"find and migrate any remaining call sites, just in case,\" which is an optional cleanup, not a concrete crash, wrong result, or real broken contract."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/lib/server/service/insightsBooking.ts:76-77 `} else if (filterConditions) { return filterConditions;` is indeed present, but packages/lib/server/service/insightsBooking.ts:83-88 `getAuthorizationConditions` only ever returns `buildAuthorizationConditions()`, and that method (lines 125-143) always returns a `Prisma.Sql` (`NOTHING_CONDITION` for missing options, non-owner/admin, or unmatched scope), so `authConditions` can never be falsy and the leak branch is unreachable.",
+       "reason": "The described branch exists as claimed, but the bypass it warns about is speculative since `getAuthorizationConditions()` never returns a falsy value, making this a defensive \"just in case\" change rather than a real defect."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete security failure: the code path returns a WHERE clause with no ownership/authorization restriction, which would be an authorization-boundary bypass allowing a caller to see all bookings for the given filters regardless of the requesting user's org/team membership. That the checker considers the branch unreachable today (because getAuthorizationConditions() currently always returns a Prisma.Sql) does not change the classification — the instruction is to keep when the comment names a concrete failure such as a security hole, even if the checker believes it is rare or not reachable. This is a security-boundary concern, not a style/refactor/optional-improvement nit."
+     }
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:134-136 `if (response.status === 200) { setStep(SetupStep.DisplayBackupCodes); return; }`; line 266-270 close button `onClick={(e) => { e.preventDefault(); resetState(); onEnable(); }}`; apps/web/pages/settings/security/two-factor-auth.tsx:64 `onOpenChange={() => setEnableModalOpen(!enableModalOpen)}` and 65-68 `onEnable={() => { setEnableModalOpen(false); utils.viewer.me.invalidate(); }}`; packages/ui/components/dialog/Dialog.tsx:70 `<DialogPrimitive.Root {...dialogProps}>` forwards onOpenChange.",
+       "reason": "The statements about the code hold, but the extra onEnable-on-dismiss is an optional hardening of a non-primary dismissal path: skipping it only briefly leaves the Switch/badge out of sync until a refetch, causing no crash, wrong computed result, data loss, security hole, or broken caller, and the intended Close-button flow already works."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete failure, not an optional hardening. When the user dismisses the Dialog via ESC or overlay click, the wired onOpenChange only toggles the modal state, so the parent's onEnable callback (which closes the modal and calls utils.viewer.me.invalidate() / setEnabled(true)) never fires. The server has enabled 2FA but the client never invalidates or refetches, leaving the Switch/badge permanently showing 2FA as disabled — a wrong result and a broken contract between the modal and its callers, not merely a transient sync gap. This matches a keep condition (wrong computed/displayed result and broken caller contract), so the nit classification does not justify dropping it."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "apps/web/components/auth/BackupCode.tsx:7: `export default function TwoFactor({ center = true }) {` ... apps/web/pages/auth/login.tsx:32: `import BackupCode from \"@components/auth/BackupCode\";` and :221 `<BackupCode center />`; apps/web/components/settings/DisableTwoFactorModal.tsx:8 `import BackupCode from \"@components/auth/BackupCode\";` and :104 `<BackupCode center={false} />`.",
+       "reason": "The name mismatch is real, but renaming a component function is a pure naming/style change that breaks nothing and misleads no reader about runtime behavior, so it is an optional nit."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment only asks to rename a component function so it matches the file/import name. It describes no concrete failure: the default export works identically under any local function name, so no crash, wrong result, broken caller contract, or other runtime impact is involved. That makes it a naming/style request — an optional improvement — so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:278-279 - `navigator.clipboard.writeText(backupCodes.map(formatBackupCode).join(\"\\n\")); showToast(t(\"backup_codes_copied\"), \"success\");` and apps/web/playwright/login.2fa.e2e.ts:120-122 - `await page.getByTestId(\"backup-codes-copy\").click(); await page.getByTestId(\"toast-success\").waitFor(); // TODO: check clipboard content`",
+       "reason": "The comment's facts are accurate (unconditional toast, weak assertion), but the requested change is strengthening a test assertion/addressing test coverage, which is optional and involves no production failure, so it is a nit."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment describes a weak test assertion (the toast appears unconditionally, so the test would pass even if the clipboard copy were broken). That is a test-quality/coverage concern, not a production failure: no crash, wrong result, data loss, security hole, race, or broken contract in shipped code. The requested change—asserting the actual clipboard effect—is an optional test strengthening, which falls under the \"tests or an optional improvement\" category for removal."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "apps/web/playwright/login.2fa.e2e.ts:50-53:\n// FIXME: this passes even when switch is not checked, compare to test\n// below which checks for data-state=\"checked\" and works as expected\nawait page.waitForSelector(`[data-testid=two-factor-switch]`);\nawait expect(page.locator(`[data-testid=two-factor-switch]`).isChecked()).toBeTruthy();",
+       "reason": "The facts hold — the code passes an un-awaited isChecked() Promise to a non-web-first matcher, and the PR's own FIXME (lines 50-51) confirms the assertion passes even when the switch is unchecked — but this is a test-only assertion weakness that does not affect product behavior, so fixing it is an optional test improvement, not a concrete failure."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete defect, not an optional improvement: the assertion is a tautology. `expect(page.locator(...).isChecked()).toBeTruthy()` receives a Promise<boolean>, which is always truthy, so the test passes regardless of the switch's actual state. This is a definite wrong result — a false-positive test that cannot detect the regression it exists to guard against — confirmed by the PR's own FIXME. The comment asks for a specific, verifiable correction (`await expect(locator).toBeChecked()`), not speculation or style/naming preference, so it should not be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/features/auth/lib/next-auth-options.ts:144-156 — `const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\")); if (index === -1) throw new Error(ErrorCode.IncorrectBackupCode); // delete verified backup code and re-encrypt remaining backupCodes[index] = null; await prisma.user.update({ where: { id: user.id }, data: { backupCodes: symmetricEncrypt(JSON.stringify(backupCodes), process.env.CALENDSO_ENCRYPTION_KEY) } });`",
+       "reason": "The check-then-act the comment describes is real, but double-use only arises from a narrow concurrent interleaving by a client that already holds the password and a valid code (nulled by either write), so making consumption atomic is optional hardening rather than a concrete, reachable failure."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete race condition: two concurrent requests with the same backup code both pass the `index !== -1` check and both persist a stale array, allowing a single-use code to authenticate twice. This is a real security hole / lost-update race violating the stated single-use invariant, which the criteria explicitly count as a concrete failure. The checker's view that it is a narrow interleaving or \"optional hardening\" is irrelevant to this decision — a reachable-by-concurrency race condition is grounds to keep, not drop."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/features/auth/lib/next-auth-options.ts:144: `const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"));` — the described ordinary string equality is indeed used; the codebase has no constant-time comparison helper (`timingSafeEqual` not present), and the login path is rate-limited first at line 109 `await checkRateLimitAndThrowError({`.",
+       "reason": "The code does use plain `indexOf` string equality as described, but swapping to constant-time comparison is an optional hardening (best practice) since no concrete, exploitable failure path is shown and the login is already rate-limited; the facts hold, so it is a nit rather than refuted or confirmed."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete security failure: a timing side-channel in which the short-circuiting string comparison (`backupCodes.indexOf(...)`) leaks, byte by byte, how much of a backup code an attacker has guessed. That is a genuine security hole, not merely a speculative or optional hardening request, even though the checker regards it as optional because the path is rate-limited. The rule says a security hole is a concrete failure that must be kept regardless of how rare or unlikely the checker considers it."
+     }
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:31-43 — `OR: [{ method: WorkflowMethods.SMS, scheduledDate: { lte: dayjs().toISOString() } }, { retryCount: { gt: 1 } }]`; packages/prisma/schema.prisma:1000 — `retryCount Int @default(0)`; packages/prisma/schema.prisma:1002-1006 — indexes are `[bookingUid]`, `[workflowStepId]`, `[seatReferenceId]`, `[method, scheduled, scheduledDate]`, `[cancelled, scheduledDate]` (no retryCount index).",
+       "reason": "The comment's statements are true (the OR is present and retryCount is unindexed), but adding an index is an optional performance/future-proofing optimization with no correctness impact, so it is a nit rather than a confirmed defect."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete degradation in performance: the newly added two-way OR cannot use the existing `(method, scheduled, scheduledDate)` index, so Postgres falls back to a sequential scan of the entire WorkflowReminder table on every cron invocation — turning a previously indexed delete into a full table scan as the table grows. That is a real performance cost attributable to the changed code, which is explicitly listed as a concrete failure that should be kept, even if the checker regards the fix as an optional optimization."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-186 — the failed-send (else) branch does update retryCount: `} else { await prisma.workflowReminder.update({ where: { id: reminder.id }, data: { retryCount: reminder.retryCount + 1, }, }); }`. The error path (catch at 189-199) also increments it the same way.",
+       "reason": "The comment claims the failure branch fails to increment retryCount, but line 184 shows the else (failed-send) branch explicitly sets retryCount to reminder.retryCount + 1, so the reported missing increment does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment asserts that the failed-send branch fails to increment retryCount. The checker quotes the actual code in packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-186, where the else (failed-send) branch explicitly does `data: { retryCount: reminder.retryCount + 1 }`. This is a direct factual contradiction about what the named branch contains, so the comment's premise is false."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:184 `              retryCount: reminder.retryCount + 1,` (in the `} else {` of `if (scheduledSMS)` at line 178) and line 195 `          retryCount: reminder.retryCount + 1,` (in `} catch (error) {` at line 189).",
+       "reason": "The two increments (else-branch at 184 and catch at 195) genuinely exist, but they handle two distinct failure paths (falsy return vs. thrown error) and each writes `reminder.retryCount + 1` from the same in-memory base, so no path double-increments; the concern is only code duplication/refactoring, which is optional."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment only points out duplicated code (the same `reminder.retryCount + 1` increment appearing in both the else-branch and the catch). The checker confirms both increments exist but do not cause any double-increment or incorrect behavior—each handles a distinct failure path from the same in-memory base. The request is purely a code-duplication/refactoring suggestion, an optional improvement with no concrete failure (no crash, wrong result, data loss, race, or broken contract)."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:184 `retryCount: reminder.retryCount + 1,` and :195 `retryCount: reminder.retryCount + 1,` do use a fetched read value, and :39-41 `retryCount: { gt: 1 }` is the deletion threshold, so the core observation is accurate; but the increment is monotonic and the deleteMany at :29-45 runs every invocation, so the count always reaches >1 and the \"loop forever\" consequence is not supported.",
+       "reason": "The code facts hold (non-atomic read-modify-write and the `>1` deletion threshold), but the failure only materialises under speculative overlapping cron invocations and the impact is a minor off-by-one in a bookkeeping counter (not the claimed infinite loop), so the atomic-increment change is an optional/defensive improvement rather than a fix for a demonstrated concrete failure."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete race condition: a non-atomic read-modify-write on `retryCount` where two concurrent cron invocations can both read N and both write N+1, undercounting failures. Race conditions are explicitly listed as a category that must be kept, even if the checker considers the scenario rare or the impact overstated (a minor off-by-one rather than an infinite loop). The change requested (atomic `increment: 1`) is a real correctness fix for that race, not a style or optional nicety."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:189-199 shows the update inside the catch with no wrapping try/catch, and 200-201 closes the loop then responds: `} catch (error) { await prisma.workflowReminder.update({ where: { id: reminder.id }, data: { retryCount: reminder.retryCount + 1 } }); console.log(...); } } res.status(200).json({ message: \"SMS scheduled\" });`. However, the deleteMany the comment names runs before the query at line 29 and the loop is fed by the findMany at line 48, so no reminder in the loop can be removed by that deleteMany in the same run; the failure the comment describes requires a concurrent run or a transient DB error, not a concrete deterministic path.",
+       "reason": "The code matches the comment's structural description (unprotected update in the catch), but the failure only occurs under external/concurrent error conditions, so wrapping it in try/catch is an optional defensive hardening rather than a concrete in-code bug."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete failure: the unprotected `prisma.workflowReminder.update` inside the catch block can throw, and the exception escapes the `for` loop and rejects the handler, causing the cron request to fail and all remaining unscheduled reminders to be skipped. This is an exception/crash path and a race condition (P2025 on concurrent deleteMany), which is exactly the kind of concrete failure that should be kept. The checker's own reasoning acknowledges the structural description is accurate and only argues the failure is unlikely/reachable under concurrent or transient errors — per the rules, rarity or reachability does not change the decision. Keep."
+     }
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:38-42 `{ retryCount: { gt: 1 } }` has no method filter (true), but only this file ever writes retryCount: line 184 `retryCount: reminder.retryCount + 1` and line 195 same. packages/features/ee/workflows/api/scheduleWhatsappReminders.ts:100-110 updates `scheduled`/`referenceId` only, and no email path touches it; schema default is `retryCount Int @default(0)` (packages/prisma/schema.prisma:1000).",
+       "reason": "The query's second OR arm does lack the method filter, but since only SMS reminders ever increment retryCount, no non-SMS reminder can match it today, so the deletion is effectively SMS-scoped and the change is optional future-proofing."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment names a concrete failure, not an optional nicety: it points out that the SQL scoping contract is broken — the deletion is supposed to be \"all scheduled sms reminders\" (per the statement's own comment) but the second `OR` arm `{ retryCount: { gt: 1 } }` has no method filter, so it can delete non-SMS reminders (EMAIL, WHATSAPP, etc.) that happen to have retryCount > 1. That is lost data / a wrong result, which is exactly the kind of concrete failure that must be kept. The checker's argument that no non-SMS row increments retryCount today only speaks to current reachability; per the decision rule, whether the failure is rare or unreachable today is not the criterion — the comment does describe a real data-deletion failure and a mismatch between the code and its documented intent."
+     }
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "app/models/topic.rb:868-870: `def expandable_first_post?` / `SiteSetting.embed_truncate? && has_topic_embed?` / `end`; the `embeddable_hosts` site setting no longer exists (config/site_settings.yml:761-771 lists only embed_by_username/embed_post_limit/embed_truncate/...), and spec/models/topic_spec.rb:1403-1404 `it \"is false if embeddable_host is blank\"` expects false while embed_truncate stays at its default false (line 1410 sets it true only inside the \"embeddable host\" block), so the spec no longer exercises host presence.",
+       "reason": "The facts about the current code and the now-vacuous spec check out, but the requested host-presence gate is an optional defensive restoration (the comment itself hedges \"if host presence is still required\") with no concrete crash, data loss, or wrong core result, so it is a nit."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete behavioral regression, not a speculative \"just in case\" check: by dropping the `SiteSetting.embeddable_hosts.present?` guard, `expandable_first_post?` now returns true whenever `embed_truncate?` and `has_topic_embed?` are true. For a topic whose embedding host was deleted (so no embeddable host is configured), the first post still gets expanded, changing embed output in a state the previous guard explicitly blocked — a wrong result / broken behavioral contract. It also notes the retained spec no longer catches this because `has_topic_embed?` is unstubbed and false, so the regression goes undetected. That is a concrete, verifiable failure scenario, so the nit classification does not apply."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:25 `execute \"INSERT INTO embeddable_hosts (host, category_id, created_at, updated_at) VALUES ('#{h}', ...)` (raw insert does bypass the model); app/models/embeddable_host.rb:5-8 strips `^https?://` and `/.*$` in `before_validation`; app/models/embeddable_host.rb:14,17 `host = uri.host` / `where(\"lower(host) = ?\", host)`. But the legacy setting's own description in this repo states values are hostname-only: config/locales/server.he.yml:984 `embeddable_hosts: \"Host(s) that can embed the comments from this Discourse forum. Hostname only, do not begin with http://\"` (same text in server.zh_CN.yml:971, server.ja.yml:931, etc.).",
+       "reason": "The code mechanics the comment cites are accurate (raw INSERT skips before_validation, and record_for_host matches `lower(host) = uri.host`), but the failure only occurs for legacy values containing a scheme/path, whereas the setting's documented/expected format is \"Hostname only, do not begin with http://\", so stripping is a defensive, optional change rather than a concrete fix."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment names a concrete failure, not a speculative or optional improvement: legacy rows inserted raw (e.g. `http://discourse.org`) would never match `record_for_host`'s `lower(host) = uri.host` lookup, so `host_allowed?` returns false and embedding silently breaks for existing installs — a wrong-result/broken-contract failure. The checker's counterargument is only that the setting is documented as hostname-only, which at most makes the failure rare or arguably unreachable; per the rules, whether it happens is not this decision. Keep."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "spec/controllers/admin/groups_controller_spec.rb:115 `xhr :put, :remove_member, group_id: 1, user_id: 42` vs spec/.../groups_controller_spec.rb:125 `xhr :delete, :remove_member, group_id: group.id, user_id: user.id`; config/routes.rb:49-50 `delete \"members\" => \"groups#remove_member\"` / `put \"members\" => \"groups#add_members\"`.",
+       "reason": "The comment's facts hold, but it asks only for a test-consistency change; the example still calls the correct action, and switching the verb doesn't make the controller spec verify routing, so ignoring it causes no failure."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment describes no concrete failure: it explicitly notes the example still lands on the correct action and passes, and that switching the verb wouldn't make the controller spec verify routing. It only asks for a test-consistency improvement, which is an optional change, not a crash, wrong result, broken contract, or other real defect."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "config/routes.rb:49-50: `delete \"members\" => \"groups#remove_member\"` / `put \"members\" => \"groups#add_members\"` are bare custom routes inside `resources :groups` (not in a `member do` block). In Rails 4.1 such bare routes inside a resources block use the parent resource's `_id` param, not `:id`: the analogous bare routes in `resources :users` (config/routes.rb:62-85) are matched by `fetch_user`, which reads `params[:user_id]` — app/controllers/admin/users_controller.rb:337-338 `def fetch_user` / `@user = User.find_by(id: params[:user_id])` — and the specs pass `user_id:` (spec/controllers/admin/users_controller_spec.rb:113 `xhr :put, :approve, user_id: evil_trout.id`). Likewise app/controllers/groups_controller.rb:8 reads `find_group(:group_id)`. So the members route supplies `:group_id`, and `params.require(:group_id)` in app/controllers/admin/groups_controller.rb:66 is correct.",
+       "reason": "Bare routes inside a `resources` block use the resource's `_id` param name (`:group_id`/`:user_id`), not `:id`, so the route does supply `params[:group_id]` and the reported ParameterMissing bug does not exist."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The checker's rebuttal rests on how the Rails routing framework interprets syntax: the claim is that in Rails 4.1 a \"bare\" custom route inside a `resources` block (not wrapped in `member do`) draws the parent resource's `_id` param name rather than `:id`. That is a statement about framework/library behavior — how the routing DSL normalizes a route — not about what a specific line in this repository contains or does. To support it the checker points to a *different* place, the analogous `resources :users` routes, and shows `fetch_user` reading `params[:user_id]` plus specs passing `user_id:`. Quoting that analogous controller/spec code does not turn the framework-semantics argument into repository evidence about the `resources :groups` routes at config/routes.rb:49-50 that the comment is actually about; it is exactly the \"different place used as an example\" / framework-behavior carve-out. The quoted group route lines themselves do not exhibit the param name — resolving them to `:group_id` or `:id` requires the Rails routing rule the checker is invoking. So this is evidence about framework behavior illustrated by repository code, which the instructions say to treat as \"keep\"."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "app/controllers/uploads_controller.rb:63-69:\n```\n# allow users to upload large images that will be automatically reduced to allowed size\nif tempfile && tempfile.size > 0 && SiteSetting.max_image_size_kb > 0 && FileHelper.is_image?(filename)\n  attempt = 5\n  while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes\n    OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)\n    attempt -= 1\n  end\nend\n```",
+       "reason": "The facts are accurate (80% × up to 5 attempts with no post-resize size check against max_image_size_kb), but the requested change is a wording/optional improvement — the best-effort downsize loop neither crashes, returns a wrong result, nor corrupts data, so an inaccurate comment is a nit."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment identifies documentation that states something false about the code: the inline comment promises large images are \"automatically reduced to allowed size,\" but the loop only shrinks by 80% up to 5 times (≈0.33× at best) with no post-resize check against max_image_size_kb, so the promised guarantee does not exist. Documentation that misstates the code's actual behavior is a concrete failure per the rubric, so this is not a droppable nit — the change (make the loop converge or fix the wording) is required to remove the false claim, not merely optional."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/models/optimized_image.rb:126-135 `def self.downsize_instructions(from, to, dimensions, opts={})` ... `-resize #{dimensions}#{!!opts[:force_aspect_ratio] ? \"\\\\!\" : \"\\\\>\"}` (line 132), reached via app/models/optimized_image.rb:149-151 `def self.downsize(from, to, dimensions, opts={})` -> `optimize(\"downsize\", from, to, dimensions, opts)`. The value is forwarded verbatim into ImageMagick's `-resize`, which accepts percentage geometry such as `80%`, so the auto-downsize does reduce the file rather than no-oping.",
+       "reason": "The consumer's instruction builder feeds the value straight into ImageMagick's `-resize`, which accepts a percentage, so the claim that explicit `WxH` is required and that downsizing silently no-ops is contradicted by the repository code."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The checker's rebuttal rests on how an external tool (ImageMagick's `-resize`) interprets its argument, namely that it accepts percentage geometry such as `80%`. Although the checker quotes repository code (`optimized_image.rb`) forwarding the value verbatim, that code merely passes the value along; the decisive claim is about the library/tool's behavior, which is not a factual statement about what this repository's code contains or does. Per the rules, evidence relying on how a language, library, framework or external tool behaves—quoting the repository code that passes the value along—counts as \"keep\"."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "app/views/embed/best.html.erb:14: `      <%= link_to post.created_at.strftime(\"%e %b %Y\"), post.url, class: 'post-date', target: \"_blank\" %>`",
+       "reason": "The described code and I18n usage are accurate, but limiting the date to a localized format is a best-practice/consistency improvement with no crash, wrong result, or data loss, so it is optional."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment accurately describes the code, but its requested change is an optional localization/consistency improvement, not a concrete failure. The date renders correctly (just with English month abbreviations) with no crash, exception, wrong data, data loss, security issue, race condition, broken contract, or performance cost. There is no functional defect — the \"should be localized\" ask (use l( ) / a localized helper instead of a literal strftime) is a best-practice/style/refactoring suggestion, which is the kind of optional change that qualifies as a nit to drop."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "app/jobs/scheduled/poll_feed.rb:15-17: \"poll_feed if SiteSetting.feed_polling_enabled? && SiteSetting.feed_polling_url.present? && SiteSetting.embed_by_username.present?\"; config/site_settings.yml:355: \"feed_polling_enabled: false\"; spec/jobs/poll_feed_spec.rb:18-28 stubs only feed_polling_url/embed_by_username and asserts poller.expects(:poll_feed).never.",
+       "reason": "The facts hold, but the requested change is a test-only setup improvement with no functional impact if omitted, so it is an optional (nit) change rather than a concrete failure."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment identifies a concrete defect in existing test code, not an optional enhancement: the two specs name specific conditions (feed_polling_url / embed_by_username) but never reach them because the `feed_polling_enabled?` guard short-circuits to false. As a result the assertions are vacuous — the tests would still pass even if the checked conditions were deleted, so they report a passing result while verifying nothing. That is a wrong (false-positive) verification outcome, i.e. the tests state something false about the code's behavior. Although the checker frames the stub as a mere setup improvement, the underlying issue is a broken test contract, which counts as a concrete failure rather than style, naming, logging, refactoring, or a \"just in case\" request."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "config/site_settings.yml:348-351 shows `queue_jobs:` with `test: false`; app/jobs/base.rb:162-173 shows `Jobs.enqueue` running the job inline when `queue_jobs?` is false (`klass.new.perform(opts)`); app/jobs/regular/retrieve_topic.rb:17 shows `TopicRetriever.new(args[:embed_url], no_throttle: user.try(:staff?)).retrieve`. So in the test env the enqueued job executes inline and calls `TopicRetriever.new`, satisfying the spec's expectation.",
+       "reason": "In the test environment `SiteSetting.queue_jobs?` is false, so `Jobs.enqueue` executes `Jobs::RetrieveTopic` inline, which calls `TopicRetriever.new(...).retrieve`, making the spec expectation pass — the comment's premise that the job is not run inline is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's premise is that the request path \"only enqueues a Sidekiq job (which is not executed inline here)\", so `TopicRetriever.new` is never called during `get :best`. The checker quotes repository code showing that premise is factually false: config/site_settings.yml sets `queue_jobs:` to `test: false`, and app/jobs/base.rb runs `Jobs.enqueue` inline (`klass.new.perform(opts)`) when `queue_jobs?` is false, and app/jobs/regular/retrieve_topic.rb calls `TopicRetriever.new(...).retrieve`. Thus in the test environment the enqueued job executes inline and does call `TopicRetriever.new`, so the spec expectation is satisfied — contradicting the factual claim about how this repository configures the code path."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "database_test.go:53 `anonDBStore := ProvideAnonDBStore(store, 1)` is the only store with a nonzero limit; lines 65-69 set `anonDevice.DeviceID = \"keep\"` (never inserted) and assert `require.ErrorIs(t, err, ErrDeviceLimitReached)`. Other tests use `ProvideAnonDBStore(store, 0)` (lines 16, 74), and database.go:109-117 only calls `s.updateDevice` when `s.deviceLimit > 0 && count >= s.deviceLimit`.",
+       "reason": "The facts about the code are accurate (the at-limit call uses new ID \"keep\" and hits the rowsAffected==0 branch; the updateDevice success path is unexercised since only one test uses a nonzero limit), but the comment asks only for additional test coverage, which the rubric classifies as an optional nit."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's facts are accurate, but it asks only for an additional test case (covering the updateDevice success path with the same device ID at the limit). Under the rubric, requests for extra tests/coverage are optional improvements, not a concrete failure. No crash, wrong result, data loss, security hole, race, or broken contract is identified — merely a gap in test coverage. Therefore it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:108-117 — updateDevice is only reachable from inside the limit branch: \"// if device limit is reached, only update devices\\nif s.deviceLimit > 0 { ... if count >= s.deviceLimit {\\n return s.updateDevice(ctx, device)\\n}\"; and pkg/services/anonymous/anonimpl/anonstore/database_test.go:65-69 asserts that same zero-row case is the intended outcome: \"anonDevice.DeviceID = \\\"keep\\\" ... err = anonDBStore.CreateOrUpdateDevice(...)\\n require.ErrorIs(t, err, ErrDeviceLimitReached)\".",
+       "reason": "updateDevice runs only when count >= deviceLimit, so every zero-row result occurs with the limit already reached, meaning the sentinel is never emitted for a reason unrelated to the limit (and the test codifies that a no-matching-row device must yield ErrDeviceLimitReached), so the reported spurious-auth-failure premise is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The checker quotes repository code establishing the control flow the comment's claim depends on: updateDevice is only invoked from inside the limit branch (\"// if device limit is reached, only update devices ... if count >= s.deviceLimit { return s.updateDevice(ctx, device) }\"). Since updateDevice runs only after the device limit has already been detected as reached, a zero-row result cannot be emitted \"for reasons unrelated to the limit\" — the sentinel is only produced when the limit is genuinely reached. That directly falsifies the comment's factual premise that the error conflates a non-limit condition and causes a spurious auth failure. The test at database_test.go:65-69 further codifies that the no-matching-row case is expected to yield ErrDeviceLimitReached. This is a factual statement about which callers/control-flow exist in the repository, matching the \"remove\" criterion."
+     }
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "spec/controllers/application_controller_spec.rb:92-97 — `user = Fabricate(:user, locale: :fr)` ... `expect(I18n.locale).to eq(:fr)`; app/controllers/application_controller.rb:153-154 sets `I18n.locale = current_user.effective_locale`, and app/models/user.rb:157 returns `SiteSetting.default_locale` (a String from config/site_settings.yml:60 `default: 'en'`). I18n therefore normalizes the assigned locale to a Symbol, so `I18n.locale` is a Symbol, not a String.",
+       "reason": "Since I18n.locale is a Symbol (the spec asserts `eq(:fr)` after assigning the string `effective_locale`), the `locale` argument in `FallbackLocaleList#[]` is already a Symbol, so `[locale, SiteSetting.default_locale.to_sym, :en].uniq` does deduplicate to a single entry and no duplicate lookup/load occurs."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The checker's rebuttal turns on how the I18n library normalizes an assigned locale value (converting the String returned by effective_locale/default_locale into a Symbol). That is a claim about a library/framework's conversion behavior, merely illustrated with repository code (the spec's `eq(:fr)` and the assignment in application_controller.rb). The instructions explicitly say such evidence — \"how a library converts or normalizes a value\" — counts as \"keep\" even when a repository file is quoted to illustrate it. The checker does not quote repository code showing a factual statement of the comment (e.g., that `[]` is passed a String, or that `.uniq` fails to dedupe) to be false; it argues the argument's type is different because of I18n's own normalization. Therefore the evidence does not establish that the comment's factual statement about this code is false."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "lib/freedom_patches/translate_accelerator.rb:67-76: \"def translate(key, *args)\\n      load_locale(config.locale) unless @loaded_locales.include?(config.locale)\\n      return translate_no_cache(key, *args) if args.length > 0\\n\\n      @cache ||= LruRedux::ThreadSafeCache.new(LRU_CACHE_SIZE)\\n      k = \\\"#{key}#{config.locale}#{config.backend.object_id}\\\"\\n\\n      @cache.getset(k) do\\n        translate_no_cache(key).freeze\\n      end\" — and lib/freedom_patches/translate_accelerator.rb:46-48: \"def load_locale(locale)\\n      LOAD_MUTEX.synchronize do\\n        return if @loaded_locales.include?(locale)\".",
+       "reason": "translate always calls load_locale(config.locale) before any cache entry is created, and load_locale early-returns for an already-listed locale, so a fallback can never be cached for a locale whose file is loaded later — the comment's described stale-cache path cannot occur."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The checker quotes code from the very file the comment targets. In translate (lines 67-68) the requested locale is loaded via `load_locale(config.locale) unless @loaded_locales.include?(config.locale)` BEFORE the cache is ever touched, and load_locale (lines 46-48) early-returns for an already-listed locale. So the comment's central factual premise—that a lookup for a not-yet-loaded locale can be served/​cached as the :en fallback and then remain stale after the locale file is loaded \"later\"—is false: the hashing/caching at line 72-76 only happens after the requested locale has been synchronously loaded, so no fallback value can be cached for a locale whose file is loaded afterwards. This is a statement about what specific named lines of this repository do (translate always calls load_locale first), which contradicts the comment's described call/​cache flow."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "metrics_middleware_test.go:21: `func TestInstrumentationMiddleware(t *testing.T) {`; metrics_middleware.go:26: `type MetricsMiddleware struct {`, :32: `func newMetricsMiddleware(...)`, :76: `func NewMetricsMiddleware(...) plugins.ClientMiddleware`.",
+       "reason": "The facts hold (the test function still uses the old name while the middleware/file were renamed), but renaming a test function is an optional naming/consistency change that breaks nothing."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment only requests renaming a test function for naming/consistency (TestInstrumentationMiddleware → TestMetricsMiddleware). It describes no concrete failure — no crash, wrong result, broken contract, or false documentation. Renaming a test identifier is an optional style/consistency improvement, so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "metrics_middleware_test.go:101-109 `if tc.shouldInstrumentRequestSize { require.Equal(t, 1, testutil.CollectAndCount(promRegistry, metricRequestSize), \"request size should have been instrumented\") ... }`; the false cases at lines 45 and 68 therefore have no request-size assertion, and metrics_middleware.go:169-185 confirms CheckHealth/CollectMetrics never call instrumentPluginRequestSize, so the cited behavior is accurate.",
+       "reason": "The comment's factual observations hold (the assertion is gated and the false cases assert nothing about request size), but it is a request to add a negative test assertion/coverage, which is an optional test improvement rather than a concrete failure."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's factual claims are accurate, but it does not describe a concrete failure in the code—no crash, wrong result, data loss, security hole, race, or broken contract. It asks to add a negative test assertion to improve coverage for the `shouldInstrumentRequestSize: false` cases. That is an optional test improvement, which falls under the \"remove\" category."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "metrics_middleware_test.go:132 `var foundLabels int` sits outside the loop at line 134, and lines 140-141 `if v != *l.Value { return fmt.Errorf(\"expected label %q to have value %q, got %q\", ...) }` return instead of continuing. However, the only call sites (lines 95 and 103) are preceded by `require.Equal(t, 1, testutil.CollectAndCount(promRegistry, metricRequestDurationMs))` etc. (lines 88-90, 102), i.e. every metric family in this test has exactly one series, so the multi-series scenario the reported failure depends on never occurs.",
+       "reason": "The facts about the helper hold (foundLabels isn't reset and a value mismatch returns rather than continues), but the false-failure only occurs with a multi-series metric family, which the tests explicitly preclude (CollectAndCount == 1 for every family), so the fix is optional/forward-looking rather than a concrete failure."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete wrong result: with a multi-series metric family, `foundLabels` carrying over between metrics and the premature error return produce false test failures and incorrect \"expected N labels, got M\" counts. That is a specific incorrect behavior, not a \"just in case\" or style request. The checker only argues the scenario is not reachable today (all families have exactly one series), but reachability/rarity is explicitly not the criterion for this decision—the comment names a concrete failure, so it should be kept."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S5",
+      "S8",
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/infra/tracing/tracing.go:91-97: `log.RegisterContextualLogProvider(func(ctx context.Context) ([]any, bool) { if traceID := TraceIDFromContext(ctx, false); traceID != \"\" { return []any{\"traceID\", traceID}, true } return nil, false })`, and pkg/infra/log/log.go:203-217 `func (cl *ConcreteLogger) FromContext(ctx context.Context) Logger { ... for _, p := range ctxLogProviders { if pArgs, exists := p(ctx); exists { args = append(args, pArgs...) } } ... }`. Since `m.logger.FromContext(ctx).Info(...)` at logger_middleware.go:58 is used for the log line, the traceID is appended from the context automatically (equivalently to the old explicit `tracing.TraceIDFromContext(ctx, false)`), and `tracing.ProvideService` is wired in pkg/server/wire.go:249, so the provider is registered.",
+       "reason": "The `FromContext` call already merges a registered contextual provider that adds `traceID` from the same `TraceIDFromContext(ctx, false)`, so egress log lines do not lose it."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's factual claim is that egress log lines \"silently lose their traceID\" because nothing on the path adds it. The checker quotes repository code (pkg/infra/tracing/tracing.go:91-97) that registers a contextual log provider returning `[]any{\"traceID\", traceID}` from `TraceIDFromContext(ctx, false)`, and pkg/infra/log/log.go:203-217 showing `FromContext` merges all registered providers' args. Since logger_middleware.go:58 logs via `m.logger.FromContext(ctx).Info(...)`, the traceID is appended automatically by this repository code (and `ProvideService` is wired in pkg/server/wire.go:249). This is a statement about how this repository configures the code path the comment describes, showing the comment's factual assertion is false."
+     }
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "dualwriter_mode3_test.go:237 `assert.Equal(t, obj, exampleObj)` with `exampleObj` being a non-nil `*example.Pod` (dualwriter_mode1_test.go:19). `assert.Equal` fails when `obj` is nil and `exampleObj` is not, so this assertion does NOT pass if the storage call is dropped and nil is returned. `DualWriterMode3.Delete` returns the storage result: dualwriter_mode3.go:100 `res, async, err := d.Storage.Delete(ctx, name, deleteValidation, options)` and dualwriter_mode3.go:116 `return res, async, err` — so line 237 exercises the pass-through and would catch a broken implementation.",
+       "reason": "The comment's central claim that the Equal assertion \"can never fail\" and \"would still pass if ... nil ... returned\" is false: assert.Equal(t, nil, exampleObj) fails, so the assertion does exercise the code under test."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The checker's refutation turns on how testify's `assert.Equal` behaves (it fails when comparing a nil value against a non-nil `*example.Pod`), and it illustrates that with the fixture definition quoted from a different file (`dualwriter_mode1_test.go:19`). That is a statement about a library's comparison semantics, not about what this repository's code does, so under the rules it does not count as repository evidence showing the comment's factual statement false. The comment's falsifiable claim (\"would still pass if ... nil ... returned\") is only overturned by invoking the assertion library's behavior, so the correct verdict is \"keep.\""
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "pkg/apiserver/rest/dualwriter_mode3_test.go:51-54 `m := &mock.Mock{}` then `ls := legacyStoreMock{m, l}` / `us := storageMock{m, s}` (both embed the same mock); grep over the package returns no `AssertExpectations`/`AssertCalled`/`AssertNumberOfCalls`/`WaitGroup`/`time.Sleep`. pkg/apiserver/rest/dualwriter_mode3.go:50-57 shows the legacy write in a goroutine `go func(){ ... d.Legacy.Create(ctx, obj, createValidation, options) ... }()`.",
+       "reason": "The facts hold (no assertions on the legacy mock, shared *mock.Mock, legacy write in a detached goroutine), but the request is to add test assertions/coverage, which is an optional improvement rather than a concrete production failure."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's substance is a test-coverage gap: it points out that the tests register legacy expectations but never assert on them (`AssertExpectations`/`AssertCalled`/`AssertNumberOfCalls`), never wait for the goroutine, and share a single `*mock.Mock`. Its requested fix is to add assertions/observation of the legacy write — i.e., to strengthen tests. That is an optional improvement, not a concrete production failure (no crash, wrong result, data loss, security hole, race, or broken production contract). The facts hold, but the ask falls under \"tests or an optional improvement,\" so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:96-97: `log := d.Log.WithValues(\"name\", name, \"kind\", options.Kind, \"method\", method)` then `ctx = klog.NewContext(ctx, d.Log)`; every other method (lines 39, 66, 82, 123, 150) uses `klog.NewContext(ctx, log)`.",
+       "reason": "The facts hold (line 97 does pass d.Log while all sibling methods pass the composed log), but this only drops per-request log fields — a logging/observability improvement with no crash, wrong result, data loss, or security impact — so it is an optional nit."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment describes a copy/paste error where the mode-level logger is installed instead of the request-scoped one, dropping per-request log fields. The facts are true, but the impact is purely a logging/observability concern — no crash, wrong result, data loss, security issue, race, broken contract, or performance cost. That makes it an optional logging improvement, so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "dualwriter_mode3_test.go:145 `name: \"error when listing an object in the unified store is not implemented\"`; dualwriter_mode3.go:79 `func (d *DualWriterMode3) List(...)` whose body at line 85 does `res, err := d.Storage.List(ctx, options)`, and the test only checks `assert.Error(t, err)` at dualwriter_mode3_test.go:179.",
+       "reason": "The name is indeed misleading, but the fix is just renaming a test case — a naming/readability change with no crash, wrong result, data loss, or broken caller — so it is an optional nit."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment only asks to rename a test case for accuracy/readability. It names no concrete failure — no crash, wrong result, data loss, security hole, race, or broken contract. A misleading test-case name is a naming/readability issue (and a test change), which the rubric classifies as an optional nit, so it can be dropped."
+     }
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6",
+      "S7",
+      "S11",
+      "S12",
+      "S13",
+      "S18",
+      "S19",
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S4",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "server.go:258-262 does call s.Init(ctx) and return nil, err without cancel (initWatcher is the last step, 752-770; search.go:202 watchctx := context.Background()). But the watcher goroutine is only started after connect succeeds (broadcaster.go:163 `if err := connect(stream); err != nil { return err }` precedes broadcaster.go:177 `go b.stream(stream)`), so on the only failing path no watcher goroutine exists, and the one goroutine that can leak (search.go:207, bound to context.Background()) is not stoppable by cancel().",
+       "reason": "The cited call/return and the Background goroutine are real, but the concrete leak the request targets is not fixed by calling cancel(), making the cleanup an optional defensive change rather than a demonstrable failure."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete failure—a resource/goroutine leak: when NewResourceServer's Init succeeds but a later step fails, the constructor returns nil, err and discards the server while long-lived goroutines keep running with no way to stop them. Even accepting the checker's points that the watcher goroutine is only started after connect succeeds and that the search.go:207 goroutine is bound to context.Background() (and thus not stoppable by cancel()), the latter confirms rather than refutes a genuine leaked-goroutine condition on the error path. A leaked goroutine/internal context is a real resource leak, not a mere style, naming, or \"just in case\" request. Per the rule to keep concrete failure descriptions even when the checker deems them rare or not reachable today, this comment should be kept."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "pkg/server/module_server_test.go:36-38 `if dbType == \"postgres\" { t.Skip(\"skipping - test not working with postgres in Drone. Works locally.\") }`; pkg/server/instrumentation_service_test.go:41-43 `res, err := client.Get(\"http://localhost:3001/metrics\"); ... assert.Equal(t, 200, res.StatusCode)` still exercises the instrumentation HTTP setup.",
+       "reason": "The cited skip and ordering are accurate, but the ask is restoring/adding test coverage for the postgres target path, which the rubric classifies as a nit rather than a concrete failure."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment accurately notes the t.Skip ordering, but its ask is to restore/add test coverage for the postgres target path (an equivalent postgres-target test). That is a request for tests / an optional improvement, and the described harm is speculative (\"could regress\"), not a concrete failure. Per the rubric, coverage-only asks are nits to drop."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S4",
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-157 — `new Thread(() -> { while (!deletedAll.get()) { ... managedRealm.admin().groups().groups(...); } }).start(); ... deletedAll.set(true); assertThat(caughtExceptions, Matchers.empty());`. The Thread is started at line 149 with no stored reference and no `join()`, confirming the comment's factual description of the code (so it is not refuted).",
+       "reason": "The comment accurately notes the missing join, but the change it requests is an optional test-robustness/timing hardening of code that currently passes, not a concrete reproducible failure, so it is a nit."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete race condition: the reader Thread is started without being captured or joined, so the assertion at line 157 can run before the reader has performed any groups() read (or while a failing read is still in flight). This means the test could pass even if the GroupAdapter.getSubGroupsCount null-model NullPointerException were reintroduced, i.e. the test does not actually verify the condition it claims to verify. A race condition and a broken test contract are concrete failures, and the guidance says to keep such comments even if the checker deems them optional timing hardening."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "model/infinispan/.../GroupAdapter.java:274-275 `GroupModel model = modelSupplier.get(); return model == null ? null : model.getSubGroupsCount();` — the nullable return is real. But the only consumer in the repo, services/src/main/java/org/keycloak/utils/GroupUtils.java:90 `representation.setSubGroupCount(group.getSubGroupsCount());`, feeds it into GroupRepresentation.setSubGroupCount(Long) (core/.../GroupRepresentation.java:94), which stores it in `protected Long subGroupCount;` (line 40) — no unboxing anywhere; tests explicitly expect null (GroupSearchTest.java:130 `assertThat(...getSubGroupCount(), is(nullValue()))`).",
+       "reason": "The now-nullable return is true, but no caller in the repository unboxes it (the sole consumer accepts a nullable Long and tests assert null), so the described NPE is a speculative \"could break if a caller unboxes\" concern rather than a concrete failure — a nit."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete failure and a broken contract, not an optional improvement. It asserts that getSubGroupsCount() changed from a non-null contract (value or exception) to a genuinely nullable return, so any caller that unboxes the result — e.g. `group.getSubGroupsCount() > 0`, `long n = ...`, or passing to a primitive-typed parameter — will now throw NullPointerException instead of receiving a value or the previous exception. That is a named, concrete failure mode (NPE) and a contract mismatch between the changed code and its callers. The checker's point that the only in-repo consumer happens to store the nullable Long is an argument about reachability/rarity, which per the decision rules does not downgrade the finding. It is not phrased as a \"just in case\" or style suggestion, so it should be kept."
+     }
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "OAuth2GrantTypeFactory.java:30 Javadoc: \"@return usually like 3-letters shortcut of specific grants...\". Implementations: AuthorizationCodeGrantTypeFactory.java:32 \"GRANT_SHORTCUT = \\\"ac\\\"\", ClientCredentialsGrantTypeFactory.java:40 \"return \\\"cc\\\"\", PermissionGrantTypeFactory.java:40 \"pg\", PreAuthorizedCodeGrantTypeFactory.java:60 \"pc\", RefreshTokenGrantTypeFactory.java:33 \"rt\", ResourceOwnerPasswordCredentialsGrantTypeFactory.java:40 \"ro\", TokenExchangeGrantTypeFactory.java:42 \"te\", CibaGrantTypeFactory.java:37 \"ci\", DeviceGrantTypeFactory.java:37 \"dg\". Decoder DefaultTokenContextEncoderProvider.java:74 \"if (encodedContext.length() != 6)\" and :79-81 substring(0,2)/substring(2,4)/substring(4,6).",
+       "reason": "The stated facts hold (all shortcuts are 2 chars and the decoder hard-codes 2+2+2=6), but the requested change is only a Javadoc wording correction that causes no crash, wrong result, or broken caller, so it is an optional documentation nit."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment identifies documentation that states something false about the code: the Javadoc claims getShortcut() returns \"usually like 3-letters shortcut\", while every implementation returns a 2-character shortcut and the decoder hard-codes 2-char segments (encoded length 6 = 2+2+2). Documentation that states something false about the code is explicitly listed as a keep reason, regardless of the checker's view that the change is optional."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S11",
+      "S15"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "AccessTokenContext.java:72-73: `Objects.requireNonNull(grantType, \"Null grantType not allowed\");` then `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\");` The fact is correct. But no path supplies null rawTokenId: TokenManager.java:1053 `encoder.getTokenContextFromClientSessionContext(clientSessionCtx, KeycloakModelUtils.generateId())`, and DefaultTokenContextEncoderProvider.java:62/69/96 construct with `rawTokenId`, `encodedTokenId`, `rawId` (all non-null).",
+       "reason": "The duplicated check and mismatched message are real as described, but the fix is a defensive null validation with no concrete input or path (all call sites pass non-null ids), so ignoring it changes no behavior — a nit."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete failure, not merely a style preference: the constructor's second null check targets `grantType` (with a mismatched message referencing `rawTokenId`), so a null `rawTokenId` would be silently accepted and `encodeTokenId` would produce a token id ending in `:null`, yielding an invalid value for any later consumer instead of failing early. The checker confirms the factual basis (the duplicated check and wrong argument are real). That stated consequence is a wrong result / broken contract between the code and its callers. Per the rules, reachability (no current path passes a null id) is not this decision, so the comment should not be dropped as an optional nit."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S3",
+      "S7",
+      "S8",
+      "S9",
+      "S10",
+      "S12",
+      "S13",
+      "S14",
+      "S16",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "GrafanaGroupLoader.test.tsx:95-101: `// Check that More button is present\\n const moreButton = ui.moreButton().get(ruleListItem);\\n expect(moreButton).toBeInTheDocument();\\n // Verify More button accessibility\\n expect(moreButton).toHaveAttribute('aria-label', 'More');\\n expect(moreButton).toHaveTextContent('More');` — no menuitem assertion follows, even though ui.menuItems (lines 37-43) defines Silence/Duplicate/Copy link/Export/Delete selectors that go unused in this test.",
+       "reason": "The facts hold (the test only checks the trigger button), but the requested change is adding test coverage/renaming, which is optional and cannot cause a failure."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment names no concrete failure in the code. It points out that the test only asserts the More button's presence/attributes and that a hypothetical empty dropdown would still pass — i.e., a gap in test coverage. The requested change is to add menu-item assertions or rename the test, which is a test/optional improvement, not a crash, wrong result, data loss, security hole, race, broken contract or performance issue. Per the rules, requests for tests or optional improvements are dropped as nits."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "public/app/features/alerting/unified/utils/rules.ts:103-104: `function isGrafanaPromAlertingRule(rule?: Rule): rule is GrafanaPromAlertingRuleDTO { return isAlertingRule(rule) && 'folderUid' in rule && 'uid' in rule; }` — the guard on line 57 of RuleActionsButtons.V2.tsx is a runtime structural check (`'folderUid' in rule && 'uid' in rule`), not a check of the declared TS type. And public/app/types/unified-alerting.ts:41-42 shows `RuleBase` (base of the `Rule` type) itself declares `uid?: string; folderUid?: string;`, so `Rule` does carry those fields. Callers pass real Grafana prom-rule DTOs (GrafanaRuleListItem.tsx:47 `promRule={rule}` with `rule: GrafanaPromRuleDTO`; StateView.tsx:132; DataSourceGroupLoader.tsx:196), whose runtime objects have `uid`/`folderUid`, so the guard returns true. Additionally the cited \"RulesTable path\" does not even use this component: RulesTable.tsx:30 imports the V1 `./RuleActionsButtons` (used at line 329), not `RuleActionsButtons.V2`.",
+       "reason": "The claimed failure rests on the false premise that the runtime type guard depends on the TS type and returns false for combined-rule callers; the guard is a runtime `'uid' in rule` check and the `Rule` type itself has `uid?`/`folderUid?`, so Grafana prom-rule objects pass it and the abilities resolve normally."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The evidence quotes repository code that falsifies the comment's factual claims. (1) It quotes the actual guard implementation at public/app/features/alerting/unified/utils/rules.ts:103-104 (`isGrafanaPromAlertingRule` = `isAlertingRule(rule) && 'folderUid' in rule && 'uid' in rule`), showing the guard is a runtime structural check of the object, not a check of the TS-declared type, so the comment's premise that it \"returns false for combined-rule callers\" because `Rule` \"is not a prom-rule DTO\" is false. (2) It quotes public/app/types/unified-alerting.ts:41-42 showing `RuleBase` (the base of `Rule`) itself declares `uid?: string; folderUid?: string;`, so `Rule` does carry those fields. (3) It shows the cited caller example does not even use this component: RulesTable.tsx imports the V1 `./RuleActionsButtons`, not `RuleActionsButtons.V2`. These are statements about what specific named functions/types/callers in this repository contain and do, so the comment rests on false factual statements."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "illegalHtmlTag_en.properties line 17: `key=Some <div>tag</div`; VerifyMessageProperties.java lines 58-61: `.allowElements(\"br\", \"p\", \"strong\", \"b\")`; line 91: `PolicyFactory policy = containsHtml(englishValue) ? POLICY_SOME_HTML : POLICY_NO_HTML;`. No fixture pairs an English value containing HTML with a translation using an allowed tag (noHtml_en.properties line 17 `key=No HTML` pairs with noHtml_de.properties line 17 `key=Some <b>HTML</b>`), so the allow-list is untested.",
+       "reason": "The gap is real (no test exercises the permitted br/p/strong/b subset), but the requested change is only an added test case, so it is an optional coverage improvement rather than a concrete failure."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment requests an additional test case to improve coverage of the POLICY_SOME_HTML allow-list. It names no concrete failure in the code itself (no crash, wrong result, security hole, etc.); the current code behaves correctly. The gap is a missing test/coverage improvement, which the rubric classifies as an optional change, so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S6",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S8",
+      "S9",
+      "S10",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "model/jpa/src/main/java/org/keycloak/authorization/jpa/store/ResourceServerAdapter.java:91-93 `public String getClientId() { return getId(); }` and model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/authorization/ResourceServerAdapter.java:121-123 `public String getClientId() { return getId(); }`. Thus ResourceServer.getClientId() always equals getId(), the owner created at AdminPermissionsSchema.java:104 (`resourceStore.create(resourceServer, name, resourceServer.getClientId())`) equals server.getId(), and the findByName(server, ..., server.getId()) at ClientPermissionsV2.java:244 does match.",
+       "reason": "Both ResourceServer implementations make getClientId() return getId(), so the owner used at creation equals the ownerId passed at lookup and the claimed mismatch/always-null failure does not exist."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The checker's evidence is not a direct contradiction of a factual statement about what the cited lines contain or do. The comment's factual descriptions (lookup passes server.getId(); the resource is created with owner server.getClientId(); the 2-arg findByName uses getClientId()) are not disputed. Instead, the checker argues that the hypothetical branch (\"if ResourceServer.getId() differs from ResourceServer.getClientId()\") can never occur, because the implementations make getClientId() return getId(). That is precisely the \"a type/function never returns the bad value, so the reported branch cannot be reached\" style of argument — it shows the mismatch case is unreachable and the concern is harmless by design, rather than quoting code that makes a stated fact false. When unsure, answer keep."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissions.java:85 `if (Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ) || Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ_V2)) {` — the non-V2 (MgmtPermissions) model only obtains an AuthorizationProvider, and thus authorization resources, when ADMIN_FINE_GRAINED_AUTHZ (or V2) is enabled. Without it, `authz` is null and RolePermissions.disablePermissions returns at services/src/main/java/org/keycloak/services/resources/admin/permissions/RolePermissions.java:87-88 `ResourceServer server = resourceServer(role); if (server == null) return;`, so there were never any V1 resources to orphan. The admin endpoints that create these permissions also require the same feature (e.g. ClientResource.java:739 `ProfileHelper.requireFeature(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ);`).",
+       "reason": "The non-V2 permission model only holds authorization resources while ADMIN_FINE_GRAINED_AUTHZ is enabled, so when the gate is false there is nothing to clean up; the comment's claimed orphan scenario cannot occur."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's factual claim is that disabling ADMIN_FINE_GRAINED_AUTHZ leaves V1 (non-V2) authorization resources/permissions orphaned, because the removal cleanup no longer runs. The checker quotes repository code showing this scenario cannot arise: MgmtPermissions.java:85 only obtains an AuthorizationProvider (and thus authorization resources) when ADMIN_FINE_GRAINED_AUTHZ or ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled, and RolePermissions.disablePermissions returns early at lines 87-88 (`ResourceServer server = resourceServer(role); if (server == null) return;`) when there is no resource server. Since the admin endpoints that create these permissions also require the same feature (ClientResource.java:739), the non-V2 model has no authorization resources to orphan when the gate is false. This is a statement about what the named repository code does, refuting the comment's premise rather than an external-behavior or design/intent argument."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "ClientPermissionsV2.java:262 `private EvaluationContext getEvaluationContext(ClientModel authorizedClient, AccessToken token) {` — grep for `getEvaluationContext` across the package returns only this declaration, and ClientPermissionsV2.java:148-150 `public boolean canExchangeTo(...) { throw new UnsupportedOperationException(\"Not supported in V2\"); }` while V1 ClientPermissions.java:360-369 builds the context inline.",
+       "reason": "The facts are accurate (unused private method), but the fix is deleting dead code, an optional cleanup that causes no functional failure — a nit, not a bug."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment reports an unused private method (dead code) whose only potential caller was overridden to throw UnsupportedOperationException. This names no concrete runtime failure — no crash, wrong result, data loss, security hole, race, or broken contract. The requested change is deleting dead code, an optional cleanup/refactor, so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "PasswordForm.java:46-49: `if (alreadyAuthenticatedUsingPasswordlessCredential(context)) { context.success(); return; }` — authenticate() already short-circuits before rendering the password page, and UsernamePasswordForm.java:160-163 shows isConditionalPasskeysEnabled only returns true when webauthnAuth != null, passkeys are enabled and the user has a passkey configured.",
+       "reason": "The factual reading holds (configuredFor does return true for a passkey-only user), but the reported harm is speculative: the passkey path is already short-circuited to success by the existing `alreadyAuthenticatedUsingPasswordlessCredential` branch, and stranding only occurs under the speculative condition that the passkey fails or is unsupported, so the requested gating is an optional design change rather than a concrete regression."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment identifies a concrete functional problem, not a style/optional improvement: making `configuredFor` return true for a passkey-only user causes the flow to treat PasswordForm as a required step and render a password page for a user who has no password credential, so the step can never be satisfied. Whether the existing `alreadyAuthenticatedUsingPasswordlessCredential` short-circuit hides this in the common case is a question of reachability, which the rubric says is not this decision. The requested gating addresses a real broken contract between configureFor's advertised requirement and the flow's behavior, so it should not be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "UsernamePasswordForm.java:160-163: `protected boolean isConditionalPasskeysEnabled(UserModel currentUser) { return webauthnAuth != null && webauthnAuth.isPasskeysEnabled() && (currentUser == null || currentUser.credentialManager().isConfiguredFor(webauthnAuth.getCredentialType())); }`; and line 114 comment `// setup webauthn data when passkeys enabled` guards line 115-116.",
+       "reason": "The comment's facts hold (the guard does require a known user to have a passkey credential, as the test confirms), but it only asks to reword a code comment for readability/accuracy, which is an optional documentation change, not a concrete failure."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment identifies documentation that states something false about the code: the inline comment claims webauthn data is set up \"when passkeys enabled,\" but the guard also requires the selected user to actually have a passkey credential, so with realm passkeys enabled and a user lacking a passkey, `fillContextForm` is skipped. A false/misleading code comment is exactly the \"documentation that states something false about the code\" case, so it should not be dropped as a nit."
+     }
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:112-114 `logger.warning(\"browser_report_validation_failed\", extra={\"validation_errors\": serializer.errors, \"raw_report\": report})`; line 80 `permission_classes = ()`; line 93 already logs the full body: `logger.info(\"browser_report_received\", extra={\"request_body\": request.data})`.",
+       "reason": "The comment's facts hold (raw_report is logged by an unauthenticated, CSRF-exempt endpoint), but the request is an optional logging/redaction-hygiene change — the full payload is already logged at info level on line 93, so ignoring it changes no behavior or security posture."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete security/privacy failure: an unauthenticated, CSRF-exempt public endpoint logs the full attacker-controlled raw report payload, which routinely contains sensitive values (CSP blocked-uri/document-uri, sourceFile, user_agent), writing that data into application logs on every validation failure. That is a real sensitive-data-exposure/security concern, not merely an optional style, naming, or refactoring preference. The checker's argument that the payload is already logged at info level on line 93 does not negate the failure — it actually corroborates that sensitive data is being persisted to logs; whether the leak is pre-existing or how reachable it is today is irrelevant to this decision. Per the rules, a security hole warrants keeping the comment."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "organization_preprod_artifact_assemble.py:81-91 — analytics.record(\"preprod_artifact.api.assemble\", ...) at lines 81-86, then `if not features.has(\"organizations:preprod-artifact-assemble\", ...): return Response({\"error\": \"Feature not enabled\"}, status=404)` at lines 88-91. src/sentry/preprod/analytics.py:5 shows the event type with only organization_id/project_id/user_id attributes.",
+       "reason": "The code facts are accurate, but the endpoint still returns correct results and no data is lost or corrupted; changing when an analytics/logging event fires is an optional telemetry-accuracy refinement, so it is a nit rather than a concrete functional failure."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's facts are accurate, but it describes only when a telemetry/analytics event fires. The endpoint returns correct results, no data is lost or corrupted, and nothing crashes; moving an analytics.record call is an optional telemetry-accuracy improvement akin to a logging refinement, not a concrete functional failure, broken contract, security issue, race, or performance cost. It therefore names no concrete failure and can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx:120 `return query.query === 'search-query';` vs useGetTraceItemAttributeValues.tsx:53 `query.substringMatch = search;` (and the correct first-test predicate at spec.tsx:73 `return query.substringMatch === 'search-query';`)",
+       "reason": "The mismatch the comment describes is real (mock predicate uses `query.query`, hook sends `substringMatch`), but it only affects a test's mock/assertion, not production behavior — fixing the predicate is an optional test-quality improvement, so it is a nit."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment is a test-quality improvement: it points out that a mock predicate (`query.query`) in a spec file doesn't match how the hook sends the search string (`substringMatch`), making one assertion vacuous. Nothing in production code is affected — no crash, wrong result, data loss, security issue, race, or broken contract. Fixing the predicate to pin the guard is an optional strengthening of a test, which falls under the \"tests / optional improvement\" category for removal. Naming the mismatch as a concrete fact is not the same as naming a concrete failure in the code under review."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "model/jpa/src/main/java/org/keycloak/organization/jpa/JpaOrganizationProvider.java:341-342 `identityProvider.setOrganizationId(organizationEntity.getId()); session.identityProviders().update(identityProvider);` and :368-371 `identityProvider.setOrganizationId(null); ... session.identityProviders().update(identityProvider);`. Because InfinispanIdentityProviderStorageProviderFactory.order()==10 outranks the JPA factory, session.identityProviders() resolves to the cached InfinispanIdentityProviderStorageProvider, so update() runs registerIDPLoginInvalidationOnUpdate (InfinispanIdentityProviderStorageProvider.java:93,403-417) which invalidates all cacheKeyForLogin keys.",
+       "reason": "The org-link/unlink path does route through IdentityProviderStorageProvider.update() (the JPA org provider calls session.identityProviders().update()), which invalidates the login caches, so the reported gap does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's central factual premise is that the org-link/unlink mutation \"does not itself route through IdentityProviderStorageProvider.update().\" The checker quotes repository code in JpaOrganizationProvider (lines 341-342 and 368-371) showing the org-link/unlink paths set/unset the organization id and then call `session.identityProviders().update(identityProvider)`. Because the cached InfinispanIdentityProviderStorageProvider (factory order()==10) resolves `session.identityProviders()`, that update() runs `registerIDPLoginInvalidationOnUpdate`, which invalidates all cacheKeyForLogin keys. This is a statement about what the repository's code contains/does and how its code path is configured, and it directly refutes the comment's claim that org-link mutations never trigger cacheKeyForLogin invalidation. Hence the reported gap rests on a false statement."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:252-255: `public static Predicate<IdentityProviderModel> getLoginPredicate() { return ((Predicate<IdentityProviderModel>) Objects::nonNull).and(idp -> idp.getOrganizationId() == null || Boolean.parseBoolean(idp.getConfig().get(OrganizationModel.BROKER_PUBLIC))).and(Stream.of(values())...` and javadoc at 215-217.",
+       "reason": "The stated facts hold, but the request is only to update a javadoc comment, which is an optional documentation fix with no runtime or correctness impact."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes documentation that now states something false about the code: the enum javadoc (lines 215-217) claims it \"contains all fields that are considered when deciding if a provider should be available for login or not,\" while getLoginPredicate (line 252-256) now also filters on the organization link and the BROKER_PUBLIC config. That is a false contract statement about the code, which falls squarely under \"documentation that states something false about the code\" — not merely an optional style/nit fix. The nit classification from the checker does not apply."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "InfinispanIdentityProviderStorageProvider.java:244 `Set<IdentityProviderModel> identityProviders = new HashSet<>();` and :254 `return identityProviders.stream();` confirm the HashSet/stream claim. But the non-cached branch also reaches the same HashSet (lines 226-243 fall through to 244) and already drops delegate order at :229/:238 `.collect(Collectors.toSet())`. Every caller re-sorts: IdentityProviderBean.java:238-241 `getForLogin(...).filter(...).map(...).sorted(IDP_COMPARATOR_INSTANCE).toList();` and OrganizationAwareIdentityProviderBean.java:58-82 all end with `.sorted(IDP_COMPARATOR_INSTANCE).toList();`.",
+       "reason": "The HashSet usage is real, but the ordering is already discarded by the non-cached path too and every existing caller sorts the result, so preserving/sorting the cached order is an optional consistency improvement with no concrete failure."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment describes no concrete failure. Its central premise—that the non-cached/delegate path preserves order while the cached path does not—is false: the non-cached branch also falls through to the same HashSet (lines 226-254) and already discards delegate order via `.collect(Collectors.toSet())`. Every existing caller (IdentityProviderBean, OrganizationAwareIdentityProviderBean) ends with `.sorted(IDP_COMPARATOR_INSTANCE).toList()`, so no caller relies on the returned order. The comment's failure case is conditional on a hypothetical caller that \"does not re-sort,\" which does not exist. What remains is an optional consistency/robustness improvement (use LinkedHashSet or sort), not a crash, wrong result, broken contract, or any other concrete failure."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "InfinispanIdentityProviderStorageProvider.java:141: `return createOrganizationAwareIdentityProviderModel(cached.getIdentityProvider());` (and line 139/135) — session.identityProviders() resolves to this same InfinispanIdentityProviderStorageProvider, so getById(id) already returns an organization-aware model; the loop at line 246-251 therefore does not add a raw model.",
+       "reason": "The claim that the cache-hit loop stores an unwrapped/raw model is false because the getById it calls always returns a model wrapped by createOrganizationAwareIdentityProviderModel."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's factual claim is that the cache-hit loop adds the raw/unwrapped model returned by session.identityProviders().getById(id). The checker quotes code from this same file (InfinispanIdentityProviderStorageProvider.java, lines 135/139/141) showing that getById itself already returns createOrganizationAwareIdentityProviderModel(...). Since the loop calls exactly that getById, the loop cannot be adding an unwrapped model — the statement the comment rests on is factually false about what this code does/returns. The evidence quotes the repository code at issue (the getById definition the loop invokes), not a language/library behavior or a different location used as an example, so the comment should be removed."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S4",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:173-181 — the default getForLogin (used by the JPA delegate) explicitly adds the BROKER_PUBLIC filter for org modes: `if (mode == FetchMode.ORG_ONLY || mode == FetchMode.ALL) { Map<String, String> searchOptions = LoginFilter.getLoginSearchOptions(); if (organizationId != null) { searchOptions.put(IdentityProviderModel.ORGANIZATION_ID, organizationId); } searchOptions.put(OrganizationModel.BROKER_PUBLIC, \"true\"); result = Stream.concat(result, getAllStream(searchOptions, null, null)); }`. The JPA getAllStream applies this as a config join predicate (JpaIdentityProviderStorageProvider.java:268-283), so org-linked IDPs with BROKER_PUBLIC false are returned by neither ORG_ONLY nor ALL.",
+       "reason": "The premise is false: BROKER_PUBLIC gates org-linked IDPs in ORG_ONLY/ALL too, so non-public org IDPs are never part of any login view and getLoginPredicate is consistent with the fetch modes."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's key factual premise is that FetchMode.ALL/ORG_ONLY include an organization's linked IDPs regardless of BROKER_PUBLIC. The checker quotes this repository's own default getForLogin (IdentityProviderStorageProvider.java:173-181), which for ORG_ONLY/ALL builds search options that always put OrganizationModel.BROKER_PUBLIC = \"true\" (plus the organization id when present) and concatenates that result; the JPA getAllStream applies it as a config join predicate (JpaIdentityProviderStorageProvider.java:268-283). So non-public, org-linked IDPs are returned by neither ORG_ONLY nor ALL. This directly contradicts the comment's statement about what the fetch modes return, showing the factual claim is false; therefore getLoginPredicate is consistent and nothing in the invalidation is broken by the BROKER_PUBLIC condition."
+     }
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "src/sentry/integrations/tasks/sync_assignee_outbound.py:56 `if installation.should_sync(\"outbound_assignee\", parsed_assignment_source):`; src/sentry/integrations/mixins/issues.py:66 `def should_sync(self, attribute, sync_source: AssignmentSource | None = None):` and :382 `def should_sync(self, attribute: str, sync_source: AssignmentSource | None = None) -> bool:`; src/sentry/integrations/utils/sync.py:48 `and integration.get_installation(organization_id=organization.id).should_sync(key)`. A repo-wide grep for `should_sync` returns only these two definitions, both of which already accept the second parameter — no concrete integration overrides `should_sync` with the old `(self, attribute)` signature.",
+       "reason": "The mechanical statements hold (2-arg call site, both base signatures updated, 1-arg where_should_sync caller), but no concrete `should_sync` override exists anywhere in the repository, so nothing crashes and the requested verification/defensive change is optional."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete failure mode: at the new 2-arg call site (sync_assignee_outbound.py:56) any integration overriding `should_sync` with the pre-PR `(self, attribute)` signature would raise `TypeError`, crashing the assignee-outbound task. This is a broken contract between the changed call site and its overridable hook, not a style or \"just in case\" request. That no such override exists in the repo today only speaks to current reachability, which is explicitly not the criterion here. Keep."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "tests/sentry/integrations/services/test_assignment_source.py:8-11: `def test_from_dict_empty_array(self):\\n        data: dict[str, Any] = {}\\n        result = AssignmentSource.from_dict(data)\\n        assert result is None`; and src/sentry/integrations/services/assignment_source.py:31: `def from_dict(cls, input_dict: dict[str, Any]) -> AssignmentSource | None:`",
+       "reason": "The name/input mismatch is real, but it is only a test-naming/readability concern whose fix (rename or add a case) is optional and breaks nothing."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment describes a test-naming/readability mismatch (test named test_from_dict_empty_array but passing {}), not a concrete runtime failure. Its proposed fix is renaming the test or adding a case—a naming/test-coverage improvement that is optional and breaks nothing. No crash, wrong result, data corruption, security hole, race, or broken contract is claimed, so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/conf/server.py:739-741: CELERY_TASK_SERIALIZER = \"pickle\"; CELERY_RESULT_SERIALIZER = \"pickle\"; CELERY_ACCEPT_CONTENT = {\"pickle\"}",
+       "reason": "Sentry's Celery task serializer is pickle (with accept_content {\"pickle\"}), so the datetime in the kwargs is serialized natively and round-trips as a datetime object rather than failing or becoming a string, meaning the reported type/serialization bug does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's core factual claim is that the kwargs dict is \"serialized by the Celery task serializer\" using a JSON-native representation, so a raw datetime would fail to serialize or round-trip as a string. The checker quotes this repository's actual configuration at src/sentry/conf/server.py:739-741, showing CELERY_TASK_SERIALIZER = \"pickle\" (and CELERY_RESULT_SERIALIZER = \"pickle\", CELERY_ACCEPT_CONTENT = {\"pickle\"}). That setting is directly applied on the code path the comment describes (apply_async enqueueing / task deserialization), and it contradicts the comment's premise: with pickle, the datetime in kwargs is serialized natively and round-trips as a datetime object, so neither the \"fails to serialize / breaks outbound propagation\" nor the \"comes back as a plain string\" failure the comment asserts occurs. This is a repository configuration statement about the exact path, so the factual basis of the comment is false."
+     }
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "src/sentry/spans/consumers/process/flusher.py:127 `    def _create_process_for_shard(self, shard: int):` — repo-wide grep finds only this definition. The restart path actually invoked is src/sentry/spans/consumers/process/flusher.py:259 `            self._create_process_for_shards(process_index, shards)`.",
+       "reason": "The facts hold (the singular `_create_process_for_shard` truly has no caller and the plural `_create_process_for_shards` is the used path), but the request is only to remove/wire dead code with a speculative future-caller concern, which is an optional change and therefore a nit."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment identifies newly added dead code (`_create_process_for_shard` has no caller) and asks to remove it or wire it up. No concrete failure is described: nothing currently crashes, returns a wrong result, loses data, or breaks a contract, since there is no caller to misbehave. The stated concern — that a *future* caller might rely on it and \"silently do nothing\" — is explicitly speculative (\"any future caller... will silently do nothing\") and the requested action is an optional cleanup/refactor. This matches the criteria for removal: a speculative future concern plus an optional improvement, not a present defect."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "src/sentry/spans/consumers/process/flusher.py:32 \"Creates one process per shard for parallel processing.\"; flusher.py:60 \"self.num_processes = min(self.max_processes, len(buffer.assigned_shards))\"; flusher.py:65 \"process_index = i % self.num_processes\"; src/sentry/consumers/__init__.py:434 \"default=1,\"; tests/.../test_consumer.py:115 \"assert len(flusher.processes) == 2\"",
+       "reason": "The facts hold (the docstring is indeed stale relative to the shard-sharing code and the default of 1), but the fix requested is only a docstring/comment wording change with no functional consequence."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment documents a concrete falsehood: the docstring at flusher.py:32 states the flusher \"Creates one process per shard for parallel processing,\" but the code shares shards across up to max_processes (num_processes = min(self.max_processes, len(assigned_shards)), assigned via i % num_processes), and with the new default of 1 one process handles every shard — confirmed by test_flusher_processes_limit (4 shards, 2 processes). Documentation that states something false about the code is explicitly a keep criterion, regardless of the checker's view that the fix is only a wording change."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "src/sentry/spans/consumers/process/flusher.py:51: `self.max_processes = max_processes or len(buffer.assigned_shards)`; src/sentry/consumers/__init__.py:432-437 click option `[\"--flusher-processes\", \"flusher_processes\"], default=1, type=int`.",
+       "reason": "The facts hold (`or` does treat 0 as not-provided, and the int option permits 0), but 0 is not a valid limit — `num_processes = min(0, len(shards))` would then be 0 and line 65's `i % self.num_processes` would divide by zero — so the ask (explicit None check plus rejecting 0 upstream) is a validation/guard improvement rather than a fix for a valid input, making it optional."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment's premise is a valid input being mishandled, but the checker shows no valid input is affected: a `--flusher-processes` value of 0 is not a meaningful limit, and the current `or` fallback actually avoids the division-by-zero that a naive `is not None` fix would introduce at line 65. What the comment ultimately requests is a guard/validation improvement (explicit None check plus rejecting 0 upstream) — an optional hardening, not a fix for a concrete failure with a valid input. It names no crash, wrong result, data loss, security hole, race, or broken contract for any reachable legitimate value, so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "tests/sentry/spans/consumers/process/test_consumer.py:15 `monkeypatch.setattr(\"time.sleep\", lambda _: None)` patches the `time` module's `sleep` attribute in place, and the same module is imported at line 1 (`import time`), so the call at test_consumer.py:62 `time.sleep(0.1)` resolves to the lambda and is a no-op. The flusher does run as a thread in this test (src/sentry/spans/consumers/process/flusher.py:107-108 `target = partial(SpanFlusher.main, shard_buffer)` / `make_process = threading.Thread`), so the comment's factual description is accurate. However, ignoring it leaves the test passing: the flusher thread spins (its own `time.sleep(1)` at flusher.py:182 is also neutralized) and `step.join()` (test_consumer.py:64) waits for it, so the reported harm is only potential flakiness, not a demonstrated failure.",
+       "reason": "The comment's facts hold (the monkeypatched `time.sleep` makes line 62 a genuine no-op against the same `time` module), but the requested change is an optional test-robustness/synchronization improvement whose harm (\"liable to be flaky\") is speculative, so it is a nit rather than a concrete bug."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment identifies a concrete race condition: the added synchronization point `time.sleep(0.1)` is a genuine no-op because `monkeypatch.setattr(\"time.sleep\", lambda _: None)` at line 15 patches the same `time` module imported at line 1. The checker confirms this factual basis (the call at line 62 resolves to the lambda) and that the flusher runs as a background thread (flusher.py:107-108), so the test does race the flusher thread before `step.join()`. A race condition is an explicitly listed concrete failure, and it must be kept even if the checker judges the resulting flakiness as only potential/speculative rather than demonstrated."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "src/sentry/monitors/logic/mark_failed.py:8-9 imports only `try_incident_threshold` and models, with no reference to `SimpleCheckIn`; a repo-wide grep for `SimpleCheckIn` returns only src/sentry/monitors/types.py:105 (definition), src/sentry/monitors/logic/incidents.py:9, and src/sentry/monitors/logic/incident_occurrence.py:20 — no importer from the old location exists.",
+       "reason": "The comment's statements about the current code are accurate, but since no consumer still imports SimpleCheckIn from the old module, the reported ImportError scenario is speculative and the requested check/update is optional."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment does not describe a concrete, present failure. Its own wording is conditional and speculative: it asks to \"confirm there is no other importer left\" and to update it \"if there is.\" The checker verified via repo-wide grep that no consumer imports `SimpleCheckIn` from the old location, so the ImportError scenario does not exist in the current code. This is an optional \"just in case\" verification request, not a real broken contract, crash, or wrong result, so it can be dropped as a nit."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "detector.py:229-230 `Evaluates a given data packet and returns a list of \\`DetectorEvaluationResult\\`.` vs detector.py:228 `-> dict[DetectorGroupKey, DetectorEvaluationResult]:` and detector.py:237-244 `results = {} ... results[result.group_key] = result ... return results`. Caller detector.py:58-60 `detector_results = handler.evaluate(data_packet)` then `for result in detector_results.values():` already treats it as a dict.",
+       "reason": "The mismatch is real but it is a documentation/comment-only fix: callers already use the dict, so merging without the docstring update causes no crash, wrong result, or broken caller — an optional change, i.e. a nit."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment identifies documentation that is factually false about the code: the docstring states `evaluate` \"returns a list of `DetectorEvaluationResult`\", while the signature (`-> dict[DetectorGroupKey, DetectorEvaluationResult]`) and body (`results = {}` ... `results[result.group_key] = result`) return a dict keyed by group_key. This is a documented contract that contradicts the actual return type, which the rubric explicitly counts as a concrete failure (\"documentation that states something false about the code\"). Although the checker calls it an optional doc-only nit because callers already use `.values()`, the mismatch itself is the failure the rules ask us to preserve."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:244-275 defines `value: int` (line 247) but the body only uses `group_key` (line 255) and `new_status.value` (line 265); line 39: `return build_mock_occurrence_and_event(self, group_key, value, new_status)`; line 191 builds group_2 occurrence with `value=6` while line 177's packet has `\"group_2\": 10`.",
+       "reason": "The facts hold, but the reported issue is a test helper's unused (dead) parameter plus a test-coverage gap with no concrete failure, so the requested change is optional."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The comment reports a dead/unused helper parameter and a test-coverage gap: the tests pass regardless of the value passed, so they don't verify the value/threshold path. It names no concrete failure (no crash, wrong result, corrupted data, etc.) in the code under review — the tests still pass and nothing breaks. The request is to add coverage/assertions and correct expected values in tests, i.e., an optional test improvement, not a real defect. Therefore it can be dropped as a nit."
+     }
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "src/sentry/integrations/github/integration.py:149-152 `def get_document_origin(org) -> str: if org and features.has(\"organizations:customer-domains\", org.organization): return f'\"{generate_organization_url(org.organization.slug)}\"'`; callers at lines 413/432/436/498/505 pass `self.active_organization`, and base.py:169 confirms active_organization exposes `.organization`.",
+       "reason": "The facts hold, but the requested change is only a parameter rename (naming/readability) with no concrete failure — all callers already pass the correct active-organization context — so it is an optional nit."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete failure: a broken contract between the parameter name/type and its actual usage. The parameter is named `org` but the code dereferences `org.organization`, meaning the contract implied by the name (an Organization) is violated. A caller following the name and passing a real Organization would hit an AttributeError. The comment names a specific exception and a mismatch between the declared signature and what all callers pass, so it is not merely optional style/naming—it flags a real contract/type defect."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/pipeline/base.py:132-133: `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" for v in self.pipeline_views]` / `self.signature = md5_text(*pipe_ids).hexdigest()`. The `IntegrationPipeline` (src/sentry/integrations/pipeline.py:83) does not override this, so `pipeline.signature` used in src/sentry/integrations/github/integration.py:402/412 is a deterministic MD5 of the pipeline's view class names — a publicly computable constant identical across all flows, not a \"secret per-flow\" nonce.",
+       "reason": "The comment's timing-attack concern rests on the state value being a secret nonce, but `pipeline.signature` is a deterministic MD5 of public pipeline-view class names, so there is no secret to leak via a comparison timing signal."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "remove",
+      "reason": "The checker quotes repository code (src/sentry/pipeline/base.py:132-133) showing `pipeline.signature` is `md5_text(*pipe_ids).hexdigest()` over pipeline-view class names, and notes IntegrationPipeline doesn't override it. This directly falsifies the comment's factual premise that the state value is a \"secret per-flow\" nonce, so the claimed timing-leak of a secret does not hold. This is a statement about what the named code contains/does, so the evidence removes the comment."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "src/sentry/integrations/github/integration.py:343-344 `def get_pipeline_views(self) -> Sequence[PipelineView]: return [OAuthLoginView(), GitHubInstallation()]`; lines 500-505 contain the check `if (pipeline.fetch_state(\"github_authenticated_user\") != integration.metadata[\"sender\"][\"login\"]): return error(request, self.active_organization)`; a repo-wide grep for `GitHubInstallation` returns only its definition (line 442) and this single usage (line 344). The only subclass, src/sentry/integrations/github_enterprise/integration.py:294 `class GitHubEnterpriseIntegrationProvider(GitHubIntegrationProvider)`, overrides `get_pipeline_views` at line 328 with `[InstallationConfigView(), GitHubEnterpriseInstallationRedirect(), lambda: self._make_identity_pipeline_view()]` and never uses `GitHubInstallation`.",
+       "reason": "The check and the OAuthLoginView-produced state exist exactly as the comment says, but the only pipeline that uses GitHubInstallation already prepends OAuthLoginView and the enterprise subclass supplies its own views, so no consumer is broken today; the request for a fallback is speculative future-proofing, i.e. a nit."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment describes a concrete broken contract / behavioral regression, not an optional improvement. GitHubInstallation's second step now hard-fails (renders ERR_INTEGRATION_INVALID_INSTALLATION_REQUEST) whenever it is driven without OAuthLoginView having populated `github_authenticated_user`, since `fetch_state(...)` returns None and can never equal the sender login. That is a specific wrong-result/broken-contract failure for any reused pipeline (e.g. a subclass or related provider invoking GitHubInstallation directly, or keeping a GitHubInstallation-only `get_pipeline_views`), and the comment offers concrete remedies (update consumers or add a fallback). The checker's finding that the only current consumer already prepends OAuthLoginView makes the failure unreachable today, but per the rule that rarity/reachability is not this decision, the comment names a real failure mode and should be kept rather than dropped as a nit."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "nit",
+       "evidence": "src/sentry/integrations/github/integration.py:501-505 confirms the unguarded index. But the branch at 492-505 is only reached when the Integration exists with *no* OrganizationIntegration (integration.py:477-484), which is exactly the webhook-created case; webhook.py:202-209 shows the only writer always sets \"sender\" (state[\"sender\"] = {\"id\": event[\"sender\"][\"id\"], \"login\": ...}) before build_integration creates the Integration, and integration.py:376-377 only omits sender for the pipeline path, which always gets an OI via pipeline.py:225 (add_organization) — e.g. the pipeline-created integration in tests/sentry/integrations/github/test_integration.py:303-314 has metadata without \"sender\" but does have an OrganizationIntegration.",
+       "reason": "The statements about the code are accurate (the index is unguarded and \"sender\" is only written by the installation webhook), but every integration that actually reaches this branch is webhook-created and already carries \"sender\", so the requested guard is a defensive/optional change with no concrete path that triggers the KeyError."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "keep",
+      "reason": "The comment names a concrete failure: an unguarded `integration.metadata[\"sender\"][\"login\"]` index that raises KeyError (HTTP 500). Although the checker argues the branch is only reached by webhook-created integrations that already carry \"sender\" (making the crash unreachable today), the rules explicitly say to keep a comment that describes a concrete failure even when the failure is believed rare or unreachable. The requested guard addresses a real crash, not mere style or a \"just in case\" check."
+     }
+    }
+   ]
+  }
+ },
+ "sobre": "u1",
+ "prompt": "f1"
+}

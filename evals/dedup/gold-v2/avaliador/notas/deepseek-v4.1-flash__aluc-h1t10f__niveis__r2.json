@@ -1,0 +1,4661 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "atribuidor": "deepseek-v4.1-flash@together",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 33.3,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "WorkflowReminder is a small, low-traffic table and the cron runs hourly; a seq scan here costs nothing measurable, so I would not block on an index."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The OR is only marginally worse than the old plan and the row counts are tiny, so I would note it but merge."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Even if it is small today, an unindexed OR on a delete-per-cron is a needless full scan that only gets worse, so I would add the index before it bites us."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Our other reminder queries already rely on the same indexes and this table isn't big enough for the scan to matter."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The retryCount column is new so now is exactly the cheap moment to index it rather than backfill later."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would trust the existing plan; the second OR arm usually matches almost nothing and Postgres handles it fine."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A deleteMany that seq scans the whole reminder table every cron cycle reads as a real smell I would want to fix."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I don't have strong evidence the planner falls off the index, so I wouldn't change working code on a guess."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "This is a performance nicety and not something I would raise as a blocker on this PR."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would not notice the index question at all on a first read of this diff."
+      }
+     ]
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 19.3,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Duplicating one two-line update in two branches is a trivial style point, not worth a round trip."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The two sites express genuinely different situations (unscheduled vs. error) so the repetition is defensible."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I might suggest a small helper in a follow-up but I would not hold the PR for it."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Pure duplication nit; merging is fine, the behavior is identical either way."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd leave it — extracting a single update call for two distinct branches adds indirection for little gain."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would hoist the increment into one place so the retry logic has a single source of truth."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "It's duplicated but harmless; I wouldn't ask for a refactor here."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Two identical update blocks invite drift, so I would combine them while I'm in this file."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads clearly enough as-is; duplication alone isn't worth blocking a merge."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I wouldn't feel confident enough to call out a stylistic duplication on someone else's PR."
+      }
+     ]
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 57.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The read-then-write increment is a lost-update pattern; using Prisma's atomic increment is a one-line change with strictly better semantics."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Overlapping cron runs are real in our infra, and a non-atomic counter that gates deletion can loop forever, so I'd switch to increment."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Each row is handled by one run and we don't actually run this cron concurrently, so the race is theoretical here."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "`increment: 1` is idiomatic Prisma and removes a subtle correctness footgun for free, so I would apply it."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Even if overlap is unlikely today, the counter feeds a deletion threshold so it should be atomic."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd want evidence that runs actually overlap before changing it; the simple version works for now."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I wouldn't spot the concurrency angle on my own reading of the diff."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The atomic increment is clearly safer and trivial to change, so I would make it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Seems fine for our workload; I would not raise it as a blocker."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would not think about concurrent runs overwriting the count."
+      }
+     ]
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 82.5,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Putting an unguarded DB write inside the catch turns one failing reminder into a thrown handler that aborts every remaining reminder — a real regression I would fix before merge."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "A P2025 from a concurrently deleted row would now reject the whole cron; the write needs its own error handling or a safe update."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The catch block is now a failure vector instead of a logging point, so it must not be able to throw out of the loop."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Error paths that themselves throw are exactly what breaks cron jobs silently; I would wrap this update or use updateMany."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "One bad reminder now skips all the ones after it, which is user-visible, so I would guard the increment."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I would flag that the catch can throw and needs a guard, though I might do it in a quick follow-up."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I would probably not realize the update in the catch can throw and abort the loop."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Looks like reasonable best-effort bookkeeping to me; I wouldn't challenge it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Given the deleteMany at the top, an update here can target a missing row, so I would make it safe."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would just see a normal update call and not think about it failing."
+      }
+     ]
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 57.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Lifting method into only one OR arm means the second arm is unscoped, so the SMS cron would delete EMAIL/WHATSAPP reminders — that contradicts the comment and must be scoped."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This deleteMany is no longer SMS-only; I would either keep method at the top level or repeat it in the retryCount arm."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Only SMS currently increments retryCount, so the behavior is equivalent today; I'd note it but the SMS scope is effectively preserved."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The comment and the intent are SMS-only, and an unscoped delete arm is a data-loss hazard as soon as any other method touches retryCount."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I would ask the author to keep the method filter applied to both arms to match the stated intent."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Since nothing else writes retryCount yet, this is latent; I would merge and open a follow-up."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I would likely read past that the method filter moved into the first OR arm."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The comment says SMS reminders but the query now isn't SMS-scoped, so I would tighten it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I don't think this changes anything in practice right now, so I wouldn't block."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would not catch that the method filter no longer applies to the second branch."
+      }
+     ]
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 57.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Optional-chaining a push on a null field silently drops the team destination calendars, which is precisely the multi-host case this PR exists to enable."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "In the null branch every other host is left uninvited, a functional regression the author clearly did not intend."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "It only bites when no destination calendar exists anywhere, and I'd rather land the refactor and file a targeted follow-up than block on this corner."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Pushing into a field that can be null is a silent no-op and defeats the whole feature for COLLECTIVE events."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The fix is a one-line array initialization and it restores the behavior the PR is trying to add."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Real but narrow; most COLLECTIVE setups do have a destination calendar, so I'd merge and note it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The team calendars vanishing on a null seed looks like an obvious bug once you trace the push."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd need to confirm the null path is actually reachable before touching it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Seems plausible but I'd trust the author to know whether the field can be null here."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would not have noticed the optional-chaining push on a null and would defer to reviewers."
+      }
+     ]
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 57.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Dropping result.credentialId for the non-calendar branch loses the video reference's credential, breaking later lookups that delete the meeting."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Video references are keyed by uid in practice, so I doubt the lost credentialId actually matters, but it's worth a follow-up."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "This is a silent behavior change for video results and the correct value is trivially available."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Previously non-calendar results carried result.credentialId and now they carry undefined, which can break video teardown."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I can't find a consumer that actually relies on the video reference's credentialId, so I'd let it slide."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The regression is real but cosmetic for now, so I'd fix it in a quick follow-up rather than block the PR."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Looks like a deliberate cleanup of a value that was never used."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Dropping the credentialId where it used to come from result feels unintentional and easy to restore."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Hard to see the user-facing consequence, so I'd leave it."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I can't follow the reference-credential flow well enough to be confident this is wrong."
+      }
+     ]
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 22.8,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Extra findUnique calls on the booking path are a concern but the cache miss is rare; this is a performance follow-up, not a blocker."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Sequential round-trips here are acceptable for now and can be batched later; not worth holding the merge."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "N sequential queries scaling with host count on the hot booking path is worth at least a batched preload before this ships."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Only triggers on cache misses for multi-host bookings; I'd merge and optimize later."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Performance, not correctness — belongs in a follow-up ticket."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I don't consider this blocking; the DB hit is an edge case and the data is probably already loaded."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads as a reasonable fallback and I wouldn't push back on the query count."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A loop of individual DB lookups on the creation path would bother me enough to want it batched."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Sounds theoretical; I'd need profiling before changing anything."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I wouldn't second-guess a DB fallback the author added deliberately."
+      }
+     ]
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 71.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Destructuring [] yields undefined and reading .integration on it throws, so a Meet location with an empty destination calendar crashes booking."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This is a plain TypeError now that many callers pass [], and it needs optional chaining before merge."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The missing optional chaining is an obvious foot-gun introduced by the array refactor; I'd fix it."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Callers set [] routinely now, so the Meet fallback will throw; that's a crash worth blocking on."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "One character of optional chaining prevents an undefined dereference; no reason to merge without it."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Only reachable for Meet locations without a destination calendar, which is uncommon; I'd merge and fix fast."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The destructured value is undefined on an empty array and the dereference throws, so I'd guard it now."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd need to reproduce the Meet path before changing it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Looks like it only fires in a rare branch and I'd trust reviewers to weigh it."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I wouldn't spot the undefined-vs-empty-array distinction on my own."
+      }
+     ]
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 82.5,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The else-branch find compares externalId against the very value that is falsy, so it matches nothing and silently falls back to primary or undefined."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This is a logic error duplicated in updateEvent and deleteEvent that breaks the host's selected calendar whenever no externalCalendarId is passed."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The predicate can never be true in that branch; it's clearly wrong and should be fixed before merge."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Events will land on primary instead of the configured destination calendar; that's a visible regression."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Finding by the argument you already know is falsy is a self-defeating fallback; easy fix, clear bug."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The comparison is only executed when externalCalendarId is empty, so it's dead logic that drops the destination calendar."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The fallback can never match anything, so the calendar id resolves wrong; I'd correct it now."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "It looks odd but I'd assume the credentialId-based selection elsewhere covers it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd want to confirm externalCalendarId is ever actually falsy here before touching it."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The find looks plausible to me and I'd trust the author's intent."
+      }
+     ]
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 43.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "jsforce re-authenticates from the refresh_token itself, so passing the stale access_token to the Connection is harmless and the extra fetch is merely redundant."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The connection still authenticates via refresh_token, so diverging DB/connection tokens don't actually break anything today."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Persisting the refreshed token but not using it is inconsistent; passing accessTokenParsed.data.access_token keeps state coherent."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The whole point of the new block is to use a fresh token, so wiring it into the Connection is the obvious completion."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd merge it; jsforce handles the refresh internally and this is just a wasted call."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Clear mismatch between the token we just fetched and the one we hand the client; worth a one-line fix."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The stored key and the live connection disagree, which is a latent bug I'd correct now."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "jsforce appears to refresh on its own so I wouldn't block the PR on this."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Divergence is only visible if the old token is expired, and the library recovers."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd read past it since the connection constructor looked unchanged from before."
+      }
+     ]
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 19.3,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Recovering an env secret byte-by-byte through network timing jitter is not practically exploitable and isn't the codebase convention."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Constant-time comparison matters for user-supplied hashes, not for a server-configured shared secret compared over the wire."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Theoretical here; no other webhook secret comparison in the repo uses timingSafeEqual, so this would be inconsistent noise."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "It's a cheap hardening and the endpoint mints credentials, so timingSafeEqual on equal-length buffers is worth adding."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I wouldn't block on this; the timing signal is drowned out and the endpoint is gated by APP_CREDENTIAL_SHARING_ENABLED."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Plausible in theory, negligible in practice over HTTP; a follow-up at most."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Security reviewers flag string comparison of secrets, and the fix is trivial."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Feels like a textbook finding that doesn't survive contact with real network timing."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd merge and note it, since the endpoint returns 403 fast enough that timing recovery is hopeless."
+      },
+      {
+       "level": "junior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd swap in timingSafeEqual because the comment about an attacker recovering the secret is scary."
+      }
+     ]
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 8.8,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A duplicated JSDoc line is cosmetic and doesn't change behavior; not worth holding the PR."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Docs nit; the code is unambiguous and callers don't rely on that comment."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd let it slide; there are far more consequential things in this diff."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Copy-paste doc error, harmless."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't spend a review comment on a comment."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor, can be fixed whenever."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd correct the type doc since it currently says the same thing as appId."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth a comment before merge."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Pure prose, no code impact."
+      },
+      {
+       "level": "junior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd fix the duplicated param description because it's easy and I'm learning the diff."
+      }
+     ]
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 82.5,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Passing credential.id as calcomUserId sends the sync request for the wrong user, which corrupts the shared-credential feature."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Every other app passes credential.userId; this one silently diverges and would sync against a non-existent user."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Real inconsistency with the rest of the PR; I'd change it to credential.userId."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The argument name mismatch is exactly the kind of copy/paste bug that breaks credential sharing."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "I'd block on this; the sync endpoint receives a credential id where it expects a user id."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Matches the pattern violation and is a one-token fix, so I'd make it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Comparing with the sibling apps it's obviously the wrong variable."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd probably not notice unless I cross-checked each call site."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The sharing path is off by default so I might overlook the argument semantics."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd trust the reviewer's claim but wouldn't have caught it myself."
+      }
+     ]
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 100,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "persist parseRefreshTokenResponse's {success,data} wrapper as the key, then the next load's googleCredentialSchema.parse throws and Google Calendar breaks."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This is a genuine regression from googleCredentialSchema.parse: the stored key shape no longer matches the schema."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The wrapper returns the safeParse result, not data, and it's written straight to the credential row."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Storing {success, data} instead of the parsed key will break every subsequent read."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "I'd insist on key = parseRefreshTokenResponse(...).data before merging."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Clear shape mismatch that breaks calendar sync; must fix."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The old code returned parsed data and the new one returns a result object, so I'd correct it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "I'd catch it because the function name suggests it returns the token, and it doesn't."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Looks wrong; I'd fix the assignment to use the parsed data."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I might assume parseRefreshTokenResponse returns the data and not dig into it."
+      }
+     ]
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 71.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Returning a Response in the sharing branch while callers read .data is an interface contradiction that will yield undefined tokens."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The two branches must return the same shape; as written the shared-credential path is broken for every caller."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Clear contract violation, though it only bites when CALCOM_CREDENTIAL_SYNC_ENDPOINT is set."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Callers assume parsed tokens, so returning a raw fetch Response is a real bug in the enabled path."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Feature is off by default, so I'd merge and fix when we turn sharing on."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd normalize the return to the parsed payload so hubspot/google/zoho callers keep working."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The .data reads downstream make the mismatch obvious once you follow the sharing branch."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Gated feature, so I'd defer it to a follow-up."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I wouldn't trace every caller in this pass."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd assume the caller handles the Response and move on."
+      }
+     ]
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 47.4,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The lowercasing in the blacklist block right below shows the house convention; strict equality here can wrongly FORBID a real attendee and mis-dedupe guests."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Emails are case-insensitive everywhere that matters, so both the auth check and the dedupe should normalize before comparing."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Stored attendee casing almost always matches the session email, so this is a narrow edge I would log as a follow-up."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "It is a two-line lowercase fix and it prevents a legitimate user being locked out of a booking they own."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The pathological case is rare enough that I would not gate this feature on it."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Other handlers in the repo compare raw emails too, so this matches existing behavior rather than regressing it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Lowercasing both sides is trivial and clearly more correct."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would not block on a case-sensitivity edge case I have never seen hit."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Seems like a theoretical concern; leaving it."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I did not notice anything wrong with the comparison."
+      }
+     ]
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 33.3,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The repo lint/enforcement expects user-facing strings through t(), so even a tooltip should use a key."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A cosmetic i18n nit; there are hardcoded strings elsewhere and it is not worth blocking the feature."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Trivial and can be swept up in a localization pass later."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Adding a key is a one-liner and keeps the component consistent with the t() calls beside it."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth a review round-trip for a tooltip."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Purely cosmetic; I would let it slide."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Easy localization fix, so why not."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor, not blocking."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Too small to matter."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Did not even notice the string was hardcoded."
+      }
+     ]
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 49.1,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Surfacing a raw code prefix like BAD_REQUEST to the user is a real UX regression; the message construction needs rework."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The fallback is provably dead code, so the intended translated message never reaches the user."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The error path is rarely hit and the string can be cleaned up in a follow-up."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Error messages users actually see should be translated, not leaking internal codes."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor polish on a rare path."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The added translation is unused, which signals the logic is off; worth a quick fix."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Only hit on failure; I would not block."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Leaving it for now."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not a priority."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The error handling looks fine at a glance."
+      }
+     ]
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 57.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The server must not trust the client refine; duplicates in the payload create duplicate attendee rows."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Adding a uniqueness refine to ZAddGuestsInputSchema is the right place to enforce this."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The UI already prevents duplicates and this is a non-default API surface, so a follow-up is acceptable."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Duplicate attendees corrupt the booking and cascade into emails and calendar updates."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Realistically only reachable via direct API abuse."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cheap to dedupe server-side so I would add it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The dialog already blocks duplicates, so this is fine."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not something I would push back on."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Server-side validation is the safer pattern; I would add the refine."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The client check seems sufficient to me."
+      }
+     ]
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 33.3,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Classic TOCTOU; the right long-term fix is a unique constraint on (bookingId, email), which is a separate change."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Wrapping read-filter-insert in a transaction is worth doing to prevent concurrent duplicate attendees."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Concurrency here is genuinely rare and the feature is fine to ship meanwhile."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I would not gate the PR on a race this unlikely."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A transaction is cheap insurance against duplicate rows."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Note it, fix later."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Two simultaneous adds for the same guest is far-fetched."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not blocking."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Concurrent duplicate attendees would be bad, so I would add the transaction."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Too deep a concern for me to act on."
+      }
+     ]
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 80.7,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "isTeamAdmin already covers OWNER, so && silently locks out team admins and contradicts the variable name."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Must be ||; as written only owners pass the team branch."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Clear boolean logic error that should be corrected before merge."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Team admins being forbidden is a functional bug in the new permission check."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Plain bug, fix it now."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I would want to confirm the intended semantics of isTeamAdmin first before changing it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The && means only owners pass; that is clearly not what the name says."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I would flag it but not be certain without checking the helpers."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Should be ||, easy fix."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Did not catch the logic difference between the two helpers."
+      }
+     ]
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 47.4,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The blacklist is lowercased on one side and compared raw on the other, so it is trivially bypassed; normalize the input."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A casing bypass defeats the purpose of BLACKLISTED_GUEST_EMAILS."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The blacklist is a niche escape hatch; worth a follow-up rather than blocking."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Lowercasing before the includes check is a one-character-trivial fix."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Blacklist is rarely populated, so low priority."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Skip; matches the same fragility as the identity check."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth blocking."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Just lowercase the guest before comparing."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not have spotted the casing mismatch."
+      }
+     ]
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 47.4,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Passing raw guests means addresses that were filtered out are still treated as newly added and get the wrong email."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "sendAddGuestsEmails should receive uniqueGuests, the set that was actually persisted."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The mismatch only affects which template an existing attendee receives; a follow-up can fix it."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Sending the scheduled email to blacklisted or pre-existing addresses is a behavioral bug."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Recipients are mostly attendees either way, so not critical."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would note it and move on."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not clear enough an issue to block."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Should obviously be uniqueGuests, mismatch with the variable name."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Did not trace which argument is passed."
+      }
+     ]
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 71.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Untrusted feed HTML reaches the browser via `raw post.cooked` on the forum's own origin, which is stored XSS and must be sanitized before merge."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The raw_html cook method deliberately bypasses the rendering/sanitizing pipeline and is then emitted raw, so the sanitizer gap has to be closed."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A real sanitization gap, softened only by the feed being admin-configured; still worth sanitizing."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "A poisoned RSS item can execute script in the forum's origin, so this blocks."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Imported HTML should be sanitized rather than trusted unconditionally."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The polling URL is chosen by an admin, so the source is semi-trusted and sanitization can be a follow-up."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Emitting raw cooked HTML looks unsafe; I'd add sanitization."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "This is the intended raw_html design for curated feeds."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Don't clearly see the exploit path; probably acceptable."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not confident enough about the sanitizer internals to block on this."
+      }
+     ]
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 24.6,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor formatting nit, not worth blocking a feature PR."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The literal date format is cosmetic and can be cleaned up later."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The date should go through the localized date helper like the rest of the view."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Localization polish, not a defect."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd merge it and fix the format in a follow-up."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Using an English-only strftime next to I18n.t is inconsistent and easy to fix."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cosmetic, low priority."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doesn't affect behavior."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Trivial nit."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Just a date format."
+      }
+     ]
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 35.1,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Hostnames are case-insensitive, so both sides should be downcased before comparison."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Browsers lowercase URL hosts, so this rarely bites in practice."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Edge case; real-world referers arrive lowercase."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cheap normalization to avoid a surprising mismatch if the admin types mixed case."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The configured host is normally lowercase, so low priority."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Consistency fix in both controller and topic_retriever."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Unlikely to matter."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't block on it."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Too minor to act on."
+      }
+     ]
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 47.4,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The tests pass for the wrong reason because feed_polling_enabled? short-circuits first; stub it true so they actually exercise the guard."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A test that never reaches the code it names is worthless; worth fixing."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Test coverage nit that doesn't affect shipped behavior."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Fix the stubs so the named conditions are genuinely tested."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Follow-up polish."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The delegate test does cover the happy path, so acceptable."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Good catch that the tests are vacuous; easy to fix."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Tests pass, ship it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not blocking."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't notice the short-circuit myself."
+      }
+     ]
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 47.4,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The test never sets embeddable_host, so it fails on the blank-host check before params.require is reached; stub a host so the failure is attributable."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A test named for the missing embed_url that never reaches that line is misleading."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Coverage nit."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Set a valid host so the 404 genuinely tests the param requirement."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doesn't change behavior; can follow up."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Other specs cover the referer/host checks."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Nice catch on the wrong-reason failure."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Minor test issue."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't block."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't have spotted it."
+      }
+     ]
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 24.6,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The check-then-insert races against the unique index, and the staff/throttle-expiry paths make it reachable; add a rescue or upsert."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The unique index turns the race into a harmless raised error; the Redis throttle covers the common path."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Narrow edge case, not worth blocking."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Guard the create against the unique-index violation for robustness."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Throttle makes concurrent imports unlikely."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Acceptable for now."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Hard to hit in practice."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't block."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Edge case."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Beyond what I'd catch."
+      }
+     ]
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 100,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "`end if` is a Ruby syntax error, so every render of the embed best view raises and the whole feature is dead."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "This must be `<% end %>`; otherwise Erubis compiles invalid Ruby."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Plain syntax bug that breaks rendering — fix before merge."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The view can never render with this tag."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Obvious syntax error, block it."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Fix the mismatched end tag immediately."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Clearly wrong, breaks the feature."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Would fix on sight."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Must be corrected before shipping."
+      },
+      {
+       "level": "junior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Even I can see `end if` isn't valid Ruby."
+      }
+     ]
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 43.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Guard missing link/title/content before importing, since one bad item aborts the hourly job."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "SimpleRSS generally returns nil rather than raising for absent elements, so less severe than claimed."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Robustness nicety, not a blocker."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Wrap item processing so a malformed entry is skipped instead of killing the job."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Feeds we point at are well-formed."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cheap defensive coding around i.content/i.title."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Skip items missing fields."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Probably fine."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't block."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Unclear if it actually raises."
+      }
+     ]
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 47.4,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The substring origin check accepts origins embedded in discourseUrl; compare the exact origin instead."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Origin matching should be exact, not indexOf."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Impact is limited to spoofed resize messages, so low priority."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Use e.origin !== expectedOrigin; the substring test is wrong."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Worst case is a resized iframe."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cosmetic concern, follow up."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Exact origin comparison is the right pattern."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Low stake."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't block."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not sure of the exploit."
+      }
+     ]
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 24.6,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Relative order is preserved because both the old -webkit-box model (default 1) and the modern model (default 0) put anything above the default after the untouched siblings, so the offset never manifests here."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A cross-browser mixin should normalize the legacy value (+1 for -webkit-box-ordinal-group) so the abstraction is honest, even if this PR's usages happen to work."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The mixin's callers only use values 2 and 3 relative to default siblings, so the base-index difference changes nothing visible and is not worth churning."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I tried to construct a broken layout and couldn't: nothing in this tree relies on order(0) semantics, so the off-by-one is inert."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "This reads as a theoretical prefix concern; Discourse's flexbox ordering here is relative and unaffected, so I'd merge as-is."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "It's a cheap, correct fix to emit the 1-based value for the legacy prefix, and I'd rather the mixin be right for future callers."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The ordering still works, so I wouldn't block or chase this before merge."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd read past it; the visible outcome is identical with the values actually used."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Sounds plausible but I can't point to a broken case, so I'd note it as a possible follow-up rather than change it."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I don't have enough confidence in the legacy box model to act on this, and nothing appears broken."
+      }
+     ]
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 35.1,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The per-condition tests already pin both sides and the end-to-end query still returns the correct row, so strengthening this fixture isn't needed for this PR."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A test literally named 'should combine authorization and filter conditions' that passes under auth-only or filter-only is a real gap; adding a distinguishing booking makes it meaningful."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "This fixture weakness predates the refactor and the fixed assertion still exercises the real query, so it can wait."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Cheap to add one booking that matches only the filter so a broken combine actually fails instead of silently passing."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The single-row assertion is weak but the integration path is exercised and the combine logic is trivial, so I wouldn't block."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd add a distinguishing fixture so the test fails if getBaseConditions drops one side of the AND."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Looks fine; the other tests already check each condition separately so this one just confirms wiring."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not obvious how to make the fixture discriminate without a lot of extra setup, so I'd leave it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Test still passes and covers the query shape; acceptable as is."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "I'd note the reviewer's point but wouldn't block a merge over a test-only nit."
+      }
+     ]
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 24.6,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "getAuthorizationConditions is declared to return Prisma.Sql and always yields an object, so that else-if branch is unreachable and no bypass exists today."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The branch only fires if authConditions is falsy, which the current implementation cannot produce, so the security framing doesn't hold."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Even unreachable, returning filter-only with no auth predicate is a fail-open footgun; I'd change it to return NOTHING_CONDITION."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Confirmed the non-null return type makes it dead code, so no behavioral change is needed."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "I'd remove or harden the misleading branch so a later refactor can't silently drop the authorization clause."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The security logic is correct as written and the dead branch is harmless."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Auth conditions are always present, so the described scenario never materializes."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't touch it; the type guarantees auth is non-null."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Sounds alarming but I can't find a call path that reaches that branch."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Auth is always returned, so this reads as a theoretical concern rather than a live bug."
+      }
+     ]
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 35.1,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "onEnable only triggers an SWR revalidation and 2FA is already enabled server-side, so a stale switch self-heals on the next load."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Dismissing via ESC after the codes are shown skips onEnable and leaves the settings section stale, so wire the dialog close to onEnable."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The server state is correct and the refresh gap is cosmetic, safe to defer."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Better to fire onEnable on any dismissal path so the section always reflects the enabled state."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Edge-case state refresh, fine as a follow-up."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cheap to route onOpenChange through onEnable and keeps the UI honest."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Hadn't considered the ESC path but sees it as minor."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Assumes the section revalidates on refocus."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Rare dismissal toggle, not blocking."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Relies on the reviewer's framing and doesn't judge it merge-blocking."
+      }
+     ]
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 61.4,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "A second-factor-only login path is an auth bypass if the password gate is real, and it must be verified and closed before merge."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Password verification must be unconditional before any 2FA or backup branch is reached."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The backup-code branch must not be reachable without an already-validated password."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Security-sensitive: gate the new branch on the same credential check as the others."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Reads password verification as always running, so the premise doesn't hold."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Skeptical that the described gate exists; would ask for a reproduction first."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Would add a guard around the backup branch just to be safe on an auth path."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Can't confirm the conditional; wants proof before changing."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Not convinced the described exploit path exists."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Lacks the context to evaluate the auth flow claim."
+      }
+     ]
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 8.8,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Naming is cosmetic and not worth a review round-trip."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Trivial rename with no behavioral effect."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Merge as-is; fold the rename into a later cleanup."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Copy-paste nit that doesn't affect callers."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Harmless since it's imported under the right name."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Style-only, not blocking."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Agrees it's misleading but low priority."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would rename the default export to BackupCode for readability."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Cosmetic, leave for cleanup."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't push back on a naming nit."
+      }
+     ]
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 29.8,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The in-PR TODO already acknowledges the clipboard gap, so it's deferred intentionally."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Clipboard content verification is a nice-to-have already tracked by the TODO."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Test thoroughness, not a product defect."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Assert the clipboard content so the test actually fails when copy breaks."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A test that passes regardless of the feature isn't a test."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Known TODO, fine to land and improve later."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't block the PR on test depth."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Agrees but sees it as follow-up work."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would add an assertion on the copied codes."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doesn't own test coverage decisions."
+      }
+     ]
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 42.1,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The FIXME in the PR already flags this; the author chose to defer it knowingly."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "One-line fix to await expect(locator).toBeChecked() makes the assertion real."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Documented known issue, not merge-blocking."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Fix the promise-truthy assertion so the check can actually fail."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Explicitly deferred by the FIXME."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Acknowledged in the PR; leave it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "The assertion currently always passes, so it should be corrected."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Use toBeChecked to make it meaningful."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "FIXME covers it; acceptable for now."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't independently catch the Promise semantics."
+      }
+     ]
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 57.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Single-use backup codes must be consumed atomically; a transaction or compare-and-swap is warranted."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Concurrent reuse of the same backup code is a real correctness hole in an auth path."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The race window is narrow and can be handled in a follow-up."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Wrap the code consumption in a transaction to preserve the single-use invariant."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Two simultaneous logins can currently spend the same code twice."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Extremely unlikely in practice; accept for now."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Would make the read-modify-write atomic."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Racy edge case, not worth blocking the PR."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Sees it as theoretical."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doesn't grasp the concurrency implication on their own."
+      }
+     ]
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 14,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Constant-time comparison is cheap insurance for an auth credential, even if the leak is theoretical."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "indexOf timing is not practically exploitable over a network for a random hex code."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth the added complexity given the noise floor."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The search space and jitter make timing extraction infeasible."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Over-engineering for a non-actionable side channel."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't change working auth logic for a speculative timing concern."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doesn't see a realistic attack."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Theoretical, leave it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't act on this."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Can't assess timing attacks."
+      }
+     ]
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 33.3,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "lower(host) with an un-downcased bind parameter means an uppercase referer host silently fails to match."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Referer hosts are effectively always lowercase in practice, so the real risk is negligible."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Knows this partial-lower pattern is widespread and the mismatch only bites on unusual uppercase URLs."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Binding host.downcase is cheap and makes the lookup genuinely case-insensitive."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Won't block the PR over a corner case real referers never hit."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Treats it as a follow-up nit rather than a merge blocker."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Spotted the column/parameter asymmetry and would add downcase for correctness."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads past it since hosts are lowercase."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doesn't see a user-facing impact."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not spot this without being pointed at it."
+      }
+     ]
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 47.4,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "execute()[0] can be nil, and the migration should not abort installs lacking embed_category."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Since CI ran the migration it evidently didn't crash here; fix later if needed."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "An index into a possibly-empty result needs a nil guard before the fallback can work."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Would merge; if it mattered the build would have failed."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "An unmatched join aborts the whole migration, so it is worth guarding."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Considers it low risk given their known database state."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Obvious nil dereference once you read the line."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Assumes the setting always exists."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doesn't trace the empty-result case."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not question the migration's query."
+      }
+     ]
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 33.3,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Empty string still passes through sub! fine; only an explicit nil param crashes."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "A missing host param would 500 instead of returning the normal validation error."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Considered an unlikely request shape, not worth guarding."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Guard the mutation; it's easy and clearly correct."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The controller always sends a host value in practice."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would leave it as a minor robustness nit."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Noticed the unguarded sub! and would add a blank check."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doesn't think nil input reaches the model."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads past it."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't spot the nil edge."
+      }
+     ]
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 43.9,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The example no longer tests embeddable hosts and passes for the wrong reason."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Test hygiene only; the behavior is covered elsewhere."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not block on a stale test description."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "A test named 'embeddable_host is blank' that no longer exercises that path should be fixed."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would rework the example so it fails if the condition regresses."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Considers it cosmetic and merges."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Noticed the setup was deleted, leaving a misleading assertion."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doesn't scrutinize test names."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Sees a green test and moves on."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't catch the mismatch between name and body."
+      }
+     ]
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 66.7,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Migrated rows keep the scheme/path, so host_allowed? never matches and embedding silently breaks on upgrade."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Existing installs lose embedding until hosts are re-added; values must be normalized like the model does."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Would want to verify but might merge and open a follow-up."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Raw inserts bypass before_validation and break the lookup for real installs."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Data migration should strip scheme/path before inserting."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Underestimates the mismatch, treats it as edge."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Spotted that stored hosts won't match uri.host lookups."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Assumes the values were already bare hosts."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Recognizes the legacy format includes schemes and paths."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't follow the migration-to-lookup interaction."
+      }
+     ]
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 19.3,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Knows embed: :ids still sideloads the records, so there is nothing broken here."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Trusts the standard rest_serializer sideloading pattern."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Knows rest_serializer includes embedded associations as top-level collections."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The client already hydrates plural ids from the sideloaded array."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Sees the ids plus objects pattern working elsewhere."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would add a spec proving the payload includes the hosts, but wouldn't change the serializer."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Assumes the framework handles it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would double-check the generated JSON before merging."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Doesn't question the serializer."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not know either way."
+      }
+     ]
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 33.3,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The existing controller idiom doesn't nil-check here either, so it's consistent."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "A stale or deleted id shouldn't 500; a 404 check is warranted."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Considers it defensive hardening, not a merge blocker."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Guard the lookup so host is never nil before use."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Merges, given admin-only access and normal id flow."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Low likelihood under admin constraints."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Noticed .first can be nil and would add a check."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Assumes the record always exists."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads past the missing guard."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Wouldn't consider the nil case."
+      }
+     ]
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 47.4,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The new call passes a tempfile path with no .GIF suffix, so the animated branch is unreachable and GIFs get flattened; hand it the real filename."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Reaching downsize_instructions with a nameless tempfile silently drops frames from animated GIFs, a real regression for over-limit uploads."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Oversized animated GIFs are rare enough that I would merge and note it rather than block."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Downsizing is best-effort and animation loss on an over-limit upload is tolerable."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "The extension check can never match a generated tempfile name, so the intended animated path is dead here."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Edge case that is not worth expanding the PR scope for."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads as acceptable behavior for files that exceed the limit."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Detecting animation by filename suffix obviously fails for these tempfiles, so fix the call."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not notice without tracing the tempfile naming convention."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Did not realize the animated branch depends on the filename."
+      }
+     ]
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10.5,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Pure comment wording; the loop is intentionally best-effort."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Prose nit with no behavioral defect."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not worth another round trip for a comment."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": true,
+       "justify": "Reword the comment so it does not promise a hard size guarantee."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Comment overpromises but is harmless."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Slack wording, not code."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads past it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Comment-only, no fix needed."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not a defect."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not act on a comment."
+      }
+     ]
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 24.6,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Replacing the site-setting with a literal desyncs the client-side limit from the server setting."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "The PR deliberately caps at 10MB, so the client literal matches the new intent."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "An intentional constant, not a defect."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Acceptable given the hardcoded server value."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": true,
+       "justify": "Better to reference a shared constant than a bare literal."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No functional difference worth blocking."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Seems fine as written."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not raise it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Out of the assigned scope."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No opinion."
+      }
+     ]
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 24.6,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "convert -resize accepts a percentage, so 80% works on the reachable path and the gifsicle concern is moot."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "gifsicle --resize-fit will not take a percentage, so if the animated path ever runs it silently fails; pass explicit geometry."
+      },
+      {
+       "level": "expert",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Works correctly for the convert path that actually executes."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Percentage resizing is valid for the downsize instructions."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "low",
+       "urgent": true,
+       "justify": "Prefer explicit dimensions so the resize is unambiguous across backends."
+      },
+      {
+       "level": "senior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Not convinced this is actually broken."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Reads as working code."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not flag it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "No clear defect shown."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Assumes it works."
+      }
+     ]
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 91.2,
+     "devs": [
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Two downsize definitions; Ruby keeps the last, so the 5-arg width/height contract is silently gone—remove one."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "The duplicate method overrides the width/height signature and breaks any existing caller."
+      },
+      {
+       "level": "expert",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "A plain redefinition mistake that must be deduped before merge."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Callers passing width and height now bind into dimensions and opts and blow up."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "high",
+       "urgent": true,
+       "justify": "Last definition wins, making the original downsize dead and dangerous."
+      },
+      {
+       "level": "senior",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Remove the redundant definition before merging."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Spot the duplicate and delete it."
+      },
+      {
+       "level": "mid",
+       "wouldFix": true,
+       "impact": "medium",
+       "urgent": true,
+       "justify": "Clearly a merge slip."
+      },
+      {
+       "level": "mid",
+       "wouldFix": false,
+       "impact": "medium",
+       "urgent": false,
+       "justify": "Might miss that Ruby silently overrides methods."
+      },
+      {
+       "level": "junior",
+       "wouldFix": false,
+       "impact": "low",
+       "urgent": false,
+       "justify": "Would not catch the redefinition."
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

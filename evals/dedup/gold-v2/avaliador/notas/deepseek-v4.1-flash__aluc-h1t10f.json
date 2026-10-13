@@ -1,0 +1,1825 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "atribuidor": "deepseek-v4.1-flash@together",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 40,
+     "porque": "addGuests.handler.ts:52,76 use case-sensitive equality while case is normalized elsewhere (line 71), a real but narrow inconsistency; several devs would tighten it, others accept it."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 30,
+     "porque": "MultiEmail.tsx:46 hard-codes \"Remove email\" next to t(\"add_another\") on line 69; a trivial i18n fix some would make, most would merge."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 40,
+     "porque": "AddGuestsDialog.tsx:42-45 message is always truthy so the fallback and guests_added translation are unreachable and raw codes leak; worth a fix but cosmetic-ish."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "addGuests.handler.ts:74-90 never dedups within the input array and the server schema lacks the client's refine, so duplicate attendee rows can be persisted; real, though UI usually guards."
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "addGuests.handler.ts:92-106 check-then-insert without a transaction/unique guard is a genuine race, but low-frequency and a larger change many would defer."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 80,
+     "porque": "addGuests.handler.ts:46-48 uses && where || is intended, so only OWNERs pass while team ADMINs get FORBIDDEN; a clear logic bug most owners would fix before merge."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 40,
+     "porque": "addGuests.handler.ts:70-78 lowercases the blacklist list but compares raw input, so casing bypasses BLACKLISTED_GUEST_EMAILS; correct but niche."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 30,
+     "porque": "addGuests.handler.ts:167-171 passes raw guests instead of uniqueGuests to sendAddGuestsEmails, misselecting email templates; subtle and only a few would chase it."
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "scheduleSMSReminders.ts:31-43 — the new OR arm `retryCount > 1` has no supporting index, so the previously indexed deleteMany can degrade to a scan; several owners would add an index (or defer to a follow-up), but it's a performance concern not a correctness break."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 10,
+     "porque": "scheduleSMSReminders.ts:178-197 — the duplicated increment is a tidy-up suggestion; most owners would merge as-is and at most refactor later."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "scheduleSMSReminders.ts:184,195 — read-modify-write `retryCount + 1` is a genuine lost-update race under overlapping crons; the one-line `{ increment: 1 }` fix is cheap so about half would adopt it, though others would call current behavior acceptable."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 40,
+     "porque": "scheduleSMSReminders.ts:190-197 — a DB write added inside the catch with no guard can throw (e.g. P2025 after the top deleteMany in a concurrent run) and abort the whole loop; worth raising, but it requires the concurrency premise to matter."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 70,
+     "porque": "scheduleSMSReminders.ts:31-43 — moving `method: WorkflowMethods.SMS` into only the first OR arm makes `{ retryCount: { gt: 1 } }` match reminders of every method, contradicting the 'delete all scheduled sms reminders' comment; most owners would scope the second arm to SMS before merging."
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 70,
+     "porque": "handleNewBooking.ts:1077 `evt.destinationCalendar?.push(...)` no-ops when the field is null (set at 1063-1067), silently dropping the other hosts' teamDestinationCalendars for COLLECTIVE events — the exact multi-host case this PR targets."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "EventManager.ts:169-170 changes non-calendar from `result.credentialId` to `undefined`, so video references lose their credentialId; a plausible regression, though some owners may consider the old value incidental."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "EventManager.ts:344/517 adds per-destination `prisma.credential.findUnique` on the booking hot path; a valid perf concern but likely a deliberate cache-miss fallback the owners would accept."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 70,
+     "porque": "EventManager.ts:118-119 destructures from `?? []` and then reads `mainHostDestinationCalendar.integration` with no optional chaining; with the now-common empty-array DC and a Google Meet location this throws TypeError."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 70,
+     "porque": "googlecalendar/lib/CalendarService.ts:254-256 (and 315-317) only runs the `find` fallback when `externalCalendarId` is falsy, so it compares `cal.externalId === null/undefined` and always yields undefined instead of the host's calendar."
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "packages/app-store/salesforce/lib/CalendarService.ts:96-106 refreshes and persists a new access token but the connection is built from the stale credentialKey, so jsforce re-refreshes or fails; several owners would fix it but others would call it harmless since jsforce auto-refreshes."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 30,
+     "porque": "apps/web/pages/api/webhook/app-credential.ts:24-29 uses !== for the secret; a real timing-attack concern but many owners dismiss network timing attacks as impractical and would merge anyway."
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts:12-14 JSDoc copies the same 'app slug' text for both params; purely cosmetic, most owners read past it."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 50,
+     "porque": "packages/app-store/zoho-bigin/lib/CalendarService.ts:85-94 passes credentialId where the signature expects userId, mis-syncing Bigin credentials under the sharing flag; a genuine functional bug most owners would correct."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 70,
+     "porque": "packages/app-store/googlecalendar/lib/CalendarService.ts:97-101 stores the whole safeParse result object {success,data} as credential.key, breaking the googleCredentialSchema on next load; clear regression almost all owners would fix."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 60,
+     "porque": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15 returns a raw fetch Response in the sync branch while callers read .data/token fields off it, yielding undefined/NaN; most owners would reconcile the return shape."
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "EnableTwoFactorModal.tsx:134-136 no longer calls onEnable() on success and only the close button (line 269) triggers it, so dismissing via ESC/overlay leaves the server-enabled 2FA not reflected in the switch/UI."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "next-auth-options.ts:131-156 backup branch fires on any truthy credentials.backupCode while the password gate at line 121 is keyed on !credentials.totpCode, so supplying a valid backup code plus a dummy totpCode skips password verification, collapsing backup-code login to a single factor."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "BackupCode.tsx:7 exports the backup-code component under the name TwoFactor, which contradicts the file, imports and content; a trivial rename nit most owners would read past."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "login.2fa.e2e.ts:119-122 only waits for the toast-success element, which EnableTwoFactorModal fires unconditionally after an un-awaited clipboard write, so the copy test passes even if copying is broken."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 70,
+     "porque": "login.2fa.e2e.ts:50-53 asserts expect(promise).toBeTruthy() on isChecked()'s Promise, which is true for any Promise, so the check never reflects the switch state — a plain test defect the PR's own FIXME admits."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "next-auth-options.ts:144-156 consumes backup codes via a non-atomic read-modify-write, so two concurrent requests with the same code both pass index !== -1 and each persist a stale array, letting a code authenticate twice."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "porque": "next-auth-options.ts:143-145 uses short-circuiting indexOf equality on the backup code; a timing side-channel over a 40-bit code over the network is largely theoretical, so most owners would not rework it here."
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "insightsBooking.integration-test.ts:480-491 — the single fixture booking satisfies both predicates, so auth-only, filter-only, and the AND all pass; a real but test-only blind spot that other suites partially cover, so some owners would tighten it, most would merge."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 10,
+     "porque": "insightsBooking.ts:76-77 — getAuthorizationConditions is typed Promise<Prisma.Sql> and always returns at least NOTHING_CONDITION, so authConditions is never falsy and the `else if (filterConditions)` branch is unreachable dead code; the claimed authorization bypass cannot occur as described."
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 20,
+     "porque": "Real but pedantic: -webkit-box-ordinal-group is indeed 1-based vs order 0-based (mixins.scss:126), but with the only callers using order(2)/order(3) (topic.scss:30, header.scss:39) relative ordering vs default-1 siblings is preserved, so most owners would merge and maybe not bother."
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "Correct but low-impact: spec/controllers/admin/groups_controller_spec.rb:114 uses `xhr :put, :remove_member` while the sibling at line 125 uses `:delete`; controller specs bypass the router, so the wrong verb still exercises the action and no controller spec tests routing anyway — most owners would just tidy the verb or read past it."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 80,
+     "porque": "Real production bug: app/controllers/admin/groups_controller.rb:66,85 use `params.require(:group_id)` but the member routes config/routes.rb:49-50 supply `:id` and the client calls /admin/groups/<id>/members.json (app/assets/javascripts/discourse/models/group.js:42,53), so add/remove member raises ParameterMissing (400) while controller specs mask it by passing group_id."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 70,
+     "porque": "Genuine off-by-one in app/assets/javascripts/admin/controllers/admin-group.js.es6:11-14: `Math.floor(user_count/limit)+1` disagrees with currentPage on exact multiples (50/50 → totalPages 2), leaving showingLast false and 'next' (line 30-37) fetching offset=50 and rendering an empty member panel."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 40,
+     "porque": "Real regression: app/controllers/groups_controller.rb:22-35 now always paginates (limit 50), so non-automatic groups no longer return full membership, and discourse/templates/group/members.hbs renders only the first page with no next/previous — several owners would merge and file a follow-up rather than block."
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "uploads_controller.rb:67 calls OptimizedImage.downsize with tempfile.path, which never ends in .GIF, so optimized_image.rb:154's animated branch is skipped and large GIFs get flattened to one frame — a real regression, though only for oversized uploads."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "uploads_controller.rb:63 comment claims auto-reduction 'to allowed size' while the 80%x5 loop (line 66) may still exceed max_image_size_kb; accurate but a wording issue most would merge past."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 40,
+     "porque": "utilities.js:182/246 hardcode 10*1024 in place of Discourse.SiteSettings max_size_kb, dropping admin configurability; plausibly deliberate for this PR but worth a question."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 20,
+     "porque": "uploads_controller.rb:67 passing \"80%\" is valid ImageMagick -resize geometry and matches the new downsize(dimensions) signature, so the 'rejects a percentage / silently no-ops' claim is largely wrong for the reachable path."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 80,
+     "porque": "optimized_image.rb:149 redefines downsize(from, to, dimensions) directly after line 145's downsize(from, to, max_width, max_height), so the old 4-arg contract is silently shadowed and callers passing width/height bind them into dimensions/opts."
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 50,
+     "porque": "app/models/embeddable_host.rb:17 — `where(\"lower(host) = ?\", host)` only lowers the column while the stored value is never downcased (before_validation at :5-7 strips scheme/path only), so a host saved as 'Example.com' (allowed by the /i regex) can fail to match; a defensive `host.downcase` is a reasonable fix, though some owners will know URI parsing behavior and shrug."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 40,
+     "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11 — `execute(...)[0]['id']` dereferences nil when the join returns no row (missing/'unmatched embed_category), raising NoMethodError and aborting the migration; the intended fallback at :14-16 is unreachable, but owners may argue the setting always exists at migrate time."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "app/models/embeddable_host.rb:5-6 — `self.host.sub!` raises on nil host, and Admin::EmbeddableHostsController#save_host assigns params[:embeddable_host][:host] directly, so an absent host yields a 500 instead of the render_json_error validation response; a `return if host.blank?` guard is an easy, defensible fix."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "spec/models/topic_spec.rb:1403-1405 — the example 'is false if embeddable_host is blank' lost its setup and expandable_first_post? no longer consults hosts, so it only passes because embed_truncate defaults false; misleading test rot, but owners may merge and clean up later."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 60,
+     "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:24-26 — legacy values like 'http://discourse.org' are inserted raw, bypassing before_validation's scheme/path stripping, while record_for_host matches on uri.host, so migrated rows never match and embedding silently breaks for existing installs; a real upgrade-path regression most owners would fix."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 60,
+     "porque": "app/serializers/embedding_serializer.rb:3 — `embed: :ids` emits only embeddable_host_ids with no sideloaded objects, yet store._hydrateEmbedded plus embedding.hbs/embeddable-host.hbs expect full records, so the feature renders empty/null hosts; plausibly the core breakage, though a few owners might claim the serializer auto-includes."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "app/controllers/admin/embeddable_hosts_controller.rb:10-16 — update/destroy use `where(id: ...).first` with no nil check before save_host/host.destroy, so a stale id raises NoMethodError -> 500; a legit but low-severity robustness nit for an admin-only endpoint."
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 60,
+     "porque": "The lock at webassets.go:48-49 is taken without a second cache check, so after the first loader populates the cache every queued goroutine still re-runs the load; a textbook double-checked-locking gap most owners would add a re-check for."
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "database.go:109-118 does CountDevices then a separate INSERT with no transaction/lock; a real TOCTOU race that can exceed the cap, though the 29-min cache and soft-limit intent make some owners accept it."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 20,
+     "porque": "client.go:44-50 describes the intended contract of the feature (deny new devices past the limit); most owners would call this the point, not a defect, though the dropped goroutine/timeout latency concern is minor and mostly intentional."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "database_test.go:51-70 uses a never-inserted id so updateDevice's success path (existing device updated while at limit) is never covered; a legitimate coverage gap but a follow-up rather than a blocker."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 50,
+     "porque": "If impl.go:87 truly caches the device before the store call at impl.go:93 and never evicts, the limit is bypassed on the next request — high impact, but the claim hinges on exact ordering not shown in the diff."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 30,
+     "porque": "database.go:95-97 does conflate '0 rows affected' with the limit sentinel, but a device outside the 30d window is effectively expired/new, so denying it is arguably intended and the misleading error is a minor nit."
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 50,
+     "porque": "dualwriter_mode3_test.go:30-57 registers legacy expectations (setupLegacyFn) but never calls m.AssertExpectations, and the detached goroutine at dualwriter_mode3.go:50-57 means the legacy half of Mode 3 goes unverified — a real gap, though the async design makes it awkward to fix."
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 80,
+     "porque": "dualwriter_mode3.go:97 installs d.Log in the context instead of the composed request-scoped log from line 96, dropping name/kind/method fields every other method carries — a plain copy/paste defect that would be fixed."
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 30,
+     "porque": "dualwriter_mode3_test.go:145 name still references the old unimplemented List stub while List now delegates to Storage.List at dualwriter_mode3.go:79; worth a rename but cosmetic."
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6",
+      "S7",
+      "S11",
+      "S12",
+      "S13",
+      "S18",
+      "S19",
+      "S20"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 70,
+     "porque": "dualwriter_mode3.go:45 and 129 call recordLegacyDuration on storage-failure paths while 166 calls recordStorageDuration in the legacy goroutine, swapping the two duration series for failed writes — a genuine metric misattribution."
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S4",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 60,
+     "porque": "dualwriter_mode3.go:50-57 derives the goroutine context from the request-scoped ctx, which the API server cancels when the handler returns, so the legacy write can be aborted almost immediately — real behavior risk, though the fire-and-forget change itself may be intended."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9",
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-data-exposure",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "dualwriter_mode3.go:106 passes name in the kind slot while every other call site (48, 103, 113, 156, 159) passes options.Kind, making the Delete success sample's label inconsistent with the rest — minor but a clear inconsistency devs would smooth out."
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 70,
+     "porque": "metrics_middleware.go:76-82 reuses one shared *MetricsMiddleware and mutates imw.next on every chain build, unlike the sibling middlewares that return a fresh struct, so successive decorations/requests race on and clobber next."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "metrics_middleware.go:47-48 HELP says \"sizes returned\" while the value observed is the outgoing request (len(v.JSON) at 145-148, len(req.Body) at 161); a doc inaccuracy a couple would fix."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "metrics_middleware_test.go:21 keeps the superseded TestInstrumentationMiddleware name after the rename; cosmetic, most would read past it."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "metrics_middleware_test.go:101-109 gates the request-size assertion so the shouldInstrumentRequestSize:false cases (CheckHealth:45, CollectMetrics:68) assert nothing about non-instrumentation; a real test gap some would close."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 20,
+     "porque": "metrics_middleware_test.go:132-153 never resets foundLabels per series and bails on a value mismatch instead of continuing, so the helper would misbehave with multiple series; dormant today since each family has one series."
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "app/models/post.rb:133 devolve HTML cru que poll_feed.rb:35-36 guarda e best.html.erb:19 emite com raw na origem do fórum — XSS armazenado real vindo de feed externo, embora o feed seja configurado pelo admin."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "best.html.erb:14 usa strftime fixo '%e %b %Y' em vez do helper localizado usado no resto da view; cosmético, a maioria mescla assim."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "porque": "embed_controller.rb:26 e topic_retriever.rb:15 comparam host case-sensitive; navegadores já enviam host minúsculo, então é robustez de borda, poucos param o merge."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "poll_feed_spec.rb:18-28 nunca stuba feed_polling_enabled?, então os dois testes passam sem exercitar feed_polling_url/embed_by_username; defeito real de teste, mas não é bug de produto."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "embed_controller_spec.rb:8-11 nunca define embeddable_host, então falha no before_filter (blank host) e não em params.require; o teste passaria sem a checagem de embed_url."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "topic_embed.rb:15-30 faz check-then-insert sem rescue para o índice único de embed_url, e o throttle é burlado para staff (retrieve_topic.rb:17); corrida rara, alguns tratariam."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 10,
+     "porque": "best.html.erb:6 — '<%- end if %>' é sintaticamente estranho mas fecha o if de modo válido (a expressão seguinte vira a condição do modificador), então a alegação de SyntaxError não se sustenta."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "poll_feed.rb:31-35 lê i.link/i.title/i.content sem verificar presença; SimpleRSS levanta NoMethodError em itens sem <content>, abortando o job horário inteiro num feed comum."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "porque": "embed.js:17 usa indexOf substring para validar e.origin, aceitando origens que sejam substring de discourseUrl; impacto é só redimensionar o iframe, então muitos ignorariam."
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "server.go:258-262 returns nil,err on Init failure without calling the cancel/lifecycle created earlier, so a partially-initialized server leaks the watcher goroutine started by Init — a real but error-path-only leak some owners would fix with a defer cancel."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "module_server_test.go:35-38 disables the only postgres coverage of the storage-server instrumentation path before the /metrics assertion at line 63, so owners would at least want the skip tied to a tracking issue rather than silently merged."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 30,
+     "porque": "server.go:258-262 moving Init into the constructor is the deliberate point of this PR, and the blocking/lazy-index tradeoff is a design call owners likely already accepted, so most would not reverse it."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 30,
+     "porque": "search.go:216 TotalDocs reads b.cache unlocked, but the watcher that feeds build() events is now started after search.init (server.go:308-311), so no concurrent writer exists at that point — the data race is largely unreachable here."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "bleve.go:137-139 narrowing the lock to the map write is an intentional fix for holding cacheMu across the heavy bleve.New calls; a duplicate concurrent build is tolerated/guarded elsewhere in searchSupport, so few owners would revert."
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "OAuth2GrantTypeFactory.java:30 doc says 'usually like 3-letters shortcut' while every impl returns 2 chars and the encoder assumes 6=2+2+2; it's a doc nit most owners would merge as-is or fix in passing, not a code-changing defect."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S11",
+      "S15"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 70,
+     "porque": "AccessTokenContext.java:73 duplicates Objects.requireNonNull(grantType,...) instead of validating rawTokenId, a clear copy-paste bug that silently allows ':null' token ids; owners would fix this before merging."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S3",
+      "S7",
+      "S8",
+      "S9",
+      "S10",
+      "S12",
+      "S13",
+      "S14",
+      "S16",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-secret-and-identity",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 50,
+     "porque": "AssertEvents.java matcher uses substring(3,5) while the decoder reads the grant shortcut at 4-6, so the assertion never validates the grant; a genuine test-correctness defect worth raising, though the file isn't in the shown diff so relevance is uncertain."
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "FilterView.tsx:157-162 — removing key={key} from the grafana branch while the siblings still key by getRuleKey is a real list-key regression React warns about and misreconciles."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "useAbilities.ts:349-401 — the skipToken/undefined path yields AlwaysSupported with global grafana permissions, but for most actions isEditable/isAlertingRule are false so the OR is neutral; only Duplicate leaks, a subtle point most would merge past."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "GrafanaGroupLoader.test.tsx:85-102 — the 'action menu options' test only asserts the More button, so it would pass with an empty dropdown; a fair request to open the menu or rename."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "useAbilities.ts:242-246 — consolidating into useAllRulerRuleAbilities hardcodes isFederated=false, dropping isFederatedRuleGroup(rule.group) for existing useAllAlertRuleAbilities callers and making federated Mimir groups look editable, though the TODO suggests it's a deliberate migration gap."
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "config/initializers/i18n.rb:17 — the String/Symbol mismatch is real and .uniq can't collapse it, but the only practical effect is one redundant fallback lookup (Backend::Simple normalizes keys with to_sym), so most owners would call it a harmless nit rather than block."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 30,
+     "porque": "lib/freedom_patches/translate_accelerator.rb:68 — legit gap: only config.locale is lazily loaded, so fallback locales come from ApplicationController#set_locale alone, but @loaded_locales is process-global so the loss is confined to fresh non-controller processes; several owners would take the suggestion, the rest would merge and follow up."
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S4",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 60,
+     "porque": "GroupTest.java:139 starts a non-joined reader thread and the assertion at :157 can run before the thread records anything; capturing and joining the Thread is a concrete, commonly-requested fix."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 40,
+     "porque": "GroupTest.java:139-155: if a remove() at :152-154 throws, deletedAll.set(true) is skipped and the non-daemon while loop at :140 spins forever; daemon/try-finally is a fair ask but only bites the error path."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 30,
+     "porque": "GroupAdapter.java:274-275 returns null where the delegate path previously threw; the Long return type is already nullable and this null-return is the deliberate fix for the cache-expiry NPE, so most owners would accept it."
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 70,
+     "porque": "messages_zh_CN.properties:112 usa caracteres tradicionales (手機/應用程式) num arquivo zh_CN (simplificado), desviando das linhas vizinhas simplificadas; l10n claramente errada que os donos corrigiriam."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "VerifyMessageProperties.java:73-80 deriva o arquivo _en com replaceAll amplo e lança RuntimeException em vez de MojoExecutionException; robustez real, mas raramente dispara nos caminhos atuais."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "VerifyMessagePropertiesTest.java:36-40 testa <div>, rejeitado por toda política, então a allow-list br/p/strong/b (linhas 58-61) fica sem cobertura; lacuna de teste válida, mas muitos mesclariam."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 80,
+     "porque": "messages_lt.properties:101 (e login:71) teve o totpStep1 substituído por texto italiano ('Installa una delle seguenti applicazioni...'), entregando instruções no idioma errado; erro claro de substituição."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S6",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 40,
+     "porque": "VerifyMessageProperties.java:106-111 calcula prefixo e sufixo independentes sem limite mútuo, podendo fazer start+end exceder o comprimento e lançar StringIndexOutOfBoundsException em value.substring; defeito latente, mas a alcançabilidade é incerta."
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "IdentityProviderStorageProvider.java:252-256 widens the predicate past what the LoginFilter javadoc describes; a doc-only inconsistency most owners would fix at most as a nit, few would block on it."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 40,
+     "porque": "InfinispanIdentityProviderStorageProvider.java:244-254 returns a HashSet-backed stream, so cache-hit order diverges from the delegate (cache-miss) order; real but the SPI gives no ordering guarantee and the main caller re-sorts, so several owners would merge as-is."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S4",
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "OrganizationCacheTest.java:381 (and 425) register cleanup against the literal alias \"alias\" rather than \"idp-alias-\"+i, so the bound reference is null/no-op and the created IDPs leak; a genuine test bug a reviewer would want fixed, though it only touches test hygiene."
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 30,
+     "porque": "Real-ish but marginal — browser_reporting_collector.py:93 already logs the whole request.data at INFO unconditionally, so the new warning at line 111-114 adds no new exposure; owners would note the payload is already logged."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 70,
+     "porque": "organization_preprod_artifact_assemble.py:81-86 records analytics before the features.has check at line 88, so 404s without assembly still count; most owners would move the record after the flag/validation."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "The file useGetTraceItemAttributeValues.spec.tsx is not part of this diff, and a broken mock that trivially satisfies not.toHaveBeenCalled() is a test-nit — owners would treat it as outside this PR."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 60,
+     "porque": "project_replay_summarize_breadcrumbs.py:107-120 zips error_ids with get_multi(...).values(), but nodestore dedupes and reorders (uncached then cached), so ErrorEvents can be mis-paired; a plausible real defect worth flagging."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "chart.tsx is not in this diff; even if severe, the referenced widget code is unrelated to the changes under review, so owners would dismiss it here."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 40,
+     "porque": "browser_reporting_collector.py:50-60 uses truthiness for mutual-exclusion, so valid falsy age=0/timestamp=0 slips through; a genuine but low-impact edge case, half the owners would tighten it."
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 60,
+     "porque": "assignment_source.py:18 — a dataclass default is evaluated once at import, so every AssignmentSource gets the same import-time `queued`; the fix (field(default_factory=timezone.now)) is a one-liner most owners would take, though the field looks mostly informational."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "test_assignment_source.py:8 — pure naming nit; the input is {} not [], code and coverage are fine, most reviewers would merge without touching it."
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "Real behavioral change: each per-process SpansBuffer at flusher.py:93 recomputes the per-shard cap over only its subset, so the global spans.buffer.max-flush-segments cap scales with process count; some owners would flag it, others may consider the aggregate throughput intentional."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "flusher.py:127-132 _create_process_for_shard has no caller anywhere; it is genuine dead code and a smell of unfinished wiring, but harmless enough that many would just merge and clean up later."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 40,
+     "porque": "The docstring at flusher.py:31 says 'one process per shard' while lines 60-66 share shards across capped processes and the default is 1; a straightforward doc fix most owners would want before merge."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 30,
+     "porque": "The default=1 in consumers/__init__.py:434 may well be a deliberate gradual rollout that preserves prior single-process behavior, so several owners would push back on calling it a bug, though the `or len(...)` fallback suggests auto was intended."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 20,
+     "porque": "flusher.py:51 falsy-0 handling is technically wrong but passing 0 flusher processes is nonsensical and unlikely, so most would read past it."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 20,
+     "porque": "Negative flusher_processes causing a KeyError at flusher.py:60-66 is a real but very contrived edge case; few owners would block the PR on unvalidated negative config."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 50,
+     "porque": "test_consumer.py:60-62's time.sleep(0.1) is neutralized by the monkeypatch of time.sleep at line 15, so the added synchronization is a no-op; a clear, concrete test defect several owners would fix."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 60,
+     "porque": "flusher.py:199 tags wait_produce with key 'shards' while sibling metrics use 'shard', silently dropping it from shard-tagged dashboards; an easy, clear inconsistency most owners would correct."
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "PasswordForm.java:60-65 — the added clause is deliberate and covered by the new tests (e.g. PasskeysUsernameFormTest.webauthnLoginWithDiscoverableKey_reauthentication still asserts isPasswordInputPresent()==true for a passwordless user), and the page is satisfiable via the passkey conditional UI, so the 'step can never be satisfied' premise is wrong; owners added this on purpose."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "UsernamePasswordForm.java:114-117 — the comment 'when passkeys enabled' simply mirrors isConditionalPasskeysEnabled, whose own body encodes the extra user-has-credential check; a wording nit that one dev might touch, most would read past."
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "Docstring example in incident_occurrence.py:137 is inaccurate, but this is pre-existing text moved verbatim from mark_failed.py; most owners would read past a docstring nit in a pure-move PR."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 10,
+     "porque": "Speculative ImportError concern about SimpleCheckIn's new home in types.py:105 — no actual stale importer is identified, just a request to 'confirm', so it reads as noise."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 40,
+     "porque": "incident_occurrence.py:168 returns monitor_environment.monitor.config instead of the mutated local `config`, so the schedule_type substitution at line 162 is dead — a correct, real defect, though pre-existing moved code tempers how many would block the merge."
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 50,
+     "porque": "detector.py:229-233 docstring still says 'returns a list of DetectorEvaluationResult' while the body now builds a dict (results[result.group_key] = result); it's a one-line doc fix most reviewers would want in before merge, though it's cosmetic and some would let it slide."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 70,
+     "porque": "grouptype.py:11-12 MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with only `pass`, but that ABC leaves counter_names/get_dedupe_value/get_group_key_values/build_occurrence_and_event_data abstract (detector.py:142-170), so it stays abstract and Detector.detector_handler's instantiation raises TypeError — a real regression from the previously concrete handler."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 30,
+     "porque": "test_detector.py:244-275 build_mock_occurrence_and_event ignores its `value` argument, so the expected occurrence never depends on the packet value and test_state_results_multi_group can pass value=6 for group_2 where the packet carries 10; it's a test-fidelity nit most owners would merge past or fix later."
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "ClientPermissionsV2.java:244 uses owner server.getId() while AdminPermissionsSchema.getOrCreateResource creates the resource with a different owner; the mismatch is real if getId()!=getClientId() but most owners may consider it self-consistent with the surrounding lookups and untested."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "AdminPermissions.java:77 gate on ADMIN_FINE_GRAINED_AUTHZ is arguably the V1 flag itself, so with it off there are no V1 permissions to clean; the 'orphaned resources' claim is plausible but likely wrong, so most owners would merge."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 30,
+     "porque": "ClientPermissionsV2.java:262-272 getEvaluationContext is genuinely unused private code, a legitimate cleanup ask but harmless and easy to dismiss as future token-exchange scaffolding."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 60,
+     "porque": "MgmtPermissionsV2.java:63-68 clients() returns ClientPermissionsV2 whose setPermissionsEnabled throws, yet AdminPermissions.java:89-91 calls it on ClientRemovedEvent; if both FGAP features are on this throws during event handling, a concrete defect most owners would address."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "ClientPermissionEvaluator.java:95-103 javadoc on the void requireView()/requireViewClientScopes() says 'Returns true', a copy-paste doc bug; real but cosmetic, unlikely to block merge."
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "Naming nit: integration.py:149-152 dereferences org.organization so callers pass active_organization, not an Organization; real but cosmetic, most owners would merge."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "tests/.../test_integration.py:388-396 uses state ddd023... which is not the pipeline signature (9cae5e88...), so OAuthLoginView.dispatch at integration.py:412 errors early and the test no longer exercises the installation-not-found path."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "integration.py:500-505 indexes metadata['sender']['login'] unguarded; a sender-less ACTIVE integration would KeyError/500 — plausible but the normal path is webhook-created with sender present."
+    }
+   ]
+  }
+ }
+}
