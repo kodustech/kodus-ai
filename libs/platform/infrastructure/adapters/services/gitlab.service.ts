@@ -1679,9 +1679,20 @@ export class GitlabService implements Omit<
 
             const hasRepositories = gitlabRepositories?.length > 0;
 
-            const authMode = gitlabOrg?.authIntegration?.authDetails?.authMode
-                ? gitlabOrg?.authIntegration?.authDetails?.authMode
-                : AuthMode.OAUTH;
+            const gitlabAuthDetails = gitlabOrg?.authIntegration?.authDetails;
+
+            // The mode can predate the field: an OAuth record carries a
+            // refresh token and a PAT record never does, so derive it rather
+            // than assume OAuth. Reporting a PAT as OAuth hides its rotation;
+            // the reverse offers the rotation to an OAuth connection, and that
+            // modal saves a PAT which REPLACES authDetails, dropping the
+            // refresh token and converting the connection for good.
+            let authMode = gitlabAuthDetails?.authMode;
+            if (!authMode) {
+                authMode = gitlabAuthDetails?.refreshToken
+                    ? AuthMode.OAUTH
+                    : AuthMode.TOKEN;
+            }
 
             const isSetupComplete =
                 (!!hasRepositories &&
@@ -1698,13 +1709,10 @@ export class GitlabService implements Omit<
                     hasRepositories: hasRepositories,
                     status: gitlabRepositories?.installationStatus,
                     host: gitlabOrg?.authIntegration?.authDetails?.host ?? '',
-                    // What the settings card reads: the STORED mode, not the
-                    // default applied above. A connection from before the
-                    // field existed authenticates with a token, and reporting
-                    // it as OAuth would hide its rotation and leave only the
-                    // destructive reset.
-                    authMode:
-                        gitlabOrg?.authIntegration?.authDetails?.authMode,
+                    // The settings card reads this to decide whether it may
+                    // offer the token rotation, so it carries the same derived
+                    // mode the setup check above uses.
+                    authMode,
                 },
                 category: IntegrationCategory.CODE_MANAGEMENT,
             };
