@@ -197,7 +197,7 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
                             try {
                                 await this.pullRequestsService.addPrLevelSuggestions(
                                     context.pullRequest.number,
-                                    context.repository.name,
+                                    String(context.repository.id),
                                     transformedPrLevelSuggestions,
                                     context.organizationAndTeamData,
                                 );

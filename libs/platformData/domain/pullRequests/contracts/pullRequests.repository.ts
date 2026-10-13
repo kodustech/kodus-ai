@@ -313,6 +313,10 @@ export interface IPullRequestsRepository {
         pullRequest: PullRequestsEntity,
         updateData: Partial<IPullRequests>,
     ): Promise<PullRequestsEntity | null>;
+    appendPrLevelSuggestions(
+        pullRequest: PullRequestsEntity,
+        suggestions: ISuggestionByPR[],
+    ): Promise<PullRequestsEntity | null>;
     updateFile(
         fileId: string,
         updateData: Partial<IFile>,

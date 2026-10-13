@@ -220,6 +220,7 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
         pullRequestsRepository = {
             create: jest.fn(),
             update: jest.fn(),
+            appendPrLevelSuggestions: jest.fn(),
             findByNumberAndRepositoryId: jest.fn().mockResolvedValue(null),
             findByNumberAndRepositoryName: jest.fn().mockResolvedValue(null),
         };
@@ -380,77 +381,62 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
 
         await callSaveWithSuggestions(stubRepository, [{ id: 'new' }]);
 
-        // The append targets the record the identity lookup resolved.
-        expect((service as any).update).toHaveBeenCalledWith(
-            byId,
-            expect.objectContaining({
-                prLevelSuggestions: [{ id: 'old' }, { id: 'new' }],
-            }),
-        );
+        // The append targets the record the identity lookup resolved, in one
+        // atomic statement, so the service never rebuilds the array (#2076
+        // review).
+        expect(
+            pullRequestsRepository.appendPrLevelSuggestions,
+        ).toHaveBeenCalledWith(byId, [{ id: 'new' }]);
         // A fresh name lookup here could return a same-named foreign repo.
         expect(
             pullRequestsRepository.findByNumberAndRepositoryName,
         ).not.toHaveBeenCalled();
     });
 
-    it('re-reads by id before appending so a concurrent append is preserved', async () => {
-        // `existingPR` is the snapshot from the identity lookup at the start of
-        // the save; the awaited update and network calls happen in between. If
-        // the append based on that snapshot it would `$set` the whole array and
-        // silently drop a suggestion a concurrent writer appended meanwhile
-        // (#2076 review). The append must start from a fresh document.
+    it('appends to the identity-resolved record with no re-read', async () => {
+        // `existingPR` is the identity lookup's snapshot and it is the target:
+        // the append is one atomic statement now, so nothing needs re-reading
+        // before it - and nothing can be dropped between a read and a write
+        // (#2076 review).
         const snapshot = {
             uuid: 'snapshot',
             repository: { id: 'repo-uuid-stable' },
             prLevelSuggestions: [{ id: 'old' }],
         };
-        const fresher = {
-            uuid: 'fresher',
-            repository: { id: 'repo-uuid-stable' },
-            prLevelSuggestions: [{ id: 'old' }, { id: 'concurrent' }],
-        };
-        pullRequestsRepository.findByNumberAndRepositoryId
-            .mockResolvedValueOnce(snapshot)
-            .mockResolvedValueOnce(fresher);
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            snapshot,
+        );
 
         await callSaveWithSuggestions(stubRepository, [{ id: 'new' }]);
 
-        // The re-read reloaded the document and the append kept BOTH the
-        // snapshot's suggestion and the concurrent writer's.
-        expect((service as any).update).toHaveBeenCalledWith(
-            fresher,
-            expect.objectContaining({
-                prLevelSuggestions: [
-                    { id: 'old' },
-                    { id: 'concurrent' },
-                    { id: 'new' },
-                ],
-            }),
-        );
+        expect(
+            pullRequestsRepository.appendPrLevelSuggestions,
+        ).toHaveBeenCalledWith(snapshot, [{ id: 'new' }]);
+        // Exactly one lookup: the identity one at the start of the save.
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryId,
+        ).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps the snapshot array when the pre-append re-read misses', async () => {
-        // A re-read that returns null happens for the legacy documents the
-        // name lookup resolves; the append must still start from the
-        // snapshot's stored suggestions instead of `$set`ing just the new
-        // batch over them (#2076 review).
+    it('hands the new batch over untouched, with no array to rebuild', async () => {
+        // The merge belongs to the database now (`$push`), so the service never
+        // rebuilds the array from a snapshot - which is what could erase stored
+        // suggestions when that snapshot was empty or stale (#2076 review).
         const snapshot = {
             uuid: 'snapshot',
             repository: { id: 'repo-uuid-stable' },
             prLevelSuggestions: [{ id: 'old' }],
         };
-        pullRequestsRepository.findByNumberAndRepositoryId
-            .mockResolvedValueOnce(snapshot)
-            .mockResolvedValueOnce(null);
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            snapshot,
+        );
 
         await callSaveWithSuggestions(stubRepository, [{ id: 'new' }]);
 
-        expect((service as any).update).toHaveBeenCalledWith(
-            snapshot,
-            expect.objectContaining({
-                prLevelSuggestions: [{ id: 'old' }, { id: 'new' }],
-            }),
-        );
+        const [, batch] = (
+            pullRequestsRepository.appendPrLevelSuggestions as jest.Mock
+        ).mock.calls[0];
+        expect(batch).toEqual([{ id: 'new' }]);
     });
 
     it('logs and continues when appending pr-level suggestions fails', async () => {
@@ -467,10 +453,12 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
         const loggerSpy = jest
             .spyOn((service as any).logger, 'error')
             .mockImplementation(() => {});
-        // First `update` is the main save (resolves); the append rejects.
-        (service as any).update
-            .mockResolvedValueOnce(null)
-            .mockRejectedValueOnce(new Error('mongo down'));
+        // The main save resolves; the append rejects.
+        (service as any).update.mockResolvedValueOnce(null);
+        jest.spyOn(
+            service as any,
+            'appendPrLevelSuggestions',
+        ).mockRejectedValue(new Error('mongo down'));
 
         await expect(
             callSaveWithSuggestions(stubRepository, [{ id: 'new' }]),
