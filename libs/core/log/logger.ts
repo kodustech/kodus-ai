@@ -1412,10 +1412,18 @@ export function capSerialized(
 function innerErrorForHttpContext(
     source: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
-    const inner = source.lastError;
-    return typeof inner === 'object' && inner !== null
-        ? (inner as Record<string, unknown>)
-        : undefined;
+    // The log path degrades instead of throwing: a getter that throws on the
+    // error, or on `lastError`, would otherwise take the whole line down - the
+    // same contract `capSerialized` keeps for throwing getters and toJSON
+    // (#1835 review).
+    try {
+        const inner = source.lastError;
+        return typeof inner === 'object' && inner !== null
+            ? (inner as Record<string, unknown>)
+            : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 /**
@@ -1428,21 +1436,30 @@ function httpContextOf(
     maxStringLength: number,
 ): Record<string, unknown> {
     const picked: Record<string, unknown> = {};
-    const status =
-        source.statusCode === undefined ? source.status : source.statusCode;
-    if (typeof status === 'number') {
-        picked.statusCode = status;
-    }
-    if (typeof source.url === 'string') {
-        const sanitized = sanitizeString(source.url);
-        picked.url =
-            sanitized.length > maxStringLength
-                ? `${sanitized.substring(0, maxStringLength)}…`
-                : sanitized;
-    }
-    const length = responseBodyLengthOf(source.responseBody);
-    if (length !== undefined) {
-        picked.responseBodyLength = length;
+    // Every read is inside the guard, and the catch keeps whatever was read
+    // before the throwing one: a log line loses a field, never itself
+    // (#1835 review).
+    try {
+        const status =
+            source.statusCode === undefined
+                ? source.status
+                : source.statusCode;
+        if (typeof status === 'number') {
+            picked.statusCode = status;
+        }
+        if (typeof source.url === 'string') {
+            const sanitized = sanitizeString(source.url);
+            picked.url =
+                sanitized.length > maxStringLength
+                    ? `${sanitized.substring(0, maxStringLength)}…`
+                    : sanitized;
+        }
+        const length = responseBodyLengthOf(source.responseBody);
+        if (length !== undefined) {
+            picked.responseBodyLength = length;
+        }
+    } catch {
+        // Degrade to the fields read so far.
     }
     return picked;
 }
