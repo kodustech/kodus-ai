@@ -569,6 +569,101 @@ const ruleNewSiteClaim = {
     expect: 'deliver',
 };
 
+// ---------------------------------------------------------------------------
+// refund: a NEW bug in a file the earlier suggestion never touched, on a PR
+// whose history holds an applied suggestion. The no-repeat rule must not
+// swallow it: guard.
+// ---------------------------------------------------------------------------
+const refundRepo = {
+    ...billingRepo,
+    'src/billing/refund.ts': lines(
+        "import type { Gateway } from './gateway';",
+        '',
+        'export async function refund(gw: Gateway, charge: { id: string; amount: number }, amount: number) {',
+        '    if (amount < charge.amount) {',
+        "        throw new Error('refund exceeds the charge');",
+        '    }',
+        "    await gw.submit({ type: 'refund', chargeId: charge.id, amount });",
+        '}',
+    ),
+};
+const refundDiff = [
+    patch('src/billing/refund.ts', 3, [
+        ' export async function refund(gw: Gateway, charge: { id: string; amount: number }, amount: number) {',
+        '-    if (amount > charge.amount) {',
+        '+    if (amount < charge.amount) {',
+        "         throw new Error('refund exceeds the charge');",
+        '     }',
+    ]),
+];
+
+// ---------------------------------------------------------------------------
+// moved: the round-A suggestion (resubmitting duplicates the charge) is still
+// open, and the developer moved pollCharge to another file unchanged (#2020
+// production report: the same comment reposted on another file).
+// ---------------------------------------------------------------------------
+const movedPoller = billingRepo['src/billing/poller.ts'];
+const movedRepo = {
+    ...billingRepo,
+    'src/billing/tick.ts': movedPoller,
+    'src/billing/poller.ts': lines("export { pollCharge } from './tick';"),
+};
+const movedDiff = [
+    {
+        filename: 'src/billing/tick.ts',
+        patchWithLinesStr: `## file: 'src/billing/tick.ts'\n\n@@ -0,0 +1,${movedPoller.trimEnd().split('\n').length} @@\n__new hunk__\n${movedPoller.trimEnd().split('\n').map((l, i) => `${i + 1} +${l}`).join('\n')}\n__old hunk__\n`,
+    },
+    {
+        filename: 'src/billing/poller.ts',
+        patchWithLinesStr: `## file: 'src/billing/poller.ts'\n\n@@ -1,${movedPoller.trimEnd().split('\n').length} +1,1 @@\n__new hunk__\n1 +export { pollCharge } from './tick';\n__old hunk__\n${movedPoller.trimEnd().split('\n').map((l) => `-${l}`).join('\n')}`,
+    },
+];
+const resubmitOpenDecision = (over = {}) => ({
+    ...roundA_propagateNotReady('not_implemented'),
+    suggestionId: 'round-a-resubmit',
+    relevantFile: 'src/billing/poller.ts',
+    relevantLinesStart: 13,
+    relevantLinesEnd: 15,
+    suggestionContent: 'pollCharge resubmits the charge on NotReadyError, but gw.submit is not idempotent and NotReadyError means the gateway already has the charge, so every tick creates a duplicate charge. Wait instead of resubmitting.',
+    ...over,
+});
+
+// K4: the flagged code must be IN the diff, or the rule judge never evaluates
+// it and the repeat claim passes for the wrong reason (no-history control).
+const touchedJobsRepo = {
+    ...jobsRepo,
+    'src/jobs/handler.ts': lines(
+        "import { db } from './db';",
+        "import type { Run, Batch } from './types';",
+        '',
+        'export async function finishRun(run: Run) {',
+        '    const output = run.output ?? null;',
+        '    await db.results.insert(run.id, output);',
+        "    await db.progress.update(run.id, 'done');",
+        '}',
+        '',
+        'export async function finishBatch(batch: Batch) {',
+        '    await db.results.insertMany(batch.id, batch.outputs);',
+        "    await db.progress.update(batch.id, 'done');",
+        '}',
+    ),
+};
+const touchedJobsDiff = [
+    patch('src/jobs/handler.ts', 4, [
+        ' export async function finishRun(run: Run) {',
+        '-    await db.results.insert(run.id, run.output);',
+        '+    const output = run.output ?? null;',
+        '+    await db.results.insert(run.id, output);',
+        "     await db.progress.update(run.id, 'done');",
+        ' }',
+        '+',
+        '+export async function finishBatch(batch: Batch) {',
+        '+    await db.results.insertMany(batch.id, batch.outputs);',
+        "+    await db.progress.update(batch.id, 'done');",
+        '+}',
+    ]),
+];
+
 const cases = [
     { id: 'U1-premise-unread', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'dead', claims: settleClaims('not_deliver_normal') },
     { id: 'U2-premise-readable', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'alive', claims: settleClaims('not_deliver') },
@@ -676,6 +771,35 @@ const cases = [
         kodyRules: [progressFirstRule],
         previousDecisions: [resultFirstDecision],
         claims: [{ id: 'result-first-violates-rule', golden: 'finishRun writes the result with db.results.insert before updating progress with db.progress.update, violating the rule that progress must be updated before results are written.', truth: 'true', expect: 'if_delivered_linked' }],
+    },
+    // --- repeats across agents and files, and a guard (added 2026-10-06) ---
+    // Guard: an unrelated new bug in another file, with an applied suggestion
+    // in the history, is still posted (the no-repeat rule must not swallow it).
+    {
+        id: 'R12-unrelated-other-file', family: 'rounds', repo: refundRepo, changedFiles: refundDiff, sandbox: 'alive',
+        previousDecisions: [roundA_propagateNotReady('implemented')],
+        claims: [{ id: 'refund-guard-inverted', golden: 'refund now throws "refund exceeds the charge" for every refund SMALLER than the charge and lets a refund larger than the charge through: the comparison was inverted from > to <.', truth: 'true', premise: 'diff', expect: 'deliver' }],
+    },
+    // The open suggestion's code moved to another file unchanged: not posted again.
+    {
+        id: 'R13-repeat-after-move', family: 'rounds', repo: movedRepo, changedFiles: movedDiff, sandbox: 'alive',
+        previousDecisions: [resubmitOpenDecision()],
+        claims: [{ ...resubmitClaim('not_deliver', false), id: 'resubmit-repeat-moved' }],
+    },
+    // The earlier comment came from a Kody Rule and was declined; the bug
+    // finder must not raise the same problem again as a bug.
+    {
+        id: 'R14-repeat-of-rule-by-finder', family: 'rounds', repo: repeatRepo, changedFiles: repeatDiff, sandbox: 'alive',
+        previousDecisions: [resubmitOpenDecision({ label: 'kody_rules', brokenKodyRulesIds: ['rule-no-double-submit'], suggestionContent: 'Rule "never resubmit a charge the gateway accepted": pollCharge calls gw.submit again on NotReadyError, and NotReadyError means the gateway already has the charge, so each tick creates a duplicate charge. Wait instead.' })],
+        claims: [{ ...resubmitClaim('not_deliver', false), id: 'resubmit-repeat-of-rule' }],
+    },
+    // The bug finder raised the problem earlier and the developer declined it;
+    // the rule judge must not post the same problem again as a rule violation.
+    {
+        id: 'K4-rule-repeats-declined-bug', family: 'rounds', agent: 'kody-rules', repo: touchedJobsRepo, changedFiles: touchedJobsDiff, sandbox: 'alive',
+        kodyRules: [progressFirstRule],
+        previousDecisions: [{ ...declinedRuleDecision(), suggestionId: 'round-a-bug-progress', label: 'bug', brokenKodyRulesIds: undefined, suggestionContent: 'finishRun stores the result (db.results.insert) before recording progress (db.progress.update); a crash in between leaves output for a run whose progress was never recorded. Update progress first.' }],
+        claims: [ruleRepeatClaim('not_deliver'), ruleNewSiteClaim],
     },
 ];
 
