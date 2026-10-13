@@ -223,6 +223,10 @@ export class ForgejoService implements Omit<
     ): PullRequestReviewComment {
         return {
             id: comment.id,
+            // The review is the closest thing Forgejo has to a thread, and
+            // this field is what groups a review's comments together (#2064
+            // review keeps it: see the note in the PR about the reactions path,
+            // which wants the per-comment identity instead).
             threadId: review.id?.toString(),
             isResolved: comment.resolver != null,
             isOutdated: review.stale ?? false,
@@ -3341,6 +3345,7 @@ export class ForgejoService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string };
         prNumber: number;
+        commentId?: number;
     }): Promise<any[]> {
         try {
             const authDetail = await this.getAuthDetails(
@@ -3392,7 +3397,14 @@ export class ForgejoService implements Omit<
                 prNumber: filters.pullRequestNumber,
             });
 
-            return comments ?? null;
+            // Sibling adapters honour `commentId`: a caller that passes one
+            // gets the matching comment back rather than the whole
+            // conversation (#2064 review).
+            if (params.commentId !== undefined) {
+                return comments?.find((c) => c.id === params.commentId) || null;
+            }
+
+            return comments ?? [];
         } catch (error) {
             return null;
         }
