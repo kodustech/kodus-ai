@@ -42,7 +42,7 @@ export class GetWebhookCreationFailuresUseCase implements IUseCase {
                 !organizationAndTeamData?.teamId
             ) {
                 throw new BadRequestException(
-                    'organizationId e teamId são obrigatórios.',
+                    'organizationId and teamId are required.',
                 );
             }
 

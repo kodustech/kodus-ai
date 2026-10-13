@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
 import { getIntegrationConfig } from "@services/integrations/integrationConfig/fetch";
-import { getWebhookCreationFailures } from "@services/codeManagement/fetch";
+import { getWebhookCreationFailures } from "@services/codeManagement/webhookCreationFailures";
 import { getConnections } from "@services/setup/fetch";
 import { ErrorCard } from "src/core/components/ui/error-card";
 import {

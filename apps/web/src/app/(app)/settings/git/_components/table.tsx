@@ -6,7 +6,7 @@ import { Button } from "@components/ui/button";
 import { DataTable } from "@components/ui/data-table";
 import { Input } from "@components/ui/input";
 import { Link } from "@components/ui/link";
-import type { WebhookCreationFailure } from "@services/codeManagement/fetch";
+import type { WebhookCreationFailure } from "@services/codeManagement/webhookCreationFailures";
 import type { getIntegrationConfig } from "@services/integrations/integrationConfig/fetch";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";

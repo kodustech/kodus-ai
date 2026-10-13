@@ -131,38 +131,11 @@ const AWARD_EMOJI_CONCURRENCY = 5;
  */
 const GITLAB_MAX_PER_PAGE = 100;
 
-/**
- * Serializes the webhook-failure writes per organization+team, in call order.
- *
- * `createMergeRequestWebhook` is fired unawaited (two tabs, a double click on
- * Save, a retry), so two overlapping reconciliations of the SAME selection
- * would otherwise race on one stored value and the run that STARTED first could
- * finish last, replacing a newer observation with an older one: a phantom
- * failure for a repository whose hook now exists, or a fresh failure erased by
- * the stale write. Queuing the writes in call order makes the last observation
- * win (#2003 review).
- *
- * Module scope, not an instance field: the service can be request-scoped, and
- * the two saves that race are two requests.
- */
-const webhookFailureWrites = new Map<string, Promise<void>>();
-
-function queueWebhookFailureWrite(
-    key: string,
-    write: () => Promise<void>,
-): Promise<void> {
-    const previous = webhookFailureWrites.get(key) ?? Promise.resolve();
-    const next = previous
-        .catch(() => undefined)
-        .then(write)
-        .finally(() => {
-            if (webhookFailureWrites.get(key) === next) {
-                webhookFailureWrites.delete(key);
-            }
-        });
-    webhookFailureWrites.set(key, next);
-    return next;
-}
+// Overlapping reconciliations are ordered by OBSERVATION START in
+// `recordWebhookCreationFailures` (#2003 review). A module-level queue used to
+// sit here instead: it only serialised writes inside one process while the API
+// runs several instances, and it ordered by finishing time rather than by when
+// a run began observing.
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
@@ -3220,27 +3193,19 @@ export class GitlabService implements Omit<
                 metadata: { organizationAndTeamData },
             });
 
-            await queueWebhookFailureWrite(
-                this.webhookFailureWriteKey(organizationAndTeamData),
-                () =>
-                    this.recordWebhookCreationFailures(
-                        organizationAndTeamData,
-                        failures,
-                        startedAt,
-                    ),
+            await this.recordWebhookCreationFailures(
+                organizationAndTeamData,
+                failures,
+                startedAt,
             );
             return;
         }
 
         if (this.sameSelection(selection, currentRepositories)) {
-            await queueWebhookFailureWrite(
-                this.webhookFailureWriteKey(organizationAndTeamData),
-                () =>
-                    this.recordWebhookCreationFailures(
-                        organizationAndTeamData,
-                        failures,
-                        startedAt,
-                    ),
+            await this.recordWebhookCreationFailures(
+                organizationAndTeamData,
+                failures,
+                startedAt,
             );
             return;
         }
@@ -3256,11 +3221,6 @@ export class GitlabService implements Omit<
 
     /** The write queue is per organization AND team: two teams of one
      * organization reconcile different selections. */
-    private webhookFailureWriteKey(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ): string {
-        return `${organizationAndTeamData?.organizationId ?? ''}:${organizationAndTeamData?.teamId ?? ''}`;
-    }
 
     private describeWebhookCreationFailure(error: any): string {
         const status =
@@ -3349,6 +3309,7 @@ export class GitlabService implements Omit<
             // The record carries when it was written, so the stale run is a
             // no-op instead of a blind wholesale replace.
             const stored = await this.integrationConfigService.findIntegrationConfigFormatted<{
+                startedAt?: string;
                 recordedAt?: string;
                 failures?: Record<string, { reason: string; at: string }>;
             }>(
@@ -3356,7 +3317,13 @@ export class GitlabService implements Omit<
                 organizationAndTeamData,
             );
 
-            if (stored?.recordedAt && stored.recordedAt > startedAt) {
+            // Compare observation STARTS, not write times (#2003 review): an
+            // older run that finishes while a newer one is still reconciling
+            // used to find a later `recordedAt` and step aside, leaving the
+            // older observation in place. With the record carrying when its
+            // observation began, the stale run is the one whose start is
+            // earlier, whatever the finishing order.
+            if (stored?.startedAt && stored.startedAt > startedAt) {
                 this.logger.log({
                     message:
                         'Skipping the webhook failure record: a newer reconciliation already wrote it',
@@ -3373,11 +3340,16 @@ export class GitlabService implements Omit<
 
             // Replaced wholesale on every save: the loop above visits every
             // selected project, so a project missing from `failures` has no
-            // creation failure left to report. `recordedAt` is what lets a
-            // later-finishing, older-observing run recognise itself as stale.
+            // creation failure left to report. `startedAt` is what lets a
+            // later-finishing, older-observing run recognise itself as stale;
+            // `recordedAt` stays as the moment the record was written.
             await this.integrationConfigService.createOrUpdateConfig(
                 IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
-                { recordedAt: new Date().toISOString(), failures },
+                {
+                    startedAt,
+                    recordedAt: new Date().toISOString(),
+                    failures,
+                },
                 integration.uuid,
                 organizationAndTeamData,
             );
