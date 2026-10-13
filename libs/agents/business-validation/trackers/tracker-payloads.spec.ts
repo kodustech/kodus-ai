@@ -524,3 +524,39 @@ describe('ClickUp as a custom plugin (get_task)', () => {
         });
     });
 });
+
+describe('Shortcut as a custom plugin, with the team id pattern', () => {
+    it('reads sc-123 through the tool the org picked, by its number', async () => {
+        const [reference] = extractTaskReferences(
+            { branch: 'nina/sc-123-gift-cards' },
+            { taskIdPattern: 'sc-(\\d+)' },
+        );
+        const s = session({
+            tools: [
+                tool(
+                    'stories-get-by-id',
+                    { storyPublicId: { type: 'number' } },
+                    ['storyPublicId'],
+                ),
+            ],
+            call: () => ({
+                id: 123,
+                name: 'Gift cards at checkout',
+                description: 'Let buyers pay with a gift card.',
+                app_url: 'https://app.shortcut.com/acme/story/123',
+            }),
+        });
+        const lookup = await new CustomMcpTracker(
+            'Shortcut',
+            s,
+            'stories-get-by-id',
+        ).read(reference, context);
+        expect(s.calls).toEqual([
+            ['stories-get-by-id', { storyPublicId: 123 }],
+        ]);
+        expect(lookup).toMatchObject({
+            status: 'found',
+            task: { title: 'Gift cards at checkout' },
+        });
+    });
+});

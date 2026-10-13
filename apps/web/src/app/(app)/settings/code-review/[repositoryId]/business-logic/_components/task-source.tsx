@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { Card } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
+import { Input } from "@components/ui/input";
 import { Label } from "@components/ui/label";
 import { Link } from "@components/ui/link";
 import { RadioGroup } from "@components/ui/radio-group";
@@ -13,6 +15,22 @@ import { OverrideIndicatorForm } from "../../../_components/override";
 import type { CodeReviewFormType } from "../../../_types";
 
 const AUTO = "auto";
+
+/** The server drops longer or backtracking-prone patterns. */
+const MAX_PATTERN = 200;
+
+/** The ids a pattern finds in a sample, as Kody reads them: the first group, or the whole match. */
+const previewIds = (pattern: string, sample: string): string[] | "invalid" => {
+    if (!pattern.trim()) return [];
+    if (pattern.length > MAX_PATTERN) return "invalid";
+    try {
+        return [...sample.matchAll(new RegExp(pattern, "g"))]
+            .map((m) => (m[1] ?? m[0]).trim())
+            .filter(Boolean);
+    } catch {
+        return "invalid";
+    }
+};
 
 /**
  * Where tasks are read from (UC-01 to UC-04). `auto` reads every tracker
@@ -35,6 +53,13 @@ export const TaskSource = ({
         }) as string | undefined) ?? AUTO;
     const selectedSource = sources?.find((s) => s.integrationId === selected);
     const isCustom = selectedSource?.kind === "custom";
+    const pattern =
+        (useWatch({
+            control: form.control,
+            name: "businessLogic.taskIdPattern.value" as never,
+        }) as string | undefined) ?? "";
+    const [sample, setSample] = useState("");
+    const preview = previewIds(pattern, sample);
     const { data: tools, isLoading: toolsLoading } = useReadTools(
         teamId,
         isCustom ? selected : undefined,
@@ -187,6 +212,58 @@ export const TaskSource = ({
                         tools that write are never used. Check it with Try it
                         below.
                     </p>
+
+                    <div className="border-card-lv3/60 flex flex-col gap-2 border-t pt-3">
+                        <span className="text-text-primary text-sm font-medium">
+                            How your task ids look{" "}
+                            <span className="text-text-secondary font-normal">
+                                (optional)
+                            </span>
+                        </span>
+                        <p className="text-text-secondary text-xs">
+                            Kody already finds keys like SAA-96, AB#8, #12 and
+                            tracker links. For another shape, write a regular
+                            expression; its first group, when it has one, is the
+                            id. For example <code>sc-(\d+)</code> reads 123 from
+                            the branch <code>nina/sc-123-gift-cards</code>.
+                        </p>
+                        <Controller
+                            name={"businessLogic.taskIdPattern.value" as never}
+                            control={form.control}
+                            render={({ field }) => (
+                                <Input
+                                    placeholder="e.g. sc-(\d+)"
+                                    value={(field.value as string) ?? ""}
+                                    onChange={field.onChange}
+                                    maxLength={MAX_PATTERN}
+                                    disabled={!canEdit || field.disabled}
+                                />
+                            )}
+                        />
+                        {pattern.trim() && (
+                            <>
+                                <Input
+                                    placeholder="Paste a title, branch or description to preview"
+                                    value={sample}
+                                    onChange={(e) => setSample(e.target.value)}
+                                />
+                                <span
+                                    className={
+                                        preview === "invalid"
+                                            ? "text-danger text-xs"
+                                            : "text-text-secondary text-xs"
+                                    }>
+                                    {preview === "invalid"
+                                        ? "Not a valid regular expression."
+                                        : !sample.trim()
+                                          ? "Kody drops a pattern that could take too long to run, like (a+)+."
+                                          : preview.length
+                                            ? `Reads: ${preview.join(", ")}`
+                                            : "No id in this text."}
+                                </span>
+                            </>
+                        )}
+                    </div>
                 </Card>
             )}
         </section>

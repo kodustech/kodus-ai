@@ -294,6 +294,12 @@
                     "default": "",
                     "description": "For a custom plugin: the tool that reads one task by its id."
                 },
+                "taskIdPattern": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "default": "",
+                    "description": "A regex for task ids the built-in shapes miss (e.g. sc-(\\d+)). Its first group, when it has one, is the id."
+                },
                 "criteriaLocation": {
                     "type": "string",
                     "enum": ["auto", "heading", "field"],

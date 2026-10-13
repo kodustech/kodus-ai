@@ -163,12 +163,15 @@ export class BusinessValidationService {
         request: BusinessValidationRequest,
     ): Promise<BusinessValidationResult> {
         const settings = request.settings ?? DEFAULT_BUSINESS_LOGIC_SETTINGS;
-        const references = extractTaskReferences({
-            command: request.taskInput,
-            title: request.pullRequest?.title,
-            branch: request.pullRequest?.headRef,
-            body: request.pullRequest?.body,
-        });
+        const references = extractTaskReferences(
+            {
+                command: request.taskInput,
+                title: request.pullRequest?.title,
+                branch: request.pullRequest?.headRef,
+                body: request.pullRequest?.body,
+            },
+            { taskIdPattern: settings.taskIdPattern },
+        );
         // A task named in the command is the one to check, whatever the PR says.
         const fromCommand = references.filter((r) => r.source === 'command');
         const wanted = fromCommand.length ? fromCommand : references;
@@ -469,7 +472,10 @@ export class BusinessValidationService {
         taskInput: string,
         settings: BusinessLogicSettings,
     ): Promise<TryReadResult> {
-        const references = extractTaskReferences({ command: taskInput });
+        const references = extractTaskReferences(
+            { command: taskInput },
+            { taskIdPattern: settings.taskIdPattern },
+        );
         if (!references.length) {
             return {
                 status: 'no_reference',

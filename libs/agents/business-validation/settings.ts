@@ -4,6 +4,7 @@
  * directory can override any of them (UC-02). Every field is optional and
  * the defaults keep today's behavior: no setup needed (UC-44).
  */
+import { isRegexSafe } from '@libs/common/utils/safe-regex';
 import type { BusinessLogicConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 export type { BusinessLogicConfig };
@@ -28,6 +29,8 @@ export const MAX_TEAM_GUIDANCE = 2000;
 export interface BusinessLogicSettings {
     taskSource: string;
     taskSourceTool?: string;
+    /** A regex for task ids the built-in shapes miss; only ever a safe one. */
+    taskIdPattern?: string;
     criteria:
         | { location: 'auto' }
         | { location: 'heading'; heading: string }
@@ -68,10 +71,25 @@ export function resolveBusinessLogicSettings(
     return {
         taskSource: config.taskSource?.trim() || AUTO_TASK_SOURCE,
         taskSourceTool: config.taskSourceTool?.trim() || undefined,
+        taskIdPattern: usablePattern(config.taskIdPattern),
         criteria,
         failOn,
         ...(guidance ? { teamGuidance: guidance } : {}),
         commentWhenMet: config.commentWhenMet === true,
         recheckOnPush: config.recheckOnPush === true,
     };
+}
+
+/** The pattern, when it compiles and can't hang a review on a crafted title. */
+function usablePattern(pattern: string | undefined): string | undefined {
+    const trimmed = pattern?.trim();
+    if (!trimmed || !isRegexSafe(trimmed)) {
+        return undefined;
+    }
+    try {
+        new RegExp(trimmed);
+        return trimmed;
+    } catch {
+        return undefined;
+    }
 }

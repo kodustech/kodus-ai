@@ -411,6 +411,11 @@ class BusinessLogicDto {
     taskSourceTool?: string;
 
     @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    taskIdPattern?: string;
+
+    @IsOptional()
     @IsIn(['auto', 'heading', 'field'])
     criteriaLocation?: 'auto' | 'heading' | 'field';
 

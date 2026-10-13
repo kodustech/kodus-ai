@@ -185,7 +185,12 @@ export class CustomMcpTracker extends McpTaskTracker {
                     id: taskId(reference),
                     title,
                     description,
-                    url: textField(fields, ['html_url', 'web_url', 'url']),
+                    url: textField(fields, [
+                        'html_url',
+                        'web_url',
+                        'app_url',
+                        'url',
+                    ]),
                 },
             };
         }

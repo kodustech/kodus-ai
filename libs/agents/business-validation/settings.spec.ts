@@ -43,6 +43,23 @@ describe('resolveBusinessLogicSettings', () => {
     });
 });
 
+describe("the team's task id pattern (#1884)", () => {
+    it('keeps a pattern that is safe to run on every pull request', () => {
+        expect(
+            resolveBusinessLogicSettings({ taskIdPattern: 'sc-(\\d+)' })
+                .taskIdPattern,
+        ).toBe('sc-(\\d+)');
+    });
+
+    it('drops a pattern that could hang a review, or does not compile', () => {
+        for (const taskIdPattern of ['(a+)+$', '([', 'x'.repeat(201), '   ']) {
+            expect(
+                resolveBusinessLogicSettings({ taskIdPattern }).taskIdPattern,
+            ).toBeUndefined();
+        }
+    });
+});
+
 describe('applyCriteriaLocation (UC-05, UC-23)', () => {
     const task = {
         tracker: 'Jira',

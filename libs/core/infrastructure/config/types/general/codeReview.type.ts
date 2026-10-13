@@ -355,6 +355,11 @@ export type BusinessLogicConfig = {
     taskSource?: string;
     /** For a custom plugin: the tool that reads one task by its id. */
     taskSourceTool?: string;
+    /**
+     * How the team writes a task id the built-in shapes miss (`sc-123`,
+     * `T1234`). A regex; its first group, when it has one, is the id.
+     */
+    taskIdPattern?: string;
     criteriaLocation?: 'auto' | 'heading' | 'field';
     /** The heading the criteria sit under, when `criteriaLocation` is `heading`. */
     criteriaHeading?: string;

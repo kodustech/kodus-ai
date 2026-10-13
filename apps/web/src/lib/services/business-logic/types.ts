@@ -28,6 +28,7 @@ export type ReadTool = {
 export type BusinessLogicSettingsValue = {
     taskSource?: string;
     taskSourceTool?: string;
+    taskIdPattern?: string;
     criteriaLocation?: "auto" | "heading" | "field";
     criteriaHeading?: string;
     criteriaField?: string;
