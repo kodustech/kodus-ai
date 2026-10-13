@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "id": "S3",
+ "golden": 3,
+ "promptSha": "6ce5cc0b595782d499f7654147add4ab3674ebe6",
+ "sameProblem": true,
+ "reason": "The review explicitly recommends re-statting file size after each conversion, which addresses the golden comment’s stale cached tempfile.size issue in the same loop."
+}

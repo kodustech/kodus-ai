@@ -1,0 +1,288 @@
+{
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "bleve.go:85-139: o PR tira o cacheMu.Lock do corpo inteiro de BuildIndex e deixa só em volta de b.cache[key]=idx (137-139), então duas goroutines constroem o mesmo índice em paralelo. É o golden 0. Cita bleve.New no mesmo diretório como consequência.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "server.go:303-311 troca a ordem para search.init antes de initWatcher, mas Init agora roda dentro de NewResourceServer (:258) antes de o servidor existir para clientes de Watch; não há cliente que perca eventos. E search.go:203 só assina WatchWriteEvents depois do build, então a premissa de eventos indexados durante o build está errada.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "server.go:229/258: Init roda com ctx de context.Background cancelável, sem timeout. Startup bloqueante é intencional do PR (comentário em search.go:171); timeout/readiness é melhoria opcional, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "module_server_test.go:35-38 adiciona t.Skip para postgres; lacuna de cobertura de teste, sem defeito de produção e sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Cita src/app/(legal)/tribute-brand-story/page.tsx e marca Beausy, inexistentes no diff do Grafana.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "Marcada semProblemaNoSanitizador: afirma que estreitar o lock em bleve.go não muda contrato; não relata problema, apesar de o juiz ter casado com o golden 0.",
+      "confianca": "alta",
+      "observacao": "Juiz casou com golden 0 por mencionar o lock, mas a sugestão conclui que não há problema.",
+      "astra": {
+        "respostas": {
+          "0": {
+            "mesmoProblema": false,
+            "motivo": "The review comment notes the narrowed lock scope but does not identify the resulting race that allows concurrent builds of the same index for the same key."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: conclui que o estreitamento do lock não introduz problema (contradiz o golden 0) e não pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

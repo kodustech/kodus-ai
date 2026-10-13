@@ -1,0 +1,159 @@
+{
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "integration.py:401-413 usa pipeline.signature como state OAuth, valor estático (mesmo 9cae5e88... em todos os testes); é exatamente o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "integration.py:422-436: safe_urlopen e get_user_info (novos neste PR) ficam fora do try/except, só safe_urlread é protegido; falha de rede/HTTP vira 500 em vez da página de erro. Nenhum golden trata disso.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "integration.py:500-505 indexa metadata[\"sender\"][\"login\"] sem guarda; sender só é gravado se state['sender'] existe (376-377) = golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "integration.py:481-483: no caminho Integration.DoesNotExist o pipeline segue sem comparar o usuário autenticado; isso já era assim antes do PR (o caminho só fazia next_step). O cenário de ataque descrito é especulativo e não casa com golden.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo problema do S2: safe_urlopen/get_user_info sem tratamento em integration.py:422-437, introduzidos no PR.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo KeyError de metadata[\"sender\"][\"login\"] em integration.py:500-506 = golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "integration.py:129-146: error() aplica _(error_short) sobre variável; antes do PR as chamadas usavam _(\"Github installed on another Sentry organization.\") literal, agora as strings não são extraídas para tradução. Regressão de i18n de baixo impacto, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Sugestão revisada pelo sanitizador: não relata problema.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Sugestão revisada pelo sanitizador: não relata problema.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,346 @@
+{
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 5,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 5,
+        "conf": 0.99
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "app/views/embed/best.html.erb:6 fecha o if com `<%- end if %>`, ERB inválido; é o golden 5.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Post#cook retorna raw quando cook_method==raw_html (app/models/post.rb:133) e PollFeed importa conteúdo do feed sem sanitizar (poll_feed.rb:35-36 -> TopicEmbed.import), renderizado com `raw post.cooked` (best.html.erb:19): XSS armazenado introduzido pelo PR. Não é o golden 4 (que é a interpolação da url) nem o 3/7.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "poll_feed.rb:35 faz i.content.scrub sem fallback para description; é exatamente o golden 6.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "strftime(\"%e %b %Y\") em best.html.erb:14 não é localizado; questão de i18n, sem defeito funcional nem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embed.js:17 usa discourseUrl.indexOf(e.origin) === -1, checagem por substring contornável; mesmo problema do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embed_controller.rb:26 compara host com != sem downcase; o efeito seria rejeitar um host legítimo com caixa diferente (browsers já mandam host em minúsculas no Referer), não um bypass. Robustez, não defeito.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "spec/jobs/poll_feed_spec.rb:18-28 não liga feed_polling_enabled? (default false em site_settings.yml:355), então os testes passam pelo motivo errado. Lacuna de teste sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embed_controller_spec.rb:8-11 não define embeddable_host (default ''), então a falha vem do before_filter e não do params.require. Lacuna de teste sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 5,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 5,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S1: `<%- end if %>` em best.html.erb:6; golden 5.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "TopicEmbed.import (topic_embed.rb:15-28) faz where().first e depois create! com índice único em embed_url (create_topic_embeds migration) sem tratar RecordNotUnique; PollFeed e RetrieveTopic (sem throttle para staff) podem correr em paralelo. Corrida real introduzida pelo PR, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "poll_feed.rb:31-36 lê i.content.scrub sem guarda; mesmo problema do golden 6 (acrescenta title/link, mas o núcleo é o content nil).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: afirma que a comparação é segura, não pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: afirma que o uso de present? está correto.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: afirma que `if topic_id` é seguro.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: texto descritivo sem pedido de mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: afirma que o código está correto.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: afirma que o fallback está correto.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S18",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: descreve o throttle sem apontar problema.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S19",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: diz que o indexOf 'não pode ser contornado', ou seja, não relata problema.",
+      "confianca": "alta",
+      "observacao": "Grupo F3 com S5 (TP golden 1), mas aqui o texto conclui que não há problema; fica sem_problema."
+    },
+    {
+      "id": "S20",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "No ambiente de teste queue_jobs é false (site_settings.yml:348-351), então Jobs.enqueue (app/jobs/base.rb:162-172) executa RetrieveTopic inline, que chama TopicRetriever.new(...).retrieve; o mock do spec é satisfeito e o teste não falha.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

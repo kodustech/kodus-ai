@@ -1,0 +1,142 @@
+{
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "insightsBooking.ts:68-81: authConditions sempre truthy (Prisma.Sql, inclusive 1=0), ramos else if/else inalcançáveis (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "insightsBooking.ts:29-34 InsightsBookingServicePublicOptions deixa teamId opcional; scope team sem teamId cai em options=null e NOTHING_CONDITION (falha fechada). Tipagem frouxa, sem defeito funcional nem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Remoção de findMany em insightsBooking.ts:67-68; no head não há chamador fora dos testes, então não há quebra concreta.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: texto sem sentido, não pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Cita src/util/sort.ts e bubble sort, que não existem no diff (só insightsBooking.ts e o teste).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Cita src/utils/handleString.ts e point.x, ausentes do PR.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmos ramos mortos em getBaseConditions (insightsBooking.ts:68-81), golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesma divergência tipo público vs schema zod em insightsBooking.ts:29-34; resultado é vazio seguro, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

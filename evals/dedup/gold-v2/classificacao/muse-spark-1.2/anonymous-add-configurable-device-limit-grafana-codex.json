@@ -1,0 +1,298 @@
+{
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:109-117 CountDevices seguido de INSERT sem transação/lock; concorrência excede o limite. Golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "wire.go:374 ainda lista anonstore.ProvideAnonDBStore, mas nenhum provider consome AnonStore via wire (impl.go:43 constrói o store direto e api.go recebe por parâmetro), então o int64 sem provider não é resolvido e a geração do wire não quebra; o 'store duplicado com limite errado' não é usado. Sobra só um provider morto.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo do S15; o efeito alegado (falha de wire/injeção) não se confirma."
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:95-97 trata rowsAffected==0 como limite atingido, misturando device inexistente/fora da janela; golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "client.go:44-50 tornou TagDevice síncrono, mas tagDeviceUI retorna cedo em cache hit (impl.go:83-84, cache de 29 min), então a latência extra de DB ocorre uma vez por device a cada 29 min; a preocupação de latência é exagerada e não é o golden 1 (que fala da recusa de autenticação).",
+      "confianca": "media",
+      "observacao": "Diverge do S13 do mesmo grupo: S4 fala só de latência/QPS, não da recusa da autenticação."
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:105-122 count-then-insert não atômico; golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database_test.go:51-70 não testa update de device existente no limite; lacuna de teste sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: só afirma que não há dado sensível.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: só afirma que não há dado sensível.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: só afirma que não há dado sensível.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: só afirma que não há dado sensível.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.82
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "Marcada semProblemaNoSanitizador: só confirma que nenhum dado sensível vai para logs; não relata a recusa de autenticação do golden 1.",
+      "confianca": "alta",
+      "observacao": "Juiz casou com golden 1, mas o texto não aponta problema.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": true,
+            "motivo": "The review identifies the same change from asynchronous, non-blocking tagging to synchronously returning ErrDeviceLimitReached in the authentication path, which causes authentication to fail at the device limit."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "junior"
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: só afirma que não há dado sensível.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "client.go:41-50 troca o tagging assíncrono best-effort por chamada síncrona que retorna erro em ErrDeviceLimitReached e falha a autenticação; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.75
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "impl.go:143-148 agora propaga o erro, mas o único chamador de TagDevice fora de testes é client.go:44 (já tratado); pedido de documentar o contrato é observação sem defeito. Não descreve a recusa de login do golden 1.",
+      "confianca": "media",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review concerns the error contract for other TagDevice callers, while the golden issue is anonymous authentication failing in the updated client when the device limit is reached."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:52-54 mudou a aridade, mas os únicos chamadores (impl.go:43 e database_test.go) foram atualizados; o provider em wire.go:374 não é consumido, então não há falha de compilação/injeção.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "packages/grafana-runtime/src/config.ts:97 'anonymousDeviceLimit = undefined' sem anotação de tipo; o valor vem do bootData por merge, então não há falha em runtime. Só tipagem.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

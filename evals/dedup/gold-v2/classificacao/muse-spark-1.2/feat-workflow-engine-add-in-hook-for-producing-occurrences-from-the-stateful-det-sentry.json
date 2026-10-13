@@ -1,0 +1,142 @@
+{
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 MetricAlertDetectorHandler passa a herdar StatefulDetectorHandler só com pass, sem counter_names/get_dedupe_value/get_group_key_values/build_occurrence_and_event_data; instanciar via Detector.detector_handler dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "processors/detector.py:195-222: counter_updates só é preenchido quando counter_names é não vazio e depois é indexado por gk, então counter_names=[] daria KeyError. O mesmo código existe na base (linhas 200-227); o PR não alterou isso.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "processors/detector.py:226-233 docstring diz que retorna lista, mas agora retorna dict por group_key; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:10 o comentário TODO 'will be a stateful detector' ficou desatualizado após a troca da base; é só comentário, sem golden correspondente.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 MetricAlertDetectorHandler passa a herdar StatefulDetectorHandler só com pass, sem counter_names/get_dedupe_value/get_group_key_values/build_occurrence_and_event_data; instanciar via Detector.detector_handler dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.72
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "processors/detector.py:166-170 o novo abstract build_occurrence_and_event_data não é implementado pela subclasse MetricAlertDetectorHandler que agora herda StatefulDetectorHandler; mesmo problema do golden 0, ancorado na base.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 MetricAlertDetectorHandler passa a herdar StatefulDetectorHandler só com pass, sem counter_names/get_dedupe_value/get_group_key_values/build_occurrence_and_event_data; instanciar via Detector.detector_handler dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 MetricAlertDetectorHandler passa a herdar StatefulDetectorHandler só com pass, sem counter_names/get_dedupe_value/get_group_key_values/build_occurrence_and_event_data; instanciar via Detector.detector_handler dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

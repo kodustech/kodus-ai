@@ -1,0 +1,169 @@
+{
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:349-356: com skipToken, useIsGrafanaPromRuleEditable(undefined) devolve loading:false, então MaybeSupported vira AlwaysSupported e Duplicate = toAbility(supported, rulesPermissions.create). Em AlertRuleMenu.tsx:91-92 o OR libera Duplicate para regras não-Grafana sempre que o usuário tem permissão de criar. Foi introduzido pelo PR e não está em nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GrafanaGroupLoader.tsx:68 usa promResponse.data.groups.at(0)?.rules.map(...). O optional chaining interrompe a cadeia inteira quando at(0) é undefined, e a expressão vira undefined sem lançar erro. O crash descrito não acontece.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "RuleActionsButtons.V2.tsx renderiza SilenceGrafanaRuleDrawer só se rulerRuleType.grafana.alertingRule(rule); a lista passa só promRule, então o menu 'Silence' não abre nada. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador ('No valid defect in scope found').",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:3 importa 'contextSrv as ctx' de app/core/services/context_srv, e ctx já é usado em outros pontos do arquivo. Não há ReferenceError.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:349-356: com skipToken, useIsGrafanaPromRuleEditable(undefined) devolve loading:false, então MaybeSupported vira AlwaysSupported e Duplicate = toAbility(supported, rulesPermissions.create). Em AlertRuleMenu.tsx:91-92 o OR libera Duplicate para regras não-Grafana sempre que o usuário tem permissão de criar. Foi introduzido pelo PR e não está em nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "useRulerRuleAbility já aceita 'rule: RulerRuleDTO | undefined' (useAbilities.ts:190-194 no headRef) e delega a useAllRulerRuleAbilities, que trata undefined. Chamar com undefined não lança nem dá erro de tipo. Não é o G1 (drawer de silêncio).",
+      "confianca": "alta",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review comment addresses undefined handling in useRulerRuleAbility, which would not fix the silence drawer failing to render when no Grafana Ruler rule is present."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GrafanaGroupLoader.tsx:68 usa promResponse.data.groups.at(0)?.rules.map(...). O optional chaining interrompe a cadeia inteira quando at(0) é undefined, e a expressão vira undefined sem lançar erro. O crash descrito não acontece.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GrafanaGroupLoader.test.tsx:85-102: o nome do teste promete opções do menu, mas o corpo só checa o botão. É uma lacuna de teste, sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

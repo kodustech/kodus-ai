@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "id": "S8",
+ "golden": 0,
+ "promptSha": "62a2e4aa1dd5de3fc634f486ed6838acf7bea432",
+ "sameProblem": false,
+ "reason": "The review identifies nil-request dereferences in MetricsMiddleware, whereas the golden issue is in ContextualLoggerMiddleware’s instrumentContext calls; fixing the former would not fix the latter."
+}

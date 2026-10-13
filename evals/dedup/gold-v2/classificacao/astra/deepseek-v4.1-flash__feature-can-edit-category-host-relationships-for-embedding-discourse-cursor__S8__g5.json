@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "id": "S8",
+ "golden": 5,
+ "promptSha": "336fce030db74401446d5064fa1c195f35fd7d71",
+ "sameProblem": false,
+ "reason": "The review flags SQL interpolation in a migration, while the golden comment flags it in app/controllers/admin/embeddable_hosts_controller.rb, so fixing the reported location would not fix the golden issue."
+}

@@ -1,0 +1,203 @@
+{
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Profile.java:56/58 define ADMIN_FINE_GRAINED_AUTHZ (v1) e _V2 (v2) como versões da mesma feature, mutuamente exclusivas; com o guard de AdminPermissions.java:77 (v1) ativo, management() (AdminPermissions.java:66-70) devolve MgmtPermissions v1, nunca ClientPermissionsV2, então o UnsupportedOperationException alegado não ocorre. O cenário 'ambas as features ativas' é impossível.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionsV2.java:214 busca o recurso por cliente com owner server.getId(), enquanto AdminPermissionsSchema.getOrCreateResource cria com owner resourceServer.getClientId(); a sugestão cita explicitamente esse lookup da linha 214 = golden 1 (o foco principal é a linha 244, mesmo padrão).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Profile.java:56/58 define ADMIN_FINE_GRAINED_AUTHZ (v1) e _V2 (v2) como versões da mesma feature, mutuamente exclusivas; com o guard de AdminPermissions.java:77 (v1) ativo, management() (AdminPermissions.java:66-70) devolve MgmtPermissions v1, nunca ClientPermissionsV2, então o UnsupportedOperationException alegado não ocorre.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionEvaluator.java:95-98: Javadoc de requireView() (void) diz 'Returns true'. Erro de documentação real, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionEvaluator.java:100-103: Javadoc de requireViewClientScopes() (void) diz 'Returns true'. Documentação, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Profile.java:56/58 define ADMIN_FINE_GRAINED_AUTHZ (v1) e _V2 (v2) como versões da mesma feature, mutuamente exclusivas; com o guard de AdminPermissions.java:77 (v1) ativo, management() (AdminPermissions.java:66-70) devolve MgmtPermissions v1, nunca ClientPermissionsV2, então o UnsupportedOperationException alegado não ocorre.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.82
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AdminPermissions.java:77 passa a guardar toda a limpeza de remoção pela flag ADMIN_FINE_GRAINED_AUTHZ (v1); com a flag v1 desligada a limpeza deixa de rodar e sobram permissões órfãs = golden 0 (embora a sugestão enquadre como regressão do v1, não do v2).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AdminPermissions.java:77-95: aponta que com a flag desligada a limpeza que antes rodava é pulada (permissões órfãs), que é o golden 0.",
+      "confianca": "media",
+      "observacao": "A outra metade (UnsupportedOperationException com FGAP v1 ativo) é falsa, como no resto do grupo F1; o membro casa com o golden só pela parte da limpeza pulada."
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "Profile.java:56/58 define ADMIN_FINE_GRAINED_AUTHZ (v1) e _V2 (v2) como versões da mesma feature, mutuamente exclusivas; com o guard de AdminPermissions.java:77 (v1) ativo, management() (AdminPermissions.java:66-70) devolve MgmtPermissions v1, nunca ClientPermissionsV2, então o UnsupportedOperationException alegado não ocorre. A sugestão se apoia só no UOE e não descreve as permissões órfãs com v2 ativo do golden 0.",
+      "confianca": "baixa",
+      "observacao": "Juiz casou com golden 0 (0.85) por sugerir que o guard está invertido; o defeito central descrito (UOE) não existe.",
+      "astra": {
+        "respostas": {
+          "0": {
+            "mesmoProblema": false,
+            "motivo": "The review reports an unsupported operation during client cleanup, while the golden issue is skipped cleanup when V2 is enabled without V1; fixing the exception would not fix the incorrect feature guard."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "style",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionsV2.java:262-272: getEvaluationContext privado sem chamador = golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ClientPermissionEvaluator.java:95-103: Javadocs de requireView/requireViewClientScopes dizem 'Returns true' em métodos void. Documentação, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

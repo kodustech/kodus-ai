@@ -1,0 +1,159 @@
+{
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "metrics_middleware.go:76-82 muta imw.next a cada decoração e o Decorator reconstrói a cadeia por request (decorator.go:34), então a corrida existe; mas NewInstrumentationMiddleware já fazia exatamente isso antes do PR (só renomeado).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Em checkHistogram (metrics_middleware_test.go:132-153) o laço termina (break ou return) assim que foundLabels>0; enquanto é 0 o 'continue' não acumula nada. O contador nunca é reaproveitado entre métricas, então não há passe/falha falsos por isso.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "O HELP de grafana_plugin_request_size_bytes diz 'returned' mas mede o request enviado; texto já existente (fora do diff do arquivo renomeado), documentação sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "TestInstrumentationMiddleware (metrics_middleware_test.go:21) mantém o nome antigo após o rename; só nome.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "instrumentContext (contextual_logger_middleware.go:27-37) não adiciona traceID e logger_middleware.go removeu o append de tracing.TraceIDFromContext; é o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "O helper checkHistogram (metrics_middleware_test.go:132-153) retorna erro na primeira métrica com valor de label diferente em vez de seguir para a próxima série, o que pode falhar falsamente com várias séries; o código do teste é anterior ao PR (rename com 2 linhas mudadas).",
+      "confianca": "media",
+      "observacao": "Mesmo grupo do S2: a parte do contador não resetado não tem efeito (como no S2), mas este membro também aponta o return prematuro, que é real e preexistente."
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Os casos shouldInstrumentRequestSize=false (metrics_middleware_test.go:101-109) não afirmam contagem zero; lacuna de teste sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "logRequest em logger_middleware.go:49-58 perdeu o traceID e o ContextualLoggerMiddleware não o recoloca; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S8: traceID removido de logParams sem substituto em instrumentContext; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

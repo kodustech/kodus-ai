@@ -1,0 +1,312 @@
+{
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:46-48 usa && entre isTeamAdmin e isTeamOwner (golden 1).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:74-78 compara guest sem lowercase contra a blacklist lowercased (golden 0); também cita falta de dedup dentro do input (golden 3).",
+      "confianca": "alta",
+      "observacao": "Cobre golden 0 e golden 3; registrado o 0, que é o mesmo do juiz."
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:168 passa guests cru e email-manager.ts:541 usa newGuests.includes (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "organizer-add-guests-email.ts:28 lê attendees[0].name, mas o handler só chega ao envio com uniqueGuests não vazio (addGuests.handler.ts:80-81) e o evt traz todos os attendees do booking; a lista vazia descrita não ocorre.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AddGuestsDialog.tsx:56 seta isInvalidEmail=true e só o botão cancelar (:91) reseta; após sucesso o banner volta na próxima abertura. Bug de UX real no componente novo; a menção ao [''] inicial é lateral e não sustenta o golden 4.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.schema.ts:3-6 aceita array sem limite; pedir .max/normalização é endurecimento defensivo, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:108-120 chama getTranslation por attendee; otimização de performance opcional, sem defeito.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Blacklist lowercased em addGuests.handler.ts:71 vs guest cru em :77 (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:76 compara guest === attendee.email sensível a caixa; variante de caixa de um attendee existente vira duplicata. Não é a blacklist (golden 0) nem duplicata dentro do input (golden 3).",
+      "confianca": "media",
+      "observacao": "Diverge do grupo F2: trata só da comparação com attendees existentes, não do bypass da blacklist."
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AddGuestsDialog.tsx:26-29 o refine de unicidade do cliente não normaliza caixa; validação client-side, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "&& em addGuests.handler.ts:46-48 (golden 1).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:168 passa guests em vez de uniqueGuests (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.schema.ts não tem refine de unicidade e o filtro do handler não deduplica o próprio input; createMany duplica attendees (golden 3).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.78
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:74-106 não deduplica guests repetidos no request (golden 3); soma race e caixa como extras.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Schema do servidor sem refine de unicidade deixa duplicatas chegarem ao createMany (golden 3).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "MultiEmail.tsx:46 Tooltip 'Remove email' sem tradução; i18n, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "BookingListItem.tsx:193 id 'add_members' para a ação de guests; nome, sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:168 passa guests cru ao email-manager (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

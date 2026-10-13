@@ -1,0 +1,278 @@
+{
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "project_replay_summarize_breadcrumbs.py:107-120 faz zip(error_ids, events.values()), supondo ordem e cobertura do get_multi (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "browser_reporting_collector.py:36-60 aceita relatório sem age nem timestamp; exigir um dos dois é endurecimento de validação, não o golden 4 (truthiness de 0).",
+      "confianca": "media",
+      "observacao": "Diverge do grupo R3: S11 inclui a truthiness do golden 4; S2 trata só da ausência dos dois campos."
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "commit_context.py:584-606 interpola nome do ambiente e título sem escapar markdown; o título já ia sem escape no template antigo e nomes de ambiente são restritos. Endurecimento, sem golden.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "commit_context.py:584-594 chama get_recommended_event por issue (até poucas issues por PR); otimização opcional.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 5,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 5,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "organization_preprod_artifact_assemble.py:81-86 registra analytics antes do features.has que devolve 404 (golden 5).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "browser_reporting_collector.py:50-60 usa initial_data.get('age'/'timestamp') por truthiness, então 0 passa a exclusão mútua (golden 4).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "project_replay_summarize_breadcrumbs.py:107-120 faz zip(error_ids, events.values()), supondo ordem e cobertura do get_multi (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "project_replay_summarize_breadcrumbs.py:107-120 faz zip(error_ids, events.values()), supondo ordem e cobertura do get_multi (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "chart.tsx:164-174 renderiza TableWidgetVisualization com columns=[] e tableData vazio fixo quando a flag está ligada (golden 3).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "project_replay_summarize_breadcrumbs.py:107-120 faz zip(error_ids, events.values()), supondo ordem e cobertura do get_multi (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "browser_reporting_collector.py:44-60: além da ausência dos dois campos, aponta a truthiness que deixa age=0/timestamp=0 passar (golden 4).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "visualizes.tsx:78-82 passa a retornar Visualize[], mas o único chamador (aggregateFields.tsx:116) já foi migrado para .map no mesmo PR; TypeScript pegaria qualquer outro. Não há quebra.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Construtor de Visualize mudou para string; no head não resta nenhum new Visualize([...]) (git grep) e o TypeScript rejeitaria. O cenário de quebra não existe.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "parameterization.py remove a classe ParameterizationRegexExperiment inteira; não sobra experimento regex para receber o callback errado.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Antes do PR, BrowserReport(**report) era dataclass sem campo age e com timestamp obrigatório, então relatórios com ambos ou sem nenhum já falhavam (TypeError); a afirmação de que eram aceitos é falsa.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "chart.tsx:164-174 renderiza TableWidgetVisualization com columns=[] e tableData vazio fixo quando a flag está ligada (golden 3).",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

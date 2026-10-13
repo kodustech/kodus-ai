@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "id": "S5",
+ "golden": 3,
+ "promptSha": "6640c9ca7080a89b257fb309edc5caf68a29a744",
+ "sameProblem": false,
+ "reason": "The review addresses case-sensitive comparisons against existing attendees, while the golden issue concerns duplicates within the submitted guest list, which normalizing those comparisons would not fix."
+}

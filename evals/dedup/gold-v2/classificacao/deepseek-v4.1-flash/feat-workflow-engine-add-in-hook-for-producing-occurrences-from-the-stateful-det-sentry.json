@@ -1,0 +1,125 @@
+{
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 MetricAlertDetectorHandler passa a herdar StatefulDetectorHandler só com pass, sem counter_names/get_dedupe_value/get_group_key_values/build_occurrence_and_event_data; instanciar via Detector.detector_handler dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "processors/detector.py:229-233 docstring ainda diz 'list of DetectorEvaluationResult' mas o método agora retorna dict por group_key; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 MetricAlertDetectorHandler passa a herdar StatefulDetectorHandler só com pass, sem counter_names/get_dedupe_value/get_group_key_values/build_occurrence_and_event_data; instanciar via Detector.detector_handler dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 MetricAlertDetectorHandler passa a herdar StatefulDetectorHandler só com pass, sem counter_names/get_dedupe_value/get_group_key_values/build_occurrence_and_event_data; instanciar via Detector.detector_handler dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "test_gap",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "test_detector.py: em test_state_results_multi_group o occurrence esperado de group_2 é construído com value=6 enquanto o packet traz 10; a sugestão aponta exatamente esse valor errado (golden 2), além do parâmetro value ignorado pelo helper.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "test_gap",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "test_detector.py: aponta o value=6 para group_2 contra 10 no packet, que é o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grouptype.py:11-12 MetricAlertDetectorHandler passa a herdar StatefulDetectorHandler só com pass, sem counter_names/get_dedupe_value/get_group_key_values/build_occurrence_and_event_data; instanciar via Detector.detector_handler dá TypeError. É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

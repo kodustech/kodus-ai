@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S7",
+ "golden": 2,
+ "promptSha": "715a4226371ae65de334e55320c56fe35f4c1776",
+ "sameProblem": false,
+ "reason": "The review targets fallback failure when externalCalendarId is absent, while the golden comment targets incorrect calendar selection when it is provided; fixing the fallback would not fix that selection logic."
+}

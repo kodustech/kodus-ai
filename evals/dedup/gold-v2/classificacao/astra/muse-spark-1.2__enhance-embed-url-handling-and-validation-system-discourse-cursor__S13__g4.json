@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "id": "S13",
+ "golden": 4,
+ "promptSha": "68bb3045c137688b699fa85b8b91a62432fd332e",
+ "sameProblem": false,
+ "reason": "The review identifies the URL-interpolation XSS, but fixing it would not address the golden comment’s additional NoMethodError when contents is nil."
+}

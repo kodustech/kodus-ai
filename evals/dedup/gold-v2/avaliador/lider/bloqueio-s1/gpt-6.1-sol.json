@@ -1,0 +1,1801 @@
+{
+ "model": "gpt-6.1-sol",
+ "versao": "bloqueio",
+ "seed": 1,
+ "avaliador": "gpt-6.1-sol@sub",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S24",
+     "membros": [
+      "S1",
+      "S13",
+      "S16",
+      "S19",
+      "S24"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11",
+      "S20",
+      "S23"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S3",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S18",
+      "S22"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S5",
+      "S14",
+      "S17",
+      "S21"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": false
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S1",
+      "S10",
+      "S14",
+      "S17",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S2",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S3",
+      "S9",
+      "S11",
+      "S15",
+      "S16",
+      "S19"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S5",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S7",
+      "S20"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": []
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S5",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "bloqueia": false
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S7",
+      "S8",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S10",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S4",
+      "S15",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S1",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S4",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S6",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S4",
+      "S9",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": false
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S8",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "agentes": [
+      "micro-exp-p3-data-exposure"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S1",
+      "S19"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S17",
+      "S20"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-data-exposure",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S5",
+      "S10",
+      "S16",
+      "S21"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S5",
+      "S7",
+      "S8",
+      "S10",
+      "S11",
+      "S12",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S3",
+      "S6",
+      "S14",
+      "S15",
+      "S19"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": []
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "bloqueia": true
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "bloqueia": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "bloqueia": true
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "bloqueia": true
+    }
+   ]
+  }
+ }
+}

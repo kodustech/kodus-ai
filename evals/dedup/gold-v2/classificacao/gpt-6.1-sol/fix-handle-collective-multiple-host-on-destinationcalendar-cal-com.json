@@ -4,10 +4,10 @@
   "itens": [
     {
       "id": "S1",
-      "classe": "TP",
-      "golden": 0,
-      "goldenCategoria": "bug",
-      "tipoFP": null,
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
       "juizMartian": {
         "tp": false,
         "golden": null,
@@ -27,7 +27,7 @@
         },
         "concordaComClaude": false
       },
-      "decisao": "revisao_junior"
+      "decisao": "junior"
     },
     {
       "id": "S2",
@@ -383,7 +383,7 @@
         },
         "concordaComClaude": false
       },
-      "decisao": "revisao_junior"
+      "decisao": "junior"
     },
     {
       "id": "S20",

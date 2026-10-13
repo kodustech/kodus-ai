@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S2",
+ "golden": 2,
+ "promptSha": "0dd3005e4e4f7b37e190bb5c207b0326c06a2991",
+ "sameProblem": true,
+ "reason": "Both comments identify the same faulty destinationCalendar lookup comparing cal.externalId to externalCalendarId and suggest selecting by credentialId instead, so fixing the review’s issue would fix the golden issue at the same location."
+}

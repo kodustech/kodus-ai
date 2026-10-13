@@ -1,0 +1,244 @@
+{
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "messages_lt.properties (login):71 e (account):101 recebem o texto italiano 'Installa una delle seguenti applicazioni...' num arquivo lituano, exatamente o G0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "VerifyMessageProperties.java:102-111 (diff) calcula start (prefixo) e end (sufixo) de forma independente; quando start+end excede o comprimento (ex.: value 'a<p>' e sanitized 'a<p></p>' com POLICY_SOME_HTML), value.substring(start, len-end) lança StringIndexOutOfBoundsException. Código novo do PR; não corresponde a nenhum golden (G2 é sobre âncoras).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "account/messages_lt.properties:101 passou a ter texto em italiano; é o problema do G0 (italiano em vez de lituano).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "login/messages_lt.properties:71 com loginTotpStep1 em italiano; é o G0. O juiz também deu 0.95 para G1, mas a sugestão não fala de zh_CN.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "account/messages_zh_CN.properties:112 recebe 手機/應用程式/安裝 (tradicional) num arquivo de chinês simplificado; é o G1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "VerifyMessageProperties.java:102-111 (diff) calcula start (prefixo) e end (sufixo) de forma independente; quando start+end excede o comprimento (ex.: value 'a<p>' e sanitized 'a<p></p>' com POLICY_SOME_HTML), value.substring(start, len-end) lança StringIndexOutOfBoundsException. Código novo do PR; não corresponde a nenhum golden (G2 é sobre âncoras).",
+      "confianca": "media",
+      "observacao": "O exemplo citado (aaa→aa) não é produzido pelo sanitizador, mas o mecanismo de sobreposição é real."
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "VerifyMessageProperties.java:75 usa [a-zA-Z-_]: a classe não inclui '/' (nem lida como range Z-_, 0x5A-0x5F), e o .properties final ancora a troca no último segmento. O argumento central (o regex reescreve caminhos com '/') está errado; RuntimeException em vez de MojoExecutionException só muda o tipo do erro.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Os bundles JS (account-ui messages_en.properties:188, admin-ui :3138) são consumidos pelo i18next com interpolação {{0}}; o PR trocou para {0} + ICU choice, que não seria interpolado. O origin/main do keycloak mantém {{0}} nesses dois arquivos, o que confirma o problema. Nenhum golden trata disso.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Os bundles JS (account-ui messages_en.properties:188, admin-ui :3138) são consumidos pelo i18next com interpolação {{0}}; o PR trocou para {0} + ICU choice, que não seria interpolado. O origin/main do keycloak mantém {{0}} nesses dois arquivos, o que confirma o problema. Nenhum golden trata disso.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Os bundles JS (account-ui messages_en.properties:188, admin-ui :3138) são consumidos pelo i18next com interpolação {{0}}; o PR trocou para {0} + ICU choice, que não seria interpolado. O origin/main do keycloak mantém {{0}} nesses dois arquivos, o que confirma o problema. Nenhum golden trata disso.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Os bundles JS (account-ui messages_en.properties:188, admin-ui :3138) são consumidos pelo i18next com interpolação {{0}}; o PR trocou para {0} + ICU choice, que não seria interpolado. O origin/main do keycloak mantém {{0}} nesses dois arquivos, o que confirma o problema. Nenhum golden trata disso.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "VerifyMessageProperties.java:102-111 (diff) calcula start (prefixo) e end (sufixo) de forma independente; quando start+end excede o comprimento (ex.: value 'a<p>' e sanitized 'a<p></p>' com POLICY_SOME_HTML), value.substring(start, len-end) lança StringIndexOutOfBoundsException. Código novo do PR; não corresponde a nenhum golden (G2 é sobre âncoras). O exemplo a<p> → a<p></p> (start=4, end=2) confere.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "VerifyMessagePropertiesTest.java:36-40: illegalHtmlTag_en usa <div>, então o allow-list de POLICY_SOME_HTML não é exercitado. É uma lacuna de teste, não um defeito, e não casa com nenhum golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: o próprio texto diz que a exclusão do choice é deliberada.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

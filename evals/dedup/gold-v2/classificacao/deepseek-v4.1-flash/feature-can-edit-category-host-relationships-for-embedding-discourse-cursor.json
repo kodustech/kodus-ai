@@ -1,0 +1,271 @@
+{
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11 faz execute(...)[0]['id'] sem checar linhas; golden 6.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "app/models/embeddable_host.rb:5-8 chama self.host.sub! sem guarda de nil; golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic.rb:869 removeu SiteSetting.embeddable_hosts.present? porque a setting deixou de existir (migrada para a tabela embeddable_hosts); has_topic_embed? já exige um embed. Mudança intencional; pedir EmbeddableHost.exists? é opcional.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "spec/models/topic_spec.rb:1403 mantém o nome 'is false if embeddable_host is blank' sem setup correspondente; nome/lacuna de teste, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S1: [0]['id'] em resultado vazio na migration (linhas 9-15); golden 6.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embeddable_host.rb:17 faz where(\"lower(host) = ?\", host) sem downcase no parâmetro; golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Migration insere o valor legado verbatim (linha 25) sem a normalização do before_validation, e o lookup compara só uri.host; golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "Aponta a interpolação '#{h}' no INSERT (migration linha 25) como SQL injection; é o mesmo problema do golden 5 (o golden cita o arquivo errado, mas descreve a mesma interpolação '#{h}').",
+      "confianca": "media",
+      "observacao": "Local da sugestão vazio; o juiz não casou, provavelmente pelo arquivo do golden 5 apontar o controller.",
+      "astra": {
+        "respostas": {
+          "5": {
+            "mesmoProblema": false,
+            "motivo": "The review flags SQL interpolation in a migration, while the golden comment flags it in app/controllers/admin/embeddable_hosts_controller.rb, so fixing the reported location would not fix the golden issue."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "junior"
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "destroy (admin/embeddable_hosts_controller.rb:15-16) usa where(id:).first sem checar nil; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "ApplicationSerializer declara `embed :ids, include: true` (app/serializers/application_serializer.rb:2), então o has_many com embed: :ids herda o sideload e o payload traz embeddable_hosts junto; o store consegue hidratar.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "update/destroy (embeddable_hosts_controller.rb:9-18) sem checar nil após where(id:).first; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S2: nil.sub! em embeddable_host.rb:6; golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S4: o teste 'is false if embeddable_host is blank' (topic_spec.rb:1403-1405) passa por embed_truncate default false; lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S7: hosts legados inseridos sem normalização (migration linhas 24-26); golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S10: ApplicationSerializer tem `embed :ids, include: true`, então embeddable_hosts é sideloaded e _lookupSubType encontra os registros.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "id": "S7",
+ "golden": 0,
+ "promptSha": "faddffefe70e029e19f1df7bc45668d9e2bc2126",
+ "sameProblem": true,
+ "reason": "Both comments identify the second downsize definition overriding the original method and breaking callers that pass separate width and height arguments."
+}

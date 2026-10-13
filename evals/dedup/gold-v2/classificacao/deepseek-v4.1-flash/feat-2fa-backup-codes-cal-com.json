@@ -1,0 +1,227 @@
+{
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EnableTwoFactorModal.tsx:134-135 troca onEnable() por setStep(DisplayBackupCodes); onEnable só roda no botão Close (269). Fechar por ESC/overlay chama só onOpenChange (two-factor-auth.tsx:64 alterna setEnableModalOpen) e pula utils.viewer.me.invalidate, deixando a UI desatualizada. Introduzido pelo PR, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "next-auth-options.ts (commit do PR): a verificação de senha só roda se !credentials.totpCode, e o novo ramo de backupCode (linha 131) não valida senha nem TOTP; backupCode válido + totpCode qualquer autentica sem senha. Caminho novo do PR, não é golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "next-auth-options.ts:144-156: indexOf, backupCodes[index]=null e prisma.user.update sem atomicidade; duas requisições concorrentes usam o mesmo código = golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "apps/web/components/security/DisableTwoFactorModal.tsx importa o seu próprio ./TwoFactorAuthAPI (components/security), não o arquivo alterado em components/settings; o consumidor do arquivo alterado (settings/DisableTwoFactorModal.tsx:58) já passa backupCode.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "style",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "BackupCode.tsx:7 exporta `function TwoFactor` num arquivo BackupCode.tsx = golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "next-auth-options.ts:144 compara com indexOf; timing de comparação de string em memória sobre códigos aleatórios de 10 hex é endurecimento defensivo. Não é o golden 2 (case-sensitivity do indexOf).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "disable.ts:61 mesma comparação indexOf; pedido de comparação em tempo constante é defensivo, não casa com golden 2 (maiúsculas/minúsculas).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesma corrida read-modify-write do backup code em next-auth-options.ts:144-156 = golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "login.2fa.e2e.ts:119-122 só espera o toast (o próprio PR deixa TODO de checar clipboard); lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "login.2fa.e2e.ts:53 `expect(locator.isChecked()).toBeTruthy()` sobre Promise nunca falha; a linha já existia antes do PR (o PR só adicionou o FIXME acima).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Cita app/api/auth/[...nextauth]/options.ts, que não está no diff nem nesse caminho do repositório; sugestão genérica de fluxo sem relação com o PR.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Cita app/(authentication)/2fa/page.tsx com intervalo de polling; arquivo e polling não existem no PR.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Sugestão revisada pelo sanitizador: não relata problema.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "id": "S11",
+ "golden": 1,
+ "promptSha": "728ba45041a6571b3a2644c013b8060a97675d6d",
+ "sameProblem": true,
+ "reason": "The review identifies the same change from asynchronous, non-blocking tagging to synchronously returning ErrDeviceLimitReached in the authentication path, which causes authentication to fail at the device limit."
+}

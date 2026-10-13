@@ -1,0 +1,152 @@
+{
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "FilterView.tsx:157-162 renderiza <GrafanaRuleListItem> dentro de rules.map sem key (o GrafanaRuleLoader anterior tinha key={key}). É o G0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:228 faz useAllAlertRuleAbilities delegar a useAllRulerRuleAbilities, que fixa isFederated = false (:243-245); antes era isFederatedRuleGroup(rule.group). Regras federadas do Mimir deixam de ser imutáveis. É uma regressão introduzida pelo PR e não casa com nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "O JSDoc de GrafanaGroupLoader.tsx ainda cita os endpoints do Ruler, que o PR removeu. É documentação desatualizada, sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:228 faz useAllAlertRuleAbilities delegar a useAllRulerRuleAbilities, que fixa isFederated = false (:243-245); antes era isFederatedRuleGroup(rule.group). Regras federadas do Mimir deixam de ser imutáveis. É uma regressão introduzida pelo PR e não casa com nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:228 faz useAllAlertRuleAbilities delegar a useAllRulerRuleAbilities, que fixa isFederated = false (:243-245); antes era isFederatedRuleGroup(rule.group). Regras federadas do Mimir deixam de ser imutáveis. É uma regressão introduzida pelo PR e não casa com nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "useAbilities.ts:349-356: com skipToken, useIsGrafanaPromRuleEditable(undefined) devolve loading:false, então MaybeSupported vira AlwaysSupported e Duplicate = toAbility(supported, rulesPermissions.create). Em AlertRuleMenu.tsx:91-92 o OR libera Duplicate para regras não-Grafana sempre que o usuário tem permissão de criar. Foi introduzido pelo PR e não está em nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GrafanaGroupLoader.test.tsx:85-102: o teste 'with action menu options' só verifica o botão More. É uma lacuna de teste, sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "RuleActionsButtons.V2.tsx:25-28 tipa promRule como Rule, mas o ramo do RulesTable também passa rulerRule, e as abilities do ruler entram no OR (linha 61). Os itens do menu não ficam escondidos. O juiz casou com o G1 (drawer de silêncio), mas a sugestão não fala do drawer.",
+      "confianca": "media",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review identifies a prop-type mismatch that hides menu entries, while the golden issue is a visible silencing action that cannot render its drawer without a Ruler rule; fixing the type mismatch would not fix the missing drawer."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    }
+  ]
+}

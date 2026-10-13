@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "id": "S9",
+ "golden": 0,
+ "promptSha": "571959d01fca6a2165149a24ffe9653c3f25bc14",
+ "sameProblem": false,
+ "reason": "The review reports an unsupported operation during client cleanup, while the golden issue is skipped cleanup when V2 is enabled without V1; fixing the exception would not fix the incorrect feature guard."
+}

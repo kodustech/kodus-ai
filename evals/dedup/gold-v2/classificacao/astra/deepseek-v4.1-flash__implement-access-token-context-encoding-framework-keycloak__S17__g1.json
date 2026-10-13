@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "id": "S17",
+ "golden": 1,
+ "promptSha": "880accd2a93e0d9e6adc95e8bde50ea53a3f6f96",
+ "sameProblem": true,
+ "reason": "The review identifies the same incorrect grant-shortcut substring in isAccessTokenId and explicitly acknowledges the inverted comparison described by the golden comment."
+}

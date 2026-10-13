@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "id": "S3",
+ "golden": 3,
+ "promptSha": "c6f37a56ee1f1032559d6fb6bb3d4624e8499e40",
+ "sameProblem": true,
+ "reason": "The review explicitly identifies bypassed host normalization during migration and the resulting lookup failures, matching the golden issue despite also raising SQL injection."
+}

@@ -262,10 +262,10 @@
     },
     {
       "id": "S15",
-      "classe": "TP",
-      "golden": 2,
-      "goldenCategoria": "doc_defect",
-      "tipoFP": null,
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
       "juizMartian": {
         "tp": false,
         "golden": null,
@@ -285,7 +285,7 @@
         },
         "concordaComClaude": false
       },
-      "decisao": "revisao_junior"
+      "decisao": "junior"
     },
     {
       "id": "S16",

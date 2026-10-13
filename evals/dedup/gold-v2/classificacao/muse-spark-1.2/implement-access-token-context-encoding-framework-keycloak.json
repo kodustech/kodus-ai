@@ -1,0 +1,346 @@
+{
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 repete Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") e nunca valida rawTokenId (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 lê substring(3,5) e retorna false quando o shortcut bate; o golden 1 aponta exatamente offset (4,6) e comparação invertida.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "OAuth2GrantType.java:99-103: o único chamador (TokenEndpoint.java:149) passa formParams não nulo, então o NPE é hipotético; a remoção do construtor de cópia não tem uso no repo. Compatibilidade/defensiva, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "DefaultTokenContextEncoderProvider.java:101-117 lança para grant sem shortcut, mas todo grant vem de uma OAuth2GrantTypeFactory que agora exige getShortcut() e getShortcutByGrantType recarrega da factory; grant ausente vira 'na', mapeado no postInit. A falha 500 descrita não ocorre nos fluxos do PR.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "DefaultTokenContextEncoderProviderFactory.java:121-137 varre ~10 factories num cache miss; custo trivial e getTokenContextFromTokenId nem é chamado em produção. Otimização opcional.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "OAuth2GrantTypeFactory.java:30 fala em 3 letras e as implementações usam 2 (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 repete Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") e nunca valida rawTokenId (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 lê substring(3,5) e retorna false quando o shortcut bate; o golden 1 aponta exatamente offset (4,6) e comparação invertida.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "DefaultTokenContextEncoderProviderTest.java:76-85 captura RuntimeException enquanto o código lança IllegalArgumentException (golden 3).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 lê substring(3,5) e retorna false quando o shortcut bate; o golden 1 aponta exatamente offset (4,6) e comparação invertida.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.99
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 repete Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") e nunca valida rawTokenId (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.99
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 repete Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") e nunca valida rawTokenId (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo ponto de S4: encodeTokenId (DefaultTokenContextEncoderProvider.java:101-117) só lança para grant sem shortcut, e todos os grants vêm de factories com getShortcut obrigatório; UNKNOWN não é produzido por getTokenContextFromClientSessionContext.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "getTokenContextFromTokenId só é usado nos testes no head (git grep); introspecção/revogação não o chamam, então não há 500 por id malformado.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo ponto de S3 (OAuth2GrantType.java:99-103): formParams nulo é hipotético e o construtor de cópia removido não tem uso no repo.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:480-484 substring(3,5) em vez de (4,6), parte do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:482-484 comparação invertida (golden 1).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S18",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "OAuth2GrantTypeFactory.java:26-34 adiciona getShortcut() sem default; quebra extensões externas de SPI privado. Compatibilidade, sem defeito no repo nem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S19",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 lê substring(3,5) e retorna false quando o shortcut bate; o golden 1 aponta exatamente offset (4,6) e comparação invertida.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S20",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 repete Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") e nunca valida rawTokenId (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

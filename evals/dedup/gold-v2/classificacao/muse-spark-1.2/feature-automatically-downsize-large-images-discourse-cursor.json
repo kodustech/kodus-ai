@@ -1,0 +1,271 @@
+{
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "utilities.js:182 e :246 trocam Discourse.SiteSettings[max_<type>_size_kb] por 10*1024 fixo, divergindo do limite do servidor. É o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "uploads_controller.rb:66-68 reconsulta tempfile.size a cada iteração depois do convert in-place; a sugestão pede re-stat com File.size(path) porque conversões falhas/sem efeito giram sem encolher, que é o problema do golden 3 (tamanho em cache). O foco principal, porém, é bloqueio síncrono da requisição.",
+      "confianca": "baixa",
+      "observacao": "Mistura preocupação de desempenho (convert síncrono no request) com o tamanho stale; casei pelo pedido explícito de re-stat.",
+      "astra": {
+        "respostas": {
+          "3": {
+            "mesmoProblema": true,
+            "motivo": "The review explicitly recommends re-statting file size after each conversion, which addresses the golden comment’s stale cached tempfile.size issue in the same loop."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Marcada semProblemaNoSanitizador: a sugestão não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GroupTest.java:139-157: a thread leitora nunca recebe join e o assert vem logo após deletedAll.set(true); exceções tardias escapam (golden 1).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GroupTest.java:152-155: se um remove() lançar, deletedAll nunca vira true e a thread fica em loop; é robustez do teste (o teste já falharia), sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GroupAdapter.java:274-275 passa a retornar null quando o delegate some, contrariando o contrato 'Never returns null' de GroupModel.getSubGroupsCount (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GroupTest.java:139-157 sem join antes do assert (golden 1).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Texto curto mas aponta a corrida de join no teste GroupTest.java:117-158 (golden 1).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Texto curto 'mid-loop abort hazard', mesmo ponto de S2 (GroupTest.java:152-155): robustez do teste, sem golden.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GroupAdapter.java:274-275 agora retorna null; chamadores que desembrulham o Long sofrem NPE (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "GroupAdapter.java:274-275 retorna null onde o contrato espera contagem não nula (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

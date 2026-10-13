@@ -1,0 +1,404 @@
+{
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "update/destroy em admin/embeddable_hosts_controller.rb:9-17 sem checagem de nil; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embeddable_host.rb:6-7 self.host.sub! sem guarda; golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.78
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "O WHAT é a interpolação '#{h}' no INSERT da migration (linha 25) como SQL injection, que é o golden 5; o texto também cita a falta de normalização (golden 3).",
+      "confianca": "media",
+      "observacao": "Grupo F3 é a normalização (golden 3); esta sugestão cobre os dois goldens e o juiz escolheu o 3 por pouco (0.78 vs 0.75 no 5). | Golden trocado de 5 para 3: juiz e Astra casam com o 3, Astra nega o 5.",
+      "astra": {
+        "respostas": {
+          "3": {
+            "mesmoProblema": true,
+            "motivo": "The review explicitly identifies bypassed host normalization during migration and the resulting lookup failures, matching the golden issue despite also raising SQL injection."
+          },
+          "5": {
+            "mesmoProblema": false,
+            "motivo": "The review flags SQL interpolation in the migration, while the golden issue is in the admin controller, so fixing the reported location would not fix the golden issue."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "juiz+astra"
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "store.js.es6:196-201: o `|| []` é inócuo e ids sem registro viram undefined no array; robustez, sem cenário quebrado no PR (o payload sideloada os hosts).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo problema do S1: where(id:).first sem nil em update/destroy; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "nil.sub! no before_validation (embeddable_host.rb:5-8); golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Começa por execute(...)[0]['id'] sem checar resultado vazio (migration linhas 9-15), golden 6; também cita a interpolação sem quote (golden 5).",
+      "confianca": "media",
+      "observacao": "Juiz deu empate 0.85 entre goldens 5 e 6; escolhido o 6 por ser o problema principal e pelo grupo R6 com S17."
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embeddable_host.rb:17 lower(host) = ? sem downcase do parâmetro; golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.72
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "spec/controllers/admin/embeddable_hosts_controller_spec.rb só checa a herança; lacuna de teste. Não descreve o crash de nil do golden 1, só o cita como algo que o teste não pegaria.",
+      "confianca": "media",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review requests broader test coverage, but does not identify missing host-existence checks in update and destroy; improving those tests would not necessarily fix the nil-host error."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embedding_controller_spec.rb só checa herança; lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic_spec.rb:1403 'is false if embeddable_host is blank' passa trivialmente; lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "spec/fabricators/category_fabricator.rb passou a definir :embeddable_host e embeddable_host_fabricator.rb os de categoria; golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S12 (conteúdos trocados entre os fabricators); golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Typo 'emeddable' no describe de topic_spec.rb; texto, sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Hosts legados inseridos verbatim na migration (linhas 24-26) sem normalização; golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "update/destroy sem nil guard (embeddable_hosts_controller.rb:9-17); golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "[0]['id'] em resultado vazio na migration (linhas 9-16); golden 6.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Fabricators trocados entre os dois arquivos; golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S19",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Migration insere hosts sem normalização (linhas 24-26); golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S20",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "update/destroy sem nil guard; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S21",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "nil.sub! no before_validation; golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S22",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Migration insere hosts sem normalização (linhas 24-26); golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

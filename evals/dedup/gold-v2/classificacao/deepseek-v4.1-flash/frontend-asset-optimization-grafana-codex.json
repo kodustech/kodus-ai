@@ -1,0 +1,40 @@
+{
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "pkg/api/webassets/webassets.go:48-49 adquire o Lock e não re-checa entryPointAssetsCache antes de recarregar; é o golden 0 (também comenta o lock segurado durante o I/O).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Sem re-check do cache depois do Lock (webassets.go:41-48); golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,159 @@
+{
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "i18n.rb:17: aponta a mistura String/Symbol que torna o uniq ineficaz e causa recarga duplicada = golden 1. A parte do default_locale nil é extra e especulativa.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "translate_accelerator.rb:56 monta o Regexp com o locale sem escape, mas o locale do usuário já chegava a load_locale antes do PR via translate (load_locale(config.locale), linha 68); o PR não cria o caminho. ReDoS/arquivos indevidos com locale de até 10 chars é exagero.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "translate_accelerator.rb:62-65: ensure_loaded! já faz o include? fora do mutex, então depois de aquecido não há I/O por request; resta só contenção no primeiro carregamento. Não é o golden 0 (inicialização preguiçosa de @loaded_locales sem sincronização).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "i18n.rb:17: SiteSetting.default_locale é setting com default (site_settings.yml:59) e não fica nil na prática; guarda contra nil é programação defensiva. Não fala da mistura String/Symbol do golden 1.",
+      "confianca": "media",
+      "observacao": "Grupo F1 junta S1/S8 (String vs Symbol, golden 1) com S4/S7 (só nil guard); S4 não traz o problema do golden."
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "translate_accelerator.rb:34-65: ensure_loaded! está dentro de `class << self`, então é método de singleton e I18n.ensure_loaded! existe; o NoMethodError alegado não ocorre.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "translate_accelerator.rb:68 só carrega config.locale; fallbacks só são carregados em ApplicationController#set_locale (application_controller.rb:159), então fora de request o fallback não funciona. Sem golden correspondente.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo ponto do S4: guarda contra default_locale nil em i18n.rb:17, setting que tem default; defensivo, não casa com golden 1.",
+      "confianca": "media",
+      "observacao": "Diverge de S1/S8 do grupo F1: só nil guard, sem a questão String/Symbol."
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "i18n.rb:17: locale cru (String) junto de símbolos faz uniq manter 'en' e :en, gerando carga duplicada = golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo problema do S6 (translate_accelerator.rb:68 só garante config.locale; fallback só em set_locale), com o acréscimo de cachear o missing no LRU. Sem golden.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

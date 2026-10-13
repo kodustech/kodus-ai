@@ -1,0 +1,176 @@
+{
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "buffer.py:382-384 calcula max_segments_per_shard = ceil(max-flush-segments / len(assigned_shards)) do próprio buffer; com o PR cada processo recebe SpansBuffer(subset) (flusher.py:93), então o teto global por ciclo vira P vezes o configurado. Introduzido pelo PR quando há mais de um processo; sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "test_gap",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "test_consumer.py:15 monkeypatcha time.sleep para no-op e a linha 62 chama time.sleep(0.1) esperando aguardar o flusher; é o golden 1 (o golden 3 é duplicata do mesmo problema).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:127-132 _create_process_for_shard não tem chamador (git grep só acha a definição); código morto, sem defeito funcional.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:199 o timer spans.buffer.flusher.wait_produce usa a tag shards enquanto produce (185) e segment_size_bytes (195) usam shard; é o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:30-32 docstring diz 'one process per shard', mas o número é limitado por max_processes (default 1 na CLI); doc imprecisa, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "test_gap",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "test_consumer.py:15 monkeypatcha time.sleep para no-op e a linha 62 chama time.sleep(0.1) esperando aguardar o flusher; é o golden 1 (o golden 3 é duplicata do mesmo problema).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "consumers/__init__.py:430-438 default=1 para --flusher-processes é escolha explícita (o help diz 'Defaults to 1'); o fallback 'or len(shards)' continua alcançável por quem constrói o SpanFlusher sem o parâmetro. Questão de configuração, não defeito.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:51 'max_processes or len(...)' trata 0 como não informado; 0 não é valor válido, é validação de entrada. Sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:51-66 com valor negativo, num_processes fica negativo, o mapa fica vazio e i % -1 == 0 dá KeyError; comportamento real, mas só com configuração inválida via CLI. Validação de entrada, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "flusher.py:199 o timer spans.buffer.flusher.wait_produce usa a tag shards enquanto produce (185) e segment_size_bytes (195) usam shard; é o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

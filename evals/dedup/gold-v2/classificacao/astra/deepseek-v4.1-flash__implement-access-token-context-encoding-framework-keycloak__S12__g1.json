@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "id": "S12",
+ "golden": 1,
+ "promptSha": "01b5e1245fb68fd893f6e56bade9ae1df79c55b8",
+ "sameProblem": false,
+ "reason": "The review identifies the inverted equality check but explicitly preserves substring(3,5), so its proposed fix leaves the golden comment’s incorrect-index issue unresolved."
+}

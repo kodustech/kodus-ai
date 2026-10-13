@@ -1,0 +1,315 @@
+{
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.99
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 repete Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") e nunca valida rawTokenId (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 lê substring(3,5) e retorna false quando o shortcut bate; o golden 1 aponta exatamente offset (4,6) e comparação invertida.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 lê substring(3,5) e retorna false quando o shortcut bate; o golden 1 aponta exatamente offset (4,6) e comparação invertida.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 repete Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") e nunca valida rawTokenId (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 repete Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") e nunca valida rawTokenId (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "OAuth2GrantTypeFactory.java:30 diz 'usually like 3-letters shortcut' enquanto todas as implementações usam 2 letras (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:482-483: comentário e índice apontam o 4º char/substring(3,5), mas o shortcut do grant está em (4,6); é o offset do golden 1.",
+      "confianca": "media",
+      "observacao": "Foca no comentário/offset, não na inversão; o golden 1 cobre os dois."
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 lê substring(3,5) e retorna false quando o shortcut bate; o golden 1 aponta exatamente offset (4,6) e comparação invertida.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 retorna false quando o shortcut bate (inversão do golden 1). A consequência dita (asserções falham) não vale porque substring(3,5) nunca bate, mas o defeito apontado é o do golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:482-483 substring(3,5) em vez de (4,6), parte do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 repete Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") e nunca valida rawTokenId (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "AssertEvents.java:483 comparação invertida (return false no equals), que é o golden 1.",
+      "confianca": "alta",
+      "observacao": "Juiz não casou; mesma inversão que os demais membros do F2.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review identifies the inverted equality check but explicitly preserves substring(3,5), so its proposed fix leaves the golden comment’s incorrect-index issue unresolved."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "junior"
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:476-492 lê substring(3,5) quando o encoder grava o grant em (4,6), parte do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:483 lê substring(3,5) e retorna false quando o shortcut bate; o golden 1 aponta exatamente offset (4,6) e comparação invertida.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AccessTokenContext.java:73 repete Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") e nunca valida rawTokenId (golden 0).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.72
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AssertEvents.java:482-484 comparação invertida (golden 1).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "AssertEvents.java:482-484 offset substring(3,5) em vez de (4,6), parte explícita do golden 1.",
+      "confianca": "alta",
+      "observacao": "Juiz não casou; o golden cita substring(4,6) literalmente.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": true,
+            "motivo": "The review identifies the same incorrect grant-shortcut substring in isAccessTokenId and explicitly acknowledges the inverted comparison described by the golden comment."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    }
+  ]
+}

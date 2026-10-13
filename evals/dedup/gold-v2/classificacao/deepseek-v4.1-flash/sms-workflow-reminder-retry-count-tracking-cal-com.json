@@ -1,0 +1,227 @@
+{
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:184 e :195 gravam retryCount: reminder.retryCount + 1 com o valor lido no findMany, e não com increment atômico. É o G0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:189-197: o prisma.workflowReminder.update dentro do catch não tem proteção. Se ele lançar (por exemplo P2025 por uma deleção concorrente), a exceção sai do for e aborta o lote. Antes o catch só fazia console.log. Foi introduzido pelo PR e não está em nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o OR com retryCount (coluna sem índice no schema.prisma) pode impedir o uso do índice [method, scheduled, scheduledDate]. É uma preocupação de desempenho especulativa em cron, sem defeito funcional.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1. Também aponta que o comentário da linha 28 ficou desatualizado.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "'The failed-send branch does not increment retryCount on the success path' é contraditório: o ramo de falha (scheduledSMS falso, :178-186) incrementa, e o de sucesso não deveria incrementar. Não descreve um defeito existente.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:189-197: o prisma.workflowReminder.update dentro do catch não tem proteção. Se ele lançar (por exemplo P2025 por uma deleção concorrente), a exceção sai do for e aborta o lote. Antes o catch só fazia console.log. Foi introduzido pelo PR e não está em nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:184 e :195 gravam retryCount: reminder.retryCount + 1 com o valor lido no findMany, e não com increment atômico. É o G0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:178-197: o update de retryCount aparece duplicado no else e no catch. É duplicação de código, sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

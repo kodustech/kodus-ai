@@ -123,10 +123,10 @@
     },
     {
       "id": "S8",
-      "classe": "TP",
-      "golden": 4,
-      "goldenCategoria": "bug",
-      "tipoFP": null,
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
       "juizMartian": {
         "tp": false,
         "golden": null,
@@ -146,7 +146,7 @@
         },
         "concordaComClaude": false
       },
-      "decisao": "revisao_junior"
+      "decisao": "junior"
     },
     {
       "id": "S9",

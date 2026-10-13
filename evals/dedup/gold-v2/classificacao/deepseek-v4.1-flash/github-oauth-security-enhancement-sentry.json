@@ -1,0 +1,108 @@
+{
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "integration.py:500-505 (commit do PR) indexa integration.metadata[\"sender\"][\"login\"] sem guarda; build_integration só grava sender quando state['sender'] existe (integration.py:376-377). É o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo KeyError em metadata[\"sender\"][\"login\"] (integration.py:500-505) = golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "integration.py:129-152: parâmetro `org` recebe active_organization em todas as chamadas; é só nome enganoso, sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "integration.py:412 compara state com pipeline.signature, que é estático (os testes usam o mesmo 9cae5e88... em todas as execuções, test_integration.py:235/242). A premissa de nonce secreto por fluxo é falsa, então o vazamento por timing não tem valor; o problema real (state estático) é o golden 1, que a sugestão não aponta.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "test_integration.py:388-396 de fato usa state ddd023... diferente da assinatura (9cae5e88...), então o teste cai no erro de state e não exercita o Integration.DoesNotExist; é lacuna de teste, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "integration.py:500-505: se github_authenticated_user não está no state, fetch_state devolve None e a verificação falha; descreve o mesmo ponto do golden 0 (state github_authenticated_user ausente). O cenário de consumidor sem OAuthLoginView é especulativo.",
+      "confianca": "media",
+      "observacao": "Golden 0 fala em null reference; a sugestão descreve rejeição sempre, não crash. Casamento pelo mesmo gatilho (state ausente)."
+    }
+  ]
+}

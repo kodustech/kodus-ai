@@ -1,0 +1,57 @@
+{
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AuthenticationProcessor.java:589-600 form() reconfigura o provider obtido por session.getProvider(LoginFormsProvider.class), que é cacheado por sessão; os atributos USERNAME_HIDDEN/REGISTRATION_DISABLED setados em AuthenticatorUtils.java:128-131 sobrevivem até o challenge. Premissa de 'provider novo a cada chamada' está errada.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "PasswordForm.java:63 configuredFor aceitando usuário só com passkey é a intenção do PR (re-auth com passkey via conditional UI, authenticate:51-54). Não casa com os goldens (UsernameForm sem UserModel / usuário nulo); é questão de contrato/UX, não defeito confirmado.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "PasskeysUsernamePasswordFormTest.java:286-291: a primeira asserção roda no login inicial com usuário nulo; removendo o check isPasskeysEnabled, isConditionalPasskeysEnabled(null) viraria true e o form webauth apareceria, falhando o assertThrows. A conclusão de que o teste não pega a regressão está errada.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

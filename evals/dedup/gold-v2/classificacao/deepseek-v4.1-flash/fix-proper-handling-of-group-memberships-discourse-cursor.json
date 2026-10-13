@@ -1,0 +1,159 @@
+{
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 5,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 5,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "admin/groups_controller.rb add_members/remove_member usam params.require(:group_id) e a sugestão diz que a rota (config/routes.rb:49-50) entrega :id; é o mesmo problema do golden 5.",
+      "confianca": "alta",
+      "observacao": "Ressalva: em Rails, rotas declaradas no bloco de resources sem member/on: são aninhadas e entregam :group_id, então o próprio golden 5 pode não se sustentar; casa com o golden mesmo assim."
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "admin-group.js.es6:11-14 totalPages = Math.floor(user_count/limit)+1 conta uma página a mais quando user_count é múltiplo de limit; é o golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "groups_controller.rb:22-26 agora pagina sempre (limit 50) para qualquer grupo, enquanto antes só grupos automáticos eram limitados; o template público group/members.hbs só troca model por members e não ganhou controles de paginação, então grupos com mais de 50 membros ficam truncados na página pública. Não casa com nenhum golden (G0 é sobre findMembers assíncrono).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "admin-group.js.es6:11-14 totalPages = Math.floor(user_count/limit)+1 conta uma página a mais quando user_count é múltiplo de limit; é o golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "admin-group.js.es6:11-14 totalPages = Math.floor(user_count/limit)+1 conta uma página a mais quando user_count é múltiplo de limit; é o golden 3.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "groups_controller.rb:22-35 paginação incondicional de 50 e template público members.hbs sem next/previous; truncamento silencioso introduzido pelo PR, sem golden correspondente.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "admin-group.js.es6:11-14 totalPages = Math.floor(user_count/limit)+1 conta uma página a mais quando user_count é múltiplo de limit; é o golden 3. Também cita o next indo para offset=user_count (golden 1), mas o foco é o totalPages.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "spec/controllers/admin/groups_controller_spec.rb:114-117 usa xhr :put para remove_member, mas a rota é DELETE; golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 5,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 5,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "admin/groups_controller.rb add_members/remove_member usam params.require(:group_id) e a sugestão diz que a rota (config/routes.rb:49-50) entrega :id; é o mesmo problema do golden 5.",
+      "confianca": "alta",
+      "observacao": "Ressalva: em Rails, rotas declaradas no bloco de resources sem member/on: são aninhadas e entregam :group_id, então o próprio golden 5 pode não se sustentar; casa com o golden mesmo assim."
+    }
+  ]
+}

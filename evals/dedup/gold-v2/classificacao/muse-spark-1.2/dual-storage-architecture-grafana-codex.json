@@ -1,0 +1,471 @@
+{
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:45 (Create): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update."
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "dualwriter_mode3.go:129 (Update): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review comment identifies the swapped duration recorder in Update, while the golden issue occurs in DeleteCollection, so fixing the reported location would not fix the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:161-167: o goroutine do DeleteCollection mede d.Legacy.DeleteCollection e registra com recordStorageDuration (:166); é a troca storage/legacy no DeleteCollection do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:106: recordStorageDuration(false, mode3Str, name, ...) passa name no lugar de options.Kind, diferente dos demais métodos; é o golden 2.",
+      "confianca": "alta",
+      "observacao": "Está no grupo F1 (troca de recorder), mas descreve o name no rótulo kind da linha 106, que é o golden 2."
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:50-57 (e 108-114, 134-141, 161-167): o goroutine legacy deriva o ctx da requisição via WithTimeoutCause, que herda o cancelamento quando o handler retorna; a escrita legacy pode abortar. Introduzido pelo PR (legacy virou assíncrono); sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:38 etc. acessam options.Kind sem checar nil; os handlers do apiserver passam options não nulos e o modo 1 já fazia igual. Programação defensiva.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:96-97: monta log com name/kind/method mas faz ctx = klog.NewContext(ctx, d.Log); é o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:50-57: um goroutine por escrita, limitado pelo timeout de 10s; falta de pool/backpressure é melhoria de design, sem defeito demonstrado nem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:106: recordStorageDuration(false, mode3Str, name, ...) passa name no lugar de options.Kind, diferente dos demais métodos; é o golden 2.",
+      "confianca": "alta",
+      "observacao": "Está no grupo F1 (troca de recorder), mas descreve o name no rótulo kind da linha 106, que é o golden 2."
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:45 (Create): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update."
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "dualwriter_mode3.go:129 (Update): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review identifies the incorrect duration recorder in Update, while the golden issue is in DeleteCollection, so fixing the reported location would not fix the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:161-167: o goroutine do DeleteCollection mede d.Legacy.DeleteCollection e registra com recordStorageDuration (:166); é a troca storage/legacy no DeleteCollection do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3_test.go: os testes não esperam nem verificam a escrita legacy assíncrona (mock compartilhado). Lacuna de teste real, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3_test.go: os testes não esperam nem verificam a escrita legacy assíncrona (mock compartilhado). Lacuna de teste real, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3_test.go: os testes não esperam nem verificam a escrita legacy assíncrona (mock compartilhado). Lacuna de teste real, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3_test.go: os testes não esperam nem verificam a escrita legacy assíncrona (mock compartilhado). Lacuna de teste real, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.99
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:96-97: monta log com name/kind/method mas faz ctx = klog.NewContext(ctx, d.Log); é o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:161-167: o goroutine do DeleteCollection mede d.Legacy.DeleteCollection e registra com recordStorageDuration (:166); é a troca storage/legacy no DeleteCollection do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S19",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "dualwriter_mode3.go:45 (Create): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review comment identifies the incorrect duration recorder in Create, while the golden issue occurs in DeleteCollection, so fixing the reported location would not fix the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S20",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "dualwriter_mode3.go:129 (Update): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review comment identifies the incorrect duration recorder in Update, while the golden comment identifies it in DeleteCollection, so fixing the reported location would not fix the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S21",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:36-60 acessa options.Kind / listOptions.ResourceVersion sem checar nil; os handlers do apiserver passam options não nulos e o modo 1 já fazia igual. Programação defensiva.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S22",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:50-57 (e 108-114, 134-141, 161-167): o goroutine legacy deriva o ctx da requisição via WithTimeoutCause, que herda o cancelamento quando o handler retorna; a escrita legacy pode abortar. Introduzido pelo PR (legacy virou assíncrono); sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S23",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:50-57: Storage.Create termina antes do goroutine começar, então não há acesso concorrente com o Storage; a mutação do obj pelo chamador depois do retorno não é mostrada. Data race afirmado sem base no código.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S24",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.72
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:45/106/129/166: lista as trocas de recorder em Create/Update, o name como kind na :106 (golden 2) e o recordStorageDuration do goroutine do DeleteCollection (:166, golden 1).",
+      "confianca": "media",
+      "observacao": "Cobre os goldens 1 e 2; registrei o 2 para alinhar com o juiz, o 1 também vale."
+    },
+    {
+      "id": "S25",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:50-57 (e 108-114, 134-141, 161-167): o goroutine legacy deriva o ctx da requisição via WithTimeoutCause, que herda o cancelamento quando o handler retorna; a escrita legacy pode abortar. Introduzido pelo PR (legacy virou assíncrono); sem golden.",
+      "confianca": "media",
+      "observacao": "Acrescenta que Delete deixou de tentar o legacy quando o Storage dá NotFound (regressão real em :101-104)."
+    }
+  ]
+}

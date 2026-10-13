@@ -1,0 +1,434 @@
+{
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "O Enum do Discourse começa em 1 (lib/enum.rb, start default 1), então :regular=1 e :raw_html=2; o default 1 da migration é :regular.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embed.js:5-12 não checa se #discourse-comments existe; o snippet de embed exige esse div. Programação defensiva.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "embed.js:17 discourseUrl.indexOf(e.origin) === -1: validação por substring contornável; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "poll_feed.rb:35 i.content.scrub sem fallback para description; golden 6.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "cook_method raw_html faz Post#cook retornar raw (post.rb:133) e o conteúdo do feed é importado sem sanitização e renderizado com `raw post.cooked` (best.html.erb:19): XSS armazenado introduzido pelo PR. Não casa com o golden 4 (interpolação da url).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "poll_feed.rb:29 faz open(SiteSetting.feed_polling_url) sem validação/proteção SSRF; é o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic_retriever.rb:40-43 roda PollFeed inline dentro do job RetrieveTopic, com throttle de 60s por URL; é uma escolha de design, custo extra opcional, sem defeito nem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "layouts/embed.html.erb:11 usa request.referer completo como targetOrigin do postMessage; golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "TopicEmbed.import (topic_embed.rb:15-28) faz check-then-create! com índice único em embed_url sem tratar RecordNotUnique; PollFeed e RetrieveTopic concorrentes podem colidir. Real e introduzido pelo PR, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S4: nil.scrub em poll_feed.rb:35; golden 6.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "poll_feed.rb:29 sem rescue de erros de rede; o job agendado apenas falha e roda de novo na hora seguinte. Robustez/logging, não defeito.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "import_remote/absolutize_urls (topic_embed.rb:48-58) sem rescue de erros de URI/rede; a exceção só falha o job RetrieveTopic. Robustez, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "topic_embed.rb:13 interpola url sem escapar em \"<a href='#{url}'>\" e o post é raw_html renderizado com raw: é a parte de XSS do golden 4.",
+      "confianca": "alta",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "4": {
+            "mesmoProblema": false,
+            "motivo": "The review identifies the URL-interpolation XSS, but fixing it would not address the golden comment’s additional NoMethodError when contents is nil."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "junior"
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "strftime(\"%e %b %Y\") em best.html.erb:14 não localizado; i18n, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mensagens de InvalidAccess em inglês literal (embed_controller.rb:25-26) são internas de exceção; i18n opcional.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "poll_feed_spec.rb:12-28 stuba só uma setting e as outras ficam no default desligado, então os testes passam pelo motivo errado. Lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Em teste queue_jobs=false (site_settings.yml:348-351), Jobs.enqueue executa RetrieveTopic inline (app/jobs/base.rb:168-172), que chama TopicRetriever.new.retrieve; o teste não 'falha em código correto' como afirmado.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S18",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "topic_retriever_spec.rb:32-42 stuba retrieved_recently?, então a lógica de setnx não é testada. Lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S19",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S3: indexOf por substring em embed.js:17; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S20",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S8: targetOrigin com URL completa em layouts/embed.html.erb:11; golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S21",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "feed_key (poll_feed.rb:20-22) é calculado e nunca usado; código morto, sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S22",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "Mesmo achado do S3 (indexOf invertido em embed.js:17); golden 1.",
+      "confianca": "alta",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": true,
+            "motivo": "Both identify bypassable substring-based origin validation at the same location, and the review’s proposed exact-origin equality check would fix the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S23",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "targetOrigin = request.referer completo em layouts/embed.html.erb:11; golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S24",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "targetOrigin = request.referer completo em layouts/embed.html.erb:11; golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,1632 @@
+{
+ "model": "sonnet-5.5",
+ "atribuidor": "claude-sonnet-5.5@sdk",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "addGuests.handler.ts:52-56 lets any attendee (matched by email only) add guests and trigger invites; a real authorization/abuse concern, though upstream may intend attendee permission."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "MultiEmail.tsx:46 hard-coded 'Remove email' tooltip is a minor i18n nit; many would fix it but it's low impact."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 50,
+     "porque": "AddGuestsDialog.tsx:43-44 template string is always truthy so the fallback is dead and users may see 'undefined: ...'; a plain bug in error UX."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S8",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 75,
+     "porque": "addGuests.handler.ts:46-48 uses && so only users who are both admin and owner pass; plain logic bug denying admins."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S3",
+      "S5",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "addGuests.handler.ts:74-78 lacks server-side dedupe and case normalization; client validates uniqueness but the API can be called directly, so duplicates are possible."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S6",
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 45,
+     "porque": "addGuests.handler.ts:158-168 uses acting user's credentials and passes raw guests rather than uniqueGuests; the credentials issue is real for admin actions, and the emails mismatch is a clear bug."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 35,
+     "porque": "addGuests.handler.ts:165 calendar update outside try/catch after the DB write leaves inconsistent state on failure; a valid robustness concern but an edge case."
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 40,
+     "porque": "googlecalendar/CalendarService.ts:145-154 only matches by credentialId, so legacy destination calendars without one now insert into \"primary\"; this is a real regression but limited to the legacy path."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 80,
+     "porque": "EventManager.ts:119 reads `.integration` on a possibly undefined destructured element with no `?.`, so Google Meet bookings with an empty destinationCalendar throw a TypeError."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7",
+      "S9",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 60,
+     "porque": "googlecalendar/CalendarService.ts:256 and 317 search for externalId === a falsy externalCalendarId, so the fallback never selects the destination calendar; this is a clear logic bug in both update and delete."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S13",
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 50,
+     "porque": "EventManager.ts:380 calls createEvent without destination.externalId, so references created in the integration-based branch are saved with an undefined externalCalendarId."
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "scheduleSMSReminders.ts:158-188 — when message or sendTo is missing the reminder is never retry-counted, so the PR's goal of capping retries is only partly met; plausible but the original code probably left these as-is."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "scheduleSMSReminders.ts:189-198 — an update that throws inside catch would abort the loop, but this is an unlikely edge case and many would merge as is."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 80,
+     "porque": "scheduleSMSReminders.ts:31-43 — the OR branch `retryCount > 1` has no method filter, so it deletes email and WhatsApp reminders in the SMS cron, which is a real bug."
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "office365calendar/lib/CalendarService.ts:263 now throws on a parse failure, so the `success` check is dead and the old logging is gone, which is a real behavior change but a modest one."
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 10,
+     "porque": "office365video/lib/VideoApiAdapter.ts:73 passes \"msteams\", which is the actual slug of the office365video app, so the claim is likely wrong."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S13",
+      "S15",
+      "S18",
+      "S20"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-data-exposure",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 30,
+     "porque": "zoho-bigin/lib/CalendarService.ts:85-94 is not visible in the diff, so the claim is unverifiable, though a wrong id in the userId slot would be a real bug."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8",
+      "S11",
+      "S14",
+      "S19"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 80,
+     "porque": "googlecalendar/lib/CalendarService.ts:97 stores the safeParse result object ({success, data}) as the credential key, which corrupts the stored credential."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 25,
+     "porque": "app-credential.ts:24-29 uses a plain !== comparison, a theoretical timing leak over a network that owners rarely fix, and the more serious undefined === undefined case is not mentioned."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S12",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 70,
+     "porque": "parseRefreshTokenResponse.ts:8 computed keys evaluate to \"[object Object]\", so the schema always fails in sync mode and the function throws."
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S10",
+      "S21"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 60,
+     "porque": "refreshOAuthTokens.ts:8-15 returns a raw fetch Response in sync mode while callers expect `.data` or a token object, so callers break when sync is on."
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "insightsBooking.ts:72-80 has a correct but dead-code branch (authConditions is always non-null Prisma.Sql), a minor cleanup that most owners would leave or only fix as a nit."
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 60,
+     "porque": "BackupCode.tsx:7 exports a component named TwoFactor, an obvious copy-paste leftover that is trivial to fix and most owners would rename it."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 30,
+     "porque": "disable.ts:50 logs a 'login' message in the disable endpoint; it is a minor copy-paste wording issue that some would fix and many would ignore."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 10,
+     "porque": "next-auth-options.ts:143-145 uses indexOf on a decrypted list of random codes; timing attacks are impractical here and rate limiting exists, so owners would not change it."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "next-auth-options.ts:139-156 has a real race that allows reuse of a backup code, but it needs concurrent requests and the password plus rate limit are also required, so a fix is a maybe."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 55,
+     "porque": "EnableTwoFactorModal.tsx:135 no longer calls onEnable on success, so dismissing via Escape or overlay leaves the parent unaware that 2FA is enabled and the codes stay in state, a plausible UX bug."
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 80,
+     "porque": "optimized_image.rb:145-151 defines a second `downsize` that overrides the 5-arg version, so the existing caller (resize_emoji with 100, 100, opts) raises ArgumentError, and the diff also changes the 5-arg version to build a dimension string, which is dead code after the override; this is a real break."
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "embedding_controller.rb:9-11 update is a no-op, but the embedding is a stub resource and hosts save via their own controller, so most would leave it."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 90,
+     "porque": "spec/fabricators/category_fabricator.rb:1 now defines :embeddable_host and the category fabricators moved to embeddable_host_fabricator.rb; the swap is plain and confusing, so nearly all would fix it."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "topic_spec.rb:1403-1405 test name no longer matches what it exercises since the host guard was removed; some would clean it up."
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 35,
+     "porque": "topic.rb:869 drops the host guard; it may be intentional given hosts now live in a table, but behavior changes for forums with no hosts."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S7",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 30,
+     "porque": "embeddable_host.rb:17 compares lower(host) with a non-downcased uri.host; URI normalizes host case in practice, so low impact."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "embeddable_host.rb:6 host.sub! on nil raises NoMethodError, but the admin UI always sends a host and the nil case is an edge."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 25,
+     "porque": "embeddable_hosts_controller.rb:10,15 .first without a nil check gives a 500 on unknown id; admin-only and a minor edge."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S5",
+      "S8",
+      "S10",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 55,
+     "porque": "migration:11 indexes [0]['id'] on an empty result when embed_category isn't stored, raising NoMethodError and aborting the migration for many installs."
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "groups_controller.rb:22 takes an unbounded limit from the client, which is a plausible DoS vector, but the endpoint is public-read and the old code had the same weakness for automatic groups, so many owners would let it go."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "The spec at line 115 uses :put for an action routed only via DELETE; in Rails 4 controller specs, though, it still hits the action and passes, so it is a minor test-accuracy issue worth a quick fix."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 60,
+     "porque": "groups_controller.rb:22-35 now truncates public group member lists to 50 with no paging UI in group/members.hbs, which is a real regression for regular users on larger groups."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 65,
+     "porque": "admin-group.js.es6:13 uses floor(count/limit)+1, which gives a phantom page when user_count is an exact multiple of the limit, a plain off-by-one that is easily fixed with Math.ceil."
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "translate_accelerator.rb:67-68 loads only config.locale while fallback locales are ensured only in the controller (application_controller.rb:159), so jobs/mailers/rake can hit unloaded fallbacks and cache 'translation missing' results."
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "webassets.go:48-49 lacks a re-check after Lock(), so concurrent first callers redundantly re-parse the manifest serially; this is real but only a one-time startup cost with correct results, so most owners would merge or follow up."
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "app/views/layouts/embed.html.erb:11 puts the referer unescaped into a script string, but the referer host is checked and only a crafted path on the embeddable host could exploit it."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "app/models/topic_embed.rb:48 uses open(url), but the retriever checks the host and the feed URL is set by an admin, so a '|cmd' string rarely gets through."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "app/models/topic_embed.rb:13-22 stores unsanitized raw HTML, but the content comes from an admin-configured feed, and the remote path already filters tags through Readability."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "app/models/topic_embed.rb:13 mutates the caller's string with <<, a minor defect that rarely causes trouble in these call paths."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "app/assets/javascripts/embed.js:17 uses a substring origin check that is weak, and an empty origin passes it, but the impact is limited to resizing the iframe."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 40,
+     "porque": "lib/tasks/disqus.thor:148 drops the category option and created_at, and adds a live HTTP fetch that can abort the import."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 35,
+     "porque": "app/models/topic_embed.rb:13 interpolates the url unescaped into HTML that is rendered raw, and the host-only check still allows quotes in the path."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "app/jobs/scheduled/poll_feed.rb:35 calls i.content.scrub, which raises on description-only items and aborts the whole poll."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 25,
+     "porque": "app/models/topic_embed.rb:32-36 does not guard against embed.post being nil after the post is deleted, which is an edge case."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "spec/jobs/poll_feed_spec.rb:18-28 never stubs feed_polling_enabled? to true, so those two tests pass vacuously."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "spec/controllers/embed_controller_spec.rb:8 is rejected by ensure_embeddable before the missing-param check, so the test is weak."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "spec/components/topic_retriever_spec.rb:21-25 does not stub embeddable_host, so the test passes without the URI rescue, a minor test weakness."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S6",
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 35,
+     "porque": "app/models/topic_embed.rb:64-71 breaks protocol-relative URLs like //cdn/x.png, which are common in RSS content."
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "metrics_middleware_test.go:101-109 only lacks a negative assertion for endpoints without size instrumentation; this is a minor test-hardening nit that owners would rarely change before merging."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 10,
+     "porque": "contextual_logger_middleware.go:27-37 omits traceID, but the new logger_middleware.go:58 uses FromContext(ctx), and Grafana's infra logger context providers normally add traceID automatically, so correlation is most likely preserved."
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "impl.go:144-147 returns every tagDeviceUI error, but client.go:44-50 already logs non-limit errors and carries on, so the effect is limited."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "database_test.go:51-70 never re-submits the existing device at the limit, so the update path is untested; a real gap but a minor one."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 55,
+     "porque": "impl.go:144-147 leaves the cache key set after a failed tag, so a rejected device passes the early return for 29 minutes and bypasses the limit."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 65,
+     "porque": "database.go:52-54 gives ProvideAnonDBStore an int64 parameter, which wire cannot inject; the diff leaves wire.go untouched, so the build likely breaks."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "database.go:108-118 does a non-atomic count then insert, so concurrent new devices can overshoot the limit, but owners would likely accept a soft limit."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 20,
+     "porque": "client.go:44-50 moves tagging from async to synchronous on purpose so the limit can reject requests; the latency concern is valid but secondary."
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "bleve.go:137-139 adds a lock around the write, but TotalDocs reading b.cache without a lock is plausible; I can't see TotalDocs, so whether the race is real is uncertain, and in the diff the new log call in search.go:216 makes it a real read path."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "server.go:303-311 moves initWatcher after search.init, which opens a real window where events between the index snapshot and watcher start are lost; owners would likely notice, though the index may also be rebuilt from the RV."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "bleve.go:88-98 removes the function-wide lock, so concurrent builds of the same key are possible; the caller getOrCreateIndex likely serializes this, so it's a moderate concern."
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "useAbilities.ts:308-318: with skipToken the rule is undefined, MaybeSupported becomes AlwaysSupported, so Duplicate is [true, createPermission] and is ORed in AlertRuleMenu, which can wrongly show Duplicate for cloud rules."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "useAbilities.ts:301-302: the comment is misleading about isAlertingRule, but this is a minor wording issue."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "useAbilities.ts:308-309: the comment says there is no loading state while the code uses loading; this is a stale comment only."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "GrafanaGroupLoader.test.tsx:85-101: the test is weak and its name overstates what it checks, but it is only a test-quality nit."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 40,
+     "porque": "useAbilities.ts:223-228: the wrapper loses the isFederatedRuleGroup check, a plausible regression for federated rules, though the TODO shows it was already hardcoded false in the ruler hook."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 45,
+     "porque": "useAbilities.ts:301-328: switching to alertingRule disables Pause/Export/etc. for Grafana recording rules, which is a plausible behavior regression."
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "dualwriter_mode3_test.go:37-44 passes only because legacy and storage share one mock, so the case doesn't really test a storage failure; this is a minor test-quality issue."
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "dualwriter_mode3_test.go:47-77 never waits for or asserts the async legacy writes, so removing them wouldn't fail the tests; owners might add this later."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S15"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 60,
+     "porque": "dualwriter_mode3.go:50-57 derives the legacy goroutine context from the request ctx, which is cancelled when the request ends, so legacy writes can be aborted and the stores drift apart."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S2",
+      "S8",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 40,
+     "porque": "dualwriter_mode3.go:134-141 passes the raw objInfo to Legacy.Update instead of the wrapper carrying the object Storage returned, so legacy may diverge, though the intent is arguable."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "dualwriter_mode3.go:97 puts d.Log into the context instead of the enriched log, which loses name/kind/method in downstream delete logs; cosmetic."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12",
+      "S19"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 70,
+     "porque": "dualwriter_mode3.go:106 passes the object name as the kind label, creating a metric series per object name; this is a clear cardinality bug."
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S5",
+      "S9",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 60,
+     "porque": "dualwriter_mode3.go:166 times the legacy DeleteCollection call but records it with recordStorageDuration, so legacy latency is attributed to the storage metric."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S10",
+      "S11",
+      "S17",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 60,
+     "porque": "dualwriter_mode3.go:45 records the failed storage Create with recordLegacyDuration (and likewise at line 129 for Update), so storage errors are attributed to the legacy metric."
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "GroupTest.java:136-157 starts the reader thread without a latch or join, so the test is racy and could pass without exercising the bug; still, it is a race-regression test that likely fails sometimes with the bug, so many owners would merge as is."
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 50,
+     "porque": "AssertEvents.java:483 is not in the shown diff, so I can't confirm it; an inverted grant check would be a plain test-matcher bug, but the tests would probably fail and expose it before merge."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S7",
+      "S8",
+      "S10",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 40,
+     "porque": "AssertEvents.java:480-484 is unverifiable from the diff; the inverted-check claim overlaps candidate 0, and the substring(3,5) offset claim is uncertain."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 80,
+     "porque": "AccessTokenContext.java:73 checks grantType twice and never checks rawTokenId, which is a plain copy-paste bug that would let a null rawTokenId through; the fix is trivial."
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S7",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 20,
+     "porque": "VerifyMessageProperties.java:73-80: every scanned theme file has an _en counterpart, and the test fixtures were renamed to _en for this path rewrite, so the crash is unlikely in practice."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "VerifyMessageProperties.java:101-111: independent prefix and suffix scans can overlap and throw StringIndexOutOfBounds, which is a real bug, but it only hits on an already-failing value and the build fails either way."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S4",
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 70,
+     "porque": "messages_lt.properties:101: totpStep1 holds Italian text in the Lithuanian file, an obvious wrong-language translation that owners would fix."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 55,
+     "porque": "messages_zh_CN.properties:112: the Traditional Chinese string in the Simplified Chinese file is a real localization defect and an easy fix."
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "PasskeysUsernamePasswordFormTest.java:281 keeps the comment 'set passwordless policy for discoverable keys' above an updater that now only sets setWebAuthnPolicyPasskeysEnabled(FALSE); this is real but cosmetic, so a few would fix it."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 10,
+     "porque": "passkeys.ftl is not in this diff, and showing the identified user's passkey on the password form is the intended behaviour here (see isConditionalPasskeysEnabled in UsernamePasswordForm.java:160 and the test at PasskeysUsernameFormTest.java:206), so owners would likely read past the info-leak claim."
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 60,
+     "porque": "OrganizationCacheTest.java:381 registers cleanup for the literal alias \"alias\" (and line 425 likewise), so the 20 created IDPs leak into other tests; this is a plain, easily fixed bug, though the test realm may be reset between tests."
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "ClientPermissionsV2.java:244 looks up the all-clients resource with findByName, which is likely the same pattern as the Users V2 code, and the resource gets created when an all-clients permission is created, so denying when it is absent is probably intended."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 35,
+     "porque": "ClientPermissionsV2.java:187-205 throws UnsupportedOperationException from isPermissionsEnabled, resource and getPermissions, which could cause a 500 on the management-permissions endpoint in V2, but the callers' guards are not visible in the diff."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "AdminPermissions.java:77 is guarded only by the V1 feature flag, so if V1 and V2 are both enabled, client removal reaches ClientPermissionsV2.setPermissionsEnabled and throws; the case is plausible but depends on whether the flags can be enabled together."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 15,
+     "porque": "ClientPermissionEvaluator.java:100-103 has a wrong Javadoc on a void method, which is a cosmetic documentation slip that a reviewer would fix quickly but that does not affect behavior."
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 20,
+     "porque": "flusher.py:51 `max_processes or len(...)` treats 0 as unset, but the CLI default is 1 and 0 is an unlikely input, so owners would rarely change it."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "test_consumer.py:60-62 `time.sleep(0.1)` is indeed a no-op because time.sleep is monkeypatched, so it gives a false sense of waiting and could cause flakiness; a real but minor test issue."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "flusher.py:31-32 the docstring 'one process per shard' is inaccurate given the max_processes cap, but it is only a docstring nit."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 45,
+     "porque": "flusher.py:199 the tag key 'shards' differs from 'shard' used by sibling metrics, which fragments dashboards; a clear, trivial inconsistency that owners would likely fix."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S5",
+      "S7",
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 65,
+     "porque": "flusher.py:254 `isinstance(process, multiprocessing.Process)` is False for SpawnProcess from a spawn context, so hung processes are never killed and get duplicated; a real bug, though the exact subclass relationship needs checking."
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "tests/sentry/integrations/services/test_assignment_source.py:36 asserts queued is not None, which is trivially true given the default; weak test, but few would block merge over it."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "tests/sentry/integrations/services/test_assignment_source.py:8 has a misnamed test (array vs dict); cosmetic nit that most would ignore."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 70,
+     "porque": "src/sentry/integrations/services/assignment_source.py:18 uses `timezone.now()` as a dataclass default, evaluated once at import, so every instance carries the same stale timestamp; a real bug with a simple fix (default_factory)."
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "chart.tsx:164-174 is not in the shown diff, so the empty-table claim cannot be verified, though it would be a plain defect if it is real."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 30,
+     "porque": "browser_reporting_collector.py:52 and :58 use truthiness, so age=0 slips through the exclusion rule, but this edge case is rare and low impact."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "useGetTraceItemAttributeValues.spec.tsx:114-147 is not in the shown diff, and a mock that can never match is a real but test-only flaw."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-data-exposure"
+     ],
+     "nota": 30,
+     "porque": "delayed_workflow.py:583 is not in the shown diff, so the claim that full event payloads are logged cannot be verified, though it would be a real privacy concern."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 70,
+     "porque": "project_replay_summarize_breadcrumbs.py:118 zips error_ids with events.values(), and get_multi omits missing nodes, so IDs and titles can be misaligned."
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "integration.py:481-482 skips the sender check when no Integration row exists; this is a real gap, but the row is created by the webhook and the flow only creates the Integration after the user's OAuth identity is bound, so the actual impact is debatable."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "integration.py:423-438 safe_urlopen and get_user_info sit outside the try block, so network failures would produce a 500; this is plausible and cheap to fix, though the existing OAuth code behaves similarly."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 10,
+     "porque": "integration.py:412 plain != on the state; a timing attack on a pipeline signature is impractical and the codebase does this elsewhere."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 15,
+     "porque": "integration.py:141 _(error_short) wraps a variable; the strings are still translated at runtime only if already in the catalog, so this is a minor i18n nit."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 15,
+     "porque": "test_integration.py:448-454 the test asserts a generic message; the state is hardcoded but matches the other tests, so this is a test-quality nit."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 45,
+     "porque": "integration.py:501-505 indexing metadata['sender']['login'] raises KeyError for existing integrations without sender metadata, so the flow crashes with a 500; this is a plausible real regression."
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 30,
+     "porque": "The evaluate() docstring at detector.py:226-233 still says it returns a list, but it now returns a dict. This is a real but minor inaccuracy that most owners would fix only if told."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "The TODO at grouptype.py:10 is stale now that the class subclasses StatefulDetectorHandler. It is harmless and many owners would leave it, since the class is still a stub."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "grouptype.py:11-12 subclasses StatefulDetectorHandler with only `pass`, so the abstract methods stay unimplemented and instantiation raises TypeError. This is a real defect, but metric alert detectors are not created yet, so some owners would accept it as a stub."
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 30,
+     "porque": "The dead `config` copy at incident_occurrence.py:160-168 is a real bug, but it was moved verbatim from mark_failed.py, so many owners would leave it out of a pure refactor PR and fix it separately."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "The docstring examples and the typo at incident_occurrence.py:131-137 were copied unchanged from the old code, and fixing the wording is cosmetic, so most owners would read past it."
+    }
+   ]
+  }
+ }
+}

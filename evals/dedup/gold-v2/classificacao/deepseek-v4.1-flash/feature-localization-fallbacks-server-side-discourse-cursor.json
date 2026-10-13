@@ -1,0 +1,57 @@
+{
+  "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "config/initializers/i18n.rb:17 monta [locale, default_locale.to_sym, :en] sem normalizar locale; a sugestão aponta a mistura String/Symbol que impede o uniq e carrega o mesmo locale duas vezes, que é o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "translate_accelerator.rb:62-76: ensure_loaded!/load_locale não limpam @cache, e com o Backend::Fallbacks ligado neste PR um valor de fallback (ou missing) pode ficar cacheado sob a chave do locale pedido antes de o locale de fallback ser carregado. Cenário plausível e introduzido pelos fallbacks, sem golden.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "translate_accelerator.rb:68 só carrega config.locale; os locales de fallback só são carregados por I18n.fallbacks.ensure_loaded! em ApplicationController#set_locale (application_controller.rb:159). Fora do request (jobs, mailers) o fallback não funciona. Não é o golden 0 (concorrência) nem o 1.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

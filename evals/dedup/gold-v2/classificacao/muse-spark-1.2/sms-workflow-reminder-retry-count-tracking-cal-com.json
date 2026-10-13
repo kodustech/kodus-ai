@@ -1,0 +1,159 @@
+{
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:158: quando message está vazio ou sendTo é falso, nada incrementa retryCount. Mas o reminder não fica em loop para sempre: o primeiro ramo do deleteMany o remove quando scheduledDate passa, e o comportamento é igual ao de antes do PR. É uma lacuna de cobertura da nova lógica de retry, não um defeito introduzido.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1. (via comentário desatualizado da linha 28, que cita o ramo sem filtro de método)",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:158: quando message está vazio ou sendTo é falso, nada incrementa retryCount. Mas o reminder não fica em loop para sempre: o primeiro ramo do deleteMany o remove quando scheduledDate passa, e o comportamento é igual ao de antes do PR. É uma lacuna de cobertura da nova lógica de retry, não um defeito introduzido.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:184 e :195 gravam retryCount: reminder.retryCount + 1 com o valor lido no findMany, e não com increment atômico. É o G0. Também menciona o update sem proteção no catch.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "scheduleSMSReminders.ts:31-43: o segundo ramo do OR, {retryCount: {gt: 1}}, não tem method: SMS, então o deleteMany apaga reminders de qualquer método. É o G1.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

@@ -1,0 +1,2635 @@
+{
+ "model": "muse-spark-1.2",
+ "atribuidor": "muse-spark-1.2",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "Race real mas baixa probabilidade em cron single-instance; file:178 usa valor stale mas owners tratariam como melhoria follow-up com increment:1, não blocker."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 90,
+     "porque": "file:30 OR sem filtro method deleta EMAIL/futuros com retryCount>1, perda de dados cross-workflow, todos barrariam o merge."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 80,
+     "porque": "file:175 increment só no else interno, quando sendTo/message falsy nunca incrementa e nunca atinge gt:1, loop infinito exatamente no caso de telefone inválido."
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "packages/emails/templates/organizer-add-guests-email.ts:28 usa attendees[0].name sem guard, mas booking sempre tem ao menos um attendee; crash só em caso hipotético vazio"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 70,
+     "porque": "apps/web/components/dialog/AddGuestsDialog.tsx:56 isInvalidEmail vira true e nunca é resetado ao editar/sucesso, banner persiste"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:5 array sem .max()/.transform permite milhares de emails, mas payload e rate-limit mitigam"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:108 getTranslation por attendee é O(N) mas N pequeno e cacheável, otimização prematura"
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 50,
+     "porque": "apps/web/components/dialog/AddGuestsDialog.tsx:27 Set sem toLowerCase permite ['a@x.com','A@x.com'] passar como único no cliente"
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "packages/ui/form/MultiEmail.tsx:46 Tooltip content=\"Remove email\" hard-coded enquanto resto usa t(), nit de i18n não bloqueante"
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "apps/web/components/booking/BookingListItem.tsx:194 id=\"add_members\" inconsistente com addGuests, apenas naming interno"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 100,
+     "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:47 && entre isTeamAdmin e isTeamOwner sempre falso, nega admin/owner legítimo"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S8",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 80,
+     "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74 filtro === case-sensitive sem dedupe intra-request permite duplicar e bypass blacklist"
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S12",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 70,
+     "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168 sendAddGuestsEmails recebe guests bruto em vez de uniqueGuests, erra ramificação de email"
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S13",
+      "S14",
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-106 falta dedupe/atômico, duplicata intra-request e race concorrente possíveis mas já coberto em #8"
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "Alega falta de import prisma em salesforce/lib/CalendarService.ts:1 mas import existe fora do hunk e statusText é nit menor, owners descartariam parte do claim."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "refreshOAuthTokens.ts:8 faz fetch sem timeout/abort no path quente de refresh, causa stall real mas muitos owners deixariam para follow-up."
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "JSDoc duplicado em createOAuthAppCredential.ts:12 é typo de doc, quase nenhum owner bloquearia merge por isso."
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 70,
+     "porque": ".env.example:244 manda openssl rand -base64 24 mas comenta 32 bytes para AES256 em :241, gera key inválida e todos corrigem doc."
+    },
+    {
+     "rep": "S26",
+     "membros": [
+      "S26"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "app-credential.ts:62 race findFirst->create raramente concorrente e sem unique comprovado, poucos owners trocariam por upsert agora."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S16",
+      "S20",
+      "S23"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 90,
+     "porque": "encodeOAuthState.ts:5 idêntico a decodeOAuthState, não codifica teamId/returnTo e quebra OAuth de time em todo add.ts."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S28"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 60,
+     "porque": "decodeOAuthState.ts:9 faz JSON.parse sem try/catch em input atacante, derruba callbacks com 500."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S19",
+      "S22"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 80,
+     "porque": "parseRefreshTokenResponse.ts:7 usa [z.string().toString()] que vira \"[object Object]\", schema nunca valida expiry."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 90,
+     "porque": "googlecalendar/lib/CalendarService.ts:97 armazena SafeParse {success,data} como key em vez de key.data e corrompe credential."
+    },
+    {
+     "rep": "S25",
+     "membros": [
+      "S5",
+      "S14",
+      "S24",
+      "S25",
+      "S27",
+      "S29"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 70,
+     "porque": "refreshOAuthTokens.ts:3 retorna Response quando syncado mas callers esperam HubspotToken/axios data, quebra zoho e hubspot com sync ligado."
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S6",
+      "S15",
+      "S21"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 60,
+     "porque": "zoho-bigin/lib/CalendarService.ts:85 passa credential.id onde deveria ser credential.userId, envia PK ao endpoint sync."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 20,
+     "porque": "app-credential.ts:24 timingSafe e method check são nits; header lowercased é documentado e owners não bloqueariam."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 50,
+     "porque": "app-credential.ts:58 symmetricDecrypt+JSON.parse sem try/catch e fallback \"\" estoura 500 em key inválida."
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "Falso-positivo para donos: destinationCalendar vem do DB (booking/user) não de input cliente; fetch de fallback é intencional para evento coletivo, donos não veem IDOR prático em packages/core/EventManager.ts:344"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "Micro-otimização de latência O(N) sequencial vs Promise.all; N=2-3 em coletivo, donos fariam follow-up não block no merge em packages/core/EventManager.ts:339"
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "String com TODO i18n já existente, troca organiser->organizer é cosmética e não quebra função; donos ignorariam em packages/core/CalendarManager.ts:230"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S11",
+      "S13",
+      "S14",
+      "S15",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 90,
+     "porque": "Bug evidente: ramo else faz find(cal=>cal.externalId===externalCalendarId) com externalCalendarId falsy, nunca casa e calendarId fica undefined quebrando update/delete em packages/app-store/googlecalendar/lib/CalendarService.ts:253"
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S12",
+      "S17",
+      "S19"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 80,
+     "porque": "Crash TypeError: const [mainHost]= evt.destinationCalendar ?? [] pode ser undefined e acesso mainHost.integration sem ?. estoura quando []/null, diferente do original com ?. em packages/core/EventManager.ts:119"
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S3",
+      "S8",
+      "S9",
+      "S18",
+      "S20"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 70,
+     "porque": "Divergência de interface: Calendar exige createEvent(event, credentialId) e Google usa find por credentialId, mas Office365 ignora credentialId e usa sempre [0] errando calendário coletivo em packages/app-store/office365calendar/lib/CalendarService.ts:73"
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "app/assets/javascripts/discourse/models/store.js.es6:196-201 `map` pode inserir undefined e `||[]` nunca ativa pois array é truthy, mas só ocorre com _ids faltando no root - borda pouco vista pelos donos."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 70,
+     "porque": "app/models/embeddable_host.rb:10-18 `where(\"lower(host)=?\",host)` sem `host.downcase` quebra matching case-insensitive EVILTROUT.COM vs eviltrout.com - defeito claro de normalização."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "spec/models/topic_spec.rb:1403-1404 teste 'is false if embeddable_host is blank' passa por `has_topic_embed?/embed_truncate?` falsos, não pelo host que o PR removeu - vácuo mas não bloqueia merge."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "spec/models/topic_spec.rb:1407 typo 'emeddable host' em describe - só documentação, nenhum dono trava PR por isso."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S16",
+      "S20"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 50,
+     "porque": "app/controllers/admin/embeddable_hosts_controller.rb:9-12 `where(id:).first` pode ser nil e `save_host(nil)/nil.destroy` dá 500 em vez de 404 - crash administrativo real."
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S2",
+      "S6",
+      "S21"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 60,
+     "porque": "app/models/embeddable_host.rb:5-8 `self.host.sub!` sem guard `if host.present?` explode NoMethodError em host nil/blank antes da validação."
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S3",
+      "S15",
+      "S19",
+      "S22"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 90,
+     "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:24-26 insere `h` cru com 'http://.../path' via SQL bruto sem strip de scheme/path, então host_allowed? nunca casa e hosts existentes viram inválidos."
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S7",
+      "S17"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 60,
+     "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11 `execute(...)[0]['id'].to_i` dereferencia [0] sem checar nil, então fallback `category_id==0` nunca alcança e migração quebra sem embed_category."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "spec/controllers/admin/embeddable_hosts_controller_spec.rb:1-9 só testa herança < AdminController - cobertura fraca mas donos aceitam spec placeholder neste PR."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12",
+      "S13",
+      "S18"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 90,
+     "porque": "spec/fabricators/category_fabricator.rb:1-4 e spec/fabricators/embeddable_host_fabricator.rb:1-4 conteúdos trocados - filename discorda do Fabricator definido, quebra convenção e fábrica."
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "packages/lib/server/service/insightsBooking.ts:67-68 findMany removido: teste foi atualizado e não há evidência de consumidores externos em produção; owners sabem que uso era só no teste e não bloqueariam merge por wrapper de compatibilidade."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "packages/lib/server/service/insightsBooking.ts:68-81 ramos inalcançáveis são reais (authConditions sempre truthy), mas ` (1=0) AND (filter)` é funcionalmente equivalente a 1=0, só dead code cosmético que poucos bloqueiam merge para corrigir."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 50,
+     "porque": "packages/lib/server/service/insightsBooking.ts:29-34 divergência real: PublicOptions com teamId? plano vs schema discriminado que exige teamId para scope team; passa no tipo e falha silenciosamente para NOTHING 1=0 em vez de erro de compilação."
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "app/assets/javascripts/discourse/lib/utilities.js:182 hardcode 10*1024 é intencional para permitir upload > SiteSetting e reduzir no servidor (uploads_controller.rb:64-69); dono vê como feature não regressão, só divergência de attachment é marginal."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "app/controllers/uploads_controller.rb:64-69 loop síncrono de até 5 converts bloqueia request mas é trade-off aceito para upload imediato; ignorar retorno merece check mas não background job neste PR."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S6",
+      "S7",
+      "S13",
+      "S14",
+      "S15"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 90,
+     "porque": "app/models/optimized_image.rb:145-151 redefinição duplicada de self.downsize sobrescreve versão (max_width,max_height) por (dimensions); Ruby mantém só a segunda e quebra callers WxH existentes."
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 90,
+     "porque": "packages/features/auth/lib/next-auth-options.ts:131 - se verifyPassword for gateado em !credentials.totpCode, enviar backupCode + totpCode dummy desvia senha; bypass critico se verdadeiro."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "apps/web/components/settings/EnableTwoFactorModal.tsx:98 - createObjectURL só é revogado no overwrite, resetState/unmount deixa Blob URL vazando memória até reload."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "apps/web/components/settings/DisableTwoFactorModal.tsx:113 - botão Lost access dentro de <Form> sem type=\"button\" pode submeter handleDisable acidentalmente."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "apps/web/playwright/login.2fa.e2e.ts:116 - teste só checa suggestedFilename, TODO de conteúdo é intencional follow-up, não bloqueia merge."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "apps/web/playwright/login.2fa.e2e.ts:121 - teste de copy só espera toast, clipboard não verificado é TODO já documentado."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "packages/features/auth/lib/next-auth-options.ts:144 - replaceAll sem guard de tipo lança TypeError se backupCode não for string, deveria retornar IncorrectBackupCode."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "packages/features/auth/lib/next-auth-options.ts:143 - TOCTOU lê array e UPDATE sem transação/lock permite reuso concorrente de mesmo backup code."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "nota": 0,
+     "porque": "apps/web/pages/api/auth/two-factor/totp/disable.ts:61 - indexOf vs timingSafeEqual é nit teórico sobre rede, nenhum owner trocaria antes do merge."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "apps/web/components/auth/BackupCode.tsx:7 - export default function TwoFactor com nome errado por copy-paste, confunde displayName/stack mas não quebra função."
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "app/assets/stylesheets/common/base/header.scss:35-40 assume .panel e irmao de .contents e nao flex-item, mas no DOM .panel e filho de .contents (que vira flex em header.scss:17) e topic.scss:30 extra-info-wrapper order(2) confirma mesmo container; margin-left:auto/order funcionam, owners sabem que float:right foi substituido corretamente."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 40,
+     "porque": "app/assets/stylesheets/common/foundation/mixins.scss:125-131 mapeia order direto para -webkit-box-ordinal-group/-moz-box-ordinal-group sem +1; ordinal-group e 1-indexado (1=order 0) entao order(3)/order(2) viram 2/1 em WebKit legado, bug real mas ordem relativa entre 2<3 se mantem e default 1 ainda menor, entao nao quebra layout atual."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "app/assets/stylesheets/common/foundation/mixins.scss:117-123 emite -ms-align-items invalido mas -ms-flex-align correto ja esta la entao fallback IE10 nao quebra; falta -moz-box-align e mapping baseline para -webkit-box-align sao reais mas legacy Firefox 19-21/2009 baseline irrelevante hoje e linha extra e inofensiva."
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 100,
+     "porque": "db/migrate/20131219203905_add_cook_method_to_posts.rb:4 default 1 mapeia para :raw_html e faz todo post sem cook_method pular Post#cook."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "app/assets/javascripts/embed.js:5 getElementById pode retornar null e appendChild quebra em páginas sem o div."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 80,
+     "porque": "app/models/post.rb:133 raw_html retorna raw sem sanitização e embed/best.html.erb:19 renderiza com raw permitindo XSS persistido de feed."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "app/jobs/scheduled/poll_feed.rb:29 open em URL de SiteSetting sem SSRF/timeout, mas URL é de admin confiável."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "lib/topic_retriever.rb:40 executa PollFeed síncrono a cada cache miss, amplificando fetch RSS e writes bloqueando a fila."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "app/models/topic_embed.rb:15 checa where e depois create! sem lock, concorrência viola índice único em embed_url."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "app/jobs/scheduled/poll_feed.rb:29 SimpleRSS.parse open sem rescue faz scheduled job falhar sem log."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "app/models/topic_embed.rb:48 open/URI sem rescue de InvalidURIError/OpenURI, url só validada por regex."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 60,
+     "porque": "app/models/topic_embed.rb:13 interpola url cru em <a href='#{url}'> sem escape e salva como raw_html renderizado com raw."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "app/views/embed/best.html.erb:14 strftime força inglês vs I18n.l, detalhe cosmético de i18n."
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "app/controllers/embed_controller.rb:25 mensagens literais não usam I18n.t como o resto do embed."
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "spec/jobs/poll_feed_spec.rb:12 cada teste stubba só um SiteSetting e passa pelo && mesmo se a checagem alvo for removida."
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 90,
+     "porque": "spec/controllers/embed_controller_spec.rb:40 mocka TopicRetriever enquanto EmbedController#best faz Jobs.enqueue, teste falha com código correto."
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "spec/components/topic_retriever_spec.rb:32 stubba retrieved_recently? que é exatamente a lógica de throttle com Redis a testar."
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "app/jobs/scheduled/poll_feed.rb:20 feed_key é computado e nunca lido, poll faz fetch incondicional."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S19",
+      "S22"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 30,
+     "porque": "app/assets/javascripts/embed.js:17 checagem invertida discourseUrl.indexOf(e.origin) mas e.origin é origem do browser não controlável para substring curta."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 60,
+     "porque": "app/jobs/scheduled/poll_feed.rb:35 i.content.scrub assume String não-nil, SimpleRSS frequentemente retorna nil e quebra o job."
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S8",
+      "S20",
+      "S23",
+      "S24"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 80,
+     "porque": "app/views/layouts/embed.html.erb:11 postMessage usa request.referer completo como targetOrigin, browser descarta por exigir origin, resize nunca ocorre."
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "lib/freedom_patches/translate_accelerator.rb:63 Regexp.new(\"\\\\.#{locale}\\\\.yml$\") sem escape mas locale vem de SiteSetting.default_locale/current_user.effective_locale já validado contra available_locales, owners sabem que '.*'/'(a+)+' nunca passa na validação."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "config/initializers/i18n.rb:20-22 ensure_loaded! só faz I/O no miss com @loaded_locales.include? fast-path; contenção no LOAD_MUTEX é só no primeiro burst após boot, custo aceito pelos owners."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 100,
+     "porque": "lib/freedom_patches/translate_accelerator.rb:62 define def ensure_loaded! como instance method de module I18n mas config/initializers/i18n.rb:21 chama I18n.ensure_loaded! e app/controllers/application_controller.rb:159 chama via fallbacks em todo request → NoMethodError garantido."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S7",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "config/initializers/i18n.rb:14-17 SiteSetting.default_locale nunca é nil (default 'en') e I18n.locale é simbolizado no app; String vs Symbol e to_sym sem guard são nit que não bloqueia merge."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 40,
+     "porque": "lib/freedom_patches/translate_accelerator.rb:67-68 translate só garante load_locale(config.locale) enquanto FallbackLocaleList promete fallback via config/initializers/i18n.rb:13; jobs/mailers fora de ApplicationController#set_locale:159 ficam sem preload, mas owners tratam como follow-up não bloqueante."
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "database.go:95 retorna ErrDeviceLimitReached para RowsAffected==0 mas entre 30d é janela de expiração intencional; donos tratariam stale como limite e não mudariam pré-merge."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "database_test.go:51 cobre limite mas não prova update de DeviceID existente com limite atingido; donos aceitariam follow-up, não bloqueia merge."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 10,
+     "porque": "impl.go:143 propagar erro é contrato novo intencional para client.go:45 já tratar ErrDeviceLimitReached; donos veem como desejado."
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 70,
+     "porque": "config.ts:97 inicializador = undefined infere tipo undefined incompatível com GrafanaConfig number|undefined e falha ao atribuir número do boot."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 20,
+     "porque": "database.go:109 CountDevices+Exec sem transação tem TOCTOU mas limite anônimo é best-effort e donos aceitariam corrida rara."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S15"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 90,
+     "porque": "database.go:52 ProvideAnonDBStore agora exige int64 mas wire.go ainda o expõe sem binding e impl.go:43 duplica criação, quebra geração wire/CI."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 20,
+     "porque": "client.go:41 tornar TagDevice síncrono no hot path é intencional para aplicar deviceLimit; donos não reverteriam para async fire-and-forget."
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "pkg/api/webassets/webassets.go:48 holds Lock() deferred across readWebAssetsFromFile/CDN; after first population hot path returns via RLock at line 41, so startup/Dev serialization is one-time millisecond file read, owners will deem global bottleneck claim overstated and not block merge."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 60,
+     "porque": "pkg/api/webassets/webassets.go:48-69 missing double-check after Lock() and unconditional entryPointAssetsCache=result allows second contender to redo I/O and clobber valid cache with nil on err!=nil, causing lost cache/retry storm owners would fix with re-check and err==nil guard."
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "pkg/apiserver/rest/dualwriter_mode3.go:50 goroutine por write sem pool é intencional em modo3 async; risco de explosão só em QPS extremo que não é o perfil atual, donos não trocariam por queue agora."
+    },
+    {
+     "rep": "S23",
+     "membros": [
+      "S23"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 80,
+     "porque": "pkg/apiserver/rest/dualwriter_mode3.go:55 obj/objInfo capturado pela goroutine sem DeepCopy pode sofrer race se Storage mutar o objeto ou caller reutilizar; donos corrigiriam copiando."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S9",
+      "S10",
+      "S11",
+      "S12",
+      "S18",
+      "S19",
+      "S20",
+      "S24"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 100,
+     "porque": "pkg/apiserver/rest/dualwriter_mode3.go:106 recordStorageDuration no caminho de sucesso de Delete usa `name` no parâmetro kind enquanto erro usa options.Kind em 103, erro puro de copy-paste que polui métrica."
+    },
+    {
+     "rep": "S25",
+     "membros": [
+      "S5",
+      "S22",
+      "S25"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 90,
+     "porque": "pkg/apiserver/rest/dualwriter_mode3.go:51 Legacy async deriva context.WithTimeoutCause do ctx do request; quando handler retorna o ctx é cancelado e o write é dropado silenciosamente, precisa contexto desacoplado."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S21"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 20,
+     "porque": "pkg/apiserver/rest/dualwriter_mode3.go:38 acesso direto a options.Kind sem nil check; registry genérico sempre passa options não-nil, panic teórico mas donos não defensivam aqui."
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S7",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 70,
+     "porque": "pkg/apiserver/rest/dualwriter_mode3.go:97 Delete cria log enriquecido na linha 96 mas propaga d.Log em klog.NewContext em vez de log, inconsistente com Create/Get/List/Update."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S14",
+      "S15",
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 40,
+     "porque": "pkg/apiserver/rest/dualwriter_mode3_test.go:63 TestMode3_Create monta mock de legacy mas não espera goroutine nem verifica expectativa, teste passa mesmo se Legacy.Create for removida."
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "app/controllers/admin/groups_controller.rb:71 usernames.split(',') sem strip faz User.find_by_username(' bob') falhar; user-selector normalmente não gera espaço, então poucos mudariam antes do merge."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "app/controllers/groups_controller.rb:22 limit = (params[:limit]||50).to_i sem clamp permite limit=1000000 carregando muitas linhas; é DoS potencial mas grupos são pequenos e follow-up poderia limitar."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 60,
+     "porque": "app/controllers/admin/groups_controller.rb:22-26 create só atribui name e visible e ignora alias_level, enquanto app/assets/javascripts/discourse/models/group.js:62 asJSON envia alias_level e update em :37 trata; cria inconsistência silenciosa."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "spec/controllers/admin/groups_controller_spec.rb:114 usa xhr :put para remove_member mas config/routes.rb:49 é delete; em controller spec o verbo não afeta roteamento, o teste chama a action direto, então donos não mudariam."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S6",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 90,
+     "porque": "app/assets/javascripts/admin/controllers/admin-group.js.es6:13 totalPages = Math.floor(user_count/limit)+1 overcount em múltiplos exatos (100/50=3 em vez de 2), quebra showingLast e paginação."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S5",
+      "S10",
+      "S12",
+      "S13",
+      "S15",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 90,
+     "porque": "app/controllers/admin/groups_controller.rb:66 params.require(:group_id) mas config/routes.rb:49-50 delete/put 'members' dentro de resources :groups e JS em discourse/models/group.js:42-53 chamam /admin/groups/:id/members.json fornecendo :id, causando ParameterMissing em todo add/remove."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 70,
+     "porque": "app/assets/javascripts/admin/controllers/admin-group.js.es6:33 next usa Math.min(offset+limit,user_count) que vai para offset==user_count (página vazia) quando total é divisível por limit; deveria ser (Math.ceil(user_count/limit)-1)*limit."
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "pkg/storage/unified/search/bleve.go:85 narrow lock allows parallel BuildIndex for same key; duplicate bleve.New on same file dir and double metric are possible but rare and owners intentionally narrowed coarse lock for different-key throughput — most would accept or add singleflight as follow-up, not block PR."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "pkg/storage/unified/resource/server.go:303 new order search.init before initWatcher is intentional to have index ready before broadcaster delivers events; claimed lost-events window assumes both use same poller but search indexing is driven by Write path handleEvent, so owners see no divergence."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "pkg/storage/unified/resource/server.go:258 synchronous s.Init(ctx) with background context blocks NewResourceServer during full ListIterator/BuildIndex; startup delay and missing timeout/cancellation could affect liveness, but owners may consider init fast enough and want fail-fast before return."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "pkg/server/module_server_test.go:35 intentional t.Skip for postgres with TODO for Drone-only flake; owners know it's quarantine to unblock CI and expect follow-up issue, not to unskip and break pipeline now."
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "DefaultTokenContextEncoderProviderFactory.java:121 laço em grants só em cache-miss e N~10, impacto baixo; donos não trocariam antes do merge."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 60,
+     "porque": "OAuth2GrantTypeFactory.java:31 comentário diz 3 letras mas código exige 2 em DefaultTokenContextEncoderProvider.java:74 length==6."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "DefaultTokenContextEncoderProviderTest.java:76 uso de RuntimeException é rigor de teste menor, não quebra produção."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "DefaultTokenContextEncoderProvider.java:75 throw IllegalArgumentException é intencional para token malformado; chamador deve tratar como inválido."
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 80,
+     "porque": "OAuth2GrantTypeFactory.java:29 quebra compatibilidade sem default getShortcut() causa AbstractMethodError em DefaultTokenContextEncoderProviderFactory.java:74."
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S1",
+      "S7",
+      "S11",
+      "S12",
+      "S20"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 100,
+     "porque": "AccessTokenContext.java:73 duplo requireNonNull(grantType) deixa rawTokenId nulo passar e quebra encodeTokenId."
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S2",
+      "S8",
+      "S10",
+      "S16",
+      "S17",
+      "S19"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 90,
+     "porque": "AssertEvents.java:476 substring(3,5) deveria ser 4,6 e condição invertida valida prefixo errado trltcc."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S15"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "OAuth2GrantType.java:102 getFirst sem null-check e remoção do construtor Context(Context) quebra cópia externa."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "TokenManager.java:1054 IllegalStateException para grant desconhecido raramente ocorre pois UNKNOWN já mapeado em DefaultTokenContextEncoderProvider.java:57."
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 100,
+     "porque": "useAbilities.ts:369 usa ctx.hasPermissionInMetadata sem importar/definir ctx — ReferenceError que quebra useAllGrafanaPromRuleAbilities (AlwaysSupported path)."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "RuleActionsButtons.V2.tsx:53 singular hook não foi alargado para undefined enquanto useRulerRuleAbilities foi; alegação depende de arquivo não exibido no diff e pode não ser caminho usado."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "GrafanaGroupLoader.test.tsx:85 teste nomeado 'with action menu options' só checa botão More sem clicar/abrir menu - nit de nome/cobertura, não bloqueia merge."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 80,
+     "porque": "AlertRuleMenu.tsx:73 useGrafanaPromRuleAbilities(skipToken) retorna Duplicate=[true,true] com permissão create global, OR com ruler faz cloud rules exibirem Duplicate indevidamente."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 30,
+     "porque": "GrafanaGroupLoader.tsx:68 promResponse.data.groups.at(0)?.rules.map sem ?. em rules pode dar TypeError se groups vazio, mas caso é raro e arquivo nem está no diff exibido."
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 70,
+     "porque": "GroupAdapter.java:272 retorna null violando contrato never-null de GroupModel.getSubGroupsCount e inconsistente com getSubGroupsStream em 256/262/268 que ainda da NPE sem null-check no mesmo caminho de delecao concorrente"
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "GroupTest.java:139 busy-spin sem sleep chama groups(null,0,MAX_VALUE,true) ilimitado, mas janela e so ~100 deletes e stress e intencional - donos nao adicionariam backoff"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "GroupTest.java:121 typo local groupUuuids vs groupUuid - nit de nome em teste, nao bloqueia merge, donos ignorariam"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S4",
+      "S6",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 80,
+     "porque": "GroupTest.java:139-157 thread lancada e nunca joined antes de assertThat(empty) em 157 - race faz teste falso-pass e esconde excecoes"
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "ClientPermissionsV2.java:214 usa server.getId() como owner igual a hasPermission(String):214-244, consistente com getResourceTypeResource; claim de owner server.getClientId() não confere com código visível, donos dispensariam."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 70,
+     "porque": "ClientPermissionsV2.java:86 canView() só checa VIEW mas UserPermissionsV2 e canView(ClientScopeModel):118 checam VIEW|MANAGE; MANAGE em all-clients fica sem listar."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 80,
+     "porque": "ClientPermissionsV2.java:217 getResourceTypeResource pode retornar null e linha 219 chama findByResource com null -> NPE, ao contrário de hasPermission(String):244 que guarda null."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "ClientPermissionsV2.java:138 findByType(CLIENTS_RESOURCE_TYPE) inclui resource tipo 'Clients' e linha 140 adiciona getName() sem filtrar, poluindo set com literal 'Clients'."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 90,
+     "porque": "AdminPermissions.java:77 listener agora só roda se ADMIN_FINE_GRAINED_AUTHZ, com V2 sozinho RoleRemoved/ClientRemoved/GroupRemoved nunca limpam, deixando resources órfãos e reuso de id herda permissão."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "ClientPermissionsV2.java:125 getClientsWithPermission faz evaluatePermission por recurso via findByType; é O(N) mas é padrão V2 e não muda decisão antes do merge."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "ClientPermissionsV2.java:262 getEvaluationContext nunca usado e UnsupportedOperation em 147-203; é dead code/imports de copy-paste, cleanup não bloqueante."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "PermissionClientTest.java:90 testSupportedPolicyTypes só cobre USERS; falta cobertura CLIENTS é gap de teste, não defeito de autorização."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "PermissionClientTest.java:325 testMapRoles cobre MAP_ROLES/MAP_ROLES_COMPOSITE mas não MAP_ROLES_CLIENT_SCOPE; falta cobertura, não quebra funcional."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S8",
+      "S10",
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 30,
+     "porque": "ClientPermissionEvaluator.java:95 Javadoc de requireView() copiado de canView() diz 'Returns true' para void que lança ForbiddenException; typo de doc de baixo impacto."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 50,
+     "porque": "ClientPermissionsV2.java:192 setPermissionsEnabled lança UOE mas AdminPermissions.java:91 chama clients().setPermissionsEnabled no ClientRemovedEvent; quando MgmtPermissionsV2 ativo, delete estoura UOE."
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "pkg/plugins/log/logger.go:48-53 fallback d.New() descarta atributos contextuais (pluginId/endpoint/traceID) quando assert para *log.ConcreteLogger falha, quebrando contrato de logger_middleware.go:58"
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:94-100 checa só 3 de 5 labels de grafana_plugin_request_duration_seconds, permitindo source/status errados passarem"
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:101-110 só testa caso positivo de request size, sem assert CollectAndCount==0 quando shouldInstrumentRequestSize==false"
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 60,
+     "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:94-108 pluginTarget retorna ErrPluginNotRegistered e aborta antes de chamar next (metrics_middleware.go:149-150), transformando métrica best-effort em gate que falha request"
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:21 renomear TestInstrumentationMiddleware para TestMetricsMiddleware é apenas cosmético após pluginsintegration.go:158-160"
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 30,
+     "porque": "pkg/plugins/log/fake.go:46-48 FromContext ignora context e retorna NewTestLogger() vazio, contradiz ifaces.go:22-23 e impede testes de verificar atributos contextuais"
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 50,
+     "porque": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go:27-37 não propaga traceID e logger_middleware.go:49-57 removeu tracing.TraceIDFromContext, perdendo correlação se log.FromContext não injetar automaticamente"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 50,
+     "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:76-82 captura singleton imw e muta imw.next a cada wrapping, race com Decorator se cadeia reconstruída concorrentemente"
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S8",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 20,
+     "porque": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go:39-56 dereferencia req.PluginContext sem guard nil, diverge de logger_middleware.go:62-65 que protege"
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "Matcher criado em VerifyMessageProperties.java:151 sobre value original e value mutado via replaceFirst em 155 sem recriar Matcher; efeito prático limitado a tags idênticas, poucos donos bloqueariam PR por isso."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 50,
+     "porque": "normalizeValue em VerifyMessageProperties.java:126 apaga bloco {n,choice,...} com \"...\" antes do sanitize; HTML malicioso dentro do choice escapa da verificação, bypass real mas depende de tradução maliciosa."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "Range [a-zA-Z-_] em VerifyMessageProperties.java:75 tem hífen não escapado formando range Z-_, mas ainda casa letras/_ e funcionamento atual não quebra; donos veem como nit de regex."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 20,
+     "porque": "verifySafeHtml em VerifyMessageProperties.java:70 lança RuntimeException em IOException que verify() não captura; falha do plugin será igual, só mensagem pior, poucos mudariam antes do merge."
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "Alega mismatch em themes/src/main/resources/theme/base/login/messages/messages_en.properties:530 que nem está no diff e cobra atualização de locales; donos sabem que _en é fonte e traduções seguem via Crowdin."
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "Typo santizeAnchors em VerifyMessageProperties.java:150 e param key não usado é cosmético privado; renomear é desejável mas não bloqueia PR."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 60,
+     "porque": "Cálculo de diff em VerifyMessageProperties.java:101-111 faz substring(start, length-end) sem clamp de overlap; quando sanitized difere em tamanho (ex. aaa vs aa) start+end > length lança StringIndexOutOfBoundsException e crasha verifier."
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "AuthenticatorUtils.java:125 faz context.form().setAttribute mas session.getProvider é cacheado por KeycloakSession: mesma instância de LoginFormsProvider é retornada, então atributo persiste até o challenge; padrão já existia em AbstractUsernameFormAuthenticator.java:221 antes do PR."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "PasswordForm.java:63 retornar true quando isConditionalPasskeysEnabled é intencional do PR para permitir PasswordForm exibir UI condicional para usuários só-passkey; mudar configuredFor faz parte do feature, não quebra de contrato."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "PasskeysUsernamePasswordFormTest.java:278 teste é nomeado reauthenticationOfUserWithoutPasskey e valida ausência de //form[@id='webauth'] para usuário sem credencial; desabilitar passkeys é redundante mas não invalida o cenário coberto, no máximo melhoria de mutação não bloqueante."
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:100 - storedIdp pode ser null se alias nao existe e registerIDPInvalidation(null) daria NPE, mas remove de alias inexistente nunca e chamado em fluxo normal, 3/10 corrigiriam com guard defensivo."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 10,
+     "porque": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:254 - idp.getConfig() nunca retorna null (IdentityProviderModel inicializa HashMap), Boolean.parseBoolean(null) e seguro; claim de NPE e falso positivo para owners."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java:381 getCleanup com literal \"alias\" ao inves de \"idp-alias-\"+i nunca limpa os IDPs criados, higiene de teste mas realm e descartado, 3/10 bloqueariam merge por isso."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 20,
+     "porque": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:226 read-modify-write com addRevisioned/startupRevision pode perder update concorrente para orgIds diferentes, janela rara so no primeiro miss e eventualmente consistente, 2/10 trocariam por compute atomico antes de merge."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 70,
+     "porque": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:244 hit path retorna getById direto sem map(this::createOrganizationAwareIdentityProviderModel) usado no miss path:218, diverge do contrato que OrganizationAwareIdentityProviderBean.java:75 re-checa isEnabled no wrapper."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 80,
+     "porque": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:382 invalidacao so em create/update/remove via IDP storage; OrganizationProvider.addIdentityProvider/removeIdentityProvider em OrganizationCacheTest.java:505 muda REALM_ONLY/ORG_ONLY sem invalidar cacheKeyForLogin, serve stale no login."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java:402 teste asserta internals realmCache.getCache().get(cacheKeyForLogin) e getIDPs().size() e nunca chama getForLogin em hit para assertar Stream do provider, nit de cobertura 2/10 exigiriam antes de merge."
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "src/sentry/integrations/source_code_management/commit_context.py:590 interpolação sem escape de environment.name/title em markdown já existia antes; risco de injeção é teórico com nomes controlados, owners tratariam como follow-up low priority."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "src/sentry/integrations/source_code_management/commit_context.py:584 get_environment_info por issue é N=5 no máximo em hot path assíncrono de comentário, latência aceitável, melhoria de batch seria otimização futura."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 60,
+     "porque": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py:81 analytics.record antes de features.has em 88 emite métrica para requests 404 negados, polui métrica."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 80,
+     "porque": "src/sentry/issues/endpoints/browser_reporting_collector.py:50 validate_timestamp/validate_age usa initial_data.get() truthiness falha para age=0/timestamp=0, precisa 'in' check."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 0,
+     "porque": "static/app/views/explore/contexts/pageParamsContext/visualizes.tsx:78 não aparece no diff deste PR, achado alucinado sobre Visualize.fromJSON."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 0,
+     "porque": "static/app/views/explore/contexts/pageParamsContext/visualizes.tsx:44 não modificado no diff, Visualize constructor alucinado."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 10,
+     "porque": "src/sentry/grouping/parameterization.py:268 remoção de ParameterizationRegexExperiment é intencional cleanup, não há experiments regex restantes para quebrar dispatch."
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "nota": 10,
+     "porque": "src/sentry/issues/endpoints/browser_reporting_collector.py:40 rejeitar reports com ambos age e timestamp é intencional conformidade com spec Working/Editors Draft, quebra de best-effort é desejada."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S7",
+      "S8",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 90,
+     "porque": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:108 zip(error_ids, events.values()) desalinhamento quando faltam entries no nodestore, pareia id errado."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 30,
+     "porque": "src/sentry/issues/endpoints/browser_reporting_collector.py:47 ambos age/timestamp required=False permite neither e truthiness esconde caso 0, mas leniência pode ser intencional sem teste exigindo um."
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S9",
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "nota": 0,
+     "porque": "static/app/views/dashboards/widgetCard/chart.tsx:164 não aparece no diff, achado alucinado sobre TabularData."
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "src/sentry/integrations/tasks/sync_assignee_outbound.py:53 chama should_sync posicionalmente com 2 args; subclass com assinatura antiga de 1 arg levanta TypeError na task, mas owners sabem que poucas integrações sobrescrevem e controle é interno."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "src/sentry/integrations/services/assignment_source.py:31 from_dict com cls(**input_dict) aceita queued como str após JSON sem erro, mas try/except já retorna None para chaves faltantes/inválidas, invariante pouco observado."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "tests/sentry/integrations/services/test_assignment_source.py:8 nome test_from_dict_empty_array diverge do corpo com {}, é só nit de nomenclatura."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 10,
+     "porque": "tests/sentry/integrations/services/test_assignment_source.py:13 typo test_from_dict_inalid_data não quebra execução, só filtro -k, nit de rename."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "tests/sentry/integrations/services/test_assignment_source.py:36 assert queued is not None é frouxo pois default sempre existe, mas não esconde regressão crítica de funcionalidade."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S2",
+      "S5",
+      "S6",
+      "S10",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 100,
+     "porque": "src/sentry/integrations/services/assignment_source.py:18 queued=timezone.now() avaliado no import e src/sentry/integrations/services/assignment_source.py:28 to_dict com datetime cru quebra JSON em src/sentry/integrations/utils/sync.py:141 apply_async e congela timestamp."
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "flusher.py:60 zero processos quando assigned_shards vazio nunca ocorre em prod (partições>=1), owners ignorariam clamp."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 30,
+     "porque": "flusher.py:299 loop sobre self.buffers chama get_memory_info N vezes no mesmo RedisCluster, ratio cancela e submit não é hot path."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 40,
+     "porque": "flusher.py:93 SpansBuffer por subset faz ceil(max_flush_segments/len(subset)) somar > limite global, mas aumenta throughput com paralelismo intencional."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 40,
+     "porque": "flusher.py:30 docstring 'one process per shard' contradiz flusher.py:60 min(max_processes,len(shards)) com default 1, fix de texto."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 20,
+     "porque": "flusher.py:30 'multiprocessing manager' vs flusher.py:106 threading.Thread quando produce_to_pipe não é None, só docstring."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 20,
+     "porque": "test_consumer.py:84 test_flusher_processes_limit só checa len(processes) e distribuição, owners aceitam como smoke test."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "nota": 30,
+     "porque": "flusher.py:51 'or' trata 0 como None, mas --flusher-processes 0 nunca é passado (default 1), idiom nit."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "nota": 70,
+     "porque": "test_consumer.py:60 time.sleep mockado como no-op em test_consumer.py:88 torna time.sleep(0.1) inútil e teste raceia antes do flush."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "flusher.py:185 tags {'shard': shard_tag} vs flusher.py:199 {'shards': shard_tag} inconsistência de chave de métrica, fácil de normalizar depois."
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "file src/sentry/workflow_engine/processors/detector.py:166 get_state_data só é exercido com counter_names=['test1','test2'] nos testes; handler com [] nunca existe hoje, owners deixariam guard para follow-up, não bloqueia PR"
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 30,
+     "porque": "src/sentry/workflow_engine/processors/detector.py:226 docstring ainda diz 'returns a list' quando assinatura mudou para dict; stale mas assinatura já documenta, owners corrigem como nit se sobrar tempo"
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 40,
+     "porque": "src/sentry/incidents/grouptype.py:10 TODO ficou obsoleto após virar StatefulDetectorHandler; limpeza trivial de comentário, maioria corrigiria mas não barra merge"
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S7",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 10,
+     "porque": "src/sentry/incidents/grouptype.py:11 MetricAlertDetectorHandler como pass é intencional - 'We don't create these issues yet', nenhum detector desse type é instanciado via workflow_engine hoje, TypeError só ocorreria se usado"
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 80,
+     "porque": "src/sentry/integrations/github/integration.py:402 usa pipeline.signature determinístico (hash de nomes de views, vide valor fixo 9cae5e... nos testes) como OAuth state, quebrando proteção CSRF que OAuth2LoginView faz com secrets.token_hex + bind_state."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "nota": 20,
+     "porque": "src/sentry/integrations/github/integration.py:481 primeiro install sem Integration existente faz next_step sem checar usuário; verificação só no caminho de reinstalação, mas falta metadata para comparar e criar Integration próprio não é hijack do org da vítima."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "nota": 10,
+     "porque": "src/sentry/integrations/github/integration.py:141 _(error_short) com variável não é extraído pelo xgettext e literais em 129-146 não são marcados; porém erro curto é só para postMessage e strings longas já têm ERR_* = _()."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 60,
+     "porque": "src/sentry/integrations/github/integration.py:423 safe_urlopen e em 434 get_user_info não estão em try/except; falha de rede/timeout/401 levanta 500 em vez de renderizar github-integration-failed.html como exchange_token faz."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "nota": 40,
+     "porque": "src/sentry/integrations/github/integration.py:503 integration.metadata[\"sender\"][\"login\"] com indexação direta levanta KeyError/TypeError se metadata antigo/malformado não tiver sender/login, derrubando o pipeline."
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "nota": 20,
+     "porque": "Defeito real em incident_occurrence.py:168 (retorna monitor.config em vez de config), mas já existia idêntico em mark_failed.py; PR é movimentação pura, donos defeririam para follow-up e não bloqueariam o merge."
+    }
+   ]
+  }
+ }
+}

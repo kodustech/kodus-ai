@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "id": "S17",
+ "golden": 2,
+ "promptSha": "c6f3194f5267285e8838b0aab41050587d20a92a",
+ "sameProblem": true,
+ "reason": "Passing guests instead of uniqueGuests causes the email manager to classify existing attendees as new guests, so using uniqueGuests fixes the golden issue."
+}

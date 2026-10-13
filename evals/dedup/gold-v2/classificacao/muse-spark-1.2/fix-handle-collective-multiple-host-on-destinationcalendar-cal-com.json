@@ -1,0 +1,393 @@
+{
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Calendar.d.ts passa a exigir createEvent(event, credentialId), mas office365calendar/lib/CalendarService.ts:72-77 e larkcalendar :125-130 continuam com createEvent(event). É o G4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:342-356 busca a credencial por destination.credentialId, que vem dos DestinationCalendar dos hosts no banco (handleNewBooking), e não do cliente. O IDOR é condicional ('if ever influenced'); fica como programação defensiva.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:338-382 faz o loop sequencial por host. É uma otimização opcional (N pequeno), sem defeito.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2.",
+      "confianca": "alta",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": false,
+            "motivo": "The review targets fallback failure when externalCalendarId is absent, while the golden comment targets incorrect calendar selection when it is provided; fixing the fallback would not fix that selection logic."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "junior"
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Calendar.d.ts passa a exigir createEvent(event, credentialId), mas office365calendar/lib/CalendarService.ts:72-77 e larkcalendar :125-130 continuam com createEvent(event). É o G4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Calendar.d.ts passa a exigir createEvent(event, credentialId), mas office365calendar/lib/CalendarService.ts:72-77 e larkcalendar :125-130 continuam com createEvent(event). É o G4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2.",
+      "confianca": "alta",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "Both comments identify the faulty destinationCalendar lookup comparing externalId to externalCalendarId, so fixing that lookup would address the golden issue at the same location."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2. (este membro aponta o deleteEvent)",
+      "confianca": "alta",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "Both comments identify the same faulty destination-calendar lookup using externalCalendarId, and correcting the fallback as the review suggests would resolve the golden issue at the same location."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.78
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2. (deleteEvent)",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Calendar.d.ts passa a exigir createEvent(event, credentialId), mas office365calendar/lib/CalendarService.ts:72-77 e larkcalendar :125-130 continuam com createEvent(event). É o G4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S19",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S20",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Calendar.d.ts passa a exigir createEvent(event, credentialId), mas office365calendar/lib/CalendarService.ts:72-77 e larkcalendar :125-130 continuam com createEvent(event). É o G4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S21",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "CalendarManager.ts:228-231: o PR só trocou 'organiser' por 'organizer' numa string que já era hard-coded. Pedir i18n é melhoria opcional e não casa com golden.",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

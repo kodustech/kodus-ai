@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "id": "S22",
+ "golden": 1,
+ "promptSha": "b3b258a6b732bfeaae891676f397dd566060b32c",
+ "sameProblem": true,
+ "reason": "Both identify bypassable substring-based origin validation at the same location, and the review’s proposed exact-origin equality check would fix the golden issue."
+}

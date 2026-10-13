@@ -1,0 +1,237 @@
+{
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "metrics_middleware.go:76-82 muta imw.next em cada decoração e decorator.go:34 reconstrói a cadeia por request, então a corrida é real; mas o mesmo código já existia em NewInstrumentationMiddleware antes do rename.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Os métodos de ContextualLoggerMiddleware (contextual_logger_middleware.go:39-56) acessam req.PluginContext sem checar req nil; é o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "grafanaInfraLogWrapper.l é sempre *log.ConcreteLogger (pkg/plugins/log/logger.go:15-17) e ConcreteLogger.FromContext sempre devolve *ConcreteLogger (pkg/infra/log/log.go:203-217); o ramo de fallback que 'descarta atributos' é inalcançável.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Cita src/app.ts:72-77 e geração de Document, que não existem neste PR do Grafana; pede mudança sem relação com o diff.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "O teste checa o histograma de duração só com 3 labels (metrics_middleware_test.go:94-100); asserção fraca, lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Sem asserção negativa para request size quando shouldInstrumentRequestSize=false (metrics_middleware_test.go:101-110); lacuna de teste.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "pluginTarget devolvendo ErrPluginNotRegistered antes de chamar next (metrics_middleware.go:94-108) é o mesmo código da InstrumentationMiddleware antes do PR; a afirmação de que o PR mudou o contrato para gate é falsa.",
+      "confianca": "media",
+      "observacao": "Se o comportamento em si for considerado defeito, seria bug_preexistente."
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "Aponta falta de nil-check nos métodos do MetricsMiddleware (metrics_middleware.go:144-185), que já não tinham guarda antes do PR, e o Decorator já rejeita req nil (decorator.go:30-32). O golden 0 é sobre o novo ContextualLoggerMiddleware, não sobre este.",
+      "confianca": "media",
+      "observacao": "Grupo F2 (nil req) com S2/S9 que casam o golden 0; este membro aponta outro middleware, inalterado pelo PR.",
+      "astra": {
+        "respostas": {
+          "0": {
+            "mesmoProblema": false,
+            "motivo": "The review identifies nil-request dereferences in MetricsMiddleware, whereas the golden issue is in ContextualLoggerMiddleware’s instrumentContext calls; fixing the former would not fix the latter."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "instrumentContext chamado com req.PluginContext sem checar req nil em contextual_logger_middleware.go:39-57; golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S1: imw.next compartilhado e mutado por decoração (metrics_middleware.go:75-82), já presente em NewInstrumentationMiddleware antes do PR.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Nome TestInstrumentationMiddleware desatualizado após o rename; só nome.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "TestLogger.FromContext (pkg/plugins/log/fake.go:46-48) devolve NewTestLogger() em vez do receptor; é o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "instrumentContext (contextual_logger_middleware.go:27-37) não propaga traceID e logger_middleware removeu o append explícito; golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

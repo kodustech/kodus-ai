@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S14",
+ "golden": 5,
+ "promptSha": "ddf70ecbd482c2a32c6009b5e0d032e502f2d104",
+ "sameProblem": true,
+ "reason": "The review flags an undefined dereference at the same location, matching the runtime failure caused by passing an undefined credential to updateEvent."
+}

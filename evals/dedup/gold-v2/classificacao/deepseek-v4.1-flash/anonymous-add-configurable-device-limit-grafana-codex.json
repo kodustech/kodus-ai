@@ -1,0 +1,125 @@
+{
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "impl.go:83-87 grava a chave no localCache antes de CreateOrUpdateDevice (impl.go:93) e não remove em erro; o próximo request do mesmo device retorna nil e passa pelo limite. É exatamente o golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:109-118 faz CountDevices e depois INSERT sem transação/lock; requests concorrentes passam do limite. Mesmo problema do golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:95-96 devolve ErrDeviceLimitReached sempre que rowsAffected==0, o que não significa limite atingido; casa com o golden 2 (o caso MySQL é só outro exemplo de 0 linhas).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "client.go:44-47 passou de goroutine best-effort para chamada síncrona que retorna nil, err em ErrDeviceLimitReached, recusando a autenticação anônima. É o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database.go:95-97: 0 linhas afetadas por device fora da janela updated_at ou inexistente vira ErrDeviceLimitReached; mesmo problema do golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "impl.go:87 SetDefault antes de CreateOrUpdateDevice; erro de limite deixa a chave no cache e o retry passa. Golden 4.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "database_test.go:51-70 só testa device novo no limite; falta caso de update de device existente. Lacuna de teste sem golden correspondente.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

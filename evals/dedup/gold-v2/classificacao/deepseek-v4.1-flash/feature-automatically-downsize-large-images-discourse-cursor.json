@@ -1,0 +1,186 @@
+{
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimize:155 só escolhe o caminho animado se from casar /\\.GIF$/i; o loop novo em uploads_controller.rb:67 passa tempfile.path, que no upload multipart (rack 1.5.5) não carrega a extensão original, então GIFs animados seriam achatados. Não é o golden 2 (que trata do 80% no gifsicle). Extensão do tempfile do rack não conferida no código-fonte da gem.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "uploads_controller.rb:63-69: comentário promete reduzir ao tamanho permitido, mas o loop faz no máximo 5 tentativas; observação de texto de comentário, não casa com golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": "Juiz não casou, mas o texto é o mesmo do grupo F1 (definição duplicada de downsize).",
+      "astra": {
+        "respostas": {
+          "0": {
+            "mesmoProblema": true,
+            "motivo": "Both comments identify the second downsize definition overriding the original method and breaking callers that pass separate width and height arguments."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "utilities.js:182 e :246 trocam Discourse.SiteSettings[max_<type>_size_kb] por 10*1024 fixo, divergindo do limite do servidor. É o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "optimized_image.rb:145-151 define self.downsize duas vezes; a segunda (dimensions) sobrescreve a de max_width/max_height, quebrando chamadas com largura e altura (ex.: resize_emoji.rb). É o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "uploads_controller.rb:67 passa \"80%\" como dimensions; no caminho animado (optimize:155, gifsicle --resize-fit) a geometria esperada é WxH. É o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

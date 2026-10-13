@@ -1,0 +1,125 @@
+{
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "modelo": "muse-spark-1.2",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:125-131 o mixin order passa $val direto para -webkit-box-ordinal-group/-moz-box-ordinal-group, que são 1-based; é o golden 2 (ordinal-group não aceita a base 0 do order).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:121 emite -ms-align-items, propriedade que nenhum IE/Edge implementou (o legado é -ms-flex-align); é o golden 1. Acrescenta mapeamento de valores para box-align, que é extra.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "header.scss:35-40 troca float:right por margin-left:auto + order(3) no .panel; no header noscript (app/views/application/_header.html.erb:15) o .panel está dentro de .row, não é item flex, e perde o alinhamento à direita. É o golden 0.",
+      "confianca": "media",
+      "observacao": "A premissa de que .panel é irmão de .contents é falsa no template Ember (header.hbs, .panel é filho direto de .contents); vale só para o header noscript, que é justamente o caso do golden."
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:125-131 o mixin order passa $val direto para -webkit-box-ordinal-group/-moz-box-ordinal-group, que são 1-based; é o golden 2 (ordinal-group não aceita a base 0 do order).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:125-131 o mixin order passa $val direto para -webkit-box-ordinal-group/-moz-box-ordinal-group, que são 1-based; é o golden 2 (ordinal-group não aceita a base 0 do order).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:121 emite -ms-align-items, propriedade que nenhum IE/Edge implementou (o legado é -ms-flex-align); é o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:125-131 o mixin order passa $val direto para -webkit-box-ordinal-group/-moz-box-ordinal-group, que são 1-based; é o golden 2 (ordinal-group não aceita a base 0 do order).",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

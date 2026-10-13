@@ -1,0 +1,142 @@
+{
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "InfinispanOrganizationProvider.addIdentityProvider delega a JpaOrganizationProvider, que faz setOrganizationId + session.identityProviders().update(idp) (JpaOrganizationProvider ~342/371); esse update passa pelo cache e registerIDPLoginInvalidationOnUpdate (Infinispan...StorageProvider.java:93,403-418) invalida as chaves de login quando o orgId muda. O cache não fica stale.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Javadoc do enum LoginFilter não menciona a nova condição de org/BROKER_PUBLIC (IdentityProviderStorageProvider.java:254). Só documentação, sem defeito e sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "getForLogin devolve HashSet (Infinispan...java:244), mas o mesmo padrão já existe em getByOrganization e os consumidores ordenam (OrganizationAwareIdentityProviderBean .sorted(IDP_COMPARATOR_INSTANCE)). Ordem não é contrato do método; sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "OrganizationCacheTest.java:381 e 425 registram cleanup com get(\"alias\") em vez de \"idp-alias-\"+i; é exatamente o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "session.identityProviders().getById (Infinispan...java:246) já devolve o modelo embrulhado por createOrganizationAwareIdentityProviderModel (linhas 135-141), então hit e miss têm a mesma forma. Toca a linha do golden 0 mas descreve outro problema (wrapping, não a reentrada no cache).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "O getForLogin padrão (IdentityProviderStorageProvider.java ~174-180) sempre filtra ORG_ONLY/ALL-org por BROKER_PUBLIC=true, mesmo com organizationId; IDPs de org não públicos nunca entram no cache de login, então pular a invalidação para eles é correto.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo problema do S6: o cache de ORG_ONLY/ALL só contém IDPs com BROKER_PUBLIC=true (default getForLogin põe searchOptions BROKER_PUBLIC=\"true\"), logo o predicado de invalidação está alinhado ao conteúdo do cache.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo achado do S4: cleanup com alias literal \"alias\" em OrganizationCacheTest.java:381/425; casa com golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

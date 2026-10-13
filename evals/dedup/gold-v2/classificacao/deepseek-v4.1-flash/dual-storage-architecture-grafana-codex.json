@@ -1,0 +1,420 @@
+{
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "dualwriter_mode3.go:45 (Create): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review comment identifies the incorrect metric call in Create, while the golden comment identifies it in DeleteCollection, so fixing the reported location would not fix the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "dualwriter_mode3.go:129 (Update): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review comment identifies the wrong metric call on Storage.Update failure, while the golden issue concerns DeleteCollection, so fixing the reported location would not fix the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:161-167: o goroutine do DeleteCollection mede d.Legacy.DeleteCollection e registra com recordStorageDuration (:166); é a troca storage/legacy no DeleteCollection do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:50-57 (e 108-114, 134-141, 161-167): o goroutine legacy deriva o ctx da requisição via WithTimeoutCause, que herda o cancelamento quando o handler retorna; a escrita legacy pode abortar. Introduzido pelo PR (legacy virou assíncrono); sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:45 (Create): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update."
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.72
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "dualwriter_mode3.go:129 (Update): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review comment identifies an incorrect duration recorder in Update, while the golden issue occurs in DeleteCollection, so fixing the reported location would not fix the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:161-167: o goroutine do DeleteCollection mede d.Legacy.DeleteCollection e registra com recordStorageDuration (:166); é a troca storage/legacy no DeleteCollection do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:106: recordStorageDuration(false, mode3Str, name, ...) passa name no lugar de options.Kind, diferente dos demais métodos; é o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:106: recordStorageDuration(false, mode3Str, name, ...) passa name no lugar de options.Kind, diferente dos demais métodos; é o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:106: recordStorageDuration(false, mode3Str, name, ...) passa name no lugar de options.Kind, diferente dos demais métodos; é o golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "dualwriter_mode3.go:45 (Create): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update.",
+      "astra": {
+        "respostas": {
+          "1": {
+            "mesmoProblema": false,
+            "motivo": "The review comment identifies the Storage.Create failure path, while the golden issue is in DeleteCollection, so fixing the reported location would not fix the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:129 (Update): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update."
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:161-167: o goroutine do DeleteCollection mede d.Legacy.DeleteCollection e registra com recordStorageDuration (:166); é a troca storage/legacy no DeleteCollection do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3_test.go:237-238 (e repetições): asserções Equal/NotEqual contra fixtures do mock são fracas; lacuna de teste, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3_test.go: os testes não esperam nem verificam a escrita legacy assíncrona (mock compartilhado). Lacuna de teste real, sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:50-57 (e 108-114, 134-141, 161-167): o goroutine legacy deriva o ctx da requisição via WithTimeoutCause, que herda o cancelamento quando o handler retorna; a escrita legacy pode abortar. Introduzido pelo PR (legacy virou assíncrono); sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:96-97: monta log com name/kind/method mas faz ctx = klog.NewContext(ctx, d.Log); é o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.75
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:45/129/166: cita as trocas em Create/Update e também a do goroutine do DeleteCollection (:166, recordStorageDuration para chamada legacy), que é o golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S19",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:45 e 129 (Create/Update): falha de d.Storage registrada com recordLegacyDuration (bug real introduzido pelo PR), mas o golden 1 localiza a troca no DeleteCollection (:166), não em Create/Update.",
+      "confianca": "media",
+      "observacao": "Mesmo grupo F1 dos que citam :166; diverge por apontar só Create/Update."
+    },
+    {
+      "id": "S20",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3.go:161-167: o goroutine do DeleteCollection mede d.Legacy.DeleteCollection e registra com recordStorageDuration (:166); é a troca storage/legacy no DeleteCollection do golden 1.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S21",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "dualwriter_mode3_test.go:145: nome do caso de teste ainda diz que List não está implementado; nome desatualizado, sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S22",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Sugestão com conteúdo vazio e local vazio; não relata problema nem pede mudança.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

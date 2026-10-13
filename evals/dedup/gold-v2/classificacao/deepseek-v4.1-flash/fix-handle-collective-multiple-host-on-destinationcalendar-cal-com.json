@@ -1,0 +1,285 @@
+{
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2.",
+      "confianca": "alta",
+      "observacao": null,
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "Both comments identify the same faulty destinationCalendar lookup comparing cal.externalId to externalCalendarId and suggest selecting by credentialId instead, so fixing the review’s issue would fix the golden issue at the same location."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "handleNewBooking.ts:1063-1078 deixa destinationCalendar null quando nem o event type nem o organizador têm destino, e evt.destinationCalendar?.push(...teamDestinationCalendars) descarta os calendários dos outros hosts. Foi introduzido pelo PR e não casa com nenhum golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:170 passou a gravar credentialId: undefined para resultados de vídeo (antes era result.credentialId), e o cancelamento da reunião depende desse credentialId. Nenhum golden trata disso.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:341-355 faz um findUnique por destino sem credencial em cache. N é o número de hosts e os createEvent já são sequenciais; é uma otimização opcional, sem defeito.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "googlecalendar/lib/CalendarService.ts:254-256 (update) e 315-317 (delete): o else só roda com externalCalendarId falso e procura cal.externalId === externalCalendarId, que nunca casa. É o erro de lógica do G2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui).",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 5,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 5,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "EventManager.ts:118-119 desestrutura evt.destinationCalendar ?? [] e lê mainHostDestinationCalendar.integration sem ?.; com destinationCalendar null ou [] (handleNewBooking pode gerar null) dá TypeError. É o null reference descrito no G0 (o golden cita o GoogleCalendarService, mas o dereference inseguro real está aqui). O juiz casou com o G5 (credential undefined), mas a sugestão aponta EventManager.ts:119.",
+      "confianca": "media",
+      "observacao": "Texto mínimo ('Undefined dereference at EventManager.ts:119'), mas aponta o mesmo ponto do grupo F1. | Golden trocado de 0 para 5: juiz e Astra casam com o 5, Astra nega o 0.",
+      "astra": {
+        "respostas": {
+          "0": {
+            "mesmoProblema": false,
+            "motivo": "The review reports an undefined dereference in EventManager.ts, not the undefined mainHostDestinationCalendar access in GoogleCalendarService.createEvent() and updateEvent()."
+          },
+          "5": {
+            "mesmoProblema": true,
+            "motivo": "The review flags an undefined dereference at the same location, matching the runtime failure caused by passing an undefined credential to updateEvent."
+          }
+        },
+        "concordaComClaude": false
+      },
+      "decisao": "juiz+astra"
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "'Null vs [] inconsistency': handleNewBooking usa null e outros callers usam [] para destinationCalendar. É uma observação sem defeito próprio e sem local preciso.",
+      "confianca": "baixa",
+      "observacao": null
+    }
+  ]
+}

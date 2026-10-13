@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "id": "S9",
+ "golden": 1,
+ "promptSha": "6b860249df19d35984939dafa74121deb91d2ab5",
+ "sameProblem": false,
+ "reason": "The review requests broader test coverage, but does not identify missing host-existence checks in update and destroy; improving those tests would not necessarily fix the nil-host error."
+}

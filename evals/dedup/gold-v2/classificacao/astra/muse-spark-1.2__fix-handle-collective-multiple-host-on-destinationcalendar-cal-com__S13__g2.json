@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S13",
+ "golden": 2,
+ "promptSha": "58b33b6424a1880017d1e4863918d2dea1aab72d",
+ "sameProblem": true,
+ "reason": "Both comments identify the faulty destinationCalendar lookup comparing externalId to externalCalendarId, so fixing that lookup would address the golden issue at the same location."
+}

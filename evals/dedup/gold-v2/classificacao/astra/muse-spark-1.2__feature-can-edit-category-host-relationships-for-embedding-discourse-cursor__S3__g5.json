@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "id": "S3",
+ "golden": 5,
+ "promptSha": "cb3c2f43af18b2e8e1ef2af35ba7a88f31e438e1",
+ "sameProblem": false,
+ "reason": "The review flags SQL interpolation in the migration, while the golden issue is in the admin controller, so fixing the reported location would not fix the golden issue."
+}

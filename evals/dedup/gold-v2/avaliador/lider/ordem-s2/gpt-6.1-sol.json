@@ -1,0 +1,2001 @@
+{
+ "model": "gpt-6.1-sol",
+ "versao": "ordem",
+ "seed": 2,
+ "avaliador": "gpt-6.1-sol@sub",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 7,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "passos": 2,
+   "chamadas": 3,
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 7,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 8,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "posicao": null,
+     "naoCorrigir": true
+    },
+    {
+     "rep": "S24",
+     "membros": [
+      "S1",
+      "S13",
+      "S16",
+      "S19",
+      "S24"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11",
+      "S20",
+      "S23"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S3",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S18",
+      "S22"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S5",
+      "S14",
+      "S17",
+      "S21"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "passos": 2,
+   "chamadas": 1,
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 7,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 12,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "posicao": 9,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 10,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 11,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S1",
+      "S11"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S4",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 8,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "passos": 3,
+   "chamadas": 4,
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": null,
+     "naoCorrigir": true
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S1",
+      "S10",
+      "S14",
+      "S17",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S2",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 7,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S3",
+      "S9",
+      "S11",
+      "S15",
+      "S16",
+      "S19"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S5",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S7",
+      "S20"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "passos": 2,
+   "chamadas": 1,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S5",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "posicao": null,
+     "naoCorrigir": true
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 7,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 9,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 8,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S7",
+      "S8",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S10",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S4",
+      "S15",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S4",
+      "S9",
+      "S10"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "passos": 2,
+   "chamadas": 1,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "passos": 3,
+   "chamadas": 4,
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "passos": 3,
+   "chamadas": 4,
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S6",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": null,
+     "naoCorrigir": true
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S8",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9",
+      "S16"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 7,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "passos": 2,
+   "chamadas": 2,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "passos": 3,
+   "chamadas": 3,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "passos": 2,
+   "chamadas": 4,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S5",
+      "S7",
+      "S8",
+      "S10",
+      "S11",
+      "S12",
+      "S18"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-test-does-not-verify",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S3",
+      "S6",
+      "S14",
+      "S15",
+      "S19"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-changed-files-disagree"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13",
+      "S17"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "passos": 2,
+   "chamadas": 1,
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "passos": 2,
+   "chamadas": 1,
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": null,
+     "naoCorrigir": true
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "passos": 1,
+   "chamadas": 0,
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S7"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "passos": 5,
+   "chamadas": 11,
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 8,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 9,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "agentes": [
+      "micro-exp-p3-data-exposure"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S1",
+      "S19"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13",
+      "S14"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "posicao": null,
+     "naoCorrigir": true
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S17",
+      "S20"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-changed-files-disagree",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-data-exposure",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S5",
+      "S10",
+      "S16",
+      "S21"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-value-boundary-and-position",
+      "micro-exp-p3-invalid-state-and-concurrency",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S11"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships",
+      "micro-exp-p3-value-boundary-and-position"
+     ],
+     "posicao": 7,
+     "naoCorrigir": false
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "passos": 3,
+   "chamadas": 2,
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "agentes": [
+      "micro-exp-p3-invalid-state-and-concurrency"
+     ],
+     "posicao": 4,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "agentes": [
+      "micro-exp-p3-test-does-not-verify"
+     ],
+     "posicao": 5,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "agentes": [
+      "micro-exp-p3-text-that-ships"
+     ],
+     "posicao": 6,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-secret-and-identity"
+     ],
+     "posicao": 2,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-says-one-thing-does-another"
+     ],
+     "posicao": 1,
+     "naoCorrigir": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "agentes": [
+      "generalist-base",
+      "micro-exp-p3-contract-not-followed"
+     ],
+     "posicao": 3,
+     "naoCorrigir": false
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,74 @@
+{
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:125-131 o mixin order passa $val direto para -webkit-box-ordinal-group/-moz-box-ordinal-group, que são 1-based; é o golden 2 (ordinal-group não aceita a base 0 do order).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:125-131 o mixin order passa $val direto para -webkit-box-ordinal-group/-moz-box-ordinal-group, que são 1-based; é o golden 2 (ordinal-group não aceita a base 0 do order).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:125-131 o mixin order passa $val direto para -webkit-box-ordinal-group/-moz-box-ordinal-group, que são 1-based; é o golden 2 (ordinal-group não aceita a base 0 do order).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "mixins.scss:125-131 o mixin order passa $val direto para -webkit-box-ordinal-group/-moz-box-ordinal-group, que são 1-based; é o golden 2 (ordinal-group não aceita a base 0 do order).",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

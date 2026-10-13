@@ -1,0 +1,74 @@
+{
+  "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "incident_occurrence.py:159-171: get_monitor_environment_context copia config e troca schedule_type, mas retorna monitor_environment.monitor.config; é exatamente o golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo problema do S1 (incident_occurrence.py:168 retorna o config original em vez da cópia transformada) = golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "incident_occurrence.py:130-137: a docstring de get_failure_reason de fato não bate com o formato real, mas é texto de documentação movido verbatim de mark_failed.py (já existia antes) e não afeta comportamento; nenhum golden trata disso.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "git grep no commit do PR: SimpleCheckIn só é importado de sentry.monitors.types (incidents.py:9, incident_occurrence.py:20); não há importador restante de mark_failed. Pedido de confirmação sem defeito.",
+      "confianca": "alta",
+      "observacao": null
+    }
+  ]
+}

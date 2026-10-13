@@ -1,0 +1,332 @@
+{
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:46-48 combina isTeamAdmin && isTeamOwner; é exatamente o golden 1 (deveria ser ||).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:71 lowercasa a blacklist e :77 compara guest cru com includes; bypass por maiúsculas = golden 0.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:168 passa guests cru para sendAddGuestsEmails; email-manager.ts usa newGuests.includes(attendee.email) para escolher o template, que é o problema do golden 2.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.99
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo bypass de case da blacklist em addGuests.handler.ts:71-77 (golden 0); acrescenta o lowercase no check de attendee existente.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "addGuests.handler.ts:52 e :76 comparam e-mails com === sensível a caixa; um guest que difere de attendee existente só na caixa passa o filtro e vira linha duplicada. Não é o golden 3 (duplicata dentro do input) nem o 0 (blacklist).",
+      "confianca": "media",
+      "observacao": "Juiz casou com golden 3, mas a sugestão trata de caixa contra attendees existentes, não de repetição no input.",
+      "astra": {
+        "respostas": {
+          "3": {
+            "mesmoProblema": false,
+            "motivo": "The review addresses case-sensitive comparisons against existing attendees, while the golden issue concerns duplicates within the submitted guest list, which normalizing those comparisons would not fix."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Os novos attendees são gravados com email: guest exatamente como enviado (addGuests.handler.ts:83-90), então newGuests.includes(attendee.email) em email-manager.ts:541 não diverge por caixa para um guest novo; o cenário descrito não ocorre.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo && em addGuests.handler.ts:46-48 (golden 1).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:168 usa guests em vez de uniqueGuests, afetando o newGuests.includes do email-manager (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "isTeamAdminOrOwner com && em addGuests.handler.ts:46-48 (golden 1).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "MultiEmail.tsx:46 Tooltip content=\"Remove email\" sem t(); i18n, sem defeito funcional e sem golden.",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "AddGuestsDialog.tsx:43-44 o template string nunca é vazio, então o fallback t(\"unable_to_add_guests\") é morto; o usuário ainda vê a mensagem traduzida com prefixo do código. Melhoria de mensagem, sem golden.",
+      "confianca": "media",
+      "observacao": null
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:167-169 passa guests cru; email-manager classifica novos por newGuests.includes (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Mesmo problema de guests vs uniqueGuests em addGuests.handler.ts:168 (golden 2).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:74-78 não deduplica e-mails repetidos no próprio input e o schema do servidor não tem refine; createMany insere duplicatas (golden 3).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "addGuests.handler.ts:26 lê attendees e :92-106 insere sem transação nem unique; duas chamadas concorrentes podem duplicar o mesmo guest. Real no handler novo, mas não é golden.",
+      "confianca": "baixa",
+      "observacao": null
+    },
+    {
+      "id": "S16",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "&& em addGuests.handler.ts:46-48 (golden 1).",
+      "confianca": "alta",
+      "observacao": null
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": null
+      },
+      "concordaComJuiz": false,
+      "precisaAstra": true,
+      "evidencia": "Texto curto mas identifica o golden 2: e-mails enviados com guests em vez de uniqueGuests (addGuests.handler.ts:168).",
+      "confianca": "media",
+      "observacao": "Juiz não casou, provavelmente pela concisão; o grupo F3 inteiro é golden 2.",
+      "astra": {
+        "respostas": {
+          "2": {
+            "mesmoProblema": true,
+            "motivo": "Passing guests instead of uniqueGuests causes the email manager to classify existing attendees as new guests, so using uniqueGuests fixes the golden issue."
+          }
+        },
+        "concordaComClaude": true
+      },
+      "decisao": "claude+astra"
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "precisaAstra": false,
+      "evidencia": "Texto curto 'ANDed isTeamAdmin/isTeamOwner check' aponta o && de addGuests.handler.ts:46-48 (golden 1).",
+      "confianca": "media",
+      "observacao": null
+    }
+  ]
+}

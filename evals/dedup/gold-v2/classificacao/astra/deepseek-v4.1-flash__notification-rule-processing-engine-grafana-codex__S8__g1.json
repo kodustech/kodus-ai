@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "id": "S8",
+ "golden": 1,
+ "promptSha": "ecad98a687547dc13896b4c7bbb59f890342fcd1",
+ "sameProblem": false,
+ "reason": "The review identifies a prop-type mismatch that hides menu entries, while the golden issue is a visible silencing action that cannot render its drawer without a Ruler rule; fixing the type mismatch would not fix the missing drawer."
+}

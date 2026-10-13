@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "id": "S14",
+ "golden": 0,
+ "promptSha": "4ccdd2076f2e124ec744e1fad342f4302b2d812a",
+ "sameProblem": false,
+ "reason": "The review reports an undefined dereference in EventManager.ts, not the undefined mainHostDestinationCalendar access in GoogleCalendarService.createEvent() and updateEvent()."
+}

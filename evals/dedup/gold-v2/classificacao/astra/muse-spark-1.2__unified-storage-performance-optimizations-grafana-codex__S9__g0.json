@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "id": "S9",
+ "golden": 0,
+ "promptSha": "f9af4da7f270e951ebd952ae56c369b6b3832df3",
+ "sameProblem": false,
+ "reason": "The review comment notes the narrowed lock scope but does not identify the resulting race that allows concurrent builds of the same index for the same key."
+}

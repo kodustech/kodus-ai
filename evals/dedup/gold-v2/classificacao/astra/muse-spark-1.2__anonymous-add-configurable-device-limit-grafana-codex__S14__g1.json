@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "id": "S14",
+ "golden": 1,
+ "promptSha": "4c50fb1771cd9bea2ab401f7ee691754b3489e59",
+ "sameProblem": false,
+ "reason": "The review concerns the error contract for other TagDevice callers, while the golden issue is anonymous authentication failing in the updated client when the device limit is reached."
+}

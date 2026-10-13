@@ -1,0 +1,9 @@
+{
+ "modelo": "muse-spark-1.2",
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "id": "S2",
+ "golden": 1,
+ "promptSha": "73ae1d8ab40e8c51441b10e549b325e043500d00",
+ "sameProblem": false,
+ "reason": "The review comment identifies the swapped duration recorder in Update, while the golden issue occurs in DeleteCollection, so fixing the reported location would not fix the golden issue."
+}
