@@ -145,6 +145,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 !event ||
                 !platformType ||
                 !organizationAndTeamData ||
+                !organizationAndTeamData.organizationId ||
                 !teamAutomationId
             ) {
                 throw new Error('Invalid payload: missing required fields');
@@ -352,7 +353,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 signal: runSignal,
                 logger: this.logger,
                 jobId,
-                organizationId: organizationAndTeamData?.organizationId,
+                organizationId: organizationAndTeamData.organizationId,
                 // Guarded on ownership: if the reaper already requeued this job
                 // and another worker picked it up, the renewal writes nothing
                 // and the renewer treats it as a lost lease rather than racing

@@ -40,8 +40,13 @@ export interface JobLeaseRenewalOptions {
     logger?: SimpleLogger;
     /** Job id, surfaced in the failure log metadata when available. */
     jobId?: string;
-    /** Organization id, surfaced in the failure log metadata when available. */
-    organizationId?: string;
+    /**
+     * Organization id, surfaced in the failure log metadata. Required: a
+     * lease-renewal incident that cannot name its organization cannot be
+     * attributed, and as an optional field a call site or a test could skip it
+     * without `tsc` saying a word (#1902 review).
+     */
+    organizationId: string;
     /** Surface a renewal write failure (e.g. transient DB error). */
     onRenewError?: (error: unknown) => void;
     /**
@@ -173,9 +178,7 @@ export function startJobLeaseRenewal(
                         if (options.jobId) {
                             metadata.jobId = options.jobId;
                         }
-                        if (options.organizationId) {
-                            metadata.organizationId = options.organizationId;
-                        }
+                        metadata.organizationId = options.organizationId;
                         options.logger?.error({
                             message:
                                 'Job lease lost — another worker may already be running this job',

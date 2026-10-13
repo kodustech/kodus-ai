@@ -15,7 +15,7 @@ describe('startJobLeaseRenewal (#1830)', () => {
     it('renews the lease on the configured cadence', () => {
         const renew = jest.fn();
         const controller = new AbortController();
-        startJobLeaseRenewal({ signal: controller.signal, renew });
+        startJobLeaseRenewal({ organizationId: 'org-1', signal: controller.signal, renew });
 
         expect(renew).not.toHaveBeenCalled();
         jest.advanceTimersByTime(JOB_LEASE_RENEW_INTERVAL_MS);
@@ -32,6 +32,7 @@ describe('startJobLeaseRenewal (#1830)', () => {
         const renew = jest.fn();
         const controller = new AbortController();
         const renewal = startJobLeaseRenewal({
+            organizationId: 'org-1',
             signal: controller.signal,
             renew,
         });
@@ -52,6 +53,7 @@ describe('startJobLeaseRenewal (#1830)', () => {
             .mockResolvedValue(undefined);
         const controller = new AbortController();
         startJobLeaseRenewal({
+            organizationId: 'org-1',
             signal: controller.signal,
             renew,
             onRenewError: onError,
@@ -107,6 +109,7 @@ describe('startJobLeaseRenewal (#1830)', () => {
         const controller = new AbortController();
 
         startJobLeaseRenewal({
+            organizationId: 'org-1',
             signal: controller.signal,
             renew,
             maxConsecutiveFailures: 2,
@@ -140,6 +143,7 @@ describe('startJobLeaseRenewal (#1830)', () => {
         const controller = new AbortController();
 
         startJobLeaseRenewal({
+            organizationId: 'org-1',
             signal: controller.signal,
             renew,
             maxConsecutiveFailures: 2,
