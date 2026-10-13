@@ -1,0 +1,2645 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "A",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "The claim is factually correct. In handleNewBooking.ts, evt.destinationCalendar is set to null when both eventType.destinationCalendar and organizerUser.destinationCalendar are absent (lines 1063-1067), both being nullable relations. teamDestinationCalendars is populated from other hosts' destination calendars (lines 990-993) and is guaranteed filled by the awaited Promise.all at line 1008 before line 1077. At line 1078, `evt.destinationCalendar?.push(...teamDestinationCalendars)` short-circuits silently on a null receiver, so team hosts' calendars are dropped. The downstream createAllCalendar"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "Confirmed. The diff changes the video/non-calendar branch of `referencesToCreate` from `credentialId: isCalendarType ? evt.destinationCalendar?.credentialId : result.credentialId` to `credentialId: isCalendarType ? result.credentialId : undefined`. For video results, `result` comes from `createVideoEvent` → `createMeeting` (packages/core/videoClient.ts:51-109), which explicitly sets `credentialId: credential.id` on the returned object. So previously the persisted `_video` reference carried the video credentialId; now it is stored as `undefined`.\n\nThis is actively consumed: `packages/features/b"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed: both createAllCalendarEvents (line 344) and updateAllCalendarEvents (line 517) issue prisma.credential.findUnique inside loops over destinationCalendar/references, so it is one DB round-trip per destination not found in the cached credentials — exactly as claimed, and both lookups are introduced by this PR. The pattern is real, scales with host count, and the finding is a concrete code-path observation rather than a generic suggestion. No evidence refutes it."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Confirmed at packages/core/EventManager.ts:118-119. `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` yields `undefined` for both empty arrays and null/undefined inputs (since `null ?? []` / `undefined ?? []` produce `[]`, which destructures to undefined). Line 119 then reads `mainHostDestinationCalendar.integration` without optional chaining. When `evt.location === MeetLocationType` and no destination calendar is present, this throws `TypeError: Cannot read properties of undefined (reading 'integration')`, aborting event creation. The prior code used `evt.destinationCalend"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Confirmed. In googlecalendar CalendarService.ts, updateEvent (254-256) and deleteEvent (315-317) use `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` in the else-branch that only runs when externalCalendarId is falsy, so the predicate compares externalId against null/undefined/\"\" and matches nothing. Reachable: CalendarManager.updateEvent accepts `externalCalendarId: string | null` and EventManager passes possibly-null values (lines 542/548/586), so this fallback path is entered with falsy externalCalendarId. Result: updateEvent calls Google with an"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Verified in the file: lines 96-99 persist the freshly refreshed token (accessTokenParsed.data), but the jsforce.Connection at lines 101-108 is constructed with credentialKey.access_token / credentialKey.instance_url (lines 105-106). credentialKey was set at line 73 from the pre-refresh credential.key and is never mutated (the prisma update uses a fresh object literal), so the new access token never reaches the connection. The refresh block is newly added by this PR, so the divergence between DB state and the connection is introduced/exposed here. The claim is technically correct and not refuta"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed: the endpoint at apps/web/pages/api/webhook/app-credential.ts:24-29 compares the incoming header against process.env.CALCOM_WEBHOOK_SECRET using `!==`. JavaScript string inequality short-circuits at the first differing character, so the comparison is not constant-time. No timingSafeEqual / constant-time comparison exists anywhere in the repo (grep found only the `!==` usage and env definitions). The endpoint goes on to decrypt AES-encrypted keys and create/update arbitrary user credentials, so recovering the secret yields the stated impact. The root-cause claim (non-constant-time com"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed. The JSDoc at lines 13-14 describes both `appData.type` and `appData.appId` identically as \"the app slug\". However, the function body uses `appData.type` for the credential `type` field (lines 49 and 63) and `appData.appId` for the `appId` field (lines 52 and 66). The `@param appData.type` documentation is therefore inconsistent with the actual usage. The claim is factually correct and cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "Confirmed by reading the file. In packages/app-store/zoho-bigin/lib/CalendarService.ts, line 53 sets `const credentialId = credential.id;` and line 93 passes `credentialId` as the 3rd argument to `refreshOAuthTokens(refreshFunction, appSlug, userId)`. In packages/app-store/_utils/oauth/refreshOAuthTokens.ts, that parameter is named `userId` and, when APP_CREDENTIAL_SHARING_ENABLED and the sync endpoint is set, is sent as `calcomUserId: userId.toString()`. Thus the Bigin flow sends the credential's id instead of the user's id — a different value — while all other migrated apps (google, hubspot,"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Confirmed. parseRefreshTokenResponse returns the safeParse result object `{ success, data }` (parseRefreshTokenResponse.ts:29). In googlecalendar/lib/CalendarService.ts:97 this raw wrapper is assigned to `key` and stored directly as credential.key (lines 98-101), whereas the original code stored the parsed data via `googleCredentialSchema.parse(googleCredentials)`. On the next credential load, line 75 runs `googleCredentialSchema.parse(credential.key)`; the wrapper lacks the required fields scope/token_type/expiry_date/access_token/refresh_token (they are nested under `.data`), so the parse th"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "The claim is factually correct and verified. refreshOAuthTokens returns the raw fetch Response in the credential-sync branch (lines 8-15), while callers read token fields: hubspot reads .expiresIn/.accessToken (line 192/202), googlecalendar reads res?.data (line 94-95), zoho-bigin reads tokenInfo.data.error (line 96), zohocrm reads zohoCrmTokenInfo.data.error (line 217). A fetch Response has no .data/.expiresIn/.accessToken, producing undefined/NaN or throwing a TypeError. The branch is reachable since APP_CREDENTIAL_SHARING_ENABLED gates on env vars (constants.ts:103). No upstream guard preve"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Verified against source. EnableTwoFactorModal.tsx:134-136 advances to SetupStep.DisplayBackupCodes on 200 without calling onEnable(); the only completion-path call to onEnable() is the close button (line ~269), and the Cancel button is hidden in that step. The Dialog (packages/ui/components/dialog/Dialog.tsx) is a Radix DialogPrimitive.Root with no onEscapeKeyDown/onInteractOutside guard, so ESC/overlay dismiss fires onOpenChange(false), which the caller maps to setEnableModalOpen(!enableModalOpen) (two-factor-auth.tsx:64) without running onEnable's utils.viewer.me.invalidate(). Thus the Switc"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Confirmed in packages/features/auth/lib/next-auth-options.ts. Password verification (line 121) runs only when `user.password && !credentials.totpCode`. The new branch (line 131) triggers on `user.twoFactorEnabled && credentials.backupCode` and validates only the backup code, never the TOTP. Thus a crafted credentials POST supplying a valid backupCode together with any non-empty totpCode: (a) bypasses password verification because totpCode is truthy, and (b) enters the backup branch which skips TOTP validation — granting a session using only the second-factor backup code with no password. No up"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "REFUTED. The claim conflates two separate modules. The cited caller apps/web/components/security/DisableTwoFactorModal.tsx:38 imports `TwoFactorAuthAPI from \"./TwoFactorAuthAPI\"` (line 10), which resolves to apps/web/components/security/TwoFactorAuthAPI.ts — a different file that was NOT touched by this PR and still declares `disable(password: string, code: string)` with only two parameters. The signature change (adding the required `backupCode` parameter) was made only to apps/web/components/settings/TwoFactorAuthAPI.ts, which is consumed solely by the settings/* tree (settings/DisableTwoFact"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "The claim misattributes the caller's import. apps/web/components/security/DisableTwoFactorModal.tsx imports `TwoFactorAuthAPI` from \"./TwoFactorAuthAPI\", i.e. apps/web/components/security/TwoFactorAuthAPI.ts — a DIFFERENT file that the PR did not modify and which still declares `async disable(password: string, code: string)` (two params). The changed file is apps/web/components/settings/TwoFactorAuthAPI.ts (`disable(password, code, backupCode)`), consumed only by settings/DisableTwoFactorModal.tsx, which was updated to pass three args. Therefore there is no type error and no runtime `backupCod"
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The claim is verifiably true. BackupCode.tsx line 7 declares `export default function TwoFactor(...)`, yet the file is named BackupCode.tsx and both callers (apps/web/pages/auth/login.tsx:32 and apps/web/components/settings/DisableTwoFactorModal.tsx:8) import it as `BackupCode`. The copied identifier genuinely misstates the component's identity/file/rendered content. No evidence refutes the factual assertion, so the finding is kept."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed by reading both files. The test (login.2fa.e2e.ts:119-122) clicks the copy button and only awaits `toast-success`. The handler (EnableTwoFactorModal.tsx:273-282) calls `navigator.clipboard.writeText(...)` without awaiting and then calls `showToast(...)` unconditionally, so the toast appears even if the clipboard write fails or is removed. The assertion therefore cannot fail on a broken copy feature — the finding's technical claim is accurate and the \"TODO: check clipboard content\" comment corroborates that no effect is actually verified. No refutation available; keep."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed at apps/web/playwright/login.2fa.e2e.ts:53. `page.locator(...).isChecked()` returns a Promise<boolean>. Playwright's `expect` only auto-awaits/asserts on Locators/Pages/APIResponses, not plain Promises, so `expect(promise).toBeTruthy()` evaluates the promise object itself, which is always truthy. Thus the assertion passes regardless of the switch state. The PR's own FIXME at lines 50-51 explicitly states this. The claim is correct and not refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed: lines 139-156 of packages/features/auth/lib/next-auth-options.ts read user.backupCodes, decrypt, verify index, then issue a separate prisma.user.update with no transaction/conditional-write/optimistic lock. Two concurrent requests with the same code both read the same stale array, both pass index !== -1, and each writes back an array nulling only its own index, letting the code authenticate twice. This breaks the single-use invariant stated in backup_code_instructions. No upstream guard or atomicity mechanism refutes the claim."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The code at next-auth-options.ts:144 and disable.ts:61 uses `backupCodes.indexOf(submittedCode)` — short-circuiting string equality on an authentication credential. The claim is factually correct and I found no upstream guard or constant-time comparison that refutes it. This is a specific, concrete code path (not a generic missing-validation suggestion), so the finding stands."
+     },
+     "v2": null
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Confirmed in addGuests.handler.ts: line 52 uses `attendee.email === user.email` and line 76 uses `guest === attendee.email`, both strict/case-sensitive, while the blacklist block (line 71) and other guest-identity checks in the codebase (handleNewBooking.ts:742-743; checkIfBookerEmailIsBlocked.ts:18) normalize case. Session emails are lowercased at auth (getServerSession.ts:59) but stored attendee emails come from booking input and are not guaranteed lowercased, so a legitimate attendee with differing casing can be wrongly FORBIDDEN and a case-varying guest can be duplicated instead of filtere"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "The claim's premise is factually false. In addGuests.handler.ts the new guests are persisted as `guestsFullDetails = uniqueGuests.map(guest => ({ email: guest, ... }))` (no lowercase/transform), and the very same `guests` input array is passed to `sendAddGuestsEmails(evt, guests)`. `evt.attendees` is built from `bookingAttendees.attendees` (the rows just written), and `formatCalEvent` only strips a `platformClientId` suffix — it does not normalize case. There is no Prisma middleware or schema transform that lowercases attendee emails. Hence for every newly added guest `attendee.email` is the i"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Refuted. In addGuests.handler.ts the exact string from the input `guests` array is written to the DB (guestsFullDetails = uniqueGuests, a subset of `guests`, with email copied verbatim; no normalization in addGuests.schema.ts which uses plain z.string().email()). The same original `guests` array is passed unchanged as `newGuests` to sendAddGuestsEmails. Therefore for every newly added guest, attendee.email matches the corresponding `newGuests` entry byte-for-byte, and `newGuests.includes(attendee.email)` is deterministically true — no casing mismatch is possible since both sides derive from th"
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified at packages/ui/form/MultiEmail.tsx:46 the prop is literally `content=\"Remove email\"`, a hard-coded English string. The same component localises other user-facing text via t() (e.g. `t(\"add_another\")` on line 69), and a grep of the locale directory found no \"Remove email\" entry. The claim is factually accurate and describes a concrete, reachable i18n defect on a new line introduced by this PR. No refutation is possible."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The claim is factually correct. At line 43, `message` is assigned a template literal, which always produces a non-empty string (undefined interpolates to \"undefined\", and even empty parts leave at least \": \"). Hence `message || t(\"unable_to_add_guests\")` at line 44 can never fall back, so the newly added `unable_to_add_guests` translation is unreachable, and the user is shown a raw code prefix instead. No guard or upstream condition changes this; it is a genuine dead-fallback / wrong-message bug. Cannot refute."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": false,
+      "rationale": "Confirmed. addGuests.handler.ts lines 74-78 compute uniqueGuests only by excluding existing attendees and blacklisted emails; there is no dedup within the incoming guests array. ZAddGuestsInputSchema (z.object({bookingId, guests: z.array(z.string().email())})) has no uniqueness refine — the only uniqueness check lives in the client AddGuestsDialog. guestsFullDetails maps every uniqueGuests element into createMany. The Prisma Attendee model (schema.prisma:526-539) has no unique constraint on (bookingId, email), so duplicates are not rejected — duplicate attendee rows are persisted, corrupting t"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Confirmed the check-then-insert race. addGuests.handler.ts reads booking.attendees (lines 26-42), filters uniqueGuests against that snapshot (74-78), then inserts in a separate prisma.booking.update createMany (92-106) with no transaction. The Attendee model (schema.prisma:526-539) has only @@index([email]) and @@index([bookingId]) — no unique constraint on (bookingId, email) — so nothing prevents duplicate rows. Two concurrent addGuests calls for the same guest can both see it absent and both insert. Root cause and failure path are factually correct; no guard refutes it."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Verified the claim in the actual code. isTeamAdmin (packages/lib/server/queries/teams/index.ts:264) returns truthy for roles ADMIN or OWNER; isTeamOwner (line 286) returns true only for OWNER. Hence `isTeamAdmin(...) && isTeamOwner(...)` at addGuests.handler.ts:46-48 is true only for OWNERs, and a team ADMIN who is neither organizer nor attendee hits the FORBIDDEN guard at line 54. The variable name `isTeamAdminOrOwner` confirms the intended OR semantics, so the && is a real authorization-logic bug. Cannot refute; keep."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed in addGuests.handler.ts: line 71 lowercases every BLACKLISTED_GUEST_EMAILS entry, but line 77 compares the raw input `guest` against that list (`blacklistedGuestEmails.includes(guest)`). The input schema (addGuests.schema.ts) is `z.string().email()` with no lowercasing, and the frontend passes raw MultiEmail values. So an email like `Foo@bar.com` fails to match a blacklisted `foo@bar.com` and gets persisted, defeating the blacklist — exactly as claimed. Not refutable."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified in the actual code: `addGuests.handler.ts:168` calls `sendAddGuestsEmails(evt, guests)` with the raw input array, not the filtered `uniqueGuests` computed at lines 74-78 (which drops emails already belonging to attendees and blacklisted emails). In `email-manager.ts:539-547`, `newGuests.includes(attendee.email)` is the sole discriminator between sending a full `AttendeeScheduledEmail` (booking confirmation) versus the lighter `AttendeeAddGuestsEmail`. Therefore an existing attendee whose email is re-submitted in `guests` is treated as a newly added guest and receives a duplicate full "
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 9,
+      "leuCitado": true,
+      "rationale": "Verified against the fixture and view definition. In the \"should combine authorization and filter conditions\" test, `createTestData` creates a team-scoped eventType (teamId = team.id) and a booking on it, while the test creates a user-scoped userEventType (teamId null) plus `userBooking` on it. The denormalized view derives `teamId` from the event type's teamId (migration 20250502130843: `et.\"teamId\"`), so `userBooking` is the only row satisfying the auth condition (`userId = user.id AND teamId IS NULL`) and the only row satisfying the filter (`eventTypeId = userEventType.id`); the createTestD"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": false,
+      "rationale": "Refuted. A repo-wide search for `InsightsBookingService`, `insightsBooking`, and the import path `service/insightsBooking` shows the class is referenced only by its own definition file and the integration test. There are no other consumers of `findMany(...)`, `getAuthorizationConditions()`, or `getFilterConditions()` — no callers spread conditions into a Prisma `where`, and no other file instantiates the service. (`insightsRouting.ts` is a distinct service with its own methods and is untouched.) The only existing consumer is the integration test, which the PR itself updated to `getBaseConditio"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Refuted: `getAuthorizationConditions()` can never return a falsy value. `buildAuthorizationConditions()` is typed `Promise<Prisma.Sql>` and every return path returns a truthy Prisma.Sql object — either `NOTHING_CONDITION` (`Prisma.sql\\`1=0\\``) at lines 127/131/141/187, a literal `Prisma.sql` at line 135, or the reduce results in buildOrg/buildTeam which always reduce over arrays initialized with ≥1 element (lines 164, 196). Since a Prisma.Sql object is always truthy, the `else if (filterConditions) { return filterConditions; }` branch (lines 76-77) is unreachable dead code. The failure path th"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "REFUTED. The finding's failure path requires `authConditions` to be falsy in `getBaseConditions`, but it cannot be. `getAuthorizationConditions(): Promise<Prisma.Sql>` is non-nullable and returns `cachedAuthConditions`, assigned from `buildAuthorizationConditions()`. Every return path of that method yields a `Prisma.Sql` object — `NOTHING_CONDITION` (`Prisma.sql`1=0``) for null options / non-owner-admin / unknown scope, and `Prisma.sql` template results otherwise. All `Prisma.Sql` values (including `1=0`) are truthy JS objects, so `authConditions` is always truthy. Thus the `} else if (authCon"
+     }
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Verified the code and schema: the deleteMany WHERE now ORs an indexed branch (method=SMS + scheduledDate<=now, supported by the (method, scheduled, scheduledDate) index) with an unindexed `retryCount > 1` branch. schema.prisma confirms no index exists on retryCount, and the new migration only adds the column with no index. The claim that Postgres cannot satisfy a two-way OR where one branch lacks an index without falling back to a scan of WorkflowReminder is factually grounded and reached on every cron invocation. This is a concrete performance path, not a generic missing-X suggestion. I could"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "The claim is refuted by the code. In scheduleSMSReminders.ts the failed-send branch is the `else` at lines 178-187, and it explicitly executes `retryCount: reminder.retryCount + 1`. The `catch` block (lines 189-198) also increments retryCount. The only path that does NOT increment is the successful schedule path (`if (scheduledSMS)` truthy), which is the correct intended behavior (a successful send must not be counted as a retry). Thus the assertion that the failed-send branch fails to increment retryCount is contradicted by concrete evidence; there is no path where a failed send is treated as"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "REFUTED. The claim's core assertion is wrong: the failed-send branch (the `else` at lines 178–187) explicitly increments retryCount (`retryCount: reminder.retryCount + 1`), as does the `catch` branch (lines 189–198). The only path that does not increment retryCount is the success path (line 168), where incrementing would be incorrect — successful scheduling should not consume retries. So the described defect does not exist: both failure paths increment, and omitting the increment on success is intended, correct behavior."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified against the file: the retryCount increment block appears verbatim in both the else-branch (lines 179-186) and the catch block (lines 190-197), each running the identical `prisma.workflowReminder.update` with `retryCount: reminder.retryCount + 1`. The factual claim of duplication is accurate and cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Confirmed: lines 184 and 195 write `retryCount: reminder.retryCount + 1`, where `reminder.retryCount` was read once during the initial findMany (line 58/60). This is a non-atomic read-modify-write. The endpoint is a CRON handler authenticated only by a static CRON_API_KEY with no locking, so concurrent/overlapping runs can both read the same value and both write N+1, undercounting failures relative to the `retryCount > 1` deletion threshold. The suggested `{ increment: 1 }` is the correct atomic fix. Per the rules, race conditions are real defects and I cannot refute this one."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Confirmed: the catch block at lines 189-199 calls prisma.workflowReminder.update without any nested try/catch. If that write throws (P2025 from a concurrent deleteMany removing the reminder, or a transient DB error), the exception escapes the catch block, aborts the for loop before line 201's res.status(200), and skips all remaining unscheduled reminders. Prior to this PR the catch only logged, so one bad reminder could not abort the batch. The described failure path is real and reachable; nothing upstream guards it. Not refutable."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Confirmed: the SMS method filter was moved inside only the first OR arm. The second arm `{ retryCount: { gt: 1 } }` matches any WorkflowReminder regardless of method, since retryCount is a shared column on the WorkflowReminder model used by email/WhatsApp/SMS. The deleteMany no longer matches its own \"delete all scheduled sms reminders\" comment. No guard scopes the second arm to SMS, so the finding is factually correct and not refutable."
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The diff at app/models/topic.rb:868-870 factually removes the `SiteSetting.embeddable_hosts.present?` guard, leaving `SiteSetting.embed_truncate? && has_topic_embed?`. This is consumed by topic_view_serializer.rb:210 which gates the serialized `expandable_first_post`. `has_topic_embed?` only checks for a persisted TopicEmbed row, which survives deletion of its originating EmbeddableHost — so the described failure path (embedded topic keeps expanding after its host is deleted, a state the old guard blocked) is reachable by real code. The spec at topic_spec.rb:1403-1405 no longer sets embed_trun"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "Confirmed in code: embeddable_host.rb:17 lowercases only the column, not the bound parameter; before_validation (lines 5-8) and the controller's save_host strip scheme/path but never downcase; the validation regex is /i so uppercase hosts are accepted and stored as-is. host_allowed? is invoked from EmbedController#ensure_embeddable and TopicRetriever#invalid_host? via record_for_host, so a case mismatch between the stored host and incoming uri.host produces no match and rejects legitimate embeds. The root cause is factually correct and the failure path is reachable; only the absolute phrasing "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 8,
+      "leuCitado": true,
+      "rationale": "The claim is technically accurate and not refutable. `execute(...)` in this codebase returns a PG result (the same line 19 calls `.cmd_tuples` on it), and indexing a zero-row PG result with `[0]` yields nil. Sibling migrations in the same repo defensively guard exactly this: 20140715190552 uses `uncat && uncat[0] && uncat[0]['value']`, and 20140929204155 uses `res.present? && res.cmd_tuples > 0`. The query `SELECT c.id FROM categories c INNER JOIN site_settings s ON s.value = c.name WHERE s.name = 'embed_category'` returns zero rows whenever the embed_category setting is absent (it is not defi"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed: app/models/embeddable_host.rb:5-8 calls self.host.sub! unconditionally inside before_validation. Admin::EmbeddableHostsController#save_host (line 23) assigns params[:embeddable_host][:host] directly with no presence/nil guard. Rails executes before_validation callbacks before validations (validates_format_of), so a request omitting the host value leaves host nil and nil.sub! raises NoMethodError, producing a 500 instead of the intended render_json_error(host) validation response. No upstream guard prevents the nil assignment, so the failure path is real and not refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Verified: `expandable_first_post?` (app/models/topic.rb:868-870) is now `SiteSetting.embed_truncate? && has_topic_embed?` and no longer consults embeddable hosts. The test at spec/models/topic_spec.rb:1403 retains the name \"is false if embeddable_host is blank\" but its removed setup (`SiteSetting.embeddable_hosts = nil`) is gone, and its body only asserts `expandable_first_post? == false`, which holds trivially (embed_truncate defaults false, built topic has no topic embed). The example thus passes independently of the embeddable-host condition it names and cannot catch a regression in that be"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": false,
+      "rationale": "Confirmed. The migration inserts legacy setting values raw via SQL (bypassing EmbeddableHost's before_validation that strips scheme/path). The new lookup record_for_host parses the incoming URL to uri.host and matches `lower(host) = ?` against the stored host verbatim. A migrated value like `http://discourse.org` (stored as-is) can never equal `discourse.org`, so host_allowed? returns false and embedding silently breaks. Legacy installs demonstrably stored scheme/path entries (the pre-PR spec used `http://discourse.org` and `https://example.com/1234` and expected success). No upstream normaliz"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "I could not refute the claim. Evidence examined supports it: `EmbeddingSerializer` declares `has_many :embeddable_hosts, serializer: EmbeddableHostSerializer, embed: :ids` (app/serializers/embedding_serializer.rb:3) and the controller only calls `render_serialized(@embedding, EmbeddingSerializer, root: 'embedding', rest_serializer: true)` with no `include`/sideload option (app/controllers/admin/embedding_controller.rb:6,10), while the client consumes `embedding.embeddable_hosts` as resolved objects: store.js `_hydrateEmbedded` (lines 196-206) maps `embeddable_host_ids` through `_lookupSubType`"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The cited code exactly matches the claim: update uses `EmbeddableHost.where(id: params[:id]).first` then passes the result to save_host, which immediately dereferences it (`host.host = ...`, `host.save`); destroy calls `host.destroy` directly. `.where(...).first` returns nil when no row matches (unlike `.find`, which would raise a proper 404), and there is no nil check or rescue. A stale/unknown id or a concurrent deletion therefore produces a NoMethodError and an unhandled 500. The failure path is concrete and reachable, so the finding cannot be refuted."
+     },
+     "v2": null
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The cited code is exactly as described: `@mixin order($val)` (mixins.scss:125-131) emits `-webkit-box-ordinal-group: $val` alongside 0-based properties (`-ms-flex-order`, `-webkit-order`, `order`). The old `-webkit-box`/`-moz-box` flexible-box model's ordinal group is indeed 1-based (initial value 1, positive integers), whereas the modern `order` is 0-based (initial 0), so the same `$val` does not represent the same ordering across prefixed engines. The two callers exist: header.scss:39 `@include order(3)` and topic.scss:30 `@include order(2)`. The mixin's stated purpose is cross-prefix consis"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Claim confirmed. spec/controllers/admin/groups_controller_spec.rb:115 uses `xhr :put, :remove_member`, but config/routes.rb:49-50 maps `remove_member` to DELETE and PUT to `add_members`. Controller specs invoke the action directly by name, bypassing the router, so this example passes even if the DELETE route were missing/mis-wired, leaving the new verb/action pairing untested. The sibling example at line 125 already uses `xhr :delete, :remove_member`, corroborating the intended verb. No evidence refutes the claim."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "REFUTED. The finding assumes custom routes declared directly inside a `resources` block behave like `member do` routes and expose the id as `:id`. In Rails they do NOT: a route declared directly inside `resources :groups` (without `member do` / `on: :member`) creates a member route whose dynamic segment is named after the singular resource, i.e. `:group_id` (the docs note: leaving out `:on` yields \"the same member route except that the resource id value will be available in `params[:photo_id]` instead of `params[:id]`\"). So `delete/put \"members\"` at config/routes.rb:49-50 generate `/admin/grou"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "The claim's premise — that a custom route declared directly inside a `resources :groups` block (e.g. `put \"members\" => \"groups#add_members\"`) supplies its parent segment as `:id` — is contradicted by the pre-existing, working code in the same repo. The non-admin `resources :groups do; get 'members'; get 'posts'; get 'counts'; end` (config/routes.rb:271-275) is consumed by `GroupsController#members` via `find_group(:group_id)`, which does `params.require(:group_id)` (app/controllers/groups_controller.rb:8,14,20,40-41). That endpoint is actively used by the front-end (`/groups/<name>/members.jso"
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified in admin-group.js.es6 lines 11-14: totalPages = Math.floor(user_count/limit)+1. For an exact multiple (user_count=50, limit=50) this yields 2 instead of the correct 1, while currentPage at offset 0 is 1. Since showingLast compares currentPage to totalPages (line 17) and next() only guards on showingLast (line 30), the next link remains enabled on the real last page and requests offset=Math.min(0+50,50)=50, producing an out-of-range empty member list server-side (offset clamped to user_count, returning zero members). This is a concrete off-by-one bug, not a generic suggestion. Refutati"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The claim is factually accurate. The PR makes GroupsController#members paginate unconditionally (limit defaults to 50, offset applied) where previously limit/offset were only applied to automatic groups (non-automatic returned the full list). The user-facing consumer was adapted to the new response shape ({members, meta}) via `{{#each m in members}}` in discourse/templates/group/members.hbs, but that template has no next/previous controls and group-members.js.es6 calls findMembers() with no offset navigation — only the admin template got pagination. Grep confirms no pagination controls/actions"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "Confirmed the code path: uploads_controller.rb:67 calls `OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)`, and optimized_image.rb:155 selects the animated instruction set only when `from =~ /\\.GIF$/i` — i.e. it inspects the path, not the original filename/content-type. For a normal browser upload the code uses `tempfile = file.tempfile`, whose Rack-generated path (Rack 1.5.5, per Gemfile.lock) does not carry the uploaded file's `.gif` extension, so `downsize_instructions` (optimized_image.rb:126-135) is chosen and runs `conve"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Verified in app/controllers/uploads_controller.rb:64-70: the loop caps at 5 iterations and applies a 0.8× downsize each pass (0.8^5 ≈ 0.33×), then exits without confirming tempfile.size <= SiteSetting.max_image_size_kb.kilobytes; Upload.create_for runs regardless. OptimizedImage.downsize/optimize/convert_with do no size validation either. Thus the comment's promise of \"automatically reduced to allowed size\" is not backed by the code. The claim's arithmetic and code path are accurate; no guard upstream or downstream refutes it, so it cannot be dropped."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The diff at utilities.js lines 182 and 246 verifiably replaces site-setting-derived values (`Discourse.SiteSettings['max_' + type + '_size_kb']` and `Discourse.SiteSettings.max_image_size_kb`) with the hardcoded literal `10 * 1024`. The claim accurately describes this decoupling of client-side validation from configurable site settings, producing a real behavioral effect (mismatch between client check and server limit). This is not a generic \"missing X\" suggestion and no upstream guard makes the path impossible. Cannot refute."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "REFUTED. The candidate claims the consumer requires explicit `WxH` geometry and that passing `\"80%\"` silently no-ops. Traced code shows the opposite: `OptimizedImage.downsize(from, to, dimensions, opts)` (app/models/optimized_image.rb:149-151) passes `dimensions` untouched into `optimize`, and `downsize_instructions` (lines 126-135) interpolates it directly into ImageMagick's `-resize #{dimensions}\\>`. ImageMagick's `-resize` accepts percentage geometry (`-resize 80%` scales to 80% of the original), so the normal JPEG/PNG path does reduce the uploaded file — it does not no-op. The premise that"
+     },
+     "v2": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 9,
+      "leuCitado": true,
+      "rationale": "The call chain checks out: uploads_controller.rb:67 passes \"80%\" as the dimensions argument; Ruby's later 3-arg downsize definition (optimized_image.rb:149) overrides the 4-arg one, so \"80%\" flows straight to optimize() as `dimensions`. For a GIF uploaded via API URL ending in .gif, `from =~ /\\.GIF$/i` matches (FileHelper.download names the tempfile with File.extname(uri.path), file_helper.rb:13-14) and allow_animated_thumbnails defaults to true (site_settings.yml:574), so the animated branch is reached and builds `gifsicle ... --resize-fit 80%` (optimized_image.rb:115-123). The PR genuinely c"
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The cited file confirms two `def self.downsize` definitions: line 145 `downsize(from, to, max_width, max_height, opts={})` and line 149 `downsize(from, to, dimensions, opts={})`. Ruby discards the earlier definition, so the (max_width, max_height) contract is dead. This is not hypothetical: the existing caller app/jobs/regular/resize_emoji.rb:14 calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, which the surviving 4-arg signature cannot accept (ArgumentError), and any width/height caller would bind height into `opts`. The PR intended to convert width/height pa"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Verified the exact flow: Jobs::PollFeed takes raw RSS content (CGI.unescapeHTML of i.content) directly to TopicEmbed.import without Readability's tag/attribute whitelist; import creates the post with cook_method :raw_html; Post#cook returns `raw` unchanged for raw_html, bypassing post_analyzer.cook/sanitization; PostCreator#create sets post.cooked = post.cook(...), so unsanitized HTML is persisted; and app/views/embed/best.html.erb:19 emits `<%= raw post.cooked %>` from the forum's own origin (X-Frame-Options ALLOWALL, no CSP in config). absolutize_urls only rewrites relative href/src via Noko"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed at app/views/embed/best.html.erb:14 — the post date is rendered with a hard-coded strftime(\"%e %b %Y\"). %b unconditionally emits English month abbreviations, so the date is pinned to en-US while surrounding strings in the same view (embed.title, embed.start_discussion, embed.continue) are localized via I18n.t. This is a concrete, verifiable locale/i18n inconsistency with a specific line and outcome, not a speculative or generic \"missing X\" suggestion. No evidence refutes the technical claim, so the finding stands."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": false,
+      "rationale": "Confirmed: embed_controller.rb:26 and topic_retriever.rb:15 both perform a raw case-sensitive `!=` comparison between `URI(...).host` and `SiteSetting.embeddable_host`, with no normalization on either side. Ruby's URI library preserves the parsed host case (only the scheme is downcased), so the claimed case-sensitivity is real. The failure path (a mixed-case host with the same domain fails to match) is possible for non-browser referers or a manually misconfigured uppercase setting, and no upstream guard prevents it. I could not find evidence refuting the claim, so per the default it is kept. N"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed. `Jobs::PollFeed#execute` guards with `feed_polling_enabled? && feed_polling_url.present? && embed_by_username.present?`. `feed_polling_enabled` defaults to false (config/site_settings.yml line 355). The tests \"requires feed_polling_url\" and \"requires embed_by_username\" (spec lines 18-28) never stub `feed_polling_enabled?` to true, so `execute` short-circuits on the first falsy clause and `poll_feed` is never called — the tests would still pass if the URL/username checks were deleted. The technical claim is accurate and not refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The claim is technically accurate and not refuted. `before_filter :ensure_embeddable` runs before the `best` action, and `ensure_embeddable` raises `Discourse::InvalidAccess` when `SiteSetting.embeddable_host.blank?`. The `embeddable_host` setting defaults to `''` (config/site_settings.yml:354), which is blank. The test \"is 404 without an embed_url\" (spec/controllers/embed_controller_spec.rb:8-11) never stubs `embeddable_host`, and a grep of the entire spec tree shows no global stub for it (only the local stubs at lines 14 and 21). Consequently `get :best` is rejected at the blank-host guard b"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Confirmed the check-then-insert race in TopicEmbed.import: it reads TopicEmbed.where(embed_url: url).first, and on blank calls TopicEmbed.create! (topic_embed.rb:15-28), with no rescue and no find_or_create_by. The unique index on topic_embeds.embed_url exists (migration 20131217174004, add_index ... unique: true), so a losing racer raises ActiveRecord::RecordNotUnique. Grep confirms no RecordNotUnique handling in the model or Jobs::Base. The only guard is the Redis throttle in TopicRetriever#retrieved_recently?, which is fully bypassed for staff (retrieve_topic.rb:17 no_throttle: user.try(:st"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 8,
+      "leuCitado": true,
+      "rationale": "Refuted. The claim asserts that `get :best` never calls `TopicRetriever.new` because it only enqueues a Sidekiq job that isn't executed inline. But in the test environment, `SiteSetting.queue_jobs?` defaults to false (config/site_settings.yml lines 348-351: `test: false`). With queue_jobs false, `Jobs.enqueue` (app/jobs/base.rb line 162-173) executes the job synchronously via `klass.new.perform(opts)` with `sync_exec: true`; `Jobs::Base#perform` (lines 85-90) then calls `execute(opts)` directly; `Jobs::RetrieveTopic#execute` (app/jobs/regular/retrieve_topic.rb line 17) calls `TopicRetriever.ne"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "REFUTED. The claim's premise is that the spec fails because `Jobs.enqueue` does not run inline, so `TopicRetriever.new` is never called during `get :best`. But `app/jobs/base.rb` (lines 153-175) shows `Jobs.enqueue` executes the job immediately when `SiteSetting.queue_jobs?` is false (the else branch: `klass.new.perform(opts)` with `sync_exec: true`). In the test environment `queue_jobs` defaults to false per `config/site_settings.yml` (lines 348-351: `test: false`). The enqueued `Jobs::RetrieveTopic#execute` (app/jobs/regular/retrieve_topic.rb lines 9-18) then calls `TopicRetriever.new(args[:"
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "REFUTED. The finding's root cause is factually wrong: `end if <expr>` is valid Ruby, not a SyntaxError. The `if` that follows `end` is lexed as the modifier form (lexer state after `end` is EXPR_END → keyword_if_mod), and the grammar production `stmt modifier_if expr_value` accepts a compound `if…end` statement as the left-hand `stmt`, so it parses as `(if … end) if <expr>`. The template's compiled code has a following statement (a literal append / the next `<%= %>`) that supplies the condition, so it compiles and renders. Concretely, the repository itself contains a shipped, working vendored "
+     },
+     "v2": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "Confirmed the file has `<%- end if %>` (line 6) with no condition, closing the if/else from line 2, and confirmed Erubis 2.7.0 is the ERB engine in use. Erubis compiles code segments with `;` separators, producing `...; end if; _buf << ...`, where `if` with no operand before `;` is a Ruby SyntaxError; and no spec in the PR renders views (no render_views found), so this would go uncaught. The finding's stated reason is imprecise (a modifier CAN follow an `if...end`; cf. chef/cookbooks/windows/providers/task.rb:99 `end if task_hash.respond_to? :[]`), but that example includes a condition, wherea"
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Confirmed in app/jobs/scheduled/poll_feed.rb:35 — the loop calls `CGI.unescapeHTML(i.content.scrub)` with no nil guard and no rescue anywhere in the job (which also has retry: false). A single RSS 2.0 item carrying only <description> (no content/content:encoded) yields an absent/nil `content`; whether the SimpleRSS accessor returns nil (so `nil.scrub` raises NoMethodError) or raises directly, the result is the same unhandled exception that aborts the entire hourly poll and skips all remaining items. TopicEmbed.import only guards malformed URLs and is never reached because the crash occurs firs"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified embed.js line 17: the origin check is `if (discourseUrl.indexOf(e.origin) === -1) { return; }`, which is a substring containment test rather than an exact origin comparison. The claim is factually accurate about the code and the mechanism: any `e.origin` that appears as a substring of `discourseUrl` is accepted as trusted, and the handler then consumes `e.data.type`/`e.data.height` from that sender. There is no upstream guard preventing this, and the finding correctly identifies the standard postMessage substring-origin weakness. Cannot refute; keep."
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "REFUTED. The finding hinges on the claim that `locale` passed into `FallbackLocaleList#[]` is a String, so `.uniq` cannot dedupe against the Symbol entries. In-repo evidence contradicts this: `spec/controllers/application_controller_spec.rb` (the `set_locale` block) asserts `expect(I18n.locale).to eq(:fr)` when the user's locale is loaded and `expect(I18n.locale).to eq(:en)` when the value comes from `SiteSetting.default_locale` (the String `'en'` in config/site_settings.yml). Since `\"en\" == :en` is false in RSpec, these passing expectations demonstrate that assigning a string-valued locale to"
+     },
+     "v2": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "I cannot refute the claim. Evidence: FallbackLocaleList#[] (config/initializers/i18n.rb:17) builds `[locale, SiteSetting.default_locale.to_sym, :en].uniq.compact` and does NOT normalize the incoming `locale`, whereas the stock i18n `I18n::Locale::Fallbacks#[]` explicitly does `locale = locale.to_sym` before deduping — i.e., the custom implementation dropped the normalization the gem relied on to guarantee type consistency. The incoming value comes from I18n.locale (via FallbackLocaleList#ensure_loaded! calling `self[I18n.locale]`, and via I18n::Backend::Fallbacks#translate using config.locale)"
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Verified in lib/freedom_patches/translate_accelerator.rb: @cache (line 71) is cleared only by reload! (line 41); ensure_loaded! (62-65) and load_locale (46-60) add locale data to the backend without ever invalidating @cache. translate (67-77) caches results per requested locale under key \"#{key}#{config.locale}#{backend.object_id}\". The new initializer enables I18n::Backend::Fallbacks and application_controller#set_locale now calls I18n.fallbacks.ensure_loaded! to lazily load the fallback chain (locale, default_locale, :en). Loading these fallback locales after a value for a locale key has alr"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 8,
+      "leuCitado": true,
+      "rationale": "Confirmed. The patched I18n.translate (translate_accelerator.rb:67-69) only loads config.locale, while Backend::Simple returns translations solely for already-loaded locales. The new I18n.fallbacks.ensure_loaded!/I18n.ensure_loaded! additions are wired only into ApplicationController#set_locale (sole caller, application_controller.rb:159). No initializer/boot code loads :en or SiteSetting.default_locale (only plurals.rb .rb files load at boot, which carry no :en translations). Real non-request paths use I18n outside set_locale: app/jobs/base.rb:151 (I18n.locale = SiteSetting.default_locale) an"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Confirmed: CreateOrUpdateDevice (database.go:109-156) performs CountDevices in one WithDbSession and the INSERT in a separate session, with no transaction, row lock, advisory lock, or limit-enforcing unique constraint linking them. CountDevices (line 158-166) is its own session. The only server lock in impl.go is for periodic cleanup, not the create path. Two concurrent first-time distinct devices when count == limit-1 both observe count < limit and both insert distinct device_id rows, exceeding AnonymousDeviceLimit. The race path is concrete and reachable; the claim cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Confirmed against the code. Previously TagDevice ran in a detached goroutine with its own timeout and errors were only logged, so Authenticate always returned a valid Identity. Now (client.go:44-50) it is a synchronous call on the request context and returns nil, err on ErrDeviceLimitReached. Traced the caller chain: authnimpl/service.go:227-232 propagates the error; Service.Authenticate joins it and, because Anonymous is priority 100 (last) and no other client matches, returns nil, authErr instead of an identity. The store (anonstore/database.go updateDevice) returns ErrDeviceLimitReached on "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Verified against the actual code. In TestIntegrationBeyondDeviceLimit (database_test.go:51-70), the first insert creates device \"32mdo31deeqwes\"; the second call reassigns DeviceID to \"keep\", which was never inserted. With deviceLimit=1, CountDevices returns 1 >= 1, so CreateOrUpdateDevice calls updateDevice with a nonexistent device_id, matching 0 rows and returning ErrDeviceLimitReached. The success branch of the new updateDevice function (rowsAffected > 0, i.e. updating an existing device while at the limit) is never exercised. All other tests (lines 16, 74, and impl_test.go via setting.New"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Confirmed. In tagDeviceUI (impl.go:80-98), the localCache key is set at line 87 before CreateOrUpdateDevice at line 93, and on error the key is never evicted. TagDevice (impl.go:144-148) and Authenticate (client.go:44-47) propagate ErrDeviceLimitReached without clearing the cache. Cache key is per DeviceID with a 29-minute TTL. CreateOrUpdateDevice (database.go:105-118) routes a brand-new device to updateDevice when count >= deviceLimit, which affects 0 rows and returns ErrDeviceLimitReached. Thus the first request from a new over-limit device is correctly denied, but the poisoned cache makes "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 8,
+      "leuCitado": true,
+      "rationale": "The claim's technical chain is factually accurate and reachable. `updateDevice` (database.go:95-97) returns `ErrDeviceLimitReached` whenever `rowsAffected == 0`, while its WHERE clause also constrains `updated_at BETWEEN device.UpdatedAt-30d AND device.UpdatedAt+1m`. Because cleanup only deletes devices after 61 days (keepFor, impl.go:27,170) while the active/limit window is 30 days, rows aged 30–61 days persist but fall outside `updateDevice`'s window, producing 0 rows and the limit sentinel. `client.go:44-47` treats `ErrDeviceLimitReached` as fatal (returns nil, err), so this surfaces as an "
+     },
+     "v2": null
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Verified in pkg/api/webassets/webassets.go: the RWMutex write lock is acquired at line 48 and released via defer at line 49, spanning the CDN HTTP call (lines 55-56) and file read (line 60). No double-check of entryPointAssetsCache occurs after acquiring the lock — line 69 unconditionally overwrites it. Cold-cache concurrent callers (confirmed at api/index.go:82, api/frontendsettings.go:62, middleware/recovery.go:141) each block then serially re-execute the full load, and in Dev mode the fast path at line 45 is always skipped so every request is serialized. The described root cause and failure"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "The claim is factually correct and verified against the code. `NewMetricsMiddleware` (metrics_middleware.go:76-82) creates a single `imw := newMetricsMiddleware(...)` and returns a `ClientMiddlewareFunc` closure that captures and mutates the shared `imw.next = next` on every invocation. `CreateMiddlewares` (pluginsintegration.go:155-167) calls `NewMetricsMiddleware` once, and `NewClientDecorator` (pluginsintegration.go:151-152) stores that single middleware instance in one shared `Decorator`. Crucially, `Decorator.QueryData/CallResource/CheckHealth/CollectMetrics/...` each call `clientFromMidd"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The cited code confirms the claim: the HistogramVec HELP is \"histogram of plugin request sizes returned\" (line 48), but the observed value is always derived from the outgoing request to the plugin — QueryData sums len(v.JSON) over req.Queries (lines 145-148) and CallResource passes len(req.Body) (line 161). No response/returned size is ever observed. The HELP string is at best misleading and documents the opposite of the recorded value, so the claim is factually correct and cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The technical claim is factually accurate and verifiable. The test file is metrics_middleware_test.go and exercises the renamed MetricsMiddleware (newMetricsMiddleware/NewMetricsMiddleware), but line 21 still declares `func TestInstrumentationMiddleware`. Grep confirms no remaining `InstrumentationMiddleware` production symbol exists (the type is now `MetricsMiddleware`), so the test name is genuinely stale/inconsistent with the code it tests. There is no code path, guard, or prior review decision that refutes this; the observation is correct, so the finding is kept."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified in metrics_middleware_test.go: all request-size assertions (lines 101-109) are guarded by `if tc.shouldInstrumentRequestSize`. For the two `false` cases (CheckHealth, CollectMetrics), the body contains no assertion on metricRequestSize, and there is no else-branch or negative check elsewhere. Thus a regression causing those endpoints to emit the request-size metric would not be detected — the factual claim is correct and not refutable."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified against the file: `foundLabels` is declared once before the `for _, m := range metricFamily.Metric` loop (line 132) and is never reset per iteration, and line 140-142 returns an error immediately when a series has a matching label key with a differing value rather than `continue`-ing to the next series. Both structural claims are factually accurate. The consequence described (false failures / inflated \"expected N labels, got M\" counts) follows directly once a metric family contains more than one series. The finding is not refuted; current tests happen to use a fresh registry per subte"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S5",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": false,
+      "rationale": "Refuted. The traceID is not dropped: the tracing service registers a global contextual log provider (pkg/infra/tracing/tracing.go:91-97) that returns []any{\"traceID\", TraceIDFromContext(ctx, false)}. ConcreteLogger.FromContext (pkg/infra/log/log.go:203-217) iterates ctxLogProviders and appends those args, and the wrapper's FromContext (pkg/plugins/log/logger.go:48-56) uses d.l.FromContext(ctx). Thus m.logger.FromContext(ctx).Info(\"Plugin Request Completed\", ...) automatically carries traceID, using the same requireSampled=false semantics as the removed explicit append. The claimed loss of trac"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The finding is not fully refuted. `assert.NotEqual(t, obj, anotherObj)` is genuinely tautological: `obj` is always `exampleObj` in the success path (mock returns it, dw.Delete passes it through) and `anotherObj` is a distinct fixture, so this assertion can never fail. The `assert.Equal(t, obj, exampleObj)` assertion is weak-but-not-tautological (it does exercise result pass-through; it would fail if `nil` were returned), so the finding's phrasing that BOTH would pass on a nil return is slightly overstated. Nonetheless, the core test-quality observation — that these assertions merely restate th"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Verified: Mode 3 performs legacy writes in detached goroutines (dualwriter_mode3.go:50-57 and analogous sites), while dualwriter_mode3_test.go never calls AssertExpectations/AssertCalled/AssertNumberOfCalls (grep returns nothing) and never waits on the goroutine. Both legacyStoreMock and storageMock embed the SAME *mock.Mock (storage_mocks_test.go:14-22, test uses m for both at lines 53-54), so calls are indistinguishable. setupLegacyFn only registers m.On expectations, which testify ignores unless asserted; hence deleting all d.Legacy.* calls would leave the tests green. The finding's factual"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed at pkg/apiserver/rest/dualwriter_mode3.go:96-97. Delete builds a request-scoped logger `log := d.Log.WithValues(\"name\", name, \"kind\", options.Kind, \"method\", method)` but then calls `ctx = klog.NewContext(ctx, d.Log)`, installing the mode-level logger rather than the composed `log`. All other methods in the diff (Create, Get, List, Update) pass the composed `log` to klog.NewContext. Consequently Storage.Delete and the legacy delete goroutine operate on a context logger lacking the per-request fields (name/kind/method) this PR adds elsewhere. This is a concrete, evidenced copy/paste e"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified: the test case at dualwriter_mode3_test.go:145 is named \"error when listing an object in the unified store is not implemented\", but List is now genuinely implemented at dualwriter_mode3.go:79 and delegates to Storage.List. The case just sets up a Storage.List error (lines 147-150) and asserts the error propagates. The name still describes the removed stub (\"List not implemented\" / \"TODO: implement List\"), so it contradicts the code it exercises. The claim is factually correct and cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6",
+      "S7",
+      "S11",
+      "S12",
+      "S13",
+      "S18",
+      "S19",
+      "S20"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Verified against the source. `recordLegacyDuration` observes into `m.legacy` (DualWriterLegacyDuration) while `recordStorageDuration` observes into `m.storage` (DualWriterStorageDuration) — two distinct histogram vecs (metrics.go:54-62). The call sites are mismatched exactly as claimed: Create storage-failure path uses `recordLegacyDuration(true, ...)` with `startStorage` (line 45), Update storage-failure path uses `recordLegacyDuration(true, ...)` with `startStorage` (line 129), and the DeleteCollection legacy goroutine uses `recordStorageDuration(err != nil, ...)` with `startLegacy` (line 16"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S4",
+      "S16"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Confirmed the cited code: DualWriterMode3.Create/Update/Delete/DeleteCollection launch a detached goroutine that calls the LegacyStorage method using a context derived via context.WithTimeoutCause(ctx, ...) from the request-scoped ctx, and the method returns immediately. The pre-PR code called Legacy synchronously in-request, so the contract change described is accurate. A repo-wide search shows no context.WithoutCancel / server-lifetime detachment in the dual-writer path (only unrelated authn code uses it, with an explicit FIXME acknowledging the pattern). Thus the detached legacy write inher"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9",
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "The metric DualWriterStorageDuration is defined with labels {is_error, mode, kind, method} (metrics.go:23), so the third arg to recordStorageDuration is the `kind` label. In dualwriter_mode3.go every call site passes options.Kind (lines 48, 73, 89, 103, 132, 156, 159) except line 106, which passes `name` (the object name) on the Delete storage-success path. This is a concrete, verifiable inconsistency: the success sample for delete is labelled with the object name in the `kind` label, contradicting the delete error sample at line 103 and all other operations. Claim is factually correct; keep."
+     },
+     "v2": null
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 8,
+      "leuCitado": true,
+      "rationale": "The claim is supported by the code. NewResourceServer (server.go:258-262) now calls s.Init(ctx) and, on error, returns `nil, err` without calling the `cancel` created at line 229 (from context.WithCancel over context.Background()). Init runs search.init BEFORE initWatcher (lines 304-311). searchSupport.init (search.go:202-213) starts a never-terminating goroutine on context.Background() once indexing succeeds, and initWatcher (server.go:752-770) can fail via NewBroadcaster returning an error (broadcaster.go:92-99). Thus the concrete path \"search.init succeeds → initWatcher fails → constructor "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "The claim's technical facts are verified. module_server_test.go is the only test in the repo that targets modules.StorageServer and asserts /metrics returns 200 via a live instrumentation server; grep for StorageServer / initializeModuleServer / /metrics in tests yields no equivalent coverage. The added t.Skip at lines 36-38 executes before db.InitTestDBWithCfg, addStorageServerToConfig, InitializeModuleServer, ms.Run(), and the line 63 status assertion, so for GRAFANA_TEST_DB=postgres the entire server bring-up and /metrics check is skipped and the described regression would pass silently. No"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "The finding's core technical claims are factually confirmed by the code. server.go:258-262 now calls `s.Init(ctx)` inside `NewResourceServer` and returns `nil, err` on any failure, so construction is eager/fail-fast instead of returning a server that degrades to per-request search errors. `Init` is guarded by `sync.Once` (server.go:288, 294), and the ctx passed in is the constructor's internal `context.Background()`-derived context (server.go:229, 246), so any later external `Init(ctx)` call finds the once already consumed and its context is ignored for `lifecycle.Init`, `search.init`, and `in"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Confirmed. bleve.go:144-153 TotalDocs iterates b.cache without holding cacheMu, while GetIndex uses RLock (bleve.go:61) and BuildIndex writes b.cache under Lock (bleve.go:137-139), proving the mutex is intended to guard this map. The PR's new call s.search.TotalDocs() at search.go:216 runs after the watcher goroutine is started at lines 207-213, and that goroutine's handleEvent → getOrCreateIndex → build → BuildIndex path writes b.cache for a not-yet-cached key. Concurrent map iteration + write can thus trigger a fatal \"concurrent map iteration and map write\" panic/data race. The root cause an"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Confirmed: BuildIndex previously held b.cacheMu.Lock()/defer Unlock() across its entire body; the diff narrows it to only the cache write (bleve.go:137-139). GetIndex uses RLock on the same mutex and BuildIndex never re-checks the cache before building. getOrCreateIndex (search.go:287-307) does GetIndex→nil→build, and there is no singleflight/per-key guard anywhere in pkg/storage/unified. Concurrent callers exist (concurrent gRPC Search and the single watch goroutine via handleEvent), so a caller can now observe GetIndex==nil while another build for the same key is in-flight, triggering a dupl"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The claim is factually correct. The Javadoc on getShortcut() states it returns \"usually like 3-letters shortcut\", but every implementation added/modified in this PR returns a 2-character shortcut ('ac','cc','pg','pc','rt','ro','te','ci','dg'). Moreover, DefaultTokenContextEncoderProvider.getTokenContextFromTokenId requires the encoded context to be exactly 6 chars (2 sessionType + 2 tokenType + 2 grantType), and encodeTokenId concatenates these 2-char pieces, so 2-char shortcuts are effectively mandatory. The documentation does not match the code's actual contract, confirming the finding. It c"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S11",
+      "S15"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 1,
+      "leuCitado": false,
+      "rationale": "The diff directly confirms the defect: lines 72 and 73 both call Objects.requireNonNull on grantType, the second with the message \"Null rawTokenId not allowed\". rawTokenId is never null-checked, so a null rawTokenId passes construction and encodeTokenId() would emit a token id ending in \":null\" (line 117 concatenates tokenContext.getRawTokenId()). No upstream guard or other validation prevents this. The claim is factually correct and the fix suggested matches the evident intent."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S3",
+      "S7",
+      "S8",
+      "S9",
+      "S10",
+      "S12",
+      "S13",
+      "S14",
+      "S16",
+      "S17"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Verified the matcher at AssertEvents.java:476-492. The encoder (DefaultTokenContextEncoderProvider.encodeTokenId) lays out the encoded token id as 2-char sessionType + 2-char tokenType + 2-char grantShort + ':' + rawId, so the grant shortcut is at indices 4-5 (decoder uses substring(4,6)). The matcher reads items[0].substring(3,5), which spans the tokenType last char ('t' for both rt/lt) and the grant's first char, so it can never equal any 2-char grant shortcut; additionally the comparison is inverted (returns false on equality). Consequently the body always falls through to isUUID().matches("
+     },
+     "v2": null
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Verified: In FilterView.tsx rules.map, the `case 'grafana'` branch renders <GrafanaRuleListItem> with no key prop, while the sibling `case 'datasource'` and default branches still pass key={key}. The PR's diff replaced <GrafanaRuleLoader key={key} .../> with <GrafanaRuleListItem .../> and dropped the key. `key` is still destructured on line 152 and the rules list is a dynamic async-streamed array (KeyedRuleWithOrigin[] via setRules), so missing keys force index-based reconciliation and can mis-associate rows/mutate stale components on updates, plus React key warnings. GrafanaRuleListItem does "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 8,
+      "leuCitado": true,
+      "rationale": "Confirmed in code. useIsGrafanaPromRuleEditable(undefined) returns loading:false; useAllGrafanaPromRuleAbilities then sets MaybeSupported=AlwaysSupported and computes rulesPermissions=getRulesPermissions('grafana') unconditionally, so AlertRuleAction.Duplicate becomes toAbility(AlwaysSupported, AlertingRuleCreate) = [true, userHasAlertingRuleCreate]. useGrafanaPromRuleAbilities maps skipToken->undefined, and AlertRuleMenu feeds skipToken for any non-Grafana prom rule then ORs the Grafana pair with the ruler pair (canDuplicate = ruler || grafana). Thus a cloud/datasource rule can have Duplicate"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Verified the cited test at lines 85-102. Its body only asserts the More button is in the document and has aria-label/text 'More'; it never clicks the button nor asserts any menu item. Confirmed the menuItems selectors (lines 37-43) are used only in a separate later test (lines 188-207), not here. The finding's factual claim that this test would pass with an empty dropdown is accurate and its name promises coverage it does not provide. This is a correct, verifiable observation; nothing refutes it."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "REFUTED. The finding's causal mechanism is factually wrong. `prometheusRuleType.grafana.rule()` is a runtime structural type guard — `isAlertingRule/isRecordingRule(rule) && 'folderUid' in rule && 'uid' in rule` (utils/rules.ts:103-109, 132-136) — so whether it returns true depends solely on the runtime shape of the object, not on the TypeScript annotation `Rule`. The declaration `type Rule = AlertingRule | RecordingRule` is wide enough to accept a `GrafanaPromRuleDTO` (it only adds extra props), which is exactly how `CombinedRule.promRule` (types/unified-alerting.ts:134) and `AlertRuleMenu`'s"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "The finding's core premise is factually wrong. `Rule` (imported from `app/types/unified-alerting`, line 13/27) is NOT \"the combined-rule type\" — it is defined as `export type Rule = AlertingRule | RecordingRule` (unified-alerting.ts:73), i.e. exactly the prom-rule shape (the combined-rule type is `CombinedRule`). The functions that consume it operate at RUNTIME: `prometheusRuleType.grafana.rule(promRule)` → `isGrafanaPromAlertingRule` checks `isAlertingRule(rule) && 'folderUid' in rule && 'uid' in rule` (rules.ts:103-105), and `isProvisionedPromRule` does the same. The guard's result depends o"
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Confirmed. The diff removes the old `useAllAlertRuleAbilities` body that computed `isFederated = isFederatedRuleGroup(rule.group)` and now delegates to `useAllRulerRuleAbilities`, which hardcodes `isFederated = false` (lines 243-245) and no longer imports `isFederatedRuleGroup`. Since `immutableRule = isProvisioned || isFederated || isPluginProvided` drives `MaybeSupportedUnlessImmutable` for Update/Delete/Pause/Restore/DeletePermanently, federated Mimir rule groups lose their immutable status. The path is live: `useAlertRuleAbility(rule, Update)` → `useAllAlertRuleAbilities`, consumed by Rule"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The cited code confirms the reader Thread at lines 139-149 is started but never retained or joined, and there is no synchronization barrier before the assertion at line 157. The main thread sets deletedAll and immediately asserts caughtExceptions is empty, so it can execute while the reader is still mid-read (or before it records an exception). The finding's root cause is factually correct and describes a concrete race path plus a concrete fix, not a generic missing-X suggestion. The claim cannot be refuted: the test could indeed pass despite a reintroduced getSubGroupsCount NPE."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The finding is factually accurate. The reader thread (lines 139-149) is a plain non-daemon thread whose loop only terminates when deletedAll becomes true. deletedAll is set solely at line 155, after the delete forEach. If any group(uuid).remove() at line 153 throws (non-2xx -> WebApplicationException is plausible under concurrent read load), the exception propagates out of the test and deletedAll.set(true) never runs, leaving the non-daemon thread looping indefinitely and hanging the test JVM. No try/finally or daemon flag guards against this. The claim cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S8"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 8,
+      "leuCitado": true,
+      "rationale": "Refuted. Before this change the body was `getGroupModel().getSubGroupsCount()`, and in the exact scenario where the delegate is gone (the concurrent-deletion case this PR addresses) `getGroupModel()` returns null, so the old code already threw a NullPointerException. Thus no new NPE hazard is introduced for unboxing callers — they saw an NPE before as well. The only in-repo caller of `GroupModel.getSubGroupsCount()` is `GroupUtils.populateSubGroupCount` (services/src/main/java/org/keycloak/utils/GroupUtils.java:90), which passes the value to `GroupRepresentation.setSubGroupCount(Long)` — a nul"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Refuted. The only production consumer of getSubGroupsCount() is GroupUtils.populateSubGroupCount, which passes the Long to the nullable setter setSubGroupCount(Long) / Long subGroupCount field — no unboxing anywhere in the codebase (grep shows no arithmetic or primitive assignment on the result). Moreover, the claimed \"new\" NPE is not new: the old code `getGroupModel().getSubGroupsCount()` already threw an NPE on the null delegate in exactly the concurrent-deletion scenario where null is now returned, so an unboxing caller would throw NPE both before and after the change. null is also already "
+     }
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": false,
+      "rationale": "The finding's premise is that ResourceServer.getId() may differ from ResourceServer.getClientId(), making the 3-arg findByName owner filter fail. Concrete evidence refutes this: both implementations of ResourceServer in the codebase define getClientId() as returning getId() — model/jpa/.../ResourceServerAdapter.java:91-93 (`public String getClientId() { return getId(); }`) and model/infinispan/.../ResourceServerAdapter.java:121-123 (identical). Thus server.getId() is always equal to server.getClientId(), and findByName(server, name, server.getId()) is functionally identical to the 2-arg defaul"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "The claim asserts that gating the listener behind Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ breaks cleanup for \"realms using the non-V2 permission model.\" This is refutable from the code:\n\n1. The non-V2 (V1) fine-grained permission model only creates the authorization resources/policies that this listener cleans up when the ADMIN_FINE_GRAINED_AUTHZ feature is ENABLED. ManagementPermissions and its sub-permissions only obtain an AuthorizationProvider (authz) when that feature (or V2) is on — see MgmtPermissions constructor (lines 81-89): `if (Profile.isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ) ||"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "Refuted. The gate uses Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ, which is exactly the feature that activates the legacy (non-V2) fine-grained permission model and causes its authorization resources to exist. The listener registered in DefaultKeycloakSessionFactory (line 122) only needs to clean up those V1 resources, and those resources are only created when ADMIN_FINE_GRAINED_AUTHZ is enabled. When the feature is off, the cleanup calls invoked by the listener are already no-ops: ClientPermissions.deletePermissions() (services/.../ClientPermissions.java:190) does `ResourceServer server = resou"
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Confirmed: getEvaluationContext(ClientModel, AccessToken) is declared private at ClientPermissionsV2.java:262 and has no caller in the class or the permissions package. The only nominal consumer, canExchangeTo, is overridden to throw UnsupportedOperationException (lines 148-150), and the V1 superclass's canExchangeTo builds its ClientModelIdentity inline rather than invoking this helper. The method and its overridden getBaseAttributes are therefore genuinely unused/dead. The claim is factually accurate and cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 9,
+      "leuCitado": true,
+      "rationale": "Confirmed. ClientPermissionsV2.setPermissionsEnabled (line 193-195) unconditionally throws UnsupportedOperationException, and the listener at AdminPermissions.java:89-91 calls exactly that on ClientRemovedEvent. The listener guard checks ADMIN_FINE_GRAINED_AUTHZ (V1) only, while management() returns MgmtPermissionsV2 based on ADMIN_FINE_GRAINED_AUTHZ_V2. Profile.java:58 shows V2 depends on AUTHORIZATION, not on V1, so both can be enabled together, at which point every client removal hits the throwing method. publish() in DefaultKeycloakSessionFactory does not swallow listener exceptions, so th"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The cited file confirms the claim: requireView() (line 98) and requireViewClientScopes() (line 103) are declared void, yet their javadoc says \"Returns {@code true} if {@link #canView()}/#canViewClientScopes() returns {@code true}.\" The rest of the same interface documents the require* counterparts correctly as \"Throws ForbiddenException if ... returns false\". The text is clearly copy-pasted from the can* accessors and does not match the void, throwing methods it documents. The technical claim is accurate and cannot be refuted."
+     },
+     "v2": null
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "REFUTED. The claim's causal chain — that the new `isConditionalPasskeysEnabled(user)` clause in `PasswordForm.configuredFor` \"marks the password execution as configured/required\" so the flow executes PasswordForm and strands a passkey-only user — is factually wrong. A full-repo search for `configuredFor(` shows the ONLY call site is `AuthenticatorConfiguredMethod.exec()` (a FreeMarker template helper), and `authenticatorConfigured` is not referenced by any bundled `.ftl` template. The flow engine (AuthenticationProcessor/flow logic) never consults `configuredFor` to decide whether an execution"
+     },
+     "v2": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "The claim's factual premise is accurate: PasswordForm.configuredFor (lines 60-65) now returns true via isConditionalPasskeysEnabled(user) whenever the user has a passkey credential, even with no password credential. Because PasswordForm.requiresUser() is true, this value is consulted in DefaultAuthenticationFlow:445, so a true result lets execution proceed to authenticate(), which renders createLoginPassword() for a passwordless-only user. The alreadyAuthenticatedUsingPasswordlessCredential short-circuit only triggers when the passkey was already used in this session (LAST_AUTHN_CREDENTIAL not"
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The finding's technical claim is factually verifiable and correct. The comment at UsernamePasswordForm.java:114 states webauthn data is set up \"when passkeys enabled\", but the guard it introduces, isConditionalPasskeysEnabled (lines 160-163), also requires that a known selected user actually has a passkey credential (currentUser == null || currentUser.credentialManager().isConfiguredFor(...)). For a selected user without a passkey, fillContextForm is skipped, exactly as the added tests passwordLogin_reauthenticationOfUserWithoutPasskey / reauthenticationOfUserWithoutPasskey rely on. I found no"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed: lines 111-114 log `raw_report`, the full unvalidated caller-supplied dict, via logger.warning on a public, CSRF-exempt, unauthenticated endpoint (permission_classes = ()). Browser reports routinely contain sensitive values (CSP blocked-uri/document-uri/script-sample, sourceFile, full user_agent). The failure path is concretely reachable (any report failing serializer validation). The root-cause description is factually correct and the PR introduces this logging, so the finding cannot be refuted. (Note: pre-existing INFO log at line 93 also logs request_body, which lessens novelty bu"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Code confirms the analytics.record call for \"preprod_artifact.api.assemble\" runs at lines 81-86, before the feature-flag check at lines 88-91 and before schema validation. On the concrete path where the org lacks \"organizations:preprod-artifact-assemble\", the endpoint returns 404 without assembling anything, but the assemble event has already fired, over-counting requests for an operation that never happened. This is a real, reachable code path, not a generic suggestion, so the finding stands."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Confirmed: the hook sends the search string as query.substringMatch (useGetTraceItemAttributeValues.tsx lines 52-54), and the query object has no 'query' key. The number-type test's mock predicate uses query.query === 'search-query' (lines 117-122), which can never match; the correct predicate (substringMatch) is used in the first test. Combined with the type==='number' short-circuit at line 91, the assertion expect(searchQueryMock).not.toHaveBeenCalled() is vacuous and does not witness the guard. The claim is technically correct and cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Confirmed: line 118 zips error_ids with events.values() positionally, but get_multi does not preserve/enforce request order. base.py:184 dedupes ids (dict.fromkeys), shortening the list when duplicates exist; base.py:203-205 builds uncached items first then does items.update(cache_items), so on partial cache hits cached entries land at the end; and the Django backend's _get_bytes_multi builds a dict from a DB query (backend.py:48-49), whose order is not the input order. Any of these breaks the positional pairing, causing each ErrorEvent to receive another error's title/message/timestamp/id. Ro"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Verified against the source: chart.tsx:164-174 renders TableWidgetVisualization with hardcoded `columns={[]}` and `tableData={{data: [], meta: {fields: {}, units: {}}}}`, discarding the real `result.data`/`result.meta`/`fields`/`fieldAliases`/`eventView` computed directly above. tableWidgetVisualization.tsx:92-99 shows `columns ?? Object.keys(tableData?.meta.fields)` — the empty array is truthy, so the fallback derivation never runs and `columnOrder` is `[]`; with `data: []`, GridEditable renders an empty table for any org with `use-table-widget-visualization`. No upstream guard or value valid"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The claim is technically correct. Both `age` (no min_value) and `timestamp` (`min_value=0`) accept falsy-but-valid 0. `validate_timestamp` does `if self.initial_data.get(\"age\")` and `validate_age` does `if self.initial_data.get(\"timestamp\")`, so when a report contains both fields with falsy values (e.g. `age: 0, timestamp: 0`), both guards are skipped and the report is wrongly accepted instead of rejected for violating the documented mutual-exclusion rule. This is a real DRF truthiness pitfall with a concrete reachable input path, so the finding cannot be refuted."
+     },
+     "v2": null
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Confirmed. buffer.py:382-384 divides the global 'spans.buffer.max-flush-segments' option (documented defaults.py:2716 as a per-cycle cap, default 500) by len(self.assigned_shards). Before this PR there was one shared buffer with all S shards, so the per-cycle aggregate was ~max_flush_segments. The PR creates P sub-buffers (flusher.py:60-66, 93), each holding ~S/P shards and each applying max_segments_per_shard = ceil(max_flush_segments/(S/P)). Per sub-buffer total ≈ max_flush_segments, so the aggregate becomes ≈ P×max_flush_segments, and any_shard_at_limit backpressure is P× harder to trigger."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Confirmed: `_create_process_for_shard(self, shard)` is defined at flusher.py:127 but has no caller anywhere in the repository. Repo-wide grep for `_create_process_for_shard` and `for_shard(` returns only the definition; the restart path actually invoked is `_create_process_for_shards(process_index, shards)` (lines 84 and 259). No dynamic getattr-style call exists. The finding's factual claim of dead code is accurate and cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified: docstring at flusher.py:32 says \"Creates one process per shard,\" but code at lines 60-66 caps processes at min(max_processes, num_shards) and distributes shards round-robin (i % num_processes). The new --flusher-processes option defaults to 1, meaning one process handles every shard. test_flusher_processes_limit confirms 4 shards across 2 processes. The documented contract directly contradicts the actual behavior introduced by this PR; no guard makes the docstring accurate. Claim cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Confirmed: the click option at consumers/__init__.py:430-438 declares default=1, and at lines 510-512 `cmd_context.params` are passed directly as kwargs to `ProcessSpansStrategyFactory`, so `flusher_processes` is 1 in production. In factory.py:74 it becomes `max_processes=1`, and in flusher.py:51 `self.max_processes = max_processes or len(buffer.assigned_shards)` evaluates to `1` (truthy short-circuit), making `self.num_processes = min(1, len(shards))` always 1. The `None` sentinel meaning \"one process per shard\" that the PR advertises is therefore unreachable from the CLI. The described root "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The cited code is verified: flusher.py:51 sets `self.max_processes = max_processes or len(buffer.assigned_shards)`, and the new `--flusher-processes` option (src/sentry/consumers/__init__.py:433) is `type=int` with default 1 and no positive-value validation. Passing `0` produces a falsy value that is silently replaced by `len(buffer.assigned_shards)`, so the requested limit is not honored and one process per shard is spawned. The root-cause mechanism (falsy `or` fallback) is factually correct and the failure path is reachable from the click option; nothing upstream rejects 0. I cannot actively"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Confirmed the mechanism: `max_processes or len(...)` only guards falsy (0/None); a negative `flusher_processes` passes through, `min(negative, len)` makes `num_processes` negative, `range(negative)` yields an empty `process_to_shards_map`, and the shard-assignment loop's `process_to_shards_map[process_index]` raises KeyError, failing consumer construction. The value is reachable via the unconstrained `--flusher-processes` int click option. Minor inaccuracy in the modulo detail does not change the outcome. Cannot refute."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The finding is factually correct. `monkeypatch.setattr(\"time.sleep\", lambda _: None)` at line 15 of test_consumer.py mutates the shared `time` module's `sleep` attribute. The test imports `time` at line 1 and calls `time.sleep(0.1)` at line 62 in the same test/function scope, which resolves to the patched lambda — so the added \"Give flusher threads time to process\" wait is a no-op. The comment's intent (synchronize before step.join()) is not achieved, leaving the test racing the background flusher thread. This is a concrete code path, not a generic suggestion, and I found no evidence to refute"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified at flusher.py line 199: `metrics.timer(\"spans.buffer.flusher.wait_produce\", tags={\"shards\": shard_tag})` uses the key `shards`, while the sibling metrics in the same block/timer context (`spans.buffer.flusher.produce` at line 185 and `spans.buffer.segment_size_bytes` at lines 192-195) use the singular key `shard`, all with the same `shard_tag` value. The inconsistency is real and concretely present in the changed code. Any dashboard/alert/aggregation keyed on the `shard` tag for this metric family would silently get no data for `wait_produce`. The root cause is factually correct and t"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": false,
+      "rationale": "REFUTED. Org link/unlink does route through the IDP storage provider's update path. InfinispanOrganizationProvider.orgDelegate is the JPA provider (line 47); JpaOrganizationProvider.addIdentityProvider (lines 341-342) and removeIdentityProvider (lines 368-371) both call session.identityProviders().update(identityProvider) after mutating the organization id. That resolves to InfinispanIdentityProviderStorageProvider.update(), which calls registerIDPLoginInvalidationOnUpdate. Because the organization id differs between original and updated, that method invalidates cacheKeyForLogin for all FetchM"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified in server-spi/.../IdentityProviderStorageProvider.java lines 215-256. The LoginFilter javadoc claims the enum \"contains all fields that are considered when deciding if a provider should be available for login or not,\" presenting ENABLED/LINK_ONLY/HIDE_ON_LOGIN as the criteria. The PR's new getLoginPredicate() (line 254) adds an organization-link + BROKER_PUBLIC config condition that is not captured by any enum constant or mentioned in the javadoc. The technical observation is factually correct and not refuted by any code path; the suggested remedy (update the javadoc / add a documente"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "REFUTED. While HashSet indeed has no iteration-order guarantee, the claimed failure (\"callers that do not re-sort receive non-deterministic ordering\") has no realizable path: every production caller of getForLogin (IdentityProviderBean line 238-241 and OrganizationAwareIdentityProviderBean lines 58/74/79) terminates the stream with .sorted(IDP_COMPARATOR_INSTANCE), so the stream order is never observed un-sorted. The SPI (IdentityProviderStorageProvider.getForLogin, lines 150-164) documents no ordering guarantee, only a non-null stream. Moreover, the identical HashSet accumulation pattern alre"
+     },
+     "v2": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "The claim is technically accurate: getForLogin accumulates into a plain HashSet (line 244) and returns identityProviders.stream() (line 254), which has no ordering guarantee. This differs from the delegate/invalid-cache path (line 218), which returns the delegate's ordered stream. The only callers sort by IDP_COMPARATOR_INSTANCE, but that comparator only compares guiOrder (OrderedModelComparator returns o1order - o2order), so tied IDPs (e.g. default 10000) keep the HashSet's nondeterministic iteration order — a stable sort preserves that, so ordering can differ between cache-hit and cache-miss"
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 8,
+      "leuCitado": true,
+      "rationale": "The claim's root premise is factually wrong. It asserts the cache-hit loop (lines 244-254) adds the raw, non-organization-aware model from session.identityProviders().getById(id), unlike the miss paths. But session.identityProviders() resolves (via DefaultDatastoreProvider:216-220, factory order 10) to this same InfinispanIdentityProviderStorageProvider, whose getById always returns createOrganizationAwareIdentityProviderModel(...) on every branch — cache miss (line 135), invalid cache (139), and cache hit (141). Therefore the model added in the loop is already wrapped/org-aware, and the retur"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 9,
+      "leuCitado": true,
+      "rationale": "Refuted. The cache-hit loop calls session.identityProviders().getById(id), which resolves to this same InfinispanIdentityProviderStorageProvider (registered by InfinispanIdentityProviderStorageProviderFactory and returned via DefaultDatastoreProvider.identityProviders() -> session.getProvider). Its getById already wraps the result via createOrganizationAwareIdentityProviderModel on all return paths (lines 135, 139, 141). Therefore the loop stores an organization-aware model, identical in shape to the non-cached path (line 218). The claim that the raw model is added is factually incorrect, and "
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S4",
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "Confirmed in the file: lines 381 and 425 both register cleanup via the literal alias \"alias\": `getCleanup().addCleanup(testRealm().identityProviders().get(\"alias\")::remove);`, while the created providers use aliases \"idp-alias-0\"..\"idp-alias-20\". No provider with alias \"alias\" is created, so these cleanup actions do not remove the 21 providers created by the test — they leak. The core technical claim (wrong alias → no removal) is accurate and I cannot refute it. (The claim's \"null-receiver\" wording is a minor imprecision since the admin-client `get()` returns a JAX-RS client proxy rather than "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 8,
+      "leuCitado": true,
+      "rationale": "REFUTED. The finding's premise is that FetchMode.ALL/ORG_ONLY return an organization's linked IDPs \"regardless of BROKER_PUBLIC,\" making non-public org-linked IDPs genuine login IDPs whose changes must invalidate the login caches. The code contradicts this. IdentityProviderStorageProvider.getForLogin (lines 173-182) unconditionally adds OrganizationModel.BROKER_PUBLIC=\"true\" to the search options for the ORG_ONLY/ALL org branch (line 180), even when a specific organizationId is supplied. JpaIdentityProviderStorageProvider.getAllStream (lines 268-283) applies BROKER_PUBLIC as a config-value pre"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "REFUTED. The claim's core premise — that ORG_ONLY/ALL for an organization \"include the organization's linked IDPs regardless of BROKER_PUBLIC\" and that \"BROKER_PUBLIC only controls the realm-level page\" — is factually wrong. The default getForLogin (IdentityProviderStorageProvider.java:165-184, the only implementation; no delegate override exists) unconditionally does `searchOptions.put(OrganizationModel.BROKER_PUBLIC, \"true\")` for the ORG_ONLY/ALL org branch (line 180). JpaIdentityProviderStorageProvider.getAllStream applies that key in the default config branch (lines 268-284) as a join on t"
+     }
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Verified against the file: line 112 of messages_zh_CN.properties (a Simplified Chinese locale) now reads 'totpStep1=在您的手機上安裝以下應用程式之一：', using Traditional characters 手機/應用程式/安裝. Neighbouring lines use Simplified forms (手机, 打开应用, 权限, 离线), confirming the script mismatch. The PR diff shows this exact line was changed, so the PR introduced the Traditional string into zh_CN. The claim's root cause is factually correct and cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "The finding's central claim is that the regex `_[a-zA-Z-_]*\\\\.properties` is \"broad\" — matching '/', digits and other chars — so it can rewrite a non-final path segment and produce a non-existent `_en.properties`. That is factually wrong. In a Java character class, `[a-zA-Z-_]` is parsed as `a-z`, `A-Z`, then the literal `-` and the literal `_`; the second `-` is NOT a range operator (a range requires the hyphen to sit between two characters, i.e. `X-Y`, which was already consumed by `A-Z`). The class therefore contains only ASCII letters, `-` and `_` — no `/` and no digits. Since `/` can neve"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "The finding's central mechanism is factually wrong. It claims the char class `[a-zA-Z-_]` matches `/`, digits and other chars (\"-'..'_'\" range), so an underscore in an earlier path segment could be swallowed and rewritten into a non-existent `_en.properties`. In Java regex, that class is parsed as the ranges `a-z`, `A-Z` plus the literal `-` and `_` (the hyphen after a completed range, with `_` next, is not a range start) — under no Java parsing is it the range `-`..`_`. Thus ASCII `/` (47) and digits (48–57) are NOT in the class. Since the class also excludes `.`, the pattern `_[a-zA-Z-_]*\\.p"
+     }
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Verified against the code: verifyIllegalHtmlTagDetected's fixture (`Some <div>tag</div`) selects POLICY_SOME_HTML because the English source contains HTML, but `<div>` is rejected by every policy (allow-list is br/p/strong/b), so the assertion passes even if the allow-list is emptied/narrowed. The other tests either use POLICY_NO_HTML (noHtml_de, duplicateKeys_en) or only assert the anchor error emitted before sanitization (changedAnchor_de). No test asserts a clean result for an allowed tag in a translation, so breaking the permitted-HTML-subset behavior would not be caught. The finding's sub"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed by reading the files directly. themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71 and themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101 both contain the Italian text 'Installa una delle seguenti applicazioni sul tuo cellulare:' in place of the Lithuanian totpStep1/loginTotpStep1. The account file change is visible in the PR diff (line 101), and the login file exhibits the identical wrong-language replacement. The claim's root cause and impact (Lithuanian users shown Italian text) are accurate; nothing refut"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S6",
+      "S12"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed in misc/theme-verifier/.../VerifyMessageProperties.java lines 102-111: the common-prefix (`start`) and common-suffix (`end`) scans are computed independently with no cross-bounding, and both are used as slice bounds for two strings of different lengths. If `value` is a prefix of `sanitized` (start == value.length()) and shares a trailing char with `sanitized` (end >= 1), then start + end > value.length(), so `value.substring(start, value.length() - end)` has begin > end and throws StringIndexOutOfBoundsException (similarly for `sanitized.substring`). This is reachable whenever saniti"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S8",
+      "S9",
+      "S10",
+      "S11"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "Evidence supports the claim and I cannot refute it. The account-ui bundle is loaded as raw key/value strings from the server and interpolated client-side by i18next (js/apps/account-ui/src/i18n.ts): it creates an i18next instance with default interpolation (prefix `{{`, suffix `}}`, escapeValue:false) — no custom prefix and no ICU plugin is configured. The rest of this same bundle overwhelmingly uses the double-brace i18next form for positional placeholders (`error-invalid-length-too-short='{{0}}'...{{1}}`, `error-number-out-of-range-too-big='{{0}}'...{{2}}`, `fullName={{givenName}} {{familyNa"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": false,
+      "rationale": "Refuted. The finding assumes some concrete integration overrides `should_sync` with the pre-PR signature `(self, attribute)`. A full-repo search shows `def should_sync` exists in exactly two places, both in `src/sentry/integrations/mixins/issues.py` (lines 66 and 382), and both were updated by this PR to accept `sync_source`. There are no assignment-style overrides (`should_sync = ...`) and no other 1-arg definitions. The other `should_sync` references are call sites (sync.py, tasks) or `hasattr` checks, neither of which affects arity. With no provider overriding the older signature, the claim"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The claim is factually accurate. `queued: datetime = timezone.now()` is a dataclass field default evaluated exactly once at import time, so all AssignmentSource instances created without an explicit `queued` value (from_integration, and from_dict when the key is missing) share the same import-time timestamp rather than the real assignment-queued moment. The code confirms from_integration never passes queued, and to_dict/from_dict round-trip the stale value. This is a genuine, well-known Python dataclass pitfall; the root cause and failure path are reachable and cannot be refuted."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified against tests/sentry/integrations/services/test_assignment_source.py lines 8-11: the test is named test_from_dict_empty_array but the input is an empty dict (data: dict[str, Any] = {}), never a list/array. The claim is factually accurate and cannot be refuted; the name does not reflect the exercised input."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "The finding's root cause is factually wrong. It assumes the task kwargs are serialized with JSON (\"a datetime is not JSON-native\"). Sentry configures Celery globally with the pickle serializer: src/sentry/conf/server.py has `CELERY_TASK_SERIALIZER = \"pickle\"`, `CELERY_RESULT_SERIALIZER = \"pickle\"`, and `CELERY_ACCEPT_CONTENT = {\"pickle\"}` (the only such config in the repo). Neither the `@instrumented_task` decorator on `sync_assignee_outbound` nor the `apply_async(kwargs=...)` call in src/sentry/integrations/utils/sync.py overrides the serializer per-task. With pickle, the `queued` datetime ro"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "The finding's core premise is that the Celery serializer cannot handle a raw `datetime`, causing either an enqueue failure or a silent type violation on `from_dict`. But Sentry's Celery config in src/sentry/conf/server.py:739-741 sets CELERY_TASK_SERIALIZER = \"pickle\" and CELERY_ACCEPT_CONTENT = {\"pickle\"} (the only such setting in the repo). Pickle natively serializes/deserializes `datetime` objects, so `to_dict()`'s raw datetime round-trips through `apply_async(kwargs=...)` back to a real `datetime` in `AssignmentSource.from_dict(...)`. The claimed JSON non-native failure path (enqueue failu"
+     }
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified against the source. The singular branch (line 146) returns SINGULAR_HUMAN_FAILURE_MAP values such as \"A missed check-in was detected\", not the docstring's \"A failed check-in was detected\". The multi-check-in branch joins \"%(count)d %(status)s\" fragments via get_text_list(last_word=\"and\") and appends \" check-ins detected\", producing strings like \"2 missed and 1 error check-ins detected\" — never the docstring's \"2 missed check-ins, 1 timeout check-in and 1 error check-in were detected\". Two of the three documented examples do not match the function's actual output, so the claim is factu"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": false,
+      "rationale": "The claim is conditional: it only describes a real bug if some importer still does `from sentry.monitors.logic.mark_failed import SimpleCheckIn`. I searched the whole repo and found no such importer. All `SimpleCheckIn` references live in the new `sentry.monitors.types` module and its two updated consumers (incidents.py, incident_occurrence.py). Every `from sentry.monitors.logic.mark_failed import ...` statement imports only `mark_failed` (monitor_consumer.py, check_timeout.py, check_missed.py, and the tests). The `create_issue_platform_occurrence` hits are an unrelated uptime function. Theref"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Confirmed by reading lines 159-171 of src/sentry/monitors/logic/incident_occurrence.py. The function builds a local `config` copy (line 160) and mutates it to substitute the human-readable schedule_type display (lines 161-162), but the returned dict at line 168 uses the ORIGINAL `monitor_environment.monitor.config` instead of the local `config`. The mutation is therefore dead, and the emitted occurrence's monitor context always contains the raw schedule_type value rather than the intended display string. The claim's root cause, failure outcome, and suggested fix are all accurate; cannot be ref"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified in src/sentry/workflow_engine/processors/detector.py: the docstring at lines 229-233 states evaluate \"returns a list of `DetectorEvaluationResult`\", but the method signature (-> dict[DetectorGroupKey, DetectorEvaluationResult]) and body (results = {}; results[result.group_key] = result) both return a dict. The documentation contradicts the actual return type, exactly as the finding claims. Not refutable."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "The claim is factually correct. MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with only `pass`, and StatefulDetectorHandler declares four abstract members (counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data at detector.py:135-170), none implemented. The class therefore remains abstract/uninstantiable. It is registered via GroupType.__init_subclass__ and assigned as detector_handler on MetricAlertFire (grouptype.py:27), and Detector.detector_handler calls group_type.detector_handler(self) unguarded (models/detector.py:8"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Verified by reading the file: `build_mock_occurrence_and_event` (lines 244-275) accepts `value: int` but never uses it anywhere in its body — the returned IssueOccurrence is built only from `group_key`, `new_status`, constants, and `handler.detector`. It is also the concrete implementation of `MockDetectorStateHandler.build_occurrence_and_event_data`, so `value` is discarded across the handler. Nothing in the expected occurrence or event_data depends on `value`. Therefore the claim that the tests cannot detect a wrong value passed into `build_occurrence_and_event_data` (and that the mismatched"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "The claim's factual content is accurate and cannot be refuted. `get_document_origin(org)` at lines 149-152 dereferences `org.organization` and `org.organization.slug`, and `error()` forwards its `org` parameter (line 131) into it (line 143). Every call site passes `self.active_organization` (lines 413, 432, 436, 470, 487, 498, 505). Per src/sentry/web/frontend/base.py, `active_organization` is typed `RpcUserOrganizationContext` and is consistently used as `active_organization.organization.slug`, confirming it is a context wrapper, not an `Organization`. Thus the parameter name `org` genuinely "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "REFUTED. The finding's premise that `pipeline.signature` is a \"secret per-flow\" state nonce is factually wrong. At src/sentry/pipeline/base.py:132-133, `self.signature = md5_text(*pipe_ids).hexdigest()`, where `pipe_ids` are merely the fully-qualified class names of the pipeline views (`OAuthLoginView`, `GitHubInstallation`). `md5_text` (src/sentry/utils/hashlib.py:14-18) is a plain deterministic MD5 with no randomness, seed, or per-flow secret. Thus the `state` value is a publicly-derivable fixed constant — the test itself hard-codes `state=9cae5e88803f35ed7970fc131e6e65d3` identically across"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "REFUTED. The claim assumes `pipeline.signature` is a secret per-flow state nonce, but it is not. In src/sentry/pipeline/base.py:132-133, `self.signature = md5_text(*pipe_ids).hexdigest()` where `pipe_ids` is merely the module/class names of the pipeline views (deterministic and identical for every GitHub flow), and `md5_text` (src/sentry/utils/hashlib.py:14-18) applies no secret/salt. Therefore the value compared at integration.py:412 is a fixed, publicly-derivable constant that is additionally echoed back through GitHub in the OAuth redirect URL (`state={pipeline.signature}`). A timing side-c"
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "Confirmed. Pipeline.signature is a deterministic md5 over the pipeline view class FQNs (base.py:132-133), so for the new [OAuthLoginView(), GitHubInstallation()] pipeline it is the fixed value 9cae5e88803f35ed7970fc131e6e65d3 — the same value the test itself asserts in the redirect query (test_integration.py:235). The first GET in test_installation_not_found goes to OAuthLoginView (step 0); with no state it only redirects to GitHub authorize and never advances. The second GET supplies state=ddd023d87a913d5226e2a882c4c4cc05, which is NOT the pipeline signature, so OAuthLoginView.dispatch return"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "The claim describes a failure path that requires a consumer driving GitHubInstallation without the preceding OAuthLoginView, but no such consumer exists in the actual code.\\n\\nEvidence:\\n1. grep for `GitHubInstallation` returns only two hits, both in `src/sentry/integrations/github/integration.py`: its class definition and the `get_pipeline_views` that returns `[OAuthLoginView(), GitHubInstallation()]` (line 344). No other module imports or reuses it.\\n2. The only subclass of `GitHubIntegrationProvider` is `GitHubEnterpriseIntegrationProvider` (github_enterprise/integration.py:294), and it ful"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "The finding posits that some \"caller/subclass that drives this provider's second step without the new preceding OAuth view\" will always hit the new authenticity check and be rejected. This is refuted by the actual code: (1) `GitHubInstallation` is instantiated in exactly one place repo-wide — `GitHubIntegrationProvider.get_pipeline_views()` → `[OAuthLoginView(), GitHubInstallation()]`; no other provider, test, or module reuses it. (2) The only subclass, `GitHubEnterpriseIntegrationProvider` (github_enterprise/integration.py:294), overrides `get_pipeline_views()` entirely (InstallationConfigVie"
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 10,
+      "leuCitado": true,
+      "rationale": "The claim is not refutable and the crash path is concretely reachable. `integration.metadata[\"sender\"][\"login\"]` (integration.py:503) is indexed unconditionally. `build_integration` only sets `metadata[\"sender\"]` when `state.get(\"sender\")` is truthy (integration.py:376-377); the only writer of that state is the installation webhook (webhook.py:202-210). An ACTIVE github Integration with no OrganizationIntegration and no `sender` metadata can exist: the pipeline calls `ensure_integration` (creating/updating the Integration — build_integration here runs with pipeline state that does NOT contain "
+     },
+     "v2": null
+    }
+   ]
+  }
+ }
+}
