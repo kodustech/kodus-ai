@@ -569,7 +569,12 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             }
             throw error;
         } finally {
-            this.forgetAttemptOwner(jobId, leaseOwner);
+            // The owner entry deliberately outlives this attempt: the router
+            // completes the job AFTER `process` returns, so dropping it here
+            // left `markCompleted` with no owner to guard on and minting a
+            // fresh one that can never match the row - the completion was
+            // silently refused. It is dropped by whoever completes the job
+            // (#1902 review).
             if (acquiredLock && !acquiredLock.isReleased()) {
                 try {
                     await acquiredLock.release();
@@ -805,7 +810,13 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     instanceId: leaseOwner,
                 },
             });
+            return;
         }
+
+        // Compare-and-delete: the entry is dropped by the completion that used
+        // it, so a second completion for the same attempt resolves nothing and
+        // gets a fresh owner minted, which cannot match the row (#1902 review).
+        this.forgetAttemptOwner(jobId, leaseOwner);
     }
 
     private removeByokConcurrencyGateMetadata(
