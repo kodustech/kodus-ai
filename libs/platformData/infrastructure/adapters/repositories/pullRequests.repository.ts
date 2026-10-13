@@ -2049,6 +2049,30 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         return doc ? mapSimpleModelToEntity(doc, PullRequestsEntity) : null;
     }
 
+    async appendPrLevelSuggestions(
+        pullRequest: PullRequestsEntity,
+        suggestions: ISuggestionByPR[],
+    ): Promise<PullRequestsEntity | null> {
+        // Appended in one statement, targeted at the document the identity
+        // lookup resolved: a re-read followed by a whole-array `$set` drops
+        // whatever a concurrent writer added between the read and the write,
+        // and a target resolved by repository NAME can be another repository's
+        // document when two of them share one (#2076 review).
+        const filter: Record<string, unknown> = { _id: pullRequest.uuid };
+        if (pullRequest.organizationId) {
+            filter.organizationId = pullRequest.organizationId;
+        }
+        const doc = await this.pullRequestsModel.findOneAndUpdate(
+            filter,
+            {
+                $push: { prLevelSuggestions: { $each: suggestions } },
+                $set: { updatedAt: new Date().toISOString() },
+            },
+            { new: true },
+        );
+        return doc ? mapSimpleModelToEntity(doc, PullRequestsEntity) : null;
+    }
+
     async updateFile(
         fileId: string,
         updateData: Partial<IFile>,
