@@ -223,11 +223,11 @@ export class ForgejoService implements Omit<
     ): PullRequestReviewComment {
         return {
             id: comment.id,
-            // The review is the closest thing Forgejo has to a thread, and
-            // this field is what groups a review's comments together (#2064
-            // review keeps it: see the note in the PR about the reactions path,
-            // which wants the per-comment identity instead).
-            threadId: review.id?.toString(),
+            // The comment id, not the review's: Forgejo reviews are not
+            // comment threads, and the only behavioural reader of this field -
+            // the reactions lookup - needs the per-comment identity, which the
+            // review id can never be (#2064 review).
+            threadId: comment.id?.toString(),
             isResolved: comment.resolver != null,
             isOutdated: review.stale ?? false,
             body: comment.body ?? '',
