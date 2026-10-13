@@ -1,0 +1,1619 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "v2",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete bug where the connection is created with a stale/expired access token instead of the freshly refreshed one, describing a real failure mode (failed or re-refreshed connection, divergent DB/connection state), not a speculative or optional concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security hole (timing-based secret recovery leading to forged credential create/update requests), not a speculative or stylistic concern, so it is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "reason": "The comment identifies JSDoc that states something false about the code (`@param appData.type` documented as \"the app slug\" while it is actually used as the credential type), which is explicitly documentation stating something false about the code and therefore not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete wrong-result bug: passing credential.id as the userId to refreshOAuthTokens sends the wrong calcomUserId to the credential-sync endpoint, syncing Bigin credentials against the wrong user.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete data-corruption failure: the raw safeParse result `{success, data}` is persisted as `credential.key`, which then fails `googleCredentialSchema.parse` on next load and breaks Google Calendar.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken contract: the changed branch returns a raw `Response` while callers such as hubspot, zoho-bigin, zohocrm and googlecalendar read `.data`/token fields off it, producing undefined/NaN or a TypeError on the feature's primary code path — not a speculative or style concern.",
+     "passos": 3
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete input/path (COLLECTIVE event with null evt.destinationCalendar) and a concrete failure (team destination calendars dropped, hosts never invited), which is a real data-loss / broken-contract bug, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure—non-calendar results lose their `credentialId` in persisted references (contradicting the parallel mapping at line 209), breaking later credential lookups so video meetings are not cleaned up—which is lost data/broken contract, not a nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete performance cost—up to N sequential database round-trips added to the booking-creation hot path—which the rubric explicitly counts as a non-nit, not a speculative or style concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete crash (TypeError) with a specific input and caller paths, so it is a bug report, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — a broken fallback makes calendarId undefined, so update/delete targets the wrong calendar or errors — which is a wrong-result/error, not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes concrete failures—a legitimate attendee being wrongly forbidden (FORBIDDEN) and duplicate attendees being created—due to case-sensitive email comparison, which is a wrong result/security concern, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result — a newly added guest with differing casing is routed to the wrong email template — which is a bug, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete functional defect: the user-facing tooltip string bypasses the component's t() translation path and will never be localised, yielding incorrect text for non-English users, which is a wrong result rather than a style or optional improvement.",
+     "passos": 2
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: the fallback is unreachable and users see a raw error-code prefix instead of the intended translated message, so it is a bug report rather than a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "reason": "The comment describes concrete failures — duplicate attendee rows being persisted (corrupted booking attendee list) or an unhandled Prisma error on createMany — rather than a speculative or style concern, so it is not a nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition producing duplicate attendees (a specific wrong result/data corruption), which is explicitly not a nit.",
+     "passos": 1
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result — team ADMINs are wrongly rejected with FORBIDDEN when adding guests because `&&` makes the flag true only for OWNERs, contradicting the variable's intent — which is a functional bug, not a nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security hole — a case-sensitivity bypass letting blacklisted guest emails be persisted — matching the actual raw-vs-lowercased comparison in the code, so it is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure — passing the unfiltered `guests` causes an existing attendee re-submitted by the requester to receive a duplicate booking-confirmation email with a new ICS REQUEST — which is a wrong-result/behavior bug, not a nit.",
+     "passos": 3
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure: dismissing the modal via ESC/overlay after a successful enable skips onEnable, leaving the UI showing 2FA as disabled while the server has it enabled—a wrong-result/UI-state bug, not a speculative or style concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete authentication bypass/security hole: supplying a backup code plus any non-empty totpCode skips both the password check (line 121 gated on !totpCode) and TOTP validation, granting a session with only a second-factor backup code — a described failure, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken contract: the caller must now pass a required third argument, causing a type error and an undefined value at runtime, which is a real failure rather than a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to rename a function for naming clarity; since it's a default export, no caller contract breaks and no concrete failure is described, making it a style/naming nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — the test's assertion is vacuous because the handler calls showToast unconditionally without awaiting writeText, so the test passes even when the copy feature is broken (verified at EnableTwoFactorModal.tsx lines 278-279), which is a specific false-negative rather than a speculative or stylistic concern.",
+     "passos": 3
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — the assertion can never fail and thus fails to verify the switch state, producing a false-positive test result, which is a real wrong-result defect rather than a style/speculative nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition (TOCTOU read-modify-write) that lets a single-use backup code authenticate twice — a security hole with a specific failure path, not a speculative or style nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security hole (timing side-channel leaking backup-code guesses via non-constant-time string comparison), which is explicitly not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete real performance cost (loss of index usage, full table scan on each cron invocation) caused by the new OR branch on an unindexed retryCount column, which is explicitly not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment merely notes that retryCount isn't incremented on the success path without describing any concrete failure (no wrong result, crash, or lost data explained), so it's an optional observation rather than a bug report.",
+     "passos": 3
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment flags a concrete logic defect: retryCount is incremented in two places for the same path, so the retry counter misrepresents the number of attempts and can cut off/allow retries incorrectly — a wrong-result bug, not a style or defensive-programming nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition (non-atomic increment under overlapping runs) that undercounts retries and can loop a reminder forever past its deletion threshold—a named wrong-result failure, not a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: an unprotected DB update in the catch block throwing/rejecting the handler and aborting the whole scheduling run, which is an exception/crash, not a speculative or defensive concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure: the moved filter makes the deleteMany match reminders of any method, so unrelated EMAIL/WHATSAPP rows with retryCount > 1 get silently deleted (lost data), which is not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment asks to add fixture data and extra assertions so the test can distinguish the branches; it is a request to strengthen test coverage/effectiveness rather than a description of a concrete production failure.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken contract: callers of the removed `findMany` method and consumers spreading the now-`Prisma.Sql` conditions into a Prisma `where` will fail, not a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security hole (authorization-boundary bypass returning all bookings without an ownership predicate), not a mere defensive/speculative style suggestion, so it is not a nit.",
+     "passos": 3
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete stored-XSS security hole with a specific data flow (raw_html cook path → unsanitized cooked value → `raw post.cooked` in embed view), which is a real security failure, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete wrong result — non-en-US viewers get an English-abbreviated month in a view that is otherwise localized — so it is a real locale bug, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — case-varying hostnames are treated as different hosts, rejecting valid referers and breaking host matching — with a specific input path, so it is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — the tests pass vacuously and would still pass even if the code they name were deleted — which is a wrong-result/broken-verification bug, not a request for extra coverage or a speculative concern.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to improve/fix a test so it verifies the intended behavior (test-quality/coverage concern); it describes no concrete production failure such as a crash, wrong result, or broken contract, so it is a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition that raises an unhandled ActiveRecord::RecordNotUnique exception and breaks the job, which is explicitly the kind of concrete failure (race condition/crash) that is not a nit.",
+     "passos": 1
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken contract: the controller only enqueues a Sidekiq job while the new spec expects `TopicRetriever.new`/`retrieve` to be invoked, so the example fails — a described test/behavior failure, not an optional or speculative nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete crash: `end if` is invalid Ruby, so the ERB compile raises a SyntaxError and every render of the embed 'best' view fails; a described exception/broken rendering is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure (an unhandled SimpleRSS NoMethodError aborting the whole job) rather than a speculative or defensive concern, so it is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security hole (substring origin matching admits malicious origins posting messages into the embed), which is a named failure, not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete behavior regression: dropping the embeddable-host guard makes `expandable_first_post?` return true for topics whose embeddable host was deleted, changing embed output that the previous guard blocked — a wrong-result/contract failure, not a speculative concern or test request.",
+     "passos": 3
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure — case-insensitive host matching silently fails to find records stored with uppercase letters, yielding wrong results — so it is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure — a NoMethodError crash on nil caused by an empty query result — which is an exception, not a speculative or defensive concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete crash: `nil.sub!` raises NoMethodError on a nil host, turning a validation error into a 500, and names the exact code path (controller assigns params host directly).",
+     "passos": 3
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "nit": true,
+     "reason": "The comment concerns test quality/coverage—arguing the example no longer exercises the behavior it names—and asks to fix assertions or rename it, with no concrete production failure, crash, or wrong result described.",
+     "passos": 3
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure — migrated rows like `http://discourse.org` are never matched by the `lower(host) = ?` lookup, so `host_allowed?` returns false and embedding silently breaks for existing installs — which is a wrong-result/behavior defect, not a nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken contract—the client expects full embeddable_host objects but the serializer emits only ids, causing the admin embedding table to render empty—naming the specific code paths and failure path rather than a speculative or stylistic concern.",
+     "passos": 3
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete crash: a nil host from a missing/deleted id leads to NoMethodError and an unhandled 500 in update/destroy, which is a real failure rather than a defensive \"just in case\" guard.",
+     "passos": 2
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result failure (an off-by-one that makes the mixin emit an ordering value inconsistent with what callers intend on old WebKit engines), which is a bug, not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — type mismatch causes .uniq to fail deduplication, leading to redundant locale lookups and parsing the same YAML file twice — which is a real bug, not a defensive or speculative concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result failure: because the initializer enables I18n::Backend::Fallbacks, translate caches the fallback (:en/default) value under the requested locale key, and ensure_loaded! loads the correct locale file without clearing @cache, so the stale fallback string continues to be served for that locale.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — fallback locales not loaded outside the request cycle cause I18n.t to silently return \"translation missing\" (a wrong result), a broken contract between the new fallbacks mechanism and the loader gate — so it is not a nit.",
+     "passos": 3
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result failure: large animated GIFs uploaded through this path get their animation flattened to a single frame because the tempfile path lacks a `.GIF` extension, so the animated downsizing branch is never selected.",
+     "passos": 3
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment flags docs stating something false about the code: the inline comment promises images are reduced to the allowed size, but the loop only shrinks 5×80% and never verifies the result meets max_image_size_kb, so it describes a concrete broken contract rather than a stylistic or speculative concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "The comment only flags a vague \"behavioral concern\" and scope, without naming any concrete input or path that produces a crash, wrong result, or broken contract.",
+     "passos": 3
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure (broken contract): the controller passes \"80%\" where the downsize/animated path requires explicit WxH geometry (gifsicle's --resize-fit rejects a percentage, and the deleted code built \"#{width}x#{height}\"), causing the auto-downsize to silently no-op and leave oversized uploads.",
+     "passos": 3
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure — a duplicate method definition overriding the existing contract, breaking callers and raising NoMethodError — which is a broken contract, not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "The comment only argues a test-coverage gap (the route verb/action pairing is untested and would go undetected), not a concrete failure in the code, so it falls under the \"tests/more coverage\" nit category.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — a route/controller contract mismatch causing params.require(:group_id) to raise ParameterMissing (HTTP 400) and break add/remove member — which is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete input (user_count an exact multiple of limit) and a concrete wrong result (pager overcounts pages, enabling 'next' into an empty member list), so it is a real bug report, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure — the user-facing members template renders only the first 50 group members with no pagination controls after the controller switched to unconditional pagination, a broken contract causing truncated results.",
+     "passos": 2
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete performance failure (redundant serialized loads of the asset cache under the exclusive lock, thundering herd on cold cache and every Dev request), which is a real performance cost rather than a speculative or stylistic nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment concretely identifies a data race and cross-request dispatch corruption from mutating a shared `imw.next` on every chain rebuild, which is a named concrete failure (race condition), not a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment identifies that the HELP string documents a response size while the code records egress request size, i.e. documentation that states something false about the code, which is explicitly not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to rename a test function for consistency with the renamed middleware; it describes a naming/readability concern rather than any concrete failure, crash, or wrong behavior.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment asks to add a negative test assertion for the false cases, which is a request for more test coverage rather than a description of a concrete failure in the code.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: stale cross-metric state and a premature error return cause false failures and incorrect label counts for multi-series metric families, which is a real bug rather than a style/speculative nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S5",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete data-loss regression: the migration dropped the traceID field, so egress log lines silently lose trace correlation, which is a specific broken behavior rather than a style or speculative concern.",
+     "passos": 3
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition (concurrent COUNT+INSERT exceeding the enforced device limit), which is a real failure, not a speculative or stylistic nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment concretely describes a broken contract where anonymous authentication now fails outright on ErrDeviceLimitReached instead of proceeding untagged, causing a caller-visible availability loss.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment requests additional test coverage for an untested branch and only speculates about a hypothetical future regression, without describing any concrete failure in the current code.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete security-relevant failure (device-limit bypass via cache poisoning after a failed DB write), not a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure: updateDevice's rowsAffected==0 path also triggers when the WHERE updated_at window excludes the row, so ErrDeviceLimitReached is returned spuriously and Authenticate (client.go:45) fails the login for reasons unrelated to the limit — a wrong-result/broken-contract bug, not a style or speculative concern.",
+     "passos": 3
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": true,
+     "reason": "The comment concerns the effectiveness/quality of the test assertions (they don't validate the code and are vacuous), which is a test-coverage/quality matter rather than a concrete production failure such as a crash, wrong result, or broken contract.",
+     "passos": 2
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": true,
+     "reason": "The comment identifies a test-coverage gap (tests don't assert the legacy write, so a regression wouldn't be caught), which is exactly the \"requests to add tests or more test coverage\" category of nit rather than a concrete production failure in the changed code.",
+     "passos": 2
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": true,
+     "reason": "The comment only concerns missing per-request fields in log output (a logging/copy-paste issue), which falls under the \"logging\" nit category and describes no crash, wrong result, data loss, or other concrete failure.",
+     "passos": 2
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": true,
+     "reason": "The comment only requests renaming a test case for accuracy; it describes no concrete failure, just a naming/readability improvement, so it is a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6",
+      "S7",
+      "S11",
+      "S12",
+      "S13",
+      "S18",
+      "S19",
+      "S20"
+     ],
+     "nit": false,
+     "reason": "The comment identifies concrete call sites where the wrong metric helper is used (lines 45, 129, and 166), producing a real wrong-result/misattribution bug in the duration series rather than a style or speculative concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S4",
+      "S16"
+     ],
+     "nit": false,
+     "reason": "The comment describes concrete failures: detached legacy writes using a request-scoped context that gets cancelled when the handler returns (legacy store silently stops being updated) and a broken synchronous-write contract relied on by callers.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9",
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete defect: the Delete success metric emits a wrong label (object name instead of resource kind), inconsistent with all other call sites including the error sample at line 103, which is a real wrong-result/contract issue rather than a style or speculative concern.",
+     "passos": 2
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure — leaked goroutines and an un-cancelled internal context on the constructor's error path — with specific code locations, rather than a vague defensive or speculative concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment only asks for restored/added test coverage and speculates that postgres \"could regress\" without naming any concrete current failure, so it is a test-coverage request rather than a described bug.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken contract: the constructor now eagerly blocks on the full index build, returns nil,err (preventing the server from existing) on any build failure instead of degrading to per-request errors, and the sync.Once guard means the caller-supplied ctx to Init is silently ignored.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete race condition (concurrent map iteration and write) with a specific failure mode (panic/data race), which is explicitly excluded from being a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition (concurrent builds of the same key yielding two distinct index instances, stale results, and two bleve.New calls on the same directory), which is explicitly a non-nit failure.",
+     "passos": 2
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure (missing key prop causing React duplicate-key warnings and wrong row reconciliation/stale state) with a specific fix, not a speculative or style concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: the undefined/skipToken path produces permission-derived supported abilities (e.g., Duplicate granted to non-Grafana rule callers) instead of NotSupported, which is a specific incorrect behavior rather than a speculative or defensive concern.",
+     "passos": 3
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment only requests stronger test assertions or a rename for a test that still passes; it describes no concrete failure in the code, which is the definition of a test-coverage nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken contract/failure: the `promRule` prop is typed `Rule` but consumed as `GrafanaPromRuleDTO`, causing the type guard to return false for combined-rule callers so Grafana abilities resolve to NotSupported and menu entries are silently hidden—a wrong result, not a speculative or stylistic concern.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete behavioral regression — federated rule groups being reported as editable/removable, causing mutating actions on immutable rules to fail — which is a wrong-result/broken-contract defect, not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition causing a wrong result (the test can falsely pass because the assertion runs before the unjoined reader thread records any read), which is explicitly not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — if a group removal throws, deletedAll is never set and the non-daemon reader thread loops forever, hanging the test JVM — which is a specific hang/liveness failure, not a speculative or stylistic nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken contract: GroupModel.getSubGroupsCount() is documented to \"Never return null,\" but the change now returns null in a path that always produced a value or threw, and it names concrete callers/paths (e.g. GroupUtils.populateSubGroupCount, unboxing in `> 0`/`long n =`) that would throw a NullPointerException — a real failure, not a speculative or defensive concern.",
+     "passos": 3
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment points out that the Javadoc documents a \"3-letters shortcut\" while the code's implementations use 2-character shortcuts, i.e. documentation that states something false about the code — which is explicitly not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S11",
+      "S15"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete bug: line 73 re-validates grantType instead of rawTokenId, so a null rawTokenId is accepted and leads to a wrong token id ending in \":null\" — an actual incorrect result, not a speculative or style concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S3",
+      "S7",
+      "S8",
+      "S9",
+      "S10",
+      "S12",
+      "S13",
+      "S14",
+      "S16",
+      "S17"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete logic defect: the grant-shortcut matcher has an inverted comparison and wrong substring indices, so the assertion silently passes for wrong grant shortcuts, producing a wrong result rather than merely suggesting a style or speculative improvement.",
+     "passos": 3
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure path (a passkey-only user is made to satisfy a password step they cannot fulfill, potentially stranding authentication) rather than a speculative or stylistic concern.",
+     "passos": 3
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment points out that the code comment states something false about the actual guard condition (it also requires the user to have a passkey), and false documentation about the code is explicitly not a nit.",
+     "passos": 3
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure (ownerId mismatch causes the lookup to never match and the method to wrongly return false, silently dropping global permissions), which is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — orphaned authorization resources/permissions remain when the feature flag is off — which is a wrong-result/data-corruption issue, not a speculative or defensive concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "The comment flags an unused private method (dead code) and requests removal or wiring it up, describing no concrete failure—explicitly a nit category.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure: ClientPermissionsV2.setPermissionsEnabled throws UnsupportedOperationException while the client-removed listener still calls it, so client deletion crashes with an exception rather than a speculative or stylistic concern.",
+     "passos": 3
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment identifies javadoc that states something false about the code (documenting a boolean-returning accessor for void methods that actually throw), which falls under documentation errors, not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete defect — the zh_CN locale string renders Traditional Chinese (手機/應用程式/安裝) instead of Simplified, an actual wrong-script output for that locale, not a speculative or style-only concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment names concrete failures (overly broad regex rewriting the path to a non-existent _en.properties and a missing English sibling file aborting the build with an opaque RuntimeException), which is a crash/exception scenario rather than speculative defensive advice.",
+     "passos": 2
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": true,
+     "reason": "The comment's request is to add a test case/coverage for an untested branch, which falls under the explicit nit category of \"requests to add tests or more test coverage,\" and it describes a gap in test detection rather than a concrete production failure of the changed code.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: Lithuanian users are shown Italian text in the login TOTP instructions at the cited lines, which is a real localization bug rather than a style or optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S6",
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete crash (StringIndexOutOfBoundsException from overlapping substring indices on strings of different lengths) with a specific triggering input and reachability argument, which is a concrete failure, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S8",
+      "S9",
+      "S10",
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — the account-ui bundle is consumed by i18next (double-brace interpolation), so switching to Java single-brace/ICU syntax makes placeholders unsubstituted and the choice text rendered literally, producing wrong user-facing output rather than merely suggesting an optional improvement.",
+     "passos": 3
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security/privacy failure — logging the full, attacker-controllable raw report (CSP URIs, sourceFile, user_agent) on validation failure leaks sensitive data into application logs — which is a security hole, not a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete, non-speculative failure: the analytics event is emitted before the feature-flag check, so requests that return 404 without assembling anything are still counted, producing an incorrect/over-counted metric — a wrong result in the recorded data, not a mere style or defensive suggestion.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete defect: the test's mock predicate (`query.query === 'search-query'`) can never match because the hook sends the search string as `substringMatch`, so the assertion is vacuously true and the test fails to witness the number-type guard it claims to verify.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure—zip positionally pairs error ids with nodestore results while get_multi reorders (dedupes and returns uncached-then-cached items), so ErrorEvents can get the wrong title/message/timestamp, producing corrupted/wrong results, which is not a nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — with the feature flag enabled, TableWidgetVisualization receives hardcoded empty columns/tableData, so the real query results are discarded and users see an empty table instead of data (a wrong/lost-result bug), not a speculative or style concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result — reports containing both `age` and `timestamp` with falsy-but-valid values (e.g. 0) bypass the mutual-exclusion guards and are wrongly accepted instead of rejected, which is a specific failure with named inputs, not a speculative or style concern.",
+     "passos": 2
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete performance/contract failure: per-process sub-buffers multiply the documented global flush cap by the process count, increasing Redis memory loaded per cycle and weakening backpressure, which is a real cost, not a speculative or style nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment primarily flags unused/dead code (a newly added method with no callers) and a speculative \"future caller\" concern, which is explicitly listed as a nit category.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment correctly identifies that the docstring states something false about the code (it claims one process per shard while the code shares shards across up to max_processes processes), which counts as a broken/false contract rather than a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete functional failure — the declared default of 1 makes `max_processes=1` reach SpanFlusher via the factory, so the `or len(buffer.assigned_shards)` fallback never fires and the advertised one-process-per-shard parallelism is silently disabled — a real wrong-behavior/broken-contract bug, not a nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete input (0 from the int click option) and a concrete wrong result (limit ignored, one process per shard), which is a real bug rather than a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete crash (KeyError from an empty process_to_shards_map when a negative --flusher-processes value makes num_processes negative), which is a specific failure path rather than a speculative/defensive nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — a race condition / nondeterministic flaky test because the added `time.sleep(0.1)` is neutralized by the test's `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, so the intended synchronization does not occur before `step.join()`; a described race condition is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete broken contract: the metric's tag key `shards` diverges from the `shard` tag used by sibling metrics in the same method, so tag-based consumers silently get no data for `wait_produce` — a real data-loss/inconsistency failure, not a style nit.",
+     "passos": 3
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure (stale ORG_ONLY/ALL login caches returning the pre-mutation IDP set after org link/unlink, causing the login page to display wrong IDP linkage), which is a wrong-result/broken-contract bug, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes documentation claiming exhaustiveness that is now false about the code (the actual predicate also filters on organization link/BROKER_PUBLIC), which is explicitly a non-nit category.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete behavioral failure: the cached path returns IdPs in non-deterministic hash order rather than the delegate's preserved order, so results differ between cache-hit and cache-miss and break the ordering contract for callers (e.g. login IdP display).",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken contract: the cache-hit path returns unwrapped models, so an IdP bound to a disabled/nonexistent org would report isEnabled()=true when served from cache (unlike the cache-miss path), which consumers such as OrganizationAwareIdentityProviderBean explicitly rely on.",
+     "passos": 3
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S4",
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — the cleanup references the literal \"alias\" instead of the created provider, so it removes nothing and the test leaks the 21 created IDPs, a wrong-target bug rather than a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — login caches serving a stale/wrong set of IDPs because the predicate wrongly classifies non-public org-linked IDPs as non-login and skips invalidation — which is a wrong-result/data-staleness bug, not a nit.",
+     "passos": 3
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure — a TypeError crash at the new 2-arg call site for any concrete integration overriding should_sync with the old signature — which is a broken contract/crash, not a speculative or style concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete correctness failure: the dataclass default is evaluated once at import, so `queued` is silently set to a frozen process-start timestamp, producing wrong/misreported data rather than a mere style suggestion.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment concerns a misleading test name/test coverage rather than a concrete failure; the test itself passes and there is no crash, wrong result, or broken contract described, so it is a naming/coverage nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: a non-JSON-native datetime is put through Celery serialization and reconstructed via from_dict, breaking the producer/consumer contract.",
+     "passos": 2
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a false docstring (claims a list return while the signature and body return a dict keyed by group_key), which is documentation contradicting the code, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure (TypeError from instantiating an abstract class that fails to implement required abstract methods), which is a crash/broken contract, not a nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment complains that a mock helper's `value` argument is unused and that existing tests therefore don't verify the value/threshold path, i.e., a request to strengthen test coverage/remove dead mock behavior rather than describing a concrete production failure.",
+     "passos": 2
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment is fundamentally a rename/readability request; its only described failure is a hypothetical future caller passing a real Organization, and all existing callers already pass active_organization, so no concrete failure path is named.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security hole — a timing side-channel in the OAuth state/CSRF guard comparison — which is explicitly not a nit even if the failure is hard to exploit in practice.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete defect: the test's mismatched state makes dispatch() hit the state-mismatch error branch, so it never exercises the Integration.DoesNotExist path and would pass even if that handling were broken — a specific wrong-verification failure, not a speculative or style nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken contract: the new check makes `fetch_state(\"github_authenticated_user\")` return None for any consumer reusing GitHubInstallation without the prepended OAuthLoginView, causing a previously working install path to always render the invalid-installation failure page — a real wrong-result/regression, not a defensive or speculative nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete crash (KeyError/500) for a specific input (an ACTIVE integration whose metadata has no \"sender\"), a named failure rather than a speculative or defensive concern.",
+     "passos": 2
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment documents that the docstring advertises outputs the function does not actually produce, i.e. documentation that states something false about the code, which is explicitly not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure (ImportError at module load for consumers importing the moved symbol from its old location), which is a broken contract rather than a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result (dead mutation causing incorrect evidence data in the emitted occurrence), which is a bug rather than a nit.",
+     "passos": 2
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,1542 @@
+{
+ "model": "gpt-6.1-sol",
+ "verificador": "gpt-6.1-sol@sub",
+ "versao": "v1",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes an authorization defect that incorrectly denies team admins access with FORBIDDEN, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete credential mismatch that prevents updating the organizer's calendar event or updates the wrong account, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a real performance and resource-exhaustion defect from reachable unbounded guest inputs causing concurrent email sends and quadratic attachment work, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes an actual localization defect: users in non-English locales receive an untranslated English tooltip rather than localized text.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8",
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment describes concrete duplicate-input and concurrent-request cases that create duplicate attendees, which is incorrect data behavior and a race condition rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6",
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security defect in which mixed-case email inputs bypass the configured blacklist and allow a blocked address to be added and emailed.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete notification bug in which an existing attendee receives a new-booking email instead of the correct add-guests email.",
+     "passos": 1
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes updates lacking a required calendarId and deletions targeting the wrong calendar when booking references omit externalCalendarId, which is incorrect behavior rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes actual loss of calendar and credential routing data during location editing that breaks subsequent updates or cancellation, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete functional defect in which organizations created with team billing disabled lack required publication fields and are consequently rejected when publishing.",
+     "passos": 1
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S1",
+      "S10",
+      "S14",
+      "S17",
+      "S18"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete caller-produced missing destination that causes Google Meet selection to crash instead of falling back to Cal Video, which is a behavioral defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S2",
+      "S13"
+     ],
+     "nit": false,
+     "reason": "The comment describes actual loss of a video integration's credential association, causing incorrect data needed for subsequent meeting lifecycle operations, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S3",
+      "S9",
+      "S11",
+      "S15",
+      "S16",
+      "S19"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete multi-host booking failure in which the wrong calendar ID is used with a host's credential, preventing event creation rather than suggesting an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S5",
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete loss of calendar events for collective hosts when destinationCalendar is null, which is incorrect behavior rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S7",
+      "S20"
+     ],
+     "nit": false,
+     "reason": "The comment describes incorrect cancellation behavior that leaves additional hosts' recurring calendar events undeleted, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes an undeclared variable that causes TypeScript checking to fail and a runtime ReferenceError during token exchange, which is a concrete defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete performance regression: every service construction incurs an unnecessary blocking OAuth request and database write even when the access token is valid.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a race condition that inserts duplicate credentials and leaves stale competing data, which is a behavioral defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "If true, the secret comparison exposes a timing side channel in webhook authentication, which is a security defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S24",
+     "membros": [
+      "S1",
+      "S13",
+      "S16",
+      "S19",
+      "S24"
+     ],
+     "nit": false,
+     "reason": "The comment describes a broken response contract between the helper and its callers that causes undefined-property exceptions and incorrect token consumption when sharing is enabled.",
+     "passos": 1
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11",
+      "S20",
+      "S23"
+     ],
+     "nit": false,
+     "reason": "The comment describes documentation that falsely states the schema’s behavior and a resulting broken contract for token responses, which is a defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S3",
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment describes corruption of stored credentials that causes subsequent authentication refreshes to fail, which is a concrete behavioral defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S18",
+      "S22"
+     ],
+     "nit": false,
+     "reason": "The comment describes persisting credentials in the wrong shape, corrupting stored credential data and causing subsequent parsing to fail, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S5",
+      "S14",
+      "S17",
+      "S21"
+     ],
+     "nit": false,
+     "reason": "The comment describes passing the wrong identifier to token refresh, causing incorrect user credential synchronization and misrouting team credentials, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": []
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies documentation that falsely describes the deletion operation’s actual scope, which is a defect under the stated criteria.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes deletion of successfully scheduled reminders and loss of their tracking data, which is a concrete behavioral defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition that causes the cron handler to reject and skip remaining reminders, which is a behavioral defect rather than an optional defensive improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a race condition that loses retry-count updates and causes extra scheduling attempts beyond the intended deletion threshold, which is a behavioral defect rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete authentication bypass that allows backup-code holders to log in without the required password, which is a security defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete dismissal path that leaves the settings switch incorrectly showing 2FA as disabled after successful enablement, which is a functional defect.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a false success notification when a clipboard write fails, which is incorrect user-visible behavior that can mislead users into believing their recovery codes were saved.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage for the clipboard effect, but does not identify actual wrong behavior occurring in the code as written.",
+     "passos": 1
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage for downloaded recovery-code contents without identifying actual incorrect export behavior.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S5",
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition that permits backup-code reuse and lost updates, violating exactly-once consumption and creating a security defect.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a timing side channel in authentication-secret verification, which, if true, is a security defect rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete layout defect where a long topic title fails to truncate and pushes navigation outside the header, rather than an optional styling improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes an actual cross-axis alignment failure in existing callers when the emitted Mozilla fallback is used, so the proposed declaration fixes wrong behavior rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete performance problem in which concurrent uncached article requests redundantly download and process the entire feed, multiplying worker load rather than merely suggesting an optional optimization.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes an actual localization defect in which users selecting other locales still see English month abbreviations and an inappropriate fixed date order.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security hole in origin validation that allows an unrelated origin to send forged resize messages and control the iframe height, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes actual loss of historical creation timestamps during import, producing incorrect dates rather than requesting an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "reason": "The comment describes a reachable concurrency race that raises an unhandled uniqueness exception and aborts an import job, which is a behavioral defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": true,
+     "reason": "The comment requests strengthening a test to exercise the intended validation and assert a specific response, without identifying wrong behavior in the application itself.",
+     "passos": 1
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage for prerequisite guards but does not identify any incorrect runtime behavior in the implementation.",
+     "passos": 1
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S1",
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes a syntax error that crashes embed requests rather than rendering the discussion, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment describes a crash on RSS entries lacking Atom content that aborts the poll and prevents subsequent entries from being imported, which is a functional defect.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete stored cross-site scripting vulnerability in which malicious feed HTML executes under the forum origin, which is a security defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S4",
+      "S14"
+     ],
+     "nit": false,
+     "reason": "The comment describes concrete relative and protocol-relative URLs being resolved incorrectly, producing broken links and images in imported posts rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "nit": false,
+     "reason": "The comment describes an existing controller test failing because its mock expectations contradict the controller's asynchronous behavior, which is a concrete defect rather than an optional request for more coverage.",
+     "passos": 1
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete lookup failure that causes an internal error rather than the expected not-found response when updating or deleting a nonexistent record, which is a behavioral defect.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result in which a valid mixed-case hostname fails authorization and yields inconsistent category lookup, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete reachable crash when a missing or null host is passed through save_host, rather than the expected validation error.",
+     "passos": 1
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": true,
+     "reason": "The comment requests correcting a misleading test setup or replacing the test, but does not establish an actual wrong runtime result or a definite broken contract.",
+     "passos": 1
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete mismatch in the existing test: requesting fruit 2 returns and validates fruit 1, so the test exercises and accepts the wrong record rather than merely lacking additional coverage.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S7",
+      "S8",
+      "S13"
+     ],
+     "nit": false,
+     "reason": "The comment describes a migration crash on ordinary installations without an embedding setting, which is a concrete functional defect rather than an optional defensive improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S10",
+      "S16"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete migration defect where previously accepted full-URL host settings remain unnormalized and cause embedding from previously allowed sites to be rejected after upgrading.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S14"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete lookup mismatch for a valid saved host with a port that prevents embedding and retrieval, which is incorrect behavior rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S4",
+      "S15",
+      "S17"
+     ],
+     "nit": false,
+     "reason": "The comment describes an actual incorrect UI state after saving a new host without a selected category, where the saved category relationship is overwritten with null and subsequent editing uses the wrong relationship.",
+     "passos": 1
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete loss of animation data in oversized animated GIF uploads despite animated thumbnails being enabled, which is incorrect behavior rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a functional regression that rejects valid attachments larger than 10 MB despite the site's configured attachment limit allowing them.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete performance defect in which malformed or unsupported oversized uploads trigger up to five identical failing external conversions rather than stopping after the first failure.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a broken contract with an existing caller that causes emoji resizing to crash with ArgumentError, which is a concrete behavioral defect.",
+     "passos": 1
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes incorrect translations caused by cross-site cache collisions and stale fallback results after default-locale changes, which are behavioral defects rather than optional improvements.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes missing translations and skipped configured fallback behavior in existing non-controller translation paths, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete data-consistency defect in which removing a member leaves a stale primary_group_id that affects user administration and post serialization.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition in which out-of-order fetch responses overwrite the latest navigation or membership refresh with stale data, producing incorrect model state.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete loss of the administrator’s selected alias level during group creation, which produces an incorrect saved result rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes an incorrect page count for exact positive multiples of the page size, enabling navigation to an empty nonexistent page, which is a functional defect.",
+     "passos": 1
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S4",
+      "S9",
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment describes a functional defect where public group member lists omit members beyond the first 50 and provide no way to access them.",
+     "passos": 1
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete authentication-limit bypass in which omitting a client-controlled header grants anonymous access despite a full device limit, which is a security defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete configuration defect where the supported environment variable is ignored, leaving the device limit at zero and disabling enforcement.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete authentication bypass in which a failed admission leaves a cache marker that lets retries evade the device limit, which is a security defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S6",
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete concurrency race that allows simultaneous admissions to exceed the configured device limit, which is incorrect behavior rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete performance defect in which concurrent cold-start requests redundantly load and decode the manifest serially under a global lock, delaying requests and blocking cache readers.",
+     "passos": 1
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes metric metadata falsely identifying measured request payload sizes as response sizes, which is incorrect documentation of actual behavior rather than an optional wording improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: integer truncation records inaccurate durations, misclassifies histogram observations, and understates the histogram sum.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage and assertions to catch hypothetical broken instrumentation, rather than identifying wrong behavior in the current implementation.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test assertions to detect hypothetical duration-value regressions, without identifying wrong behavior in the duration metrics as implemented.",
+     "passos": 1
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete concurrency defect that loses event updates from subsequent search results and leaks discarded indexes, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a reachable concurrent map iteration/write race that can crash initialization, which is a correctness defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment objects to lost test coverage and a hypothetical regression going undetected, rather than describing wrong runtime behavior that actually occurs.",
+     "passos": 1
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment asks only to rename a test case for clarity and does not identify incorrect behavior in the implementation or test.",
+     "passos": 1
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "reason": "The comment describes a race that reorders mirrored writes and leaves legacy storage stale or resurrects deleted objects, which is a data consistency defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S8",
+      "S14"
+     ],
+     "nit": false,
+     "reason": "The comment describes a request-context lifetime mismatch that cancels asynchronous legacy writes after successful unified-store writes, causing actual write failures and inconsistent data rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9",
+      "S16"
+     ],
+     "nit": false,
+     "reason": "The comment describes a broken canonical-result contract that can cause legacy updates to diverge from or reject updates already successfully applied to Storage, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13"
+     ],
+     "nit": false,
+     "reason": "The comment describes an actual metrics-labeling defect that puts successful deletes in incorrect, per-object label series rather than the intended kind-based series.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment describes actual incorrect metric observations, with legacy deletion durations and failures attributed to the unified backend instead of the legacy backend.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test synchronization and assertion coverage of the legacy update, rather than identifying wrong behavior in the implementation.",
+     "passos": 1
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes actual incorrect metrics attribution, where storage create failures are counted as legacy failures and omitted from storage error metrics.",
+     "passos": 1
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete loss of Pause and Resume actions for editable list-view rules due to a broken contract between the menu and its caller, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete loss of the Delete action for permitted users due to a broken contract with existing list-view callers, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment requests additional test coverage or a test-name clarification, without identifying any actual wrong behavior in the application.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete authorization-related defect where datasource rules incorrectly enable Duplicate despite unsupported or denied ruler abilities.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete broken UI action: the enabled Silence notifications item does nothing when clicked because its drawer cannot render without rule.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7",
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a broken abilities contract that exposes update and delete operations for federated rules that must remain immutable, which is a behavioral defect rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race in the regression test that allows assertions to pass before failures are collected or without any reads occurring, rather than an optional request for additional coverage.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a thread lifecycle defect on deletion failure that leaves a non-daemon thread running indefinitely, disrupting teardown and potentially blocking JVM termination.",
+     "passos": 1
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes known grant issuance paths producing incorrect unknown grant metadata, which is a concrete wrong result rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes an existing false-positive test caused by a concrete fixture failure masking the intended validation, rather than an optional request for additional test coverage.",
+     "passos": 1
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false,
+     "reason": "The comment describes a shortcut collision that corrupts token decoding and a concurrent-registration race, both of which are functional defects rather than optional improvements.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S5",
+      "S7",
+      "S8",
+      "S10",
+      "S11",
+      "S12",
+      "S18"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete contract violation in which event assertions accept a token with the wrong grant shortcut, producing an incorrect validation result.",
+     "passos": 1
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S3",
+      "S6",
+      "S14",
+      "S15",
+      "S19"
+     ],
+     "nit": false,
+     "reason": "The comment describes a broken encoding/decoding contract and false documentation that cause a conforming custom grant’s token IDs to fail decoding, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13",
+      "S17"
+     ],
+     "nit": false,
+     "reason": "The comment describes a broken constructor non-null contract that permits a null token identifier and serializes it incorrectly, rather than an optional defensive improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete user-visible translation regression where incompatible interpolation syntax causes literal placeholders and choice expressions to appear instead of the intended message.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security-policy bypass in which translated choice-branch markup escapes validation and is subsequently rendered, which is a defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete malformed HTML input that causes overlapping substring bounds and an uncaught exception, aborting verification instead of reporting the error.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "Displaying an Italian OTP setup instruction to Lithuanian-locale users is an actual incorrect localized output, not an optional style improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete authentication defect in which passkey-only users are accepted but receive a password-only challenge with no way to log in.",
+     "passos": 1
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete performance defect where administrators with global MANAGE permission trigger realm-wide client retrieval and authorization before pagination rather than fetching only the requested database page.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete defect in the existing test: it passes on an exception from the wrong operation and therefore fails to verify the permission check it claims to test.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete authorization defect in which a global VIEW grant bypasses a client-specific denial and exposes a representation the administrator should not be allowed to view.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes documentation falsely claiming a boolean return value for a void method, which is a documentation defect rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete cache-invalidation defect that causes a now-private identity provider to remain visible after its organization is re-enabled.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment requests additional test assertions and cache-hit coverage without identifying wrong behavior actually occurring in the implementation.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete race condition that republishes invalidated organization membership under a fresh revision, causing subsequent requests to return persistently stale results.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes an actual cleanup defect that leaves created identity providers in the shared test realm and contaminates subsequent tests or repeated runs.",
+     "passos": 1
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "The comment requests better test coverage or a test rename without identifying any actual incorrect behavior in the implementation.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes an actual wrong result: instances use a stale module-import timestamp instead of their queue time, and that incorrect metadata propagates into outbound task payloads.",
+     "passos": 1
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete performance regression in which each submitted batch performs redundant cluster-wide Redis queries on the consumer thread, increasing traffic and blocking ingestion.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies documentation that falsely promises one process per shard when workers are capped and can handle multiple shards, which is a defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete accepted CLI input, zero, being silently interpreted as no limit and starting unintended workers, which is wrong behavior rather than an optional defensive improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test assertions to detect a hypothetical broken shard distribution, not a fix for demonstrated wrong behavior in the implementation.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure to terminate unhealthy production workers, resulting in duplicate shard flushing and exceeding the configured process limit, which is incorrect behavior rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a shutdown defect in which expiration of the join deadline skips required termination cleanup and leaves workers running after shutdown or reassignment.",
+     "passos": 1
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result bug in which mixed cached and uncached nodes cause error details to be associated with the wrong event IDs.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes an actual unnecessary database round trip for opt-out requests and a new availability dependency that can make those requests fail, both concrete behavioral defects rather than optional improvements.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The change strengthens an existing test's ability to detect a hypothetical regression if the numeric guard is removed, rather than fixing wrong behavior that occurs in the current code.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment identifies documentation that falsely states a supported and actively used dataset is unsupported, which is a defect under the given criteria.",
+     "passos": 1
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "nit": false,
+     "reason": "The comment describes an actual security defect: invalid browser reports expose potentially sensitive URLs and body contents in warning-level operational logs.",
+     "passos": 1
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S1",
+      "S19"
+     ],
+     "nit": false,
+     "reason": "The comment describes actual data loss in the displayed table: the enabled branch renders empty tables despite queries returning rows.",
+     "passos": 1
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13",
+      "S14"
+     ],
+     "nit": false,
+     "reason": "The comment describes a broken consumer contract that produces undefined values instead of selected aggregate fields and corrupts saved Explore parameters, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S17",
+      "S20"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete cache-identity defect that can return another organization's attribute names or reuse a request for the wrong organization, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S5",
+      "S10",
+      "S16",
+      "S21"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete validation defect where zero-valued inputs bypass the required mutual exclusion and allow an invalid report containing both fields.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes a broken documented renderer contract that replaces valid callback results with default rendering, which is a behavioral defect rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": []
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a reachable transport failure causing an unhandled server error instead of the intended installation-failed response, which is a behavioral defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes an existing test producing a false positive by accepting an OAuth-validation error instead of exercising the installation-not-found path, rather than merely requesting additional coverage.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete localization regression in which user-facing error messages are no longer extracted into translation catalogs, rather than an optional style improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete OAuth login-CSRF vulnerability that permits an attacker-controlled account to be bound to the installing user, which is a security defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes an authorization bypass that lets a user attach another account's GitHub installation, which is a security defect rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete supported input with missing optional sender metadata that now causes a KeyError, which is a behavioral regression rather than an optional defensive improvement.",
+     "passos": 1
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes documentation that falsely states the return type, which is a defect under the supplied definition rather than an optional readability improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment identifies documentation that falsely describes an already-implemented abstraction as a future migration, which is a defect under the stated criteria.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage to detect a hypothetical value-forwarding regression, rather than identifying incorrect production behavior that actually occurs.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete TypeError during construction of a registered detector handler that breaks processing, which is a functional defect rather than an optional improvement.",
+     "passos": 1
+    }
+   ]
+  }
+ }
+}
