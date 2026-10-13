@@ -515,3 +515,46 @@ describe('boundErrorForLog (#1835 review)', () => {
         ).toBeLessThanOrEqual(2_001);
     });
 });
+
+
+describe('retry-exhausted provider errors (#1835 review)', () => {
+    // The AI SDK throws `AI_RetryError` with the attempt that failed on
+    // `lastError`; the error itself carries only name, reason and message.
+    const CORPS = '{"error":"rate limit exceeded"}';
+
+    const erreurDeRetry = () => {
+        const err = new Error('Failed after 3 attempts') as Error & {
+            name: string;
+            reason: string;
+            lastError: unknown;
+        };
+        err.name = 'AI_RetryError';
+        err.reason = 'maxRetriesExceeded';
+        err.lastError = Object.assign(new Error('too many requests'), {
+            statusCode: 429,
+            url: 'https://api.gateway.invalid/v1/messages',
+            responseBody: CORPS,
+        });
+        return err;
+    };
+
+    it('extractErrorProps surfaces the failing attempt, without its body', () => {
+        const props = extractErrorProps(erreurDeRetry());
+
+        expect(props.statusCode).toBe(429);
+        expect(props.url).toBe('https://api.gateway.invalid/v1/messages');
+        expect(props.responseBodyLength).toBe(CORPS.length);
+        expect(props.responseBody).toBeUndefined();
+        expect(JSON.stringify(props)).not.toContain('rate limit exceeded');
+    });
+
+    it('boundErrorForLog surfaces them too, without its body', () => {
+        const bounded = boundErrorForLog(erreurDeRetry());
+
+        expect(bounded.statusCode).toBe(429);
+        expect(bounded.url).toBe('https://api.gateway.invalid/v1/messages');
+        expect(bounded.responseBodyLength).toBe(CORPS.length);
+        expect(bounded.responseBody).toBeUndefined();
+        expect(JSON.stringify(bounded)).not.toContain('rate limit exceeded');
+    });
+});

@@ -1403,6 +1403,51 @@ export function capSerialized(
 }
 
 /**
+ * The failing attempt an AI SDK `RetryError` carries on `lastError`.
+ *
+ * Running out of retries is the most common BYOK failure (429/5xx), and the
+ * retry error itself has nothing to log: name, reason, message. The attempt
+ * that failed is one level down.
+ */
+function innerErrorForHttpContext(
+    source: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+    const inner = source.lastError;
+    return typeof inner === 'object' && inner !== null
+        ? (inner as Record<string, unknown>)
+        : undefined;
+}
+
+/**
+ * The HTTP context of an error, and only that: the status, the URL and the
+ * LENGTH of the response body - the body itself is never emitted. Read from
+ * whichever level carries it, sanitized and clamped like any other string.
+ */
+function httpContextOf(
+    source: Record<string, unknown>,
+    maxStringLength: number,
+): Record<string, unknown> {
+    const picked: Record<string, unknown> = {};
+    const status =
+        source.statusCode === undefined ? source.status : source.statusCode;
+    if (typeof status === 'number') {
+        picked.statusCode = status;
+    }
+    if (typeof source.url === 'string') {
+        const sanitized = sanitizeString(source.url);
+        picked.url =
+            sanitized.length > maxStringLength
+                ? `${sanitized.substring(0, maxStringLength)}…`
+                : sanitized;
+    }
+    const length = responseBodyLengthOf(source.responseBody);
+    if (length !== undefined) {
+        picked.responseBodyLength = length;
+    }
+    return picked;
+}
+
+/**
  * Collect the user-facing fields a provider error carries on itself.
  *
  * `pino.stdSerializers.err` copies own enumerable props, but uncapped, and it
@@ -1445,6 +1490,19 @@ export function extractErrorProps(
         const length = responseBodyLengthOf(source.responseBody);
         if (length !== undefined) {
             props.responseBodyLength = length;
+        }
+    }
+    // A retry-exhausted provider error carries the attempt that failed on
+    // `lastError`, so without this the line holds only type, message and
+    // reason. Only the HTTP context is unwrapped, never the inner message.
+    const inner = innerErrorForHttpContext(source);
+    if (inner) {
+        for (const [key, value] of Object.entries(
+            httpContextOf(inner, maxStringLength),
+        )) {
+            if (props[key] === undefined) {
+                props[key] = value;
+            }
         }
     }
     return props;
@@ -1581,6 +1639,19 @@ export function boundErrorForLog(
         const length = responseBodyLengthOf(flat.responseBody);
         if (length !== undefined) {
             bounded.responseBodyLength = length;
+        }
+    }
+    // Same unwrapping as extractErrorProps: a retry-exhausted provider error
+    // holds the failing attempt on `lastError`, and only its HTTP context is
+    // read - the status and URL it carries are the ones the log line needs.
+    const inner = innerErrorForHttpContext(flat);
+    if (inner) {
+        for (const [key, value] of Object.entries(
+            httpContextOf(inner, maxStringLength),
+        )) {
+            if (bounded[key] === undefined) {
+                bounded[key] = value;
+            }
         }
     }
     return bounded;
