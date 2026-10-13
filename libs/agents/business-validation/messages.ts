@@ -71,7 +71,7 @@ export function taskNotFoundMessage(attempts: ResolutionAttempt[]): string {
     ];
     return `## 🤔 Task not found
 
-I looked for ${tried.join(', ')} and it doesn't exist there. Check the reference in the title, description or branch, then comment ${RERUN}.`;
+I looked for ${tried.join(', ')}, and ${tried.length > 1 ? 'none of them exists' : "it doesn't exist there"}. Check the reference in the title, description or branch, then comment ${RERUN}.`;
 }
 
 export function trackerUnavailableMessage(

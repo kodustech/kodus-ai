@@ -40,6 +40,26 @@ describe('McpToolSession', () => {
             session().call('get_issue', { id: 'SAA-9' }),
         ).rejects.toBeInstanceOf(TaskNotFoundError);
 
+        // Rovo's answer for a missing key, in the user's language, as Jira
+        // returns it: only the status code says what happened.
+        executeTool.mockResolvedValueOnce(
+            errorResult(
+                JSON.stringify({
+                    error: true,
+                    message: JSON.stringify({
+                        errorMessages: [
+                            'O item não existe ou você não tem permissão para vê-lo',
+                        ],
+                        errors: {},
+                    }),
+                    statusCode: 404,
+                }),
+            ),
+        );
+        await expect(
+            session().call('get_issue', { id: 'SAA-9' }),
+        ).rejects.toBeInstanceOf(TaskNotFoundError);
+
         executeTool.mockResolvedValueOnce(errorResult('rate limited'));
         await expect(
             session().call('get_issue', { id: 'SAA-9' }),

@@ -32,6 +32,7 @@ const PART_OF =
  */
 export function extractTaskReferences(
     sources: ReferenceSources,
+    options: { taskIdPattern?: string } = {},
 ): TaskReference[] {
     const byKey = new Map<string, TaskReference>();
     const references: TaskReference[] = [];
@@ -41,7 +42,11 @@ export function extractTaskReferences(
         if (!text?.trim()) {
             continue;
         }
-        for (const reference of extractFromText(text, source)) {
+        for (const reference of extractFromText(
+            text,
+            source,
+            options.taskIdPattern,
+        )) {
             const key = `${reference.kind}:${reference.id}:${
                 'repository' in reference && reference.repository
                     ? `${reference.repository.owner}/${reference.repository.name}`
@@ -110,9 +115,13 @@ function intentBefore(
     return source === 'body' ? 'mentions' : 'closes';
 }
 
+/** How much of one text a team's own pattern runs on, so no pattern can stall a review. */
+const MAX_PATTERN_INPUT = 20_000;
+
 function extractFromText(
     text: string,
     source: ReferenceSource,
+    taskIdPattern?: string,
 ): TaskReference[] {
     const matches: Match[] = [];
     const taken = (index: number, end: number) =>
@@ -146,6 +155,28 @@ function extractFromText(
     collect(/https?:\/\/[^\s<>()[\]"'`]+/gi, (m) =>
         fromUrl(trimUrl(m[0]), source),
     );
+    if (taskIdPattern) {
+        // The team's own shape (`sc-123`, `T1234`) claims its text before the
+        // built-in ones: its first group, when it has one, is the id.
+        const own = new RegExp(taskIdPattern, 'g');
+        for (const m of text.slice(0, MAX_PATTERN_INPUT).matchAll(own)) {
+            const id = (m[1] ?? m[0]).trim();
+            const index = m.index ?? 0;
+            if (id && !taken(index, index + m[0].length)) {
+                matches.push({
+                    index,
+                    end: index + m[0].length,
+                    reference: {
+                        kind: 'key',
+                        id,
+                        raw: m[0],
+                        source,
+                        intent: intentBefore(text, index, source),
+                    },
+                });
+            }
+        }
+    }
     collect(/(?<![A-Za-z0-9_])AB#(\d+)\b/gi, (m) => ({
         kind: 'work_item',
         id: m[1],
@@ -169,16 +200,24 @@ function extractFromText(
         source,
     }));
     if (source === 'branch') {
-        // `12-add-login`, the branch GitHub creates from issue #12.
-        collect(/(?<![^/])(\d{1,6})(?=-[A-Za-z])/g, (m) => ({
+        // `12-add-login`, the branch GitHub creates from issue #12. Only at
+        // the start: after a prefix (`fix/404-on-login`) a number is a status
+        // code or a name as often as an issue.
+        collect(/^(\d{1,6})(?=-[A-Za-z])/g, (m) => ({
             kind: 'git_issue',
             id: m[1],
             raw: m[0],
             source,
         }));
     }
+    // Trackers write keys in capitals; only a branch or a typed command
+    // lowercases them (`nina/saa-96-sticky-notes`). In prose, `gpt-5` and
+    // `node-22` are names.
+    const lowercase = source === 'branch' || source === 'command';
     collect(
-        /(?<![A-Za-z0-9_])([A-Za-z][A-Za-z0-9_]*)-(\d+)(?![A-Za-z0-9_])/g,
+        lowercase
+            ? /(?<![A-Za-z0-9_])([A-Za-z][A-Za-z0-9_]*)-(\d+)(?![A-Za-z0-9_])/g
+            : /(?<![A-Za-z0-9_])([A-Z][A-Z0-9_]*)-(\d+)(?![A-Za-z0-9_])/g,
         (m) => ({
             kind: 'key',
             id: `${m[1].toUpperCase()}-${m[2]}`,

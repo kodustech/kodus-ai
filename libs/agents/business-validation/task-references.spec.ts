@@ -104,14 +104,54 @@ describe('extractTaskReferences', () => {
 describe('issue number in the branch', () => {
     it('reads the branch GitHub creates from an issue as that issue', () => {
         expect(ids({ branch: '12-add-login' })).toEqual(['git_issue:12']);
-        expect(ids({ branch: 'feature/12-add-login' })).toEqual([
-            'git_issue:12',
-        ]);
+    });
+
+    it('does not read a number after a prefix: it is a status code or a name as often as an issue', () => {
+        expect(ids({ branch: 'fix/404-on-login' })).toEqual([]);
+        expect(ids({ branch: 'hotfix/500-error-page' })).toEqual([]);
+        expect(ids({ branch: 'test/1908-utf8-title' })).toEqual([]);
     });
 
     it('does not read dates or versions as an issue', () => {
         expect(ids({ branch: 'release/2026-10-01' })).toEqual([]);
         expect(ids({ branch: 'v2-cleanup' })).toEqual([]);
+    });
+});
+
+describe("the team's own id pattern (#1884)", () => {
+    it('reads the id the pattern captures, where the built-in shapes do not reach', () => {
+        const pattern = { taskIdPattern: 'sc-(\\d+)' };
+        expect(
+            extractTaskReferences(
+                { branch: 'nina/sc-123-gift-cards' },
+                pattern,
+            ).map((r) => `${r.kind}:${r.id}:${r.source}`),
+        ).toEqual(['key:123:branch']);
+    });
+
+    it('reads the whole match when the pattern has no group', () => {
+        expect(
+            extractTaskReferences(
+                { title: 'feat: T1234 gift cards' },
+                { taskIdPattern: 'T\\d{3,}' },
+            ).map((r) => r.id),
+        ).toEqual(['T1234']);
+    });
+});
+
+describe('task keys by case', () => {
+    it('reads a lowercase key only where trackers write one: the branch and the command', () => {
+        expect(
+            ids({ title: 'feat: summarize threads with gpt-5 mini' }),
+        ).toEqual([]);
+        expect(ids({ body: 'Moves to node-22 and es-2022.' })).toEqual([]);
+        expect(ids({ branch: 'nina/saa-96-sticky-notes' })).toEqual([
+            'key:SAA-96',
+        ]);
+        expect(ids({ command: 'saa-96' })).toEqual(['key:SAA-96']);
+        expect(ids({ title: 'feat(SAA-96): sticky notes' })).toEqual([
+            'key:SAA-96',
+        ]);
     });
 });
 
