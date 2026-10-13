@@ -115,24 +115,31 @@ function adfToText(doc: JsonRecord): string | undefined {
     return text || undefined;
 }
 
+/** Tags that mark a field as HTML. Once it is, every tag is removed. */
 const HTML_TAG =
-    /<\/?(?:div|p|br|span|b|i|u|strong|em|ul|ol|li|h[1-6]|table|thead|tbody|tr|td|th|a|img|code|pre|blockquote|hr)\b[^>]*>/gi;
+    /<\/?(?:div|p|br|span|b|i|u|strong|em|ul|ol|li|h[1-6]|table|thead|tbody|tr|td|th|a|img|code|pre|blockquote|hr)\b[^>]*>/i;
 
-/** Plain text from the HTML some trackers store (Azure DevOps). Text without HTML is returned as is. */
+/**
+ * Plain text from the HTML some trackers store (Azure DevOps). Text without
+ * HTML is returned as is. `&lt;` stays escaped, so no tag comes back.
+ */
 export function htmlToText(text: string | undefined): string | undefined {
-    if (!text || !new RegExp(HTML_TAG.source, 'i').test(text)) {
+    if (!text || !HTML_TAG.test(text)) {
         return text;
     }
-    const plain = text
+    let plain = text
         .replace(/<li\b[^>]*>/gi, '- ')
-        .replace(/<br\s*\/?>|<\/(?:p|div|li|h[1-6]|tr|blockquote)>/gi, '\n')
-        .replace(HTML_TAG, '')
+        .replace(/<br\s*\/?>|<\/(?:p|div|li|h[1-6]|tr|blockquote)>/gi, '\n');
+    // Repeated, so `<scr<script>ipt>` leaves no tag either.
+    for (let previous = ''; previous !== plain;) {
+        previous = plain;
+        plain = plain.replace(/<[^<>]*>/g, '');
+    }
+    plain = plain
+        .replace(/</g, '&lt;')
         .replace(/&nbsp;/g, ' ')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&')
         .replace(/[ \t]+\n/g, '\n')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
