@@ -494,18 +494,20 @@ export class PullRequestsService implements IPullRequestsService {
     async addPrLevelSuggestions(
         pullRequestNumber: number,
         repositoryId: string,
+        repositoryName: string,
         prLevelSuggestions: ISuggestionByPR[],
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         try {
-            // Resolved by ID, never by name: two repositories of one
-            // organization can share a name, and a name lookup returns
-            // whichever document matches first - the #2059 case, where the
-            // review's PR-level suggestions landed on the other repository's
-            // record (#2076 review).
+            // Resolved by ID first, with the name as a guarded fallback: a
+            // name hit is only taken when the stored row carries no id, or this
+            // repository's, so it stays safe in the #2059 case where two
+            // repositories of one organization share a name - while a legacy
+            // document that has no id is still appended to instead of missed
+            // (#2076 review).
             const existingPR = await this.findExistingPullRequest(
                 pullRequestNumber,
-                { id: repositoryId },
+                { id: repositoryId, name: repositoryName },
                 organizationAndTeamData,
             );
 
@@ -516,6 +518,7 @@ export class PullRequestsService implements IPullRequestsService {
                     metadata: {
                         pullRequestNumber,
                         repositoryId,
+                        repositoryName,
                         organizationAndTeamData,
                     },
                 });
@@ -537,6 +540,7 @@ export class PullRequestsService implements IPullRequestsService {
                 metadata: {
                     pullRequestNumber,
                     repositoryId,
+                    repositoryName,
                     suggestionsCount: prLevelSuggestions.length,
                     organizationAndTeamData,
                 },
