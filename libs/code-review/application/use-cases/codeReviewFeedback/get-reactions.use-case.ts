@@ -275,8 +275,9 @@ export class GetReactionsUseCase implements IUseCase {
                                     id: reaction.pullRequest.id,
                                     number: reaction.pullRequest.number,
                                     repository: {
-                                        id: reaction?.pullRequest?.repository
-                                            ?.id,
+                                        id:
+                                            reaction?.pullRequest?.repository
+                                                ?.id || pr?.repository?.id,
                                         fullName:
                                             reaction?.pullRequest?.repository
                                                 ?.fullName ||
