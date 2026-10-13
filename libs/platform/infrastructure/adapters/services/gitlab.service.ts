@@ -119,8 +119,6 @@ const AWARD_EMOJI_CONCURRENCY = 5;
  */
 const GITLAB_MAX_PER_PAGE = 100;
 
-@Injectable()
-@IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
 /**
  * The auth mode of a GitLab record whose `authMode` predates the field: an
  * OAuth record carries a refresh token and a PAT never does.
@@ -139,6 +137,8 @@ export function deriveGitlabAuthMode(
     return authDetails?.refreshToken ? AuthMode.OAUTH : AuthMode.TOKEN;
 }
 
+@Injectable()
+@IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
 export class GitlabService implements Omit<
     ICodeManagementService,
     | 'getOrganizations'
