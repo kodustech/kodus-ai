@@ -7,10 +7,11 @@ import { JIRA_TOOLS, JiraTracker } from './jira.tracker';
 import { LINEAR_TOOLS, LinearTracker } from './linear.tracker';
 import { McpToolSession } from './mcp-tool-session';
 import { NOTION_TOOLS, NotionTracker } from './notion.tracker';
-import type { TaskTracker } from './tracker';
+import type { TaskFinder } from './task-finder';
+import type { BoundTaskFinder, McpTaskTracker, TaskTracker } from './tracker';
 
 /** Managed catalog entries, by integration id (apps/mcp-manager/src/config/managed-mcp-servers.json). */
-const MANAGED: Record<string, (server: MCPServerConfig) => TaskTracker> = {
+const MANAGED: Record<string, (server: MCPServerConfig) => McpTaskTracker> = {
     'kodus-issues-default': (server) =>
         new GitIssuesTracker(new McpToolSession(server, GIT_ISSUES_TOOLS)),
     'linear-default': (server) =>
@@ -42,6 +43,8 @@ export interface TaskSourceOptions {
     /** The tool that reads a task by id, for a custom plugin. */
     taskSourceTool?: string;
     agentReader?: AgentToolReader;
+    /** Looks for a task a tracker's direct read missed. */
+    finder?: TaskFinder;
 }
 
 /**
@@ -56,7 +59,16 @@ export function buildTaskTrackers(
     const source = options.taskSource ?? AUTO_TASK_SOURCE;
     if (source !== AUTO_TASK_SOURCE) {
         const server = servers.find((s) => s.integrationId === source);
-        return server ? [chosenTracker(server, options)] : [];
+        if (!server) {
+            return [];
+        }
+        const tracker = chosenTracker(server, options);
+        // The admin named the one tool a custom plugin reads with: keep to it.
+        return [
+            options.taskSourceTool && !isManagedTracker(server)
+                ? tracker
+                : withFinder(tracker, server, options.finder),
+        ];
     }
     const trackers: TaskTracker[] = [];
     for (const server of servers) {
@@ -64,12 +76,19 @@ export function buildTaskTrackers(
             ? MANAGED[server.integrationId]
             : undefined;
         if (managed) {
-            trackers.push(managed(server));
+            trackers.push(withFinder(managed(server), server, options.finder));
             continue;
         }
         if (server.provider === 'custom' && isTaskPlugin(server)) {
             trackers.push(
-                new CustomMcpTracker(server.name, new McpToolSession(server)),
+                withFinder(
+                    new CustomMcpTracker(
+                        server.name,
+                        new McpToolSession(server),
+                    ),
+                    server,
+                    options.finder,
+                ),
             );
         }
     }
@@ -79,7 +98,7 @@ export function buildTaskTrackers(
 function chosenTracker(
     server: MCPServerConfig,
     options: TaskSourceOptions,
-): TaskTracker {
+): McpTaskTracker {
     const managed = server.integrationId
         ? MANAGED[server.integrationId]
         : undefined;
@@ -116,4 +135,42 @@ function isTaskPlugin(server: MCPServerConfig): boolean {
     }
     const name = server.name.toLowerCase().replace(/[^a-z0-9]+/g, '');
     return CUSTOM_TRACKER_HINTS.some((hint) => name.includes(hint));
+}
+
+function withFinder(
+    tracker: McpTaskTracker,
+    server: MCPServerConfig,
+    finder: TaskFinder | undefined,
+): McpTaskTracker {
+    return finder
+        ? tracker.useFinder(bindFinder(server, tracker.name, finder))
+        : tracker;
+}
+
+/**
+ * The finder on its own session to `server`, open to every tool the org
+ * allows; the finder offers the agent only the read-only ones.
+ */
+function bindFinder(
+    server: MCPServerConfig,
+    trackerName: string,
+    finder: TaskFinder,
+): BoundTaskFinder {
+    return async (reference, context) => {
+        const session = new McpToolSession(server);
+        try {
+            return await finder({
+                reference,
+                tracker: trackerName,
+                repository:
+                    reference.kind === 'git_issue'
+                        ? (reference.repository ?? context.repository)
+                        : undefined,
+                tools: await session.tools(),
+                call: (name, args) => session.call(name, args),
+            });
+        } finally {
+            await session.close();
+        }
+    };
 }

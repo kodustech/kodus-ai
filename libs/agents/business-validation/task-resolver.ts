@@ -3,6 +3,7 @@ import type {
     ResolutionAttempt,
     TaskReference,
     TaskResolution,
+    TrackerLookup,
 } from './business-validation.types';
 import { selectReferences } from './task-references';
 import type { TaskTracker, TrackerReadContext } from './trackers/tracker';
@@ -44,31 +45,53 @@ export async function resolveTasks(
         { reference: TaskReference; tracker: TaskTracker } | undefined;
     for (const reference of selected) {
         const capable = trackers.filter((t) => t.canRead(reference));
-        let missingFrom: TaskTracker[] = [];
+        const missed: Array<{ tracker: TaskTracker; lookup: TrackerLookup }> =
+            [];
+        let hit: TrackerLookup | undefined;
         for (const tracker of capable) {
-            const read = await tracker.read(reference, context);
-            const lookup: typeof read =
-                read.status === 'found' &&
-                !matchesTitleHint(reference, read.task.title)
-                    ? { status: 'not_found', tools: read.tools }
-                    : read;
-            attempts.push({
-                reference: reference.raw,
-                tracker: tracker.name,
-                status: lookup.status,
-                ...(lookup.status === 'error'
-                    ? {
-                          message: lookup.message,
-                          ...(lookup.setup ? { setup: true } : {}),
-                      }
-                    : {}),
-                ...(lookup.tools?.length ? { tools: lookup.tools } : {}),
-            });
+            const lookup = confirmed(
+                reference,
+                await tracker.read(reference, context),
+            );
+            attempts.push(attemptOf(reference, tracker, lookup));
             if (lookup.status === 'found') {
-                found.push({ reference, task: lookup.task });
-                missingFrom = [];
+                hit = lookup;
                 break;
             }
+            missed.push({ tracker, lookup });
+        }
+        // An agent looks again only when no tracker read it directly: a
+        // Linear key Jira doesn't know never costs a search in Jira.
+        for (const miss of hit ? [] : missed) {
+            const second = await miss.tracker.find?.(
+                reference,
+                context,
+                miss.lookup,
+            );
+            if (!second) {
+                continue;
+            }
+            if (second.status !== 'found') {
+                // The agent got answers and the task isn't there: a miss
+                // the typo check reads, not a tracker that is down.
+                attempts.push(attemptOf(reference, miss.tracker, second));
+                miss.lookup = second;
+                continue;
+            }
+            const tracker = miss.tracker;
+            const checked = confirmed(reference, second);
+            attempts.push(attemptOf(reference, tracker, checked));
+            if (checked.status === 'found') {
+                hit = checked;
+                break;
+            }
+        }
+        if (hit?.status === 'found') {
+            found.push({ reference, task: hit.task });
+            continue;
+        }
+        const missingFrom: TaskTracker[] = [];
+        for (const { tracker, lookup } of missed) {
             // A tracker set up so it can't read a task is not one that can.
             readable ||= !(lookup.status === 'error' && lookup.setup);
             if (lookup.status === 'error') {
@@ -117,6 +140,37 @@ export async function resolveTasks(
               }
             : {}),
         attempts,
+    };
+}
+
+/** A found task whose title contradicts the branch it came from counts as not found. */
+function confirmed(
+    reference: TaskReference,
+    lookup: TrackerLookup,
+): TrackerLookup {
+    return lookup.status === 'found' &&
+        !matchesTitleHint(reference, lookup.task.title)
+        ? { status: 'not_found', tools: lookup.tools }
+        : lookup;
+}
+
+function attemptOf(
+    reference: TaskReference,
+    tracker: TaskTracker,
+    lookup: TrackerLookup,
+): ResolutionAttempt {
+    return {
+        reference: reference.raw,
+        tracker: tracker.name,
+        status: lookup.status,
+        ...(lookup.status === 'error'
+            ? {
+                  message: lookup.message,
+                  ...(lookup.setup ? { setup: true } : {}),
+              }
+            : {}),
+        ...(lookup.tools?.length ? { tools: lookup.tools } : {}),
+        ...(lookup.byAgent ? { byAgent: true } : {}),
     };
 }
 

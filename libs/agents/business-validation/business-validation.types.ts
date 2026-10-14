@@ -99,6 +99,8 @@ export type TrackerLookup = (
 ) & {
     /** The MCP tools called for this read, in order. */
     tools?: string[];
+    /** The direct read missed; the task finder agent found it. */
+    byAgent?: boolean;
 };
 
 export interface ResolutionAttempt {
@@ -110,6 +112,8 @@ export interface ResolutionAttempt {
     setup?: boolean;
     /** The MCP tools called to read it, so a team can see how it was found. */
     tools?: string[];
+    /** Found by the task finder agent after the direct read missed. */
+    byAgent?: boolean;
 }
 
 export type TaskResolution =

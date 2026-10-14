@@ -4,7 +4,10 @@ import type {
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
+import { createLogger } from '@libs/core/log/logger';
+
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
+import type { FoundByFinder } from './task-finder';
 
 export interface TrackerReadContext {
     organizationAndTeamData: OrganizationAndTeamData;
@@ -33,8 +36,32 @@ export interface TaskTracker {
         reference: TaskReference,
         context: TrackerReadContext,
     ): Promise<boolean>;
+    /**
+     * A second look, by an agent, at a reference the direct read missed.
+     * Undefined when there is nothing to try or it found nothing.
+     */
+    find?(
+        reference: TaskReference,
+        context: TrackerReadContext,
+        direct: TrackerLookup,
+    ): Promise<TrackerLookup | undefined>;
     close(): Promise<void>;
 }
+
+/**
+ * Looks for a task the direct read missed, through the server's read-only
+ * tools. Bound to one server by the catalog.
+ */
+export type BoundTaskFinder = (
+    reference: TaskReference,
+    context: TrackerReadContext,
+) => Promise<FoundByFinder | undefined>;
+
+/** A failure no other tool or argument fixes: the server is down, slow or refuses us. */
+const UNREACHABLE =
+    /time[sd]?\s?out|ECONN|ENOTFOUND|EAI_AGAIN|socket|fetch failed|network|\b5\d\d\b|\b429\b|rate.?limit|unauthori[sz]ed|\b401\b|\b403\b|forbidden|expired|invalid.?token|connect/i;
+
+const logger = createLogger('McpTaskTracker');
 
 const READ_ATTEMPTS = 2;
 const READ_BUDGET_MS = 30_000;
@@ -44,7 +71,15 @@ const RETRY_DELAY_MS = 1_000;
 export abstract class McpTaskTracker implements TaskTracker {
     abstract readonly name: string;
 
+    private finder?: BoundTaskFinder;
+
     constructor(protected readonly session: McpToolSession) {}
+
+    /** Lets an agent look for a task the direct read missed. */
+    useFinder(finder: BoundTaskFinder): this {
+        this.finder = finder;
+        return this;
+    }
 
     abstract canRead(reference: TaskReference): boolean;
 
@@ -52,6 +87,60 @@ export abstract class McpTaskTracker implements TaskTracker {
         reference: TaskReference,
         context: TrackerReadContext,
     ): Promise<TrackerLookup>;
+
+    /**
+     * Asks the task finder agent for a task the direct read missed. Called
+     * by the resolver only after no tracker read the reference directly.
+     */
+    async find(
+        reference: TaskReference,
+        context: TrackerReadContext,
+        direct: TrackerLookup,
+    ): Promise<TrackerLookup | undefined> {
+        if (!this.finder || !worthFinding(direct)) {
+            return undefined;
+        }
+        if (
+            direct.status === 'not_found' &&
+            reference.kind === 'key' &&
+            !(await this.ownsReference(reference).catch(() => false))
+        ) {
+            // `KOD-10` with no team KOD here: another tracker's, nothing to find.
+            return undefined;
+        }
+        const found = await this.finder(reference, context).catch(
+            () => undefined,
+        );
+        if (!found) {
+            return undefined;
+        }
+        if ('notFound' in found) {
+            // The server answered and has no such task: a miss, not an outage.
+            return {
+                status: 'not_found',
+                tools: [...(direct.tools ?? []), ...found.tools],
+                byAgent: true,
+            };
+        }
+        // The direct read is the cheap path; when the agent had to step in,
+        // the server changed and this tracker should learn its new shape.
+        logger.warn({
+            message: `[BUSINESS-LOGIC] ${this.name} read ${reference.id} only through the task finder; its direct read ${direct.status === 'error' ? `failed (${direct.message})` : 'found nothing'}`,
+            context: 'McpTaskTracker',
+            metadata: {
+                organizationId: context.organizationAndTeamData?.organizationId,
+                tracker: this.name,
+                directTools: direct.tools,
+                finderTools: found.tools,
+            },
+        });
+        return {
+            status: 'found',
+            task: { ...found.task, tracker: this.name },
+            tools: [...(direct.tools ?? []), ...found.tools],
+            byAgent: true,
+        };
+    }
 
     /**
      * Two tries within the budget: a tracker that hiccups once still
@@ -104,4 +193,20 @@ export abstract class McpTaskTracker implements TaskTracker {
     close(): Promise<void> {
         return this.session.close();
     }
+}
+
+/**
+ * A miss another tool or argument might fix: nothing found, or a failure that
+ * isn't the server being down or refusing us. A plugin set up with no reader
+ * is the admin's to fix.
+ */
+function worthFinding(lookup: TrackerLookup): boolean {
+    if (lookup.status === 'not_found') {
+        return true;
+    }
+    return (
+        lookup.status === 'error' &&
+        !lookup.setup &&
+        !UNREACHABLE.test(lookup.message)
+    );
 }

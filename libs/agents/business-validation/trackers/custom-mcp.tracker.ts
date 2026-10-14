@@ -6,12 +6,12 @@ import type {
 } from '../business-validation.types';
 import { asRecord } from '../value-utils';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
-import { htmlToText, mentions, recordsIn, textField } from './task-payload';
+import { describeTask, mentions, recordsIn } from './task-payload';
 import { McpTaskTracker, type TrackerReadContext } from './tracker';
 
 /** Verbs that change something. A tool named with one is never called. */
 const WRITE_VERB =
-    /(^|[_\-\s.]|[a-z](?=[A-Z]))(create|update|delete|remove|upsert|write|add|set|edit|patch|put|post|send|move|merge|close|reopen|assign|transition|archive|link|unlink|lock|vote|run|cancel|retry|comment|import|upload|replace|dismiss|approve|reject)/i;
+    /(^|[_\-\s.]|[a-z](?=[A-Z]))(create|update|delete|remove|upsert|write|add|set|save|edit|patch|put|post|send|move|merge|close|reopen|assign|transition|archive|link|unlink|lock|vote|run|cancel|retry|comment|import|upload|replace|dismiss|approve|reject|mark|share|unshare|submit|resolve|retire|restore|prepare|publish|toggle|enable|disable|trigger|execute|invoke|sync|rename|duplicate|subscribe|unsubscribe|invite|grant|revoke|install|uninstall|deploy|schedule|snooze)/i;
 /** What a task is called across trackers. */
 const TASK_NOUN =
     /(issue|task|ticket|story|bug|epic|card|work_?item|workitem)/i;
@@ -149,35 +149,8 @@ export class CustomMcpTracker extends McpTaskTracker {
                 // GitHub answers a pull request number as an issue.
                 continue;
             }
-            const fields = { ...item, ...asRecord(item.fields) };
-            const title = textField(fields, [
-                'System.Title',
-                'title',
-                'summary',
-                'name',
-            ]);
-            const named = namedCustomFields(item);
-            const description = joinSections([
-                htmlToText(
-                    textField(fields, [
-                        'System.Description',
-                        'description',
-                        'markdown_description',
-                        'text_content',
-                        'notes',
-                        'body',
-                    ]) ?? (typeof payload === 'string' ? payload : undefined),
-                ),
-                htmlToText(
-                    textField(fields, [
-                        'Microsoft.VSTS.Common.AcceptanceCriteria',
-                        'acceptance_criteria',
-                        'acceptanceCriteria',
-                    ]),
-                ),
-                customFieldsText(named),
-            ]);
-            if (!title && !description) {
+            const described = describeTask(item, payload);
+            if (!described) {
                 // It names the task but says nothing of it: watchers, dates, links.
                 continue;
             }
@@ -186,15 +159,7 @@ export class CustomMcpTracker extends McpTaskTracker {
                 task: {
                     tracker: this.name,
                     id: taskId(reference),
-                    title,
-                    description,
-                    url: textField(fields, [
-                        'html_url',
-                        'web_url',
-                        'app_url',
-                        'url',
-                    ]),
-                    ...(Object.keys(named).length ? { fields: named } : {}),
+                    ...described,
                 },
             };
         }
@@ -339,38 +304,6 @@ export function buildReadArgs(
     return missing.length ? undefined : args;
 }
 
-/** Custom fields shorter than this are labels and ids, not requirements. */
-const MIN_CUSTOM_FIELD_TEXT = 20;
-
-/**
- * Text custom fields kept as `[{ name, value }]` (ClickUp `value`, Asana
- * `text_value` / `display_value`), by name, where teams often keep criteria.
- */
-function namedCustomFields(
-    item: Record<string, unknown>,
-): Record<string, string> {
-    const list = Array.isArray(item.custom_fields) ? item.custom_fields : [];
-    const out: Record<string, string> = {};
-    for (const entry of list.map(asRecord)) {
-        const text = htmlToText(
-            textField(entry, ['value', 'text_value', 'display_value']),
-        );
-        if (typeof entry.name === 'string' && text) {
-            out[entry.name] = text;
-        }
-    }
-    return out;
-}
-
-function customFieldsText(named: Record<string, string>): string | undefined {
-    const long = Object.entries(named).filter(
-        ([, text]) => text.length >= MIN_CUSTOM_FIELD_TEXT,
-    );
-    return long.length
-        ? `Other fields:\n${long.map(([name, text]) => `${name}:\n${text}`).join('\n\n')}`
-        : undefined;
-}
-
 function takesRepository(tool: MCPToolRaw): boolean {
     return Object.keys(asRecord(asRecord(tool.inputSchema).properties)).some(
         (name) =>
@@ -380,7 +313,8 @@ function takesRepository(tool: MCPToolRaw): boolean {
     );
 }
 
-function taskId(reference: TaskReference): string {
+/** The id a task is shown with: `AB#12`, `owner/repo#12`, `SAA-96`. */
+export function taskId(reference: TaskReference): string {
     if (reference.kind === 'work_item') {
         return `AB#${reference.id}`;
     }
@@ -390,11 +324,6 @@ function taskId(reference: TaskReference): string {
             : `#${reference.id}`;
     }
     return reference.id;
-}
-
-function joinSections(sections: Array<string | undefined>): string | undefined {
-    const present = sections.filter(Boolean);
-    return present.length ? present.join('\n\n') : undefined;
 }
 
 function idParam(schema: Schema): string | undefined {

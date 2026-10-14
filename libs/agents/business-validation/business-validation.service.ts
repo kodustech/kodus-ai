@@ -64,6 +64,7 @@ import {
 import { extractTaskReferences } from './task-references';
 import { repositoryForLookup, resolveTasks } from './task-resolver';
 import { createAgentToolReader } from './trackers/agent-tool-reader';
+import { aiSdkAgentRun, createTaskFinder } from './trackers/task-finder';
 import { rankReadTools } from './trackers/custom-mcp.tracker';
 import { McpToolSession } from './trackers/mcp-tool-session';
 import {
@@ -205,6 +206,13 @@ export class BusinessValidationService {
                             request.organizationAndTeamData.organizationId,
                         teamId: request.organizationAndTeamData.teamId,
                     })(input),
+                finder: createTaskFinder(async (spec, prompt) =>
+                    aiSdkAgentRun((await judge()).modelSlot, {
+                        organizationId:
+                            request.organizationAndTeamData.organizationId,
+                        teamId: request.organizationAndTeamData.teamId,
+                    })(spec, prompt),
+                ),
             });
             trackerNames = trackers.map((t) => t.name);
             try {
@@ -544,6 +552,21 @@ export class BusinessValidationService {
                         teamId: organizationAndTeamData.teamId,
                     },
                 )(input),
+            finder: createTaskFinder(async (spec, prompt) =>
+                aiSdkAgentRun(
+                    (
+                        await this.judge({
+                            organizationAndTeamData,
+                            door: 'auto',
+                            diff: '',
+                        })
+                    ).modelSlot,
+                    {
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                    },
+                )(spec, prompt),
+            ),
         });
         let resolution: TaskResolution;
         try {
