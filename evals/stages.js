@@ -27,6 +27,8 @@
 //              comes only from the nightly, never from the wiring smoke
 //   friday   — true when the Friday check (evals/tier0-smoke.js) runs it on
 //              every tier-0 model: proves it still runs there, measures nothing
+//   history  — an older signal carrying the same number, for the panel's chart
+//              until this stage's own rows have a history
 //   note     — shown by the panel next to the status
 const STAGES = [
     {
@@ -56,6 +58,7 @@ const STAGES = [
         wiring: ['finder-recall'],
         nightly: true,
         friday: true,
+        history: 'evals.nightly.recall',
         note: 'recall on the nightly light set against its floor; tools answered from a recording',
     },
     {

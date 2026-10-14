@@ -51,6 +51,7 @@ function baseMeta(stage, nightlyModel) {
         measured: stage.model,
         wiring: stage.wiring,
         note: stage.note,
+        ...(stage.history ? { history: stage.history } : {}),
         by_model: byModel(stage, nightlyModel),
     };
 }
