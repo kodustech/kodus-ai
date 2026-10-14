@@ -567,9 +567,16 @@ export class GithubService
                     ? 'user'
                     : 'organization';
 
+            // @ts-expect-error property not found in type
+            const installationToken: string | undefined =
+                installationAuthentication?.token;
+
             const authDetails = {
-                // @ts-expect-error property not found in type
-                authToken: installationAuthentication?.token,
+                // Encrypt at rest like the PAT path (authenticateWithToken):
+                // the installation token is a live credential and must not be
+                // persisted in clear (GHSA-g5fx-w235-hhjq, finding 3). Every
+                // reader already decrypt()s authToken.
+                authToken: installationToken ? encrypt(installationToken) : null,
                 installationId:
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
@@ -3507,9 +3514,16 @@ export class GithubService
                 platform: PlatformType.GITHUB,
             });
 
+            // @ts-expect-error property not found in type
+            const installationToken: string | undefined =
+                installationAuthentication?.token;
+
             const authDetails = {
-                // @ts-expect-error property not found in type
-                authToken: installationAuthentication?.token,
+                // Encrypt at rest like the PAT path (authenticateWithToken):
+                // the installation token is a live credential and must not be
+                // persisted in clear (GHSA-g5fx-w235-hhjq, finding 3). Every
+                // reader already decrypt()s authToken.
+                authToken: installationToken ? encrypt(installationToken) : null,
                 installationId:
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
