@@ -19,7 +19,10 @@
 // writes what finder-recall loaded: the nightly measures only when one of those
 // files changed.
 //
-//   node evals/wiring-smoke.js [--engine-files=<file>]
+//   node evals/wiring-smoke.js [--engine-files=<file>] [--results=<file>]
+//
+// --results writes one entry per step ({ step, ok, problem, ms, calls }), which
+// evals/stage-signals.js turns into one quality signal per review stage.
 //
 // Exit: 0 every step drove the engine / 1 at least one step broke.
 const fs = require('fs');
@@ -75,6 +78,7 @@ function readJson(file) {
 
 async function main() {
     const engineFilesOut = (process.argv.find((a) => a.startsWith('--engine-files=')) || '').split('=')[1];
+    const resultsOut = (process.argv.find((a) => a.startsWith('--results=')) || '').split('=')[1];
     const server = await startFakeLlmServer();
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
     const finderOut = path.join(scratch, 'finder-recall-eval-fake.json');
@@ -163,6 +167,13 @@ async function main() {
         console.log(`   engine files for the nightly: ${finderFiles.length} → ${engineFilesOut}`);
     }
     fs.rmSync(scratch, { recursive: true, force: true });
+    if (resultsOut) {
+        const entries = results.map((r) => ({ step: r.step.name, ok: !r.problem, problem: r.problem, ms: Math.round(r.ms), calls: r.calls }));
+        // The trace check fails the smoke on its own; recorded as an entry no stage
+        // claims, so evals/stage-signals.js reads every stage as untrusted, not green.
+        entries.push({ step: 'pr-paths-filter', ok: !coverageProblem, problem: coverageProblem, ms: 0, calls: 0 });
+        fs.writeFileSync(resultsOut, `${JSON.stringify(entries, null, 2)}\n`);
+    }
 
     const broken = results.filter((r) => r.problem);
     if (!broken.length && !coverageProblem) {

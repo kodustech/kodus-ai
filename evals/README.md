@@ -50,6 +50,8 @@ Neither trigger is a hand-kept folder list. The wiring smoke records every repo 
 | [secondary](secondary/README.md) | Shared datasets and model registry for dedup/severity/format | data |
 | [results](results/README.md) | What past runs measured, per model and config (hand-recorded ledger) | data |
 
+Which review stage each eval covers, and the stages no eval covers, is in `evals/stages.js`. Every night each stage reaches the quality panel as `evals.stage.<stage>` (`evals/stage-signals.js`): the finder with its recall against the floor, the others with whether their eval still runs.
+
 ## Run locally
 
 ```bash

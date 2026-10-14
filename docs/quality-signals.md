@@ -39,6 +39,7 @@ shows it grey.
 | `evals.wiring` | `code-review-evals-pr.yml` | status only |
 | `evals.nightly.recall`, `evals.nightly.precision` | `code-review-evals-nightly.yml` (notify) | ratio; status from the nightly verdict |
 | `evals.tier0.<model>` | `code-review-evals-tier0.yml` (one row per matrix model) | review seconds (ms); red when review or PR summary is broken |
+| `evals.stage.<stage>` | `code-review-evals-nightly.yml`, one row per stage in `evals/stages.js` (`evals/stage-signals.js`) | finder: nightly recall (ratio), with `meta.floor` and `meta.baseline`; every other stage: status of its eval in tonight's wiring smoke, `skipped` when the wiring smoke does not run it — `meta.measured` then says how the stage is checked (`mocked` in the unit suite, `e2e` on the test matrix, `on-demand`, or `none`). `meta.measured` says how: `real`, `scripted`, `mocked`, `on-demand` or `none`; `meta.friday` lists the tier-0 models the Friday check runs the stage on (it proves it runs, measures nothing) and the key of its outcome in `evals.tier0.<model>`'s meta; `meta.by_hand` lists the evals that can measure the stage on a real model but only run by hand |
 | `evals.benchmark` | `code-review-model-benchmark.yml` | lowest F1 across models; `meta.models` has each model's precision/recall/f1 |
 | `prod.errors.<group>`, `.total`, `.noise`, `.new_signatures`, `.spikes` | kodus-insights `nightly-errors.yml` (CloudWatch) | counts |
 | `prod.betterstack.monitors_down` | kodus-quality `pull.yml` | count |
@@ -69,6 +70,10 @@ Reusable workflows (`e2e-self-hosted-matrix`, `e2e-cloud`, `code-review-model-be
 ```
 
 3. Run the workflow once and put the row in the PR description.
+
+Several rows from one step: write a JSON array of `{name, status, value, unit, meta}` and
+pass its path as `rows` instead of `name`/`status`/`value`/`unit`/`meta`. Each row is checked
+like a single one; a bad row is dropped with a warning and the rest are written.
 
 A new name needs no schema change. Add it to the list above.
 
