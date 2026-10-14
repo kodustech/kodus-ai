@@ -1,0 +1,1920 @@
+{
+ "model": "muse-spark-1.2",
+ "verificador": "muse-spark-1.2",
+ "versao": "f1",
+ "sobre": "aluc-h1t10f",
+ "prs": {
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "29-34, 58, 62-63",
+       "description": "New InsightsBookingServicePublicOptions widens type: teamId?: number for all scopes instead of required only for scope:'team'. This defeats the discriminated union InsightsBookingServiceOptions and allows scope:'team' without teamId (or scope:'user'/'org' with extraneous teamId) to pass type-check. Constructor then does safeParse and silently sets this.options=null instead of throwing, so invalid calls return NOTHING_CONDITION (1=0) and empty results rather than a compile-time or runtime error, masking bugs."
+      },
+      {
+       "lines": "62-63",
+       "description": "Constructor swallows validation errors: `const validation = schema.safeParse(options); this.options = validation.success ? validation.data : null`. On schema failure it silently degrades to null -> buildAuthorizationConditions returns Prisma.sql`1=0`. No exception is thrown, violating fail-fast and making misconfiguration (e.g., missing teamId) appear as 'no data' instead of an error."
+      },
+      {
+       "lines": "68-80",
+       "description": "getBaseConditions() branches on truthiness of Prisma.Sql objects: `if (authConditions && filterConditions) else if (authConditions) else if (filterConditions) else NOTHING`. Prisma.Sql is always a truthy object (even NOTHING_CONDITION = sql`1=0`), so the `else if (filterConditions)` (auth-bypass path returning filter alone) and final `else` are dead code. The structure documents an insecure fallback: if authConditions were ever nullable (as getFilterConditions is), it would return unscoped filter-only SQL, bypassing authorization. It also shows incorrect null-check logic."
+      },
+      {
+       "lines": "68-81 (diff 67-80)",
+       "description": "Removes findMany() encapsulation that guaranteed authorization: previously `where: {...findManyArgs.where, AND: [authConditions, filterConditions]}` forced callers through an AND-merged WhereInput. Replaced with getBaseConditions(): Prisma.Sql that callers must manually interpolate via `prisma.$queryRaw` WHERE ${baseConditions}` (as test does). No longer enforces AND with caller filters/where, allows forgetting the condition, using OR, or incorrect parentheses, opening lateral authorization bypass. Region 57-78 introduces this broken contract."
+      },
+      {
+       "lines": "68-80",
+       "description": "getBaseConditions uses truthiness (if (authConditions && filterConditions)) but authConditions is always a Prisma.Sql object (even NOTHING_CONDITION = Prisma.sql`1=0` is truthy). So the test collapses to if(filterConditions), else-if(filterConditions) is dead code and else return NOTHING_CONDITION is unreachable. The intended null-check should be filterConditions !== null (and should explicitly handle the NOTHING case). The branch structure masks logic errors and relies on SQL evaluation of 1=0 rather than JS short-circuit."
+      },
+      {
+       "lines": "57-66",
+       "description": "Constructor signature was widened from InsightsBookingServiceOptions (discriminated union requiring teamId when scope==='team') to InsightsBookingServicePublicOptions where teamId is optional for all scopes. Invalid team scope (missing teamId) now passes type-checking and is silently coerced to this.options = null via safeParse, causing getAuthorizationConditions() to return NOTHING_CONDITION (1=0) with no error. Previously this was a compile-time error; now it is a silent fail-closed that hides caller bugs."
+      },
+      {
+       "lines": "67-81",
+       "description": "Breaking contract: findMany(findManyArgs: Prisma.BookingTimeStatusDenormalizedFindManyArgs) which merged findManyArgs.where via AND [authConditions, filterConditions] and forwarded select/orderBy/take/skip was removed and replaced by getBaseConditions(): Prisma.Sql requiring callers to do prisma.$queryRaw`WHERE ${baseConditions}`. Existing callers will get TypeError: findMany is not a function, and any caller-provided where/select/pagination is lost. Delegating raw SQL composition to callers also risks authorization bypass if they forget to interpolate WHERE ${baseConditions} or concatenate as string (SQL injection / over-broad reads)."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "7"
+     }
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "1-21",
+       "description": "Missing `import prisma from \"@calcom/prisma\"` but `getClient` uses `prisma.credential.update` at line 96. Results in ReferenceError: prisma is not defined at runtime on every Salesforce calendar operation, unlike every other CalendarService (googlecalendar, office365calendar) which imports prisma."
+      },
+      {
+       "lines": "86-86",
+       "description": "Success check is `response.statusText !== \"OK\"` instead of `!response.ok` / `response.status`. `statusText` is implementation-dependent (often \"\" in Node fetch) and not reliable; valid 200 with different text or paged fetch polyfill will incorrectly throw, and non-JSON error bodies are not handled via handleErrorsJson as other services do."
+      },
+      {
+       "lines": "101-108",
+       "description": "Updated tokens are persisted but never used for the returned connection: `new jsforce.Connection({ instanceUrl: credentialKey.instance_url, accessToken: credentialKey.access_token })` uses the stale `credentialKey` values instead of `accessTokenParsed.data.instance_url/access_token`. The current request therefore authenticates with the expired token even after a successful refresh."
+      },
+      {
+       "lines": "1-21, 75-84",
+       "description": "Bypasses the `refreshOAuthTokens` wrapper used by all other services (googlecalendar, office365calendar, hubspot, lark, webex). When `APP_CREDENTIAL_SHARING_ENABLED && CALCOM_CREDENTIAL_SYNC_ENDPOINT` is set, the fetch should go to the sync endpoint; this file always hits `login.salesforce.com` directly, breaking credential-sharing and diverging from `parseRefreshTokenResponse`'s minimum-schema branch."
+      },
+      {
+       "lines": "75-84",
+       "description": "Unconditional refresh on every `getClient()` call with no expiry check. Other services check `isExpired`/`isTokenExpiring` before refreshing; this causes a token refresh on every availability/event call, risking rate-limiting and unnecessary latency."
+      },
+      {
+       "lines": "39-47",
+       "description": "`salesforceTokenSchema` requires `scope: z.string()` (and `id`, `token_type` etc.) as required. Salesforce's `refresh_token` grant does not guarantee `scope` is returned; a valid refresh response lacking `scope` will fail `safeParse`, triggering \"Invalid refreshed tokens\" even though tokens are valid. Should be optional."
+      },
+      {
+       "lines": "import getAppKeysFromSlug from \"../../_utils/getAppKeysFromSlug\";\nimport parseRefreshTokenResponse from \"../../_utils/oauth/parseRefreshTokenResponse\";",
+       "description": "Missing `import prisma from \"@calcom/prisma\"` in the header (lines 1-20). The PR adds `await prisma.credential.update(...)` at line 96 but never imports prisma, so `prisma` is a ReferenceError at runtime and the token refresh always crashes."
+      },
+      {
+       "lines": "    await prisma.credential.update({\n      where: { id: credential.id },\n      data: { key: { ...accessTokenParsed.data, refresh_token: credentialKey.refresh_token } },\n    });\n\n    return new jsforce.Connection({\n      clientId: consumer_key,\n      clientSecret: consumer_secret,\n      redirectUri: WEBAPP_URL + \"/api/integrations/salesforce/callback\",\n      instanceUrl: credentialKey.instance_url,\n      accessToken: credentialKey.access_token,\n      refreshToken: credentialKey.refresh_token,\n    });",
+       "description": "Stale credentials used for the jsforce Connection. After a successful refresh the code persists `accessTokenParsed.data` to the DB but then constructs the Connection from the old `credentialKey.instance_url / access_token / refresh_token` instead of `accessTokenParsed.data`. The refreshed access_token is never used, so the call immediately fails with the expired token."
+      },
+      {
+       "lines": "    if (response.statusText !== \"OK\") throw new HttpError({ statusCode: 400, message: response.statusText });",
+       "description": "Incorrect HTTP error check. `fetch` Response.statusText is unreliable (often \"\" even on success, and not guaranteed to be \"OK\") — should check `!response.ok` or `response.status !== 200`. This either throws on successful 200 responses or misses real errors, and propagates an empty/incorrect message."
+      },
+      {
+       "lines": "    const response = await fetch(\"https://login.salesforce.com/services/oauth2/token\", {\n      method: \"POST\",\n      body: new URLSearchParams({\n        grant_type: \"refresh_token\",\n        client_id: consumer_key,\n        client_secret: consumer_secret,\n        refresh_token: credentialKey.refresh_token,\n        format: \"json\",\n      }),\n    });",
+       "description": "Bypasses the credential-sync abstraction. Every other OAuth CalendarService in this PR (google, office365, hubspot, lark, webex, etc.) wraps the fetch with `refreshOAuthTokens(..., appSlug, credential.userId)` to delegate to `CALCOM_CREDENTIAL_SYNC_ENDPOINT` when `APP_CREDENTIAL_SHARING_ENABLED` is true. Salesforce fetches directly, so credential sharing never works for Salesforce and breaks the contract introduced by the PR."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "8-15",
+       "description": "Returns raw fetch `Response` on the sync branch while `refreshFunction` returns caller-specific parsed types: Google expects `GaxiosResponse {data:{access_token}}` accessed as `res?.data`, HubSpot expects already-parsed `HubspotToken`. Sync branch returns `Response` which has no `.data` / token fields, so `token = res?.data` is undefined (Google CalendarService L94-96 TypeError on `token.access_token`) and `hubspotRefreshToken.expiresIn/accessToken` is undefined (Hubspot L191-192 -> NaN expiry, corrupt credential). One wrapper cannot satisfy both `Response`-expecting and object-expecting callers."
+      },
+      {
+       "lines": "8-15",
+       "description": "No HTTP error handling on sync fetch. `fetch` does not throw on 4xx/5xx, and code returns `response` without checking `response.ok` or calling `handleErrorsJson`/`handleErrorsRaw`. Callers that do `response.json()` or check `.data` will treat error pages as valid tokens, persisting garbage and masking refresh failures. Off-365 callers do `handleErrorsJson` on the returned value, but Google/HubSpot callers do not, so failure is silent."
+      },
+      {
+       "lines": "8-13",
+       "description": "No authentication forwarded to `CALCOM_CREDENTIAL_SYNC_ENDPOINT`. The `app-credential` webhook (apps/web/pages/api/webhook/app-credential.ts L24-28) requires `CALCOM_WEBHOOK_SECRET` header; the sync fetch sends only `calcomUserId`+`appSlug` as `URLSearchParams` with no secret header or signature. The endpoint cannot verify the caller is a legitimate Cal instance, and request body is not signed/encrypted."
+      },
+      {
+       "lines": "8-13",
+       "description": "Missing `Content-Type: application/x-www-form-urlencoded` and incomplete payload. `new URLSearchParams` body sent without header may be rejected; more importantly only `userId`+`appSlug` sent, no `credentialId`/`teamId`. Team credentials have `userId==null` so `&& userId` (L5) is falsy and sync is silently skipped for team-owned calendars, falling back to local refresh even when `APP_CREDENTIAL_SHARING_ENABLED` is true, and endpoint cannot disambiguate multiple credentials for same user/app."
+      },
+      {
+       "lines": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15",
+       "description": "When APP_CREDENTIAL_SHARING_ENABLED the helper does `fetch(CALCOM_CREDENTIAL_SYNC_ENDPOINT)` and returns the raw fetch Response. GoogleCalendarService expects the refreshFunction to return a GaxiosResponse `{data:{access_token,expiry_date}}` (from `myGoogleAuth.refreshToken(...).res`) and does `const token = res?.data; token.access_token`. A fetch Response has no `.data`, so `token` is undefined and `token.access_token` throws TypeError — Google refresh is broken when sync is enabled. No `response.json()` or shape mapping is done."
+      },
+      {
+       "lines": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15",
+       "description": "Same contract break for Hubspot (and analogous for other apps). Hubspot does `const hubspotRefreshToken: HubspotToken = await refreshOAuthTokens(()=> hubspotClient.oauth.tokensApi.createToken(...))` and then accesses `hubspotRefreshToken.expiresIn/accessToken/expiryDate`. Sync path returns a fetch Response instead of a HubspotToken object, so those fields are undefined, `expiryDate = Date.now()+expiresIn*1000` becomes NaN and credential update writes corrupt data."
+      },
+      {
+       "lines": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15",
+       "description": "No normalization or error handling: sync fetch is returned without checking `response.ok` and without parsing JSON. Callers are heterogeneous (Google expects `.data`, Office365/Lark/Webex expect fetch Response for `handleErrorsJson`/`handleLarkError`, Hubspot expects plain token object). Returning an unparsed Response leaks the abstraction, treats HTTP 4xx/5xx as success, and forces each caller to branch. Should parse `await response.json()` and map to the same shape `refreshFunction` returns, or throw on !ok."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "6",
+       "description": "Incorrect relative import: file is at `packages/app-store/_utils/oauth/createOAuthAppCredential.ts` but imports `decodeOAuthState` from `../oauth/decodeOAuthState`. That resolves to `.../_utils/oauth/decodeOAuthState` via `../oauth/` indirection (up then back down) instead of `./decodeOAuthState`. It is a copy-paste error from moving both files into the `oauth/` subfolder (compare other moved files that correctly use `../../_utils/oauth/...`). Works by accident but is brittle, confusing, and will break with stricter resolvers/lint."
+      },
+      {
+       "lines": "13-14",
+       "description": "JSDoc is wrong/broken contract: both `@param appData.type` and `@param appData.appId` are documented as `the app slug`. In all callers `appId` is the slug (`google-calendar`, `hubspot`, `msteams`) and `type` is the credential type (`google_calendar`, `hubspot_other_calendar`, `office365_video`). Documenting both as slug misleads callers and hides the distinct meanings."
+      },
+      {
+       "lines": "23-24, 30-59",
+       "description": "Privilege-escalation / dead admin check exposed by this region: region decodes `state.teamId` and claims to create team vs user credentials, but the team branch (lines 30-46) only checks `members.some {userId, accepted:true}` (any member) and `return`s early, while the `throwIfNotHaveAdminAccessToTeam` imported in this region (line 7) is called on line 59 with `state?.teamId ?? null` after the early return — so for team flow it never runs, and for user flow it is always `null` (no-op). Any team member (not admin) can create `teamId`-scoped credentials."
+      },
+      {
+       "lines": "30-59",
+       "description": "Privilege escalation / dead admin check: When state.teamId is present the code only verifies `members.some({userId, accepted:true})` (lines 32-43) and then `return`s (56). The intended admin check `throwIfNotHaveAdminAccessToTeam` on line 59 is therefore dead code — it is only reached when teamId is falsy (it receives `null` and early-returns). `getUserAdminTeams` requires `role in [ADMIN,OWNER]` but this path allows any accepted member to create a team-wide credential via `prisma.credential.create({teamId})`."
+      },
+      {
+       "lines": "28-29",
+       "description": "Unhandled exception from `decodeOAuthState(req)` : `decodeOAuthState` does `JSON.parse(req.query.state)` without try/catch or Zod validation (packages/app-store/_utils/oauth/decodeOAuthState.ts:9). A malformed or non-JSON `state` query param crashes `createOAuthAppCredential` with a 500 SyntaxError instead of a 400, and `teamId` is never validated to be a number (IntegrationOAuthCallbackState)."
+      },
+      {
+       "lines": "45",
+       "description": "Wrong error contract: `throw new Error(\"User does not belong to the team\")` should be `HttpError` (401/403). The generic Error bubbles as 500 Internal Server Error, inconsistent with the `HttpError(401)` used on line 25 and with `throwIfNotHaveAdminAccessToTeam` (401)."
+      },
+      {
+       "lines": "6",
+       "description": "Brittle self-referential import: file is `packages/app-store/_utils/oauth/createOAuthAppCredential.ts` but imports `from \"../oauth/decodeOAuthState\"` which resolves to `oauth/oauth/decodeOAuthState` via `../oauth` (equivalent to `./decodeOAuthState`). Indicates the move from `_utils/` was not updated; works only by accident and will break with stricter resolvers."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "2"
+     }
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "242-244",
+       "description": "Must be 32 bytes for AES256 but suggests `openssl rand -base64 24`. That generates 24 raw bytes (32 base64 chars). `packages/lib/crypto.ts:16,33` does `Buffer.from(key,'latin1')` so 32 chars -> 32 bytes but only 192-bit entropy, contradicting 256-bit claim. If user follows the intuitive `openssl rand -base64 32` (as on line 236, which yields 44 chars) the 44-byte latin1 key makes `crypto.createCipheriv/createDecipheriv` throw 'Invalid key length' at runtime in `symmetricEncrypt/symmetricDecrypt`."
+      },
+      {
+       "lines": "237-239",
+       "description": "Docs say header name should be in lowercase because `apps/web/pages/api/webhook/app-credential.ts:25` does case-sensitive `req.headers[process.env.CALCOM_WEBHOOK_HEADER_NAME || \"calcom-webhook-secret\"]` lookup (Next.js lowercases headers). Example includes quoted value \"calcom-webhook-secret\"; if env provider does not strip quotes, lookup is `\"calcom-webhook-secret\"` vs `calcom-webhook-secret` and all webhooks get 403. Comment does not warn that any uppercase or quoted value silently breaks authentication."
+      },
+      {
+       "lines": "233-244",
+       "description": "Block implies setting either secret enables sync, but `packages/lib/constants.ts:103-104` defines `APP_CREDENTIAL_SHARING_ENABLED = CALCOM_WEBHOOK_SECRET && CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY` and `refreshOAuthTokens.ts`/`parseRefreshTokenResponse.ts` also require `CALCOM_CREDENTIAL_SYNC_ENDPOINT`. Setting only the webhook secret (per line 236) leaves feature disabled with 403 'Credential sharing is not enabled' with no documentation that both secrets (and endpoint for refresh) must be set together."
+      },
+      {
+       "lines": ".env.example:241-244",
+       "description": "Wrong key-generation instruction for AES256. Comment says key \"must be 32 bytes for AES256\" but suggests `openssl rand -base64 24` (24 raw bytes, 32 base64 chars). `packages/lib/crypto.ts:15-19,32-37` does `Buffer.from(key,\"latin1\")` and `crypto.createCipheriv(\"aes256\",...)` which requires exactly 32 bytes. A user following the sibling instruction `openssl rand -base64 32` (line 236) or who base64-decodes would get 44-char / 32-byte raw mismatch and `Invalid key length` at `symmetricDecrypt` in `apps/web/pages/api/webhook/app-credential.ts:58`. Entropy and command are inconsistent and swapped."
+      },
+      {
+       "lines": ".env.example:238-239",
+       "description": "Broken header-name contract. Docs say header name \"Should be in lowercase\" and example sets `CALCOM_WEBHOOK_HEADER_NAME=\"calcom-webhook-secret\"`. `apps/web/pages/api/webhook/app-credential.ts:25` does `req.headers[process.env.CALCOM_WEBHOOK_HEADER_NAME || \"calcom-webhook-secret\"]` without `.toLowerCase()`. Node/Next lowercases incoming headers, so any non-lowercase env value silently fails lookup and rejects all valid webhooks with 403; code must normalize. Quoted default also risks literal quotes if env is injected without dotenv stripping."
+      },
+      {
+       "lines": ".env.example:237-240",
+       "description": "Insecure/underspecified webhook auth. `.env.example` presents `CALCOM_WEBHOOK_SECRET` as sole protection, but handler uses plain `!==` string equality (`app-credential.ts:25-26`) not `crypto.timingSafeEqual`, leaking timing, and does not restrict `req.method` (accepts GET/PUT) nor verify body signature. No guidance on secret strength/rotation; attacker can brute-force via timing oracle."
+      },
+      {
+       "lines": ".env.example:240",
+       "description": "Undocumented interaction with sync endpoint weakens validation. Setting `CALCOM_CREDENTIAL_SYNC_ENDPOINT` (empty in example) together with the two secrets enables `APP_CREDENTIAL_SHARING_ENABLED` (`packages/lib/constants.ts:103-104`). When enabled, `packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:15-16` downgrades strict `zod` schemas to `minimumTokenResponseSchema` (only `access_token` required) and `refreshOAuthTokens.ts:8-14` proxies refresh via unauthenticated `fetch` to arbitrary URL without sending `refresh_token`. Docs do not warn that strict token validation is disabled and that the external endpoint can inject arbitrary tokens persisted to `prisma.credential`."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    },
+    {
+     "rep": "S26",
+     "membros": [
+      "S26"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "57-59",
+       "description": "JSON.parse(symmetricDecrypt(reqBody.keys, process.env.CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY || \"\")) is unguarded. symmetricDecrypt throws on bad key length / bad IV / wrong secret (and with fallback \"\" when env missing) and JSON.parse throws on non-JSON plaintext. Both throw as unhandled exceptions -> Next.js returns 500 and may leak stack, instead of 400. No Zod/schema validation of the decrypted payload either, so corrupted or attacker-controlled data crashes the handler."
+      },
+      {
+       "lines": "62-70",
+       "description": "findFirst({ where:{ userId, appId: appMetadata.slug }}) then separate update vs create is a classic TOCTOU race. No transaction, no unique constraint on (userId,appId) (schema.prisma Credential has no @@unique), and findFirst without order is nondeterministic if duplicates exist. Two concurrent webhook deliveries can both see no row and both create, leaving duplicate credentials for same user/app."
+      },
+      {
+       "lines": "72-91",
+       "description": "Decrypted keys are stored directly as credential.key (key: keys) with no validation and no re-encryption with CALENDSO_ENCRYPTION_KEY. Normal Cal.com credential handling encrypts sensitive fields at rest or validates against app-specific schemas (e.g., googleCredentialSchema). Here any JSON that decrypts correctly is persisted, allowing an attacker who obtains/ guesses the static webhook secret to overwrite any userId/appSlug credential with arbitrary JSON that will later be used as OAuth tokens."
+      },
+      {
+       "lines": "lines 57-59",
+       "description": "symmetricDecrypt + JSON.parse are called with no try/catch. Invalid `keys`, wrong CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY length, or non-JSON plaintext throws from crypto.createDecipheriv / decipher.final / JSON.parse and bubbles as 500 with stack trace instead of 400. Breaks API contract and leaks internals."
+      },
+      {
+       "lines": "lines 62-91",
+       "description": "Non-atomic findFirst then create/update race. Credential has no unique(userId,appId) constraint, so concurrent webhook calls can both miss and double-create duplicates. Comment claims cannot use upsert because id unknown, but upsert/transaction with unique where clause is required."
+      },
+      {
+       "lines": "lines 77-88",
+       "description": "Decrypted keys are stored as plain Json object `key: keys`. CalDAV-derived apps (apple-calendar, exchange2013/2016, exchangecalendar - BaseCalendarService) expect `credential.key` to be a string `iv:ciphertext` encrypted with CALENDSO_ENCRYPTION_KEY and do `symmetricDecrypt(credential.key as string, CALENDSO_ENCRYPTION_KEY)`. Webhook breaks that contract and will crash those services."
+      },
+      {
+       "lines": "lines 57-59, 72-88",
+       "description": "No schema validation of decrypted payload. Any JSON (string/number/null, missing access_token/refresh_token, extra fields) is persisted verbatim to credential.key. Later flows use zod schemas (googleCredentialSchema, salesforceTokenSchema, parseRefreshTokenResponse) and will fail, and allows an holder of the webhook secret to inject arbitrary credential content for any userId/appSlug."
+      },
+      {
+       "lines": "lines 62-66",
+       "description": "Lookup is `where: { userId, appId: appMetadata.slug }` only. Ignores `type` discriminator (slug != type, e.g. google-calendar vs google_calendar) and teamId/userId distinction. For apps with multiple credential types or team credentials, findFirst can match/overwrite the wrong row or miss."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "2"
+     }
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "23",
+       "description": "Uses `APP_NAME` for the From header (``${APP_NAME} <...>``) instead of `EMAIL_FROM_NAME` like every other Organizer email (`OrganizerScheduledEmail`, `OrganizerRequestEmail`). This ignores the `EMAIL_FROM_NAME` env override (`process.env.EMAIL_FROM_NAME || APP_NAME`) and violates the established contract for sender name."
+      },
+      {
+       "lines": "28",
+       "description": "Unsafe `this.calEvent.attendees[0].name` without guard/fallback. If `attendees` is empty it throws `TypeError: Cannot read properties of undefined`. Even when non-empty, newly added guests are created with `name: \"\"` in `addGuests.handler.ts`, so if the first element is a guest the interpolated `{{name}}` in `guests_added_event_type_subject` becomes empty, producing a broken subject like `Guests Added: X with  at ...`."
+      },
+      {
+       "lines": "31-34",
+       "description": "Handles `teamMember` for `to` (`toAddresses`) but does not forward `teamMember` to `renderEmail` and does not use `teamMember.language` for `this.t`/subject. Base `OrganizerScheduledEmail` passes `teamMember` to the React template and uses it for locale/timeZone. Here a round-robin team member receives organizer-personalized HTML/subject in the wrong locale/timezone."
+      },
+      {
+       "lines": "packages/emails/templates/organizer-add-guests-email.ts:1,23",
+       "description": "Uses `APP_NAME` for the `from` header (`from: `${APP_NAME} <...>`) instead of `EMAIL_FROM_NAME`. Every other organizer template (organizer-scheduled-email.ts:6,47, organizer-location-change-email.ts:1,23, etc.) uses `EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || APP_NAME` so custom `EMAIL_FROM_NAME` env is respected. This wrapper breaks that contract and makes the sender name unconfigurable/hardcoded to \"Cal.com\"."
+      },
+      {
+       "lines": "packages/emails/templates/organizer-add-guests-email.ts:28",
+       "description": "Unsafe `this.calEvent.attendees[0].name` for subject interpolation. If `attendees` is empty it throws `TypeError: Cannot read properties of undefined (reading 'name')` and crashes sendAddGuestsEmails. Even when non-empty, `addGuests.handler.ts:84` creates new guests with `name: \"\"`, so if `attendees[0]` resolves to a newly-added guest the subject becomes `Guests Added: {{eventType}} with  at {{date}}` (empty name). AttendeeAddGuestsEmail correctly falls back to `team?.name || organizer.name`; organizer version needs `attendees[0]?.name || attendees[0]?.email || organizer.name` guard."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "2, 5 (same issue - duplicates)"
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:33, 52-57, 36-40",
+       "description": "isInvalidEmail is set to true on validation failure but never cleared: not reset on input change (setValue), not reset when validation succeeds, and not reset in addGuestsMutation onSuccess (which resets multiEmailValue but not the error flag). Once shown the 'emails_must_be_unique_valid' error persists across retries and even after a successful add, and will be stale on next dialog open."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:32-33, 48-51, 60-61, 88-93",
+       "description": "Stale dialog state leak: multiEmailValue is initialized to [\"\"] and only reset on Cancel and onSuccess. Dialog onOpenChange is wired directly to setIsOpenDialog, so closing via overlay/Escape does not reset multiEmailValue or isInvalidEmail. Reopening shows previous emails/error. Conversely MultiEmail allows deleting the last field to get [] which makes handleAdd hit `if (length===0) return` with no feedback, while the initial [\"\"] defeats that guard and always triggers validation failure."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:42-44",
+       "description": "Broken error toast fallback: `const message = `${err.data?.code}: ${t(err.message)}`` is always truthy (e.g. \"undefined: ...\" when code missing), so `message || t(\"unable_to_add_guests\")` never falls back. User sees \"undefined: <message>\" instead of localized \"unable_to_add_guests\" when err.data.code is undefined."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:26-29",
+       "description": "Divergent / client-only validation: ZAddGuestsInputSchema is re-defined inside the component with .refine(unique) but the server schema in addGuests.schema.ts is just z.array(z.string().email()) with no uniqueness check. Duplicates like [\"a@a.com\",\"a@a.com\"] are blocked only client-side and can be sent via direct tRPC call; server handler's uniqueGuests filter only dedupes against existing attendees, so createMany would create duplicate attendee rows."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:26-27",
+       "description": "Case-sensitive uniqueness and email check: refine uses `new Set(emails)` and z.string().email() without normalization/trim/lowercasing, so \"Test@example.com\" vs \"test@example.com\" passes as unique and \" a@b.com \" fails inconsistently. Server also compares case-sensitively and blacklist check lowercases only the list, allowing bypass."
+      },
+      {
+       "lines": "AddGuestsDialog.tsx:32 and 48-51",
+       "description": "multiEmailValue initialized to [\"\"] so length is 1, making `if (multiEmailValue.length===0) return` dead for the initial empty field. Validation then fails via zod (\"\" is not an email) and shows generic uniqueness error. Conversely after user removes the last field via MultiEmail X, value becomes [] and handleAdd silently returns with no toast/error, leaving user with no feedback. Empty-string vs empty-array states are conflated."
+      },
+      {
+       "lines": "AddGuestsDialog.tsx:33, 52-57, 69-73",
+       "description": "isInvalidEmail is set to true on validation failure but never cleared when multiEmailValue changes or when validation later succeeds. The error banner \"emails_must_be_unique_valid\" sticks forever after one failure until Cancel is clicked, even if user corrects the emails."
+      },
+      {
+       "lines": "AddGuestsDialog.tsx:26-29 vs packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-5 and addGuests.handler.ts:74-105",
+       "description": "Client schema does .refine uniqueness check, server ZAddGuestsInputSchema is just z.array(z.string().email()) with no uniqueness. Handler's uniqueGuests filter only removes emails already in booking.attendees, not duplicates within the request itself. Bypassing client (or race) sends [\"a@b.com\",\"a@b.com\"] -> handler createMany inserts two Attendee rows with same email, duplicate DB records."
+      },
+      {
+       "lines": "AddGuestsDialog.tsx:48-54 interacting with addGuests.handler.ts:70-78",
+       "description": "Dialog sends raw multiEmailValue without trim()/toLowerCase(). Handler lowercases blacklist but checks !blacklistedGuestEmails.includes(guest) with guest not lowercased, and compares booking.attendees with strict ===. So \"Test@Example.com\" vs \"test@example.com\" is considered unique and BLACKLISTED_GUEST_EMAILS can be bypassed by case (e.g., SPAM@blocked.com), leading to duplicate attendees and blacklist bypass."
+      },
+      {
+       "lines": "AddGuestsDialog.tsx:61",
+       "description": "Dialog onOpenChange is set directly to setIsOpenDialog. Closing via overlay/Esc calls setIsOpenDialog(false) without resetting multiEmailValue or isInvalidEmail (unlike Cancel/Success handlers). Next open reuses stale emails and stale isInvalidEmail error, leaking state across opens."
+      },
+      {
+       "lines": "AddGuestsDialog.tsx:24-55 via addGuests.handler.ts:46-48",
+       "description": "Handler computes isTeamAdminOrOwner as (await isTeamAdmin(...)) && (await isTeamOwner(...)). Requires user to be BOTH admin AND owner simultaneously, which is impossible. Legitimate team admins/owners calling the dialog's trpc.viewer.bookings.addGuests will get FORBIDDEN incorrectly; should be ||."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "7 (defect 1 is identical duplicate — both 1 and 7 describe the same cause: isInvalidEmail set true on validation failure never cleared on multiEmailValue/input change or on validation-success/success path, and same consequence: 'emails_must_be_unique_valid' banner persists forever even after fixing emails/retries)"
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "3-6",
+       "description": "Server schema guests: z.array(z.string().email()) does not enforce uniqueness, but client does (AddGuestsDialog refine with Set). Direct tRPC call can send duplicates e.g. [\"a@b.com\",\"a@b.com\"]. Handler's uniqueGuests only filters against existing attendees/blacklist, not duplicates within request, so createMany will insert duplicate Attendee rows with same email and send duplicate emails."
+      },
+      {
+       "lines": "3-6",
+       "description": "Schema allows empty array guests: [] . Client guards length===0, but server permits it; handler then throws BAD_REQUEST with misleading 'emails_must_be_unique_valid' after filtering. Should be .nonempty() / .min(1) to reject at validation layer with correct error."
+      },
+      {
+       "lines": "3-6",
+       "description": "No upper bound on guests array (.max()). Attacker can bypass UI and send thousands of emails in one request causing unbounded prisma createMany rows, EventManager.updateCalendarAttendees and sendAddGuestsEmails fan-out, enabling DoS/spam. Client has no limit either."
+      },
+      {
+       "lines": "3-6",
+       "description": "No normalization (.trim()/.toLowerCase()/.transform). Emails are case-sensitive for uniqueness and blacklist checks. Handler lowercases BLACKLISTED_GUEST_EMAILS but compares with raw guest string (!blacklistedGuestEmails.includes(guest)) and uses guest === attendee.email, so 'User@Example.com' vs 'user@example.com' bypasses duplicate and blacklist detection."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:4",
+       "description": "bookingId uses z.number() with no int/positive/finite check. Accepts NaN, Infinity, floats and negative ids. Other booking inputs use commonBookingSchema but same looseness; here it is exposed as public tRPC input so Prisma is hit with invalid ids (prisma.booking.findFirst where id: NaN/ -1 / 1.5) wasting DB roundtrip and leaking confusing NOT_FOUND vs validation errors. Should be z.number().int().positive()."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:5",
+       "description": "guests: z.array(z.string().email()) lacks .nonempty()/.min(1). Empty array passes Zod and reaches handler, which then filters to uniqueGuests=[] and throws TRPCError BAD_REQUEST 'emails_must_be_unique_valid' — misleading message and unnecessary DB fetch (booking + organizer lookup). Client guards with length===0 but server must be source of truth; schema should reject [] with proper Zod error."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6",
+       "description": "No uniqueness refinement and no max length, unlike client AddGuestsDialog.tsx:26-29 which does .refine(unique). Server therefore accepts duplicate emails and unbounded arrays. Handler's deduplication only checks against existing DB attendees (guest===attendee.email) not intra-array duplicates and is case-sensitive, so ['a@x.com','a@x.com'] or ['A@x.com','a@x.com'] both pass and createMany inserts duplicate Attendee rows (or violates unique constraint), and eventManager.updateCalendarAttendees + sendAddGuestsEmails(evt, guests) are called with original guests including blacklisted/existing duplicates, causing wrong email branching and enabling DoS/spam by sending thousands of guests to create thousands of rows and Promise.all email sends."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "7"
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "70-78, 98-106",
+       "description": "Blacklist/duplicate filter is case-sensitive while blacklist is lowercased: `blacklistedGuestEmails` is `toLowerCase()` but `guest` and `attendee.email` are compared with `===`/`includes` without lowercasing. `Guest@blocked.com` bypasses `guest@blocked.com` blacklist and `User@Example.com` vs `user@example.com` bypasses existing-attendee check, so filtered `uniqueGuests` is incorrect and `prisma.booking.update` createMany at 98-106 persists blacklisted/duplicate attendees."
+      },
+      {
+       "lines": "92-106",
+       "description": "Intra-request duplicates not handled. Backend `ZAddGuestsInputSchema` (addGuests.schema.ts) is `z.array(z.string().email())` without uniqueness refine (frontend has refine), and `uniqueGuests` at 74-78 only filters against existing attendees/blacklist, not against duplicates within `guests` itself. `guests=[\"a@b.com\",\"a@b.com\"]` passes through, `guestsFullDetails` contains duplicate emails, and `createMany` at 98-106 tries to create duplicate `Attendee` rows for same booking -> duplicates or Prisma unique-constraint P2002 500."
+      },
+      {
+       "lines": "108-136, 167-168",
+       "description": "`sendAddGuestsEmails(evt, guests)` at 168 is called with original `guests` instead of filtered/normalized `uniqueGuests`. `email-manager.ts:541` does `newGuests.includes(attendee.email)` case-sensitive to decide `AttendeeScheduledEmail` (new) vs `AttendeeAddGuestsEmail` (existing). Passing unfiltered `guests` misclassifies: existing attendees that were filtered out still match as new, and case-variant duplicates mismatch. Also `evt.attendees` built in region 108-136 already contains the newly created attendees, amplifying the mismatch. Should pass `uniqueGuests` lowercased/normalized."
+      },
+      {
+       "lines": "46-48, 54",
+       "description": "Authorization is `isTeamAdmin && isTeamOwner` instead of `||`. `isTeamAdmin` already returns truthy for ADMIN or OWNER, so `&& isTeamOwner` collapses to OWNER-only. A team ADMIN (non-OWNER) is incorrectly FORBIDDEN from lines 92-106, while the intended policy was ADMIN OR OWNER OR organizer OR attendee."
+      },
+      {
+       "lines": "70-78, 92-106",
+       "description": "Deduplication/blacklist is case-sensitive and whitespace-sensitive: `guest === attendee.email` and `blacklistedGuestEmails.includes(guest)` compare raw strings while blacklist is lowercased. `Aa@x.com` vs `aa@x.com` bypasses dedup and blacklist, and duplicates *within* the input `guests` array are not de-duplicated at all (schema does not enforce uniqueness). `createMany` at 100-105 then creates duplicate Attendee rows differing only by case/whitespace or two identical rows in one request."
+      },
+      {
+       "lines": "83-89, 92-106, 168",
+       "description": "Backend stores `uniqueGuests` filtered list but `sendAddGuestsEmails(evt, guests)` at 168 sends the original unfiltered `guests`. Combined with case-sensitive `newGuests.includes(attendee.email)` in email-manager, newly added guests whose casing differs get misclassified (existing attendees get Scheduled template, new guests get AddGuests template) and blacklisted/duplicate addresses that were filtered from the DB still affect email routing. Should use the normalized `uniqueGuests`."
+      },
+      {
+       "lines": "92-106, 158-165",
+       "description": "Calendar sync uses requester's credentials `getUsersCredentials(ctx.user)` at 158. When an attendee (allowed by 52) or team admin adds guests, the EventManager is constructed with the requester's calendars, not the organizer's (`booking.userId`). `updateCalendarAttendees` (which no-ops if `booking.references.length===0`) will not update the organizer's destination calendar, leaving external calendar out-of-sync. Moreover DB `booking.update` at 92-106 is committed before calendar update with no transaction/rollback — partial failure leaves DB attendees added but calendar unchanged, and error is not handled."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:32-33",
+       "description": "Initial state `useState([\"\"])` embeds an invalid empty email. This makes `handleAdd`'s `if (multiEmailValue.length===0) return` dead (length is 1) and forces `MultiEmail` to render an empty input that always fails `z.string().email()` validation. Correct empty state is `[]` (which `MultiEmail` already handles via the \"Add Emails\" button). If validation were skipped, it would send `[\"\"]` to the server."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:33-58",
+       "description": "`isInvalidEmail` is set to `true` on validation failure but never cleared: `setIsInvalidEmail(false)` only runs in Cancel handler (88-93) and not on `onChange`/`setMultiEmailValue`, not on successful validation, not in `onSuccess` (36-41), and not when `Dialog onOpenChange={setIsOpenDialog}` closes via overlay/Esc. Error therefore sticks after user corrects input and persists across re-opens."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:26-29",
+       "description": "Client validation `z.array(z.string().email()).refine(arr=>new Set(arr).size===arr.length)` is case- and whitespace-sensitive (no `.trim()`/`.toLowerCase()`). `Test@ex.com` vs `test@ex.com` or `\" test@ex.com \"` bypass uniqueness. Server's `addGuests.handler.ts:70-77` lowercases `BLACKLISTED_GUEST_EMAILS` but compares `!blacklisted.includes(guest)` without lowercasing `guest`, and checks `guest===attendee.email` case-sensitive, so blacklist/duplicate checks can be bypassed via case variation that client incorrectly considers unique/valid."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:30-33,61",
+       "description": "`Dialog open={isOpenDialog} onOpenChange={setIsOpenDialog}` delegates close to the parent setter without resetting `multiEmailValue`/`isInvalidEmail`. Closing via outside click or Esc (which triggers `onOpenChange(false)`) leaves stale emails and stale `isInvalidEmail` state for the next open; only Cancel and `onSuccess` reset the value, and `onSuccess` doesn't reset `isInvalidEmail`. Needs `useEffect` on `isOpenDialog` or a wrapped `onOpenChange` to clear state."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:26-29",
+       "description": "Client Zod schema uses `new Set(emails)` for uniqueness without normalizing. `a@b.com` and `A@B.COM` / ` a@b.com ` are considered distinct, but emails are case-insensitive. Bypasses uniqueness and mismatches server duplicate/blacklist logic which should be case-insensitive."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:26-29",
+       "description": "Client enforces uniqueness via `.refine(unique)` but server `ZAddGuestsInputSchema` in `addGuests.schema.ts:3-6` is `z.array(z.string().email())` with no refine. Direct tRPC call bypasses client check and creates duplicate `attendee` rows in `prisma.booking.update createMany`."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:33,52-57",
+       "description": "`isInvalidEmail` is set to `true` on validation failure but never reset on subsequent `setMultiEmailValue` changes or on successful validation/mutation. Error banner `emails_must_be_unique_valid` stays visible after user fixes input; only Cancel clears it."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:32,48-54",
+       "description": "Initial state `[\"\"]` and `handleAdd` `if (multiEmailValue.length===0) return` are inconsistent. Deleting all fields yields `[]` which silently does nothing with no feedback, while `[\"\"]` triggers validation error. Empty strings are not filtered/trimmed before `safeParse`/`mutate`, so `mutate({guests:[\"\"]})` would be blocked client-side but `multiEmailValue` containing `\"\", \" \"` is treated as real input."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:54",
+       "description": "Guests are sent raw (`multiEmailValue`) without `trim()`/`toLowerCase()`. Server `addGuests.handler.ts:70-77` lowercases `BLACKLISTED_GUEST_EMAILS` but compares `!blacklistedGuestEmails.includes(guest)` and `guest===attendee.email` case-sensitively, so `User@Blacklisted.com` or ` test@example.com ` bypasses blacklist and duplicate filtering introduced by the dialog."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "5"
+     }
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "packages/ui/form/MultiEmail.tsx:39-52",
+       "description": "Passes `onClickAddon`/`addOnSuffix` to `EmailField` imported from `@calcom/ui`. That re-export comes from `packages/ui/components/form/inputs/Input.tsx` (and `form/fields.tsx`) whose `InputField`/`EmailField` does NOT implement `addOnSuffix`/`onClickAddon` – only `packages/ui/components/form/inputs/TextField.tsx:66` does. The props are spread as unknown attributes to the native `<input>` and no `Addon` wrapper is rendered, so the ‘x’ remove suffix never appears and guests cannot be removed."
+      },
+      {
+       "lines": "packages/ui/form/MultiEmail.tsx:44-51",
+       "description": "Even if the add-on capable `InputField` were used, the visible `<button type=\"button\">` inside `addOnSuffix` has no `onClick`; the handler is on the parent `Addon` div via `onClickAddon` (`TextField.tsx:39`). The div is not focusable/keyboard operable, has no role/aria-label, and `Tooltip` portals/ stops propagation, so keyboard/a11y removal is broken and clicks are brittle (rely on bubbling from button to div). Handler should be on the button with an accessible name."
+      },
+      {
+       "lines": "packages/ui/form/MultiEmail.tsx:25-26",
+       "description": "List items use `key={index}` for a dynamic list mutated with `splice`/`push` (lines 41,66,85). When an email in the middle is removed, React reuses DOM nodes for the wrong index, causing stale `value={field}` display, focus loss, and deleting/editing the wrong row. Use stable key (e.g., derived from value+index or id)."
+      },
+      {
+       "lines": "packages/ui/form/MultiEmail.tsx:2",
+       "description": "Self-import `from \"@calcom/ui\"` inside `packages/ui` (MultiEmail is part of that package, re-exported via `MultiEmailLazy.tsx`) creates a circular dependency. At build/runtime the imported `EmailField`/`Button`/`Tooltip` can be undefined or stale and breaks tree-shaking. Use relative imports e.g. `../components/form/...`."
+      },
+      {
+       "lines": "25-26",
+       "description": "Uses index as key (`key={index}`) for dynamic email list. When an email is removed via `onClickAddon` splice, React reuses DOM nodes by index, so the input that stays mounted shows the wrong value / cursor jumps. Deleting the middle guest can appear to delete the last one and sends the wrong email array to AddGuestsDialog / server."
+      },
+      {
+       "lines": "39-52",
+       "description": "Remove control is broken by nesting: `addOnSuffix` renders `<Tooltip><button type=\"button\">` inside InputField's `Addon` `<div onClick={onClickAddon}>`. The `button` has no `onClick`; reliance on bubbling to the parent `div` is fragile (Tooltip portals/stops propagation, invalid nested interactive content, keyboard activation on button does not trigger div handler). User may be unable to remove an email, leaving empty/invalid entries stuck in `value`."
+      },
+      {
+       "lines": "31-34",
+       "description": "onChange stores raw `e.target.value` without `trim()` or `toLowerCase()`. AddGuestsDialog's `ZAddGuestsInputSchema` uniqueness `new Set(emails).size===length` and the server's `uniqueGuests` filter (`guest === attendee.email` and `blacklistedGuestEmails.includes(guest)`) are all case/whitespace sensitive. `A@b.com` vs `a@b.com` or `a@b.com ` bypasses duplicate and blacklist (`BLACKLISTED_GUEST_EMAILS` is lowercased) checks, allowing duplicate attendee rows and blacklist bypass."
+      },
+      {
+       "lines": "31-43",
+       "description": "No inline validation or error reset: `required` on `EmailField` is inert outside a native `<form>` and the component never clears parent `isInvalidEmail`. After `handleAdd` sets `isInvalidEmail=true`, subsequent edits via `setValue` do not reset it, so the error banner persists indefinitely. Combined with allowing `value=[\"\",\"\"]` to be built via Add button, user gets only a generic submit-time error."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-48",
+       "description": "Permission check uses `&&` between isTeamAdmin and isTeamOwner: `isTeamAdmin && isTeamOwner`. Since isTeamAdmin already returns truthy for ADMIN||OWNER, the AND requires OWNER, so pure ADMINs are denied. This contradicts intent of `isTeamAdminOrOwner` and blocks legitimate team admins. Should be `||` (and handle isTeamAdmin returning object vs boolean)."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-78",
+       "description": "Duplicate/blacklist filtering is case-sensitive: `guest === attendee.email` and `!blacklistedGuestEmails.includes(guest)` without lower-casing `guest`. Blacklist entries are lower-cased but guest is not, so `Test@Example.com` bypasses duplicate check and blacklist via case variation, creating duplicate Attendee rows and bypassing blocklist."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168",
+       "description": "Emails are sent with original `guests` array instead of filtered `uniqueGuests`. `sendAddGuestsEmails(evt, guests)` causes newGuests.includes check to mis-classify already-existing or blacklisted emails as new, sending AttendeeScheduledEmail to wrong recipients and leaking invite vs update semantics. Should pass `uniqueGuests`."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:158-165",
+       "description": "Calendar update uses `getUsersCredentials(ctx.user)` (the caller) instead of organizer's credentials. When an attendee (allowed by line 52) adds guests, the EventManager is constructed with the attendee's credentials, so calendar attendees won't be updated on the organizer's calendar. Also DB attendees are created before calendar update with no transaction/rollback - if updateCalendarAttendees throws, DB is left inconsistent."
+      },
+      {
+       "lines": "apps/web/components/dialog/AddGuestsDialog.tsx:32-58",
+       "description": "Dialog initializes `multiEmailValue` to `[\"\"]` (single empty string) which always fails `z.string().email()` validation, and `isInvalidEmail` is set true on failure but never cleared on input change or on successful validation/mutation. Error banner persists even after fixing emails, and clearing all inputs to `[]` hits early return `if(length===0) return` with no user feedback, while empty array would otherwise pass server schema."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-48",
+       "description": "Authorization check uses `isTeamAdmin && isTeamOwner` instead of `||`. `isTeamAdmin` already returns truthy for ADMIN or OWNER, `isTeamOwner` only for OWNER, so `&&` requires OWNER. Team ADMINs (non-owners) are incorrectly denied. Should be `||` (or just `isTeamAdmin`). Existing team handlers use `||`."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-78",
+       "description": "Dedup/blacklist is case-sensitive and incomplete: `guest === attendee.email` and `blacklistedGuestEmails.includes(guest)` compare raw strings, but `blacklistedGuestEmails` is lower-cased. An attacker can bypass blacklist with `User@Example.COM` and can create duplicate attendees with different casing or whitespace. Filter also doesn't deduplicate within `guests` itself, only against existing attendees."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168",
+       "description": "Calls `sendAddGuestsEmails(evt, guests)` with the original unfiltered `guests` array instead of `uniqueGuests` (filtered for existing/blacklisted). Blacklisted/duplicate/empty entries are then treated as `newGuests` in `email-manager.ts:541` `newGuests.includes(attendee.email)` (case-sensitive), sending wrong template (`AttendeeScheduledEmail` vs `AttendeeAddGuestsEmail`) and leaking intent to add blacklisted addresses."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6",
+       "description": "Server Zod schema is `z.array(z.string().email())` with no uniqueness/refine, while client validates uniqueness. Backend therefore accepts `guests: [\"a@b.com\",\"a@b.com\"]`. Handler's `uniqueGuests` only filters against existing attendees, not within the array, so `createMany` creates duplicate Attendee rows."
+      },
+      {
+       "lines": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:52-55",
+       "description": "Permission check includes `isAttendee` as sufficient (`booking.attendees.find(email===user.email)`). Any attendee can call `addGuests` to inject arbitrary additional guests into a booking, escalating privileges. Intended policy is organizer / team admin/owner only."
+      },
+      {
+       "lines": "apps/web/components/booking/BookingListItem.tsx:193-200",
+       "description": "Add Guests action is pushed to `editBookingActions` unconditionally, with no guard for cancelled/rejected/past bookings or seated events. `bookedActions` only filters `edit_booking` for recurring tabs, so user can open `AddGuestsDialog` for a `CANCELLED` or past booking and the handler has no status check, creating attendees and calling `eventManager.updateCalendarAttendees` on an invalid booking."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "196-201",
+       "description": "Plural branch calls `obj[k].map(...)` without verifying `obj[k]` is an Array. If server sends null/undefined/non-array for `*_ids` (empty relation, missing key coerced to null), this throws TypeError and breaks hydration, whereas singular branch safely handles missing values via `_lookupSubType` returning falsy."
+      },
+      {
+       "lines": "196-201",
+       "description": "Plural hydration does not filter failed lookups: `map(id => _lookupSubType(...))` returns `undefined` when id not found in `root` (missing collection or unknown id). Result array contains `undefined` entries (e.g., `[undefined, model]`) instead of compacted models. `hydrated || []` is dead code because `map` always returns a truthy Array, so empty/missing case never falls back and undefined entries leak to consumers (`colors.length` counts undefineds, `get('id')` crashes)."
+      },
+      {
+       "lines": "200-207",
+       "description": "Inconsistent `delete` semantics: singular `*_id` only deletes the foreign-key property when hydration succeeds (`if (hydrated) { obj[subType]=hydrated; delete obj[k]; }`), preserving the original key for debugging/fallback. Plural `*_ids` unconditionally does `obj[plural]=hydrated; delete obj[k];` even when all lookups failed, deleting source ids and replacing them with an array of undefineds — data loss and broken contract compared to singular path."
+      },
+      {
+       "lines": "192-201",
+       "description": "Plural branch does obj[k].map(...) unconditionally. If the payload has *_ids == null, undefined, or not an array (nullable field, empty, or single value) this throws TypeError and crashes _hydrate/_hydrateEmbedded. Singular branch handled missing/falsy gracefully via falsy hydrated check."
+      },
+      {
+       "lines": "196-201",
+       "description": "Plural branch always does obj[self.pluralize(subType)] = hydrated || [] and delete obj[k] even when lookups fail. hydrated is always an Array from .map so || [] is dead code. Failed lookups become undefined entries in the array ([undefined, undefined]) and original *_ids is lost. Singular branch only deletes when hydrated truthy, preserving the id for fallback/debugging. Inconsistent contract and data-loss."
+      },
+      {
+       "lines": "197-200",
+       "description": "Does not compact failed lookups. Array will contain undefined/null for any id not found in root or for embeddable-host/category miss, so consumers like fruit.get('colors')[i].get('id') throw and length is wrong. Should filter falsy results."
+      },
+      {
+       "lines": "192-200",
+       "description": "Uses naive self.pluralize(subType) (adds 's') for both collection lookup and property name. Irregular plurals break: e.g. category_ids => subType=category => pluralize => 'categorys' instead of 'categories' (used by serializers/root key and expected by callers). Lookup root['categorys'] misses and assignment creates wrong property, so data never hydrates."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "2"
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "5-8",
+       "description": "before_validation does `self.host.sub!` without guarding for nil/blank. If `host` is nil (e.g. missing param `params[:embeddable_host][:host]` or direct `EmbeddableHost.new(host: nil)`), it raises `NoMethodError: undefined method `sub!' for nil` instead of failing validation. Should be `self.host = self.host.to_s.strip` guard or `if self.host.present?`."
+      },
+      {
+       "lines": "17",
+       "description": "Case-insensitive lookup is broken: `where(\"lower(host) = ?\", host)` does not downcase the input `host`. `URI#host` preserves case, so `http://EVILTROUT.COM` or mixed-case stored values will not match despite intent to be case-insensitive. Should be `host.downcase` (or `lower(?)`) and stored hosts should be normalized to downcase on save."
+      },
+      {
+       "lines": "14-17",
+       "description": "Port handling is inconsistent: `before_validation` keeps `:port` (validation regex allows `:[0-9]{1,5}` and only strips protocol and `/path`), so `https://example.com:3000/foo` is stored as `example.com:3000`. But `record_for_host` uses `URI(host).host` which discards the port, then queries `lower(host)=?` with just `example.com`. Hosts configured with a port will never match, and hosts without a port will incorrectly allow any port."
+      },
+      {
+       "lines": "10-13",
+       "description": "Contract confusion: `record_for_host` returns `false` on parse failure instead of `nil`. Callers expect nil/falsy record (e.g. `TopicEmbed` does `eh = record_for_host(url); eh.try(:category_id)` and `host_allowed?` uses `.present?`). Returning `false` is non-idiomatic for a finder, hides intent, and `false.try(:category_id)` returns nil via ActiveSupport but obscures error handling; should return `nil`."
+      },
+      {
+       "lines": "5-8",
+       "description": "before_validation assumes self.host is a String. If host is nil (e.g., params missing or blank) self.host.sub! raises NoMethodError instead of a validation error. Controller Admin::EmbeddableHostsController#save_host assigns params directly and falls back to uncategorized only for category_id, so a nil host crashes on save."
+      },
+      {
+       "lines": "6",
+       "description": "before_validation strips scheme with /^https?:\\/\\// (case-sensitive). An uppercase input like 'HTTP://example.com' is not stripped, so it is stored with scheme, fails to normalize and will never match host_allowed? which extracts uri.host (without scheme). Should be /i."
+      },
+      {
+       "lines": "14,17",
+       "description": "record_for_host extracts uri.host which excludes port, but validations and before_validation allow/store 'host:port' (e.g. 'example.com:8080'). Query where(\"lower(host) = ?\", host) compares bare hostname to 'host:port' and never matches. Also host param is not downcased, so WHERE lower(host)=? with mixed-case 'EVILTROUT.COM' misses stored 'eviltrout.com'."
+      },
+      {
+       "lines": "10-13",
+       "description": "record_for_host requires a URI with scheme: URI('eviltrout.com').host is nil, so it returns false for bare hostnames. Callers pass referer/embed_url with scheme today, but any direct host check or future caller fails. Also returns `false` instead of `nil` on not-found/invalid URI, breaking ActiveRecord convention and forcing callers to rely on .present?; e.g. TopicEmbed sets eh = record_for_host(url); eh.try(:category_id) works by accident but type is wrong."
+      },
+      {
+       "lines": "1-3",
+       "description": "Only validates_format_of :host, no validates_presence or validates_uniqueness (case-insensitive). Blank string bypasses before_validation and format handles it, but nil crashes; duplicates with different case or with/without port/scheme can be created, leaving ambiguous host_allowed? and category selection. Migration also inserts raw site_settings values without normalizing/stripping or escaping, so migrated rows retain 'http://' and paths while new rows are stripped, creating inconsistent matching."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "2"
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "spec/models/topic_spec.rb:1403-1405",
+       "description": "Test named 'is false if embeddable_host is blank' is vacuous/false-positive and mismatches new implementation. It sets no preconditions (no `embed_truncate=true`, no `has_topic_embed?=true`) so `expandable_first_post?` returns false because `has_topic_embed?` is false (Topic built unsaved) and `embed_truncate` defaults false, not because host is blank. New `Topic#expandable_first_post?` (app/models/topic.rb:868-869) is `SiteSetting.embed_truncate? && has_topic_embed?` with no host check, so with `embed_truncate=true` and `has_topic_embed?=true` it would return true even when no EmbeddableHost exists, contradicting the test's name/claim. Test therefore documents and appears to verify a contract that code no longer enforces."
+      },
+      {
+       "lines": "spec/models/topic_spec.rb:1407-1412",
+       "description": "Coverage loss / broken contract after removing `SiteSetting.embeddable_hosts.present?` check: PR deletes the host-presence guard in `Topic#expandable_first_post?` instead of replacing with `EmbeddableHost.exists?`/`EmbeddableHost.host_allowed?`. Spec moves the true-case into `describe 'with an emeddable host' [sic] with `before { Fabricate(:embeddable_host); SiteSetting.embed_truncate=true; stub has_topic_embed? }` but never tests the complementary blank-host + same preconditions case. So regression (topics with embeds remain expandable after all hosts deleted, or truncated embeds shown when embedding not configured) is not caught, and inner tests inherit host-dependent setup without isolating host vs truncate vs embed factors."
+      },
+      {
+       "lines": "1403-1405",
+       "description": "Test titled \"is false if embeddable_host is blank\" does not check what it claims. Old implementation was `SiteSetting.embeddable_hosts.present? && SiteSetting.embed_truncate? && has_topic_embed?` and test set `embed_truncate=true` + `has_topic_embed?=true` then nulled hosts to isolate host variable. New `Topic#expandable_first_post?` at app/models/topic.rb:868-870 is just `SiteSetting.embed_truncate? && has_topic_embed?` with no host check, and new test never sets `embed_truncate=true` nor stubs `has_topic_embed?=true`. It passes vacuously (defaults are false/nil) even if a host exists, and hides that expansion is now allowed with zero `EmbeddableHost` rows. It is wrong documentation and a false-positive / broken contract."
+      },
+      {
+       "lines": "1407-1412",
+       "description": "Context `describe 'with an emeddable host'` (typo) fabricates an `EmbeddableHost` in a before block but `expandable_first_post?` no longer reads `EmbeddableHost` at all. The fabrication is dead code; the three inner examples would have identical results without it, so the test misleads that a host is a precondition for `true` and for the `embed_truncate?`/`has_topic_embed?` false-cases. Coverage is misleading: no example verifies that `expandable_first_post?` is true/false independent of host presence, which is the actual post-PR behavior."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "1"
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "spec/models/topic_spec.rb:1403-1405",
+       "description": "Test titled 'is false if embeddable_host is blank' is vacuous/broken contract. It does not set SiteSetting.embed_truncate=true nor stub has_topic_embed?=true, so Topic#expandable_first_post? (app/models/topic.rb:869) returns false due to those defaults (has_topic_embed? false via DB query on unpersisted topic, embed_truncate false) not due to blank hosts. After PR the method no longer checks SiteSetting.embeddable_hosts nor EmbeddableHost at all (changed to `embed_truncate? && has_topic_embed?`), yet this example still claims to cover the blank-host case and will stay green regardless. It therefore does not check what it claims and hides that the host-gating contract was dropped vs migrated to EmbeddableHost.exists?."
+      },
+      {
+       "lines": "spec/models/topic_spec.rb:1407-1412",
+       "description": "describe 'with an emeddable host' / before { Fabricate(:embeddable_host) } is dead/misleading setup. Topic#expandable_first_post? ignores EmbeddableHost (app/models/topic.rb:868-869), so the fabricated host is never read and the 'is true with correct settings and topic_embed' example passes even with zero hosts. The describe implies host presence is a precondition, contradicting the implementation. Either the model is missing a host check (should be EmbeddableHost.exists?/any? if gating was intended) or the spec is wrong documentation that wastes DB state and gives false confidence about embedding gating."
+      },
+      {
+       "lines": "spec/models/topic_spec.rb:1403-1405",
+       "description": "Test titled 'is false if embeddable_host is blank' does not test host blank. It leaves SiteSetting.embed_truncate at default false and does not stub has_topic_embed? (returns false via DB query on unpersisted Fabricate.build(:topic)). So expandable_first_post? returns false for unrelated reasons (truncate false / no embed). It would still pass if implementation returned true when truncate true + has_topic_embed true + no host, so it does not verify the claimed host condition and gives false confidence. With new Topic#expandable_first_post? (SiteSetting.embed_truncate? && has_topic_embed?) host is no longer checked, making the title stale/wrong documentation."
+      },
+      {
+       "lines": "spec/models/topic_spec.rb:1407-1415",
+       "description": "Context 'with an emeddable host' Fabricates an EmbeddableHost but Topic#expandable_first_post? no longer reads EmbeddableHost (PR removed SiteSetting.embeddable_hosts check without replacing with EmbeddableHost.exists?). The setup is dead/misleading. If contract should still require at least one host, implementation is buggy (missing host check) and tests do not catch it. If host check intentionally removed, the fabrication and description are stale and the complementary case (truncate true + has_topic_embed true + NO host => true) is never exercised."
+      },
+      {
+       "lines": "spec/models/topic_spec.rb:1399-1426",
+       "description": "Missing/incorrect coverage for new contract. No test sets SiteSetting.embed_truncate=true and has_topic_embed?=true with zero hosts to explicitly assert behavior. Combined with shared let(:topic){Fabricate.build(:topic)} (unsaved, id nil, so real has_topic_embed? always false without stub), the suite cannot distinguish 'false because no host' vs 'false because truncate false / no embed', leaving regression undetected. Also typo 'emeddable' indicates stale docs."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "5, 12",
+       "description": "Null dereference: document.getElementById('discourse-comments') can return null if element absent or script runs before DOM ready (IIFE executes immediately, no DOMContentLoaded check). Unconditional comments.appendChild(iframe) then throws TypeError and aborts embedding. No null guard or deferred execution."
+      },
+      {
+       "lines": "17",
+       "description": "Insecure/broken postMessage origin check: discourseUrl.indexOf(e.origin) === -1 checks if e.origin is substring of discourseUrl instead of strict origin equality. Should parse discourseUrl to origin (scheme+host+port) and compare e.origin === expectedOrigin. Substring check is bypassable (e.g., e.origin='http://exam' is substring of 'http://example.com/') and brittle to trailing slash/path/port. Also throws if discourseUrl undefined."
+      },
+      {
+       "lines": "7",
+       "description": "URL construction assumes trailing slash: discourseUrl + \"embed/best?embed_url=\" + ... produces malformed URL when discourseUrl lacks trailing slash (e.g., 'https://forum.example.com' => 'https://forum.example.comembed/best?...' -> 404). No normalization of slash between base and path."
+      },
+      {
+       "lines": "7, 17",
+       "description": "Unchecked globals discourseUrl / discourseEmbedUrl: declared only as /* global */ for linter, no runtime typeof check. If not defined, line 7 encodeURIComponent(discourseEmbedUrl) yields \"undefined\" and line 17 discourseUrl.indexOf throws ReferenceError/TypeError, breaking embed. Should guard with typeof discourseUrl === 'string' etc."
+      },
+      {
+       "lines": "21",
+       "description": "Unvalidated resize height: e.data.height is used as iframe.height = e.data.height + \"px\" without numeric validation/clamping and via height attribute not style.height. Malicious or buggy sender (especially with weak origin check) can set arbitrary/NaN/very large height causing layout breakage/DoS. Should verify Number.isFinite, clamp range, and set iframe.style.height."
+      },
+      {
+       "lines": "5, 12",
+       "description": "document.getElementById('discourse-comments') can return null (element missing or script runs before DOM is ready - IIFE executes immediately with no DOMContentLoaded guard). Calling comments.appendChild(iframe) then throws TypeError and breaks embedding. No null check."
+      },
+      {
+       "lines": "7, 17",
+       "description": "discourseUrl and discourseEmbedUrl are bare globals. If the host page forgets to define them, accessing them throws ReferenceError (not just undefined) because typeof check is missing. The /* global */ comment only silences linter. Line 7 and line 17 will crash."
+      },
+      {
+       "lines": "7",
+       "description": "iframe.src = discourseUrl + \"embed/best?...\" assumes discourseUrl ends with trailing slash. If set as \"https://discourse.example.com\" (common), result is \"https://discourse.example.comembed/best...\" 404 / broken contract with GET embed/best route. No slash handling or URL parsing."
+      },
+      {
+       "lines": "17",
+       "description": "Origin validation is reversed and insecure: discourseUrl.indexOf(e.origin) === -1 checks if origin is substring of discourseUrl instead of e.origin === expectedOrigin. This is overly permissive (any substring of discourseUrl like \"https://\" as prefix would pass if attacker could set origin to that, and legitimate origin comparison should parse origin via URL) and fragile (discourseUrl includes path, so direct string containment is wrong). Correct is strict equality against new URL(discourseUrl).origin. Also allows arbitrary height resize if bypassed."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "1"
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "app/models/post.rb:130-133",
+       "description": "Stored XSS via raw_html bypass: `return raw if cook_method == Post.cook_methods[:raw_html]` skips PrettyText.cook / html-sanitizer-bundle, `add_rel_nofollow`, and any sanitization. `TopicEmbed.import` (used by `PollFeed` via `i.content.scrub` and by `import_remote` via Readability) and the appended `<a href='#{url}'>` store arbitrary external HTML as `raw`, then `PostCreator.before_create_tasks` saves `post.cooked = post.cook(raw)` => raw unsanitized. Embed view `app/views/embed/best.html.erb:19` does `<%= raw post.cooked %>` and normal views also render `cooked` unescaped. Attacker-controlled feed can inject <script>, <iframe>, on* handlers, etc. that execute in viewers' browsers."
+      },
+      {
+       "lines": "app/models/post.rb:130-136",
+       "description": "Bypasses Plugin::Filter and cooking pipeline contract: regular path is `Plugin::Filter.apply(:after_post_cook, self, post_analyzer.cook(*args))` but raw_html path returns `raw` directly without filter. Plugins expecting `after_post_cook` to normalize/sanitize/linkify cooked HTML are silently skipped for imported posts, breaking expected invariant and allowing alternative XSS vectors to remain unfiltered."
+      },
+      {
+       "lines": "120-144",
+       "description": "XSS via complete sanitizer bypass: `return raw if cook_method == Post.cook_methods[:raw_html]` skips PrettyText.markdown/html-sanitizer-bundle (whitelist/nofollow/script stripping). TopicEmbed.import (RSS via PollFeed and remote via Readability) and PollFeed store arbitrary external HTML (`i.content`, `doc.content`) as `raw` with `cook_method=:raw_html` and `skip_validations:true`. `before_create` does `post.cooked ||= post.cook(...)` so cooked==raw unsanitized, later rendered in `embed/best.html.erb` via `raw post.cooked` and in topic views. RSS path has no HTML whitelist at all; even Readability path limited tags allow `<a href=javascript:>`/`<img src=...>` and rss footer interpolates `url` unsanitized."
+      },
+      {
+       "lines": "120-144",
+       "description": "Unsanitized URL interpolation + no scheme filtering: TopicEmbed.import appends `link: \"<a href='#{url}'>#{url}</a>\"` with external `url` (i.link/i.id or embed_url) without escaping/validating. Combined with raw_html bypass and TopicEmbed.absolutize_urls only handling leading '/' (`href.start_with?('/')`), dangerous schemes `javascript:`, `data:`, `vbscript:` and attribute breakouts via `'`/`\"` in URL are preserved verbatim in cooked and executed on render."
+      },
+      {
+       "lines": "120-144",
+       "description": "Untrusted mass-assignment of cook_method: `PostCreator#setup_post` does `post.cook_method=@opts[:cook_method] if present?` with no authorization/trust check. Any controller/API that passes user-controlled opts can set `cook_method=Post.cook_methods[:raw_html]` (2) to bypass markdown/sanitizer for an arbitrary post. Enum default is 1 (:regular) but column is integer with no validation that only staff/embed flow may use 2, so bypass is exposed beyond the intended embed/RSS flow. Also skips `Plugin::Filter.after_post_cook` and `add_rel_nofollow_to_user_content`."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "1"
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "20-22",
+       "description": "feed_key is defined but never referenced. Intended for conditional GET / ETag / If-Modified-Since caching to avoid re-fetching unchanged feeds, but poll_feed unconditionally does open+parse every hour. Dead code indicates incomplete optimization and wasted bandwidth/DB work (import still re-checks SHA but after full download)."
+      },
+      {
+       "lines": "29",
+       "description": "open(SiteSetting.feed_polling_url) has no rescue/timeout/validation. Network errors (HTTPError, SocketError, Timeout), invalid XML, or SSRF values (file://, pipe '|') will raise and bubble out of a Jobs::Scheduled with retry:false, aborting the whole run. In TopicRetriever#perform_retrieve this aborts the fallback fetch_http path. Also bare Kernel#open with open-uri can interpret leading '|' as pipe command and file:// disclosure; no URI.scheme check and file descriptor is leaked (open without block)."
+      },
+      {
+       "lines": "29-31",
+       "description": "Return value of SimpleRSS.parse is not checked. On empty/invalid/non-RSS body it returns nil/false, so rss.items raises NoMethodError and kills the job. Same if feed has no items (rss.items nil). No handling for feed fetch returning nil or rss.items being empty."
+      },
+      {
+       "lines": "35",
+       "description": "content = CGI.unescapeHTML(i.content.scrub) assumes i.content is a non-nil String. Many RSS/Atom feeds put body in description or content:encoded, so i.content is nil -> NoMethodError on nil.scrub. Also String#scrub exists only Ruby >=2.1, will raise on 1.9/2.0 which Discourse 2013 target supported. No fallback to i.description and no nil guard before TopicEmbed.import."
+      },
+      {
+       "lines": "32-36",
+       "description": "Content/URL handling is insecure and incomplete: fallback url = i.id may still be non-http (urn:uuid, tag: URI) so TopicEmbed.import silently drops it; more importantly feed HTML is taken verbatim (only unescapeHTML) and stored with cook_method :raw_html (Post#cook bypasses pipeline) and rendered via raw in embed, so unsanitized script/onclick in feed becomes stored XSS. URL is later interpolated in TopicEmbed.import as \"<a href='#{url}'>\" without escaping single-quote, allowing attribute injection."
+      },
+      {
+       "lines": "app/jobs/scheduled/poll_feed.rb:29, 35",
+       "description": "Missing `require 'cgi'` and nil handling for RSS fields: `CGI.unescapeHTML(i.content.scrub)` raises `NameError` (CGI not required) and `NoMethodError` when `i.content` is nil. Standard RSS/Atom uses `description` or `content:encoded`, not `content`; SimpleRSS therefore yields `nil` for most feeds, so `.scrub`/`unescapeHTML` crashes the entire scheduled job. No fallback to `i.description`/`i.content:encoded` and `String#scrub` requires Ruby >=2.1."
+      },
+      {
+       "lines": "app/jobs/scheduled/poll_feed.rb:29",
+       "description": "`SimpleRSS.parse open(SiteSetting.feed_polling_url)` uses Kernel#open from `open-uri` without validation, timeout or rescue. `open(\"| id\")` executes shell commands (pipe injection), `open(\"file:///etc/passwd\")` reads local files, and any `OpenURI::HTTPError`, `SocketError`, `Timeout::Error` or parse error bubbles up and kills the job (`sidekiq_options retry: false`). No handling for `rss` or `rss.items` being nil/empty."
+      },
+      {
+       "lines": "app/jobs/scheduled/poll_feed.rb:32-36",
+       "description": "Stored XSS via raw HTML import: `content = CGI.unescapeHTML(...)` decodes entities then `TopicEmbed.import` stores with `cook_method: raw_html` which bypasses sanitization (`Post#cook` returns raw, rendered via `raw post.cooked` in `embed/best.html.erb`). Feed HTML/JS is persisted verbatim. Additionally `url` interpolation in `TopicEmbed.import` (`\"<a href='#{url}'>#{url}</a>\"`) only checks prefix `^https?://` so `http://x/'><svg onload=alert(1)>` breaks out of the attribute. `CGI.unescapeHTML` makes entity-encoded payloads executable."
+      },
+      {
+       "lines": "app/jobs/scheduled/poll_feed.rb:20-22",
+       "description": "`feed_key` is dead code: defined as `\"feed-modified:#{Digest::SHA1.hexdigest(SiteSetting.feed_polling_url)}\"` but never read, so conditional GET/If-Modified-Since caching is missing. Method would raise `TypeError` if `feed_polling_url` is nil. Consequently `poll_feed` re-fetches and re-imports every item hourly, doing redundant `TopicEmbed.where` + SHA comparisons and `PostRevisor` revisions even when feed unchanged, and partial failure leaves inconsistent state."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "lib/topic_retriever.rb:26-29",
+       "description": "Throttle key uses two non-atomic commands: $redis.setnx then $redis.expire. If the process crashes between them the key is left without TTL and throttles that embed_url forever (permanent DoS for that URL). Should use atomic SET NX EX / SETEX."
+      },
+      {
+       "lines": "lib/topic_retriever.rb:26-26",
+       "description": "Redis key is \"retrieved:#{@embed_url}\" with raw URL. Unbounded length, spaces/newlines/colons, no normalization or hashing. Allows redis memory bloat, key injection, and throttle bypass by trivial URL variations (trailing slash, encoding). Should hash the URL."
+      },
+      {
+       "lines": "lib/topic_retriever.rb:40-42",
+       "description": "perform_retrieve synchronously polls the entire RSS/Atom feed on every single embed miss: Jobs::PollFeed.new.execute({}) fetches and imports all items just to check if one embed_url exists. Adds latency, network failure surface, and O(feed_size) work per embed. Also guards only on feed_polling_enabled? while PollFeed requires feed_polling_url and embed_by_username, so it instantiates the poller even when it will no-op."
+      },
+      {
+       "lines": "lib/topic_retriever.rb:48-50",
+       "description": "fetch_http does SiteSetting.embed_by_username.downcase without nil/blank guard. SiteSetting.embed_by_username can be nil (stubbed as nil in poll_feed_spec and defaults to ''), raising NoMethodError: undefined method `downcase' for nil. PollFeed correctly checks .present? before downcasing. Here the job crashes instead of gracefully no-oping."
+      },
+      {
+       "lines": "lib/topic_retriever.rb:52-52",
+       "description": "TopicEmbed.import_remote does open(url).read via open-uri with no timeout/rescue. Any HTTP error, timeout, DNS failure or Readability parse error bubbles out of perform_retrieve/retrieve unhandled, failing the Sidekiq job and causing retries that hammer the remote host. Concurrent misses also race past the exists? check and can hit the unique index on topic_embeds.embed_url raising RecordNotUnique with no rescue."
+      },
+      {
+       "lines": "lib/topic_retriever.rb:49",
+       "description": "fetch_http does SiteSetting.embed_by_username.downcase without presence guard. If setting is nil (or blank) this raises NoMethodError: undefined method `downcase' for nil. The scheduled job Jobs::PollFeed#execute guards with .present? before downcasing, but TopicRetriever does not, so a default/misconfigured forum crashes RetrieveTopic jobs. If blank string, lookup finds no user and silently returns nil with no error/log, leaving EmbedController in infinite 'loading' loop."
+      },
+      {
+       "lines": "lib/topic_retriever.rb:40-42",
+       "description": "perform_retrieve synchronously runs Jobs::PollFeed.new.execute({}) on every cache-miss (throttled only to 60s per URL). This imports the entire RSS feed, not just @embed_url, as a side-effect of a single embed request: wasteful, slow, and unexpectedly creates/updates many topics. The feed path has no rescue, so any OpenURI/SimpleRSS error (network failure, invalid RSS, i.content==nil causing CGI.unescapeHTML(nil.scrub) NoMethodError) propagates and prevents the fallback fetch_http from ever running."
+      },
+      {
+       "lines": "lib/topic_retriever.rb:48-52",
+       "description": "fetch_http delegates to TopicEmbed.import_remote which does open(@embed_url).read with no timeout, size limit, or rescue. Any OpenURI::HTTPError/SocketError/Timeout/Errno error bubbles out of perform_retrieve/retrieve and fails the Jobs::RetrieveTopic Sidekiq job (no error handling/logging). The embed therefore never gets created and the frontend stays on loading with periodic retries, and the unhandled exception masks the root cause."
+      },
+      {
+       "lines": "lib/topic_retriever.rb:26-28",
+       "description": "retrieved_recently? uses non-atomic $redis.setnx + $redis.expire. If the process crashes between the two, the key is left without TTL and throttles that embed_url forever. Should use SET with NX+EX atomically or ensure expire is set transactionally."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "3"
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "13",
+       "description": "Direct interpolation of `url` into HTML `link = \"<a href='#{url}'>#{url}</a>\"` without escaping. If url contains `'` or `>` it breaks out of the attribute and injects arbitrary HTML/JS. Because the resulting string is later stored with `cook_method: :raw_html` (bypassing sanitize) and rendered with `raw post.cooked` in embed view, this is a stored XSS. The URL regex on line 11 `^https?\\:\\/\\/` also does not validate the remainder, so `http://' onerror` style URLs pass."
+      },
+      {
+       "lines": "22",
+       "description": "Creates post with `cook_method: Post.cook_methods[:raw_html]` where `Post#cook` returns `raw` verbatim (no `post_analyzer.cook`/`Sanitize`). Combined with `contents` coming from RSS (`PollFeed` `i.content`) or `Readability::Document` with only a tag/attribute whitelist, arbitrary HTML (`<script>`, `onerror`, `javascript:` hrefs, `<iframe>`) is stored verbatim and later rendered unescaped in `embed/best.html.erb` via `raw post.cooked`. Enables stored XSS from any embeddable/RSS source."
+      },
+      {
+       "lines": "13",
+       "description": "Mutates caller's `contents` string in place with `contents << \"\\n<hr>...\"`. Caller does not expect mutation; callers that reuse the string or retry will get double-appended footer, and if the string is frozen (e.g. frozen literal) it raises `RuntimeError: can't modify frozen String`. Should use `contents = contents + ...` or `dup`."
+      },
+      {
+       "lines": "24",
+       "description": "Checks `if post.present?` to decide whether to create `TopicEmbed`. `PostCreator#create` returns a `Post` object even on validation failure (unpersisted with errors), which is `present?`. This will attempt `TopicEmbed.create!(topic_id: nil, post_id: nil)` or with invalid ids, raising or creating orphaned embed, instead of checking `post.persisted?`/`post.errors.empty?` or `creator.errors`."
+      },
+      {
+       "lines": "15-30",
+       "description": "TOCTOU race: `TopicEmbed.where(embed_url: url).first` is done outside `Topic.transaction` with no row lock (`SELECT … FOR UPDATE`) or `find_or_create` handling. Concurrent `import` calls for same url can both see `embed.blank?` and both create a topic/post, violating the unique index on `embed_url` (raising `RecordNotUnique`) or creating duplicate topics."
+      },
+      {
+       "lines": "16, 22, 36",
+       "description": "SHA mismatch: `content_sha1 = Digest::SHA1.hexdigest(contents)` is computed *before* `absolutize_urls` is applied. The persisted `raw` is the absolutized form (`fragment.to_html`). SHA therefore does not represent stored content; relative vs absolute URLs are invisible to change detection. Also update path recomputes sha from pre-absolutized contents but compares/revises with absolutized raw, causing either missed updates or spurious revisions after sanitization/normalization."
+      },
+      {
+       "lines": "13",
+       "description": "contents << mutates caller's String in-place and interpolates url unsafely into HTML: \"<a href='#{url}'>#{url}</a>\" without escaping. A crafted url like https://example.com/'><script>alert(1)</script> breaks out of the single-quoted href. Combined with cook_method :raw_html (Post#cook returns raw verbatim, bypassing sanitization, and embed view uses raw post.cooked), this is stored XSS. Mutation also causes double-appending if the same string object is reused (e.g., caller keeps reference) and will raise if contents is frozen."
+      },
+      {
+       "lines": "20-29",
+       "description": "Creation path checks `if post.present?` instead of `persisted?`/`errors.empty?`. PostCreator#create wraps save in Post.transaction and returns the Post object even after ActiveRecord::Rollback (e.g., has_host_spam? or validation failure - spam path raises Rollback but leaves @post with nil id/errors). present? is still true, so TopicEmbed.create! is attempted with nil topic_id/post_id violating NOT NULL and unique index, raising exception and leaving inconsistent state. Also check-then-create via `where(embed_url:).first` is racy: two concurrent imports can both see blank and hit unique index on topic_embeds.embed_url."
+      },
+      {
+       "lines": "31-38",
+       "description": "Update path is not atomic and mishandles failures: embed.post may be nil (deleted post) causing PostRevisor.new(nil) NoMethodError; revisor.revise! may return false (should_revise? or validation with skip_validations) yet embed.update_column(:content_sha1, ...) still executes, desyncing sha from actual post raw. update_column bypasses validations/callbacks and is outside a transaction, so post updated but sha not, or vice versa, on crash. Should be wrapped in transaction and only update sha on successful revise."
+      },
+      {
+       "lines": "13-16 and 22,36",
+       "description": "content_sha1 is computed from contents before absolutize_urls, while raw stored in DB is after absolutize_urls (relative / URLs expanded). Future import computes sha from new pre-absolutized contents and compares to stored sha (also pre-absolutized), but post raw comparison in PostRevisor is on absolutized raw, causing divergence: identical feeds with different relative/absolute forms flip sha, and normal HTML serialization differences (Nokogiri to_html) cause unnecessary revisions every poll or miss real changes."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "5"
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "29",
+       "description": "Unsafe Kernel#open on SiteSetting.feed_polling_url: `open(SiteSetting.feed_polling_url)` delegates to Kernel.open patched by open-uri. If value starts with `|` it executes a shell command (classic Ruby open pipe RCE) and `file://` or internal http://169.254... allows SSRF/file disclosure. No scheme/host validation and no timeout. Should validate /^https?:\\/\\// and use URI.open/Net::HTTP with timeouts."
+      },
+      {
+       "lines": "35",
+       "description": "Nil crash on `i.content.scrub`: many RSS/Atom feeds provide `description` not `content:encoded`, so SimpleRSS `i.content` is nil. `nil.scrub` raises NoMethodError and aborts the whole hourly job (retry:false). Same for `rss` being `false`/`nil` on parse failure then `rss.items` raises. Need `i.content || i.description || \"\"` and guard `rss && rss.items`."
+      },
+      {
+       "lines": "35-36",
+       "description": "Stored XSS via raw_html bypass: `CGI.unescapeHTML(i.content.scrub)` is passed straight to `TopicEmbed.import` which creates posts with `cook_method: :raw_html` and `Post#cook` returns `raw` un-sanitized, later rendered with `raw post.cooked` in embed view. Unlike `import_remote` which whitelists tags/attributes via Readability, the RSS path allows arbitrary `<script>`, `<iframe onload=>`, etc. from external feed."
+      },
+      {
+       "lines": "29-30",
+       "description": "Unrescued network/parse exceptions kill scheduled job: `open` can raise OpenURI::HTTPError/SocketError/Timeout::Error/URI::InvalidURIError and `SimpleRSS.parse` can return false or raise. No rescue. With `sidekiq_options retry:false` the hourly PollFeed fails silently until next hour with no logging or error handling, and one bad feed blocks processing of all items."
+      },
+      {
+       "lines": "20-22",
+       "description": "Dead/buggy `feed_key`: method is defined and memoized via `@feed_key ||=` but never read anywhere (no Redis If-Modified-Since/ETag handling). Memoization makes it stale if `feed_polling_url` changes during process lifetime, and `Digest::SHA1.hexdigest(nil)` would raise TypeError if called when setting blank. Indicates incomplete conditional-fetch optimization."
+      },
+      {
+       "lines": "29",
+       "description": "Resource leak: `SimpleRSS.parse open(url)` uses non-block form of open-uri, leaving the returned Tempfile/StringIO open until GC. Should use block form `open(url){|f| SimpleRSS.parse(f)}` or `open(url).read` / `URI.open` to ensure close."
+      },
+      {
+       "lines": "29",
+       "description": "open(SiteSetting.feed_polling_url) has no error handling, timeout, SSRF validation or pipe-sanitization. OpenURI::HTTPError/SocketError, invalid XML, or a URL beginning with '|' (Kernel.open pipe injection) raises unrescued exception, and with sidekiq_options retry:false the hourly job just dies. SimpleRSS.parse can return false on bad XML so rss.items then raises NoMethodError."
+      },
+      {
+       "lines": "35",
+       "description": "content = CGI.unescapeHTML(i.content.scrub) assumes i.content is non-nil String. Most RSS 2.0 feeds put body in i.description / content:encoded not i.content; Atom may have nil. Nil.scrub raises NoMethodError and aborts entire poll_feed loop. No fallback to i.description and no nil-guard. Same for i.title possibly nil."
+      },
+      {
+       "lines": "35-36",
+       "description": "RSS HTML is passed unsanitized to TopicEmbed.import which stores with cook_method :raw_html and bypasses markdown/sanitize (Post#cook returns raw). Unlike TopicEmbed.import_remote which whitelists tags/attributes via Readability, poll_feed imports arbitrary <script>, <iframe>, on* attributes. Rendered via `raw post.cooked` in embed/best.html.erb => stored XSS if feed is compromised."
+      },
+      {
+       "lines": "20-22",
+       "description": "feed_key is defined (feed-modified:SHA1(url)) but never read. Intended conditional GET / If-Modified-Since / de-duplication is dead code, so poll_feed unconditionally fetches and re-iterates every item hourly. Also key hashes the URL itself, not content/ETag/Last-Modified, so even if wired would never change."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "4"
+     }
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "44-53",
+       "description": "import_remote does `open(url).read` without `require 'open-uri'`, without URL validation, timeout or exception handling. If open-uri not loaded, Kernel#open treats http URL as file path and fails; with open-uri it still allows SSRF/command-injection via pipe (`open(\"| cmd\")`) because validation (`^https?://`) happens only later in `import`, after the fetch. Unhandled OpenURI::HTTPError/SocketError/URI::InvalidURIError will crash RetrieveTopic/PollFeed jobs."
+      },
+      {
+       "lines": "55-76",
+       "description": "absolutize_urls does `URI(url)` with no rescue for URI::InvalidURIError and assumes uri.host/scheme present, so invalid embed_url raises unhandled exception. Prefix is built only from host+port and rewriting only handles `href/src.start_with?('/')`, leaving protocol-relative `//cdn/x`, path-relative `a/b`, `javascript:`, `data:` etc untouched. This breaks links and, combined with raw_html rendering, leaves XSS vectors."
+      },
+      {
+       "lines": "44-53, 62-73",
+       "description": "Content fetched via Readability is allowed tags `div p code pre h1 h2 h3 b em i strong a img` with `href src` but not sanitized for schemes. absolutize_urls does not strip `javascript:`/`data:` URIs. Post is created with `cook_method: raw_html` which bypasses cooking/sanitization (`Post#cook returns raw`) and embed view renders with `raw post.cooked`, so a malicious embed URL can store persistent XSS via `<a href=\"javascript:alert(1)\">` or `<img src=\"x\" onerror>` if readability preserves it."
+      },
+      {
+       "lines": "44-52",
+       "description": "import_remote uses Kernel#open(open(url).read) without requiring 'open-uri', validation, timeout or size limit. With open-uri not required, Kernel.open(\"| cmd\") executes commands (command injection). Even with open-uri, it fetches any URL without SSRF protection (follows redirects, can reach internal/metadata IPs, file:// if host check bypassed) and raises unhandled exceptions on network/timeout/invalid URI, crashing the job."
+      },
+      {
+       "lines": "48-52",
+       "description": "Content imported via readability and especially via PollFeed (which bypasses readability) is stored with Post.cook_methods[:raw_html] (Post#cook returns raw verbatim). Combined with fragment.to_html/raw post.cooked in embed view, there is no sanitization. Tags/attributes allowlist (tags: div p … a img, attributes: href src) does not strip javascript: / data: URLs and PollFeed path has no filtering at all, so feed/remote HTML with <script> or <img onerror> or <a href=\"javascript:...\"> is stored and rendered as stored XSS. The imported_from footer interpolates url directly into <a href='#{url}'>#{url}</a> without HTML escaping, allowing attribute breakout despite /^https?:\\/\\// check."
+      },
+      {
+       "lines": "56-60",
+       "description": "absolutize_urls prefix port logic is wrong: prefix << \":#{uri.port}\" if uri.port != 80 && uri.port != 443 suppresses port 443 even for http and port 80 even for https (should compare against scheme-default). http://host:443/foo becomes http://host/foo and https://host:80/foo becomes https://host/foo, producing broken/ambiguous absolute URLs and potential cache collisions."
+      },
+      {
+       "lines": "61-73",
+       "description": "absolutize_urls only rewrites href/src that start_with?('/') and ignores protocol-relative '//cdn/x', relative 'foo/bar', '../up', './same' and whitespace-prefixed values. Those remain relative/broken after import, and javascript:/data:/vbscript: schemes are not rejected, leaving XSS and broken-image/link vectors. URI(url) is also not rescued – malformed URLs raise URI::InvalidURIError and abort import."
+      },
+      {
+       "lines": "36-37",
+       "description": "content_sha1 is computed at line 16 on original contents (including the appended imported_from link before absolutization), but the stored/revised raw is absolutize_urls(url, contents). The hash therefore never matches the persisted raw, causing false 'changed' detection on every poll, unnecessary PostRevisor revisions, and missed detection when only URL absolutization would change. Combined with update_column (skips validations/callbacks) the sha can drift."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "1"
+     }
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "13, 22",
+       "description": "XSS via unsanitized url: url is interpolated directly into HTML string \"<a href='#{url}'>#{url}</a>\" on line 13 and passed to I18n.t, then stored as post raw with cook_method :raw_html (line 22). Post#cook returns raw verbatim for raw_html (no sanitize/PrettyText pipeline), so characters like ', \", <, > in the URL break out of the href attribute (e.g. http://host/'><svg onload=alert(1)>) and execute as stored XSS. Validation on line 11 (/^https?:\\/\\//) does not escape/encode URL and does not reject those chars."
+      },
+      {
+       "lines": "22",
+       "description": "Stored XSS via raw_html bypass: All imported feed/remote HTML (RSS i.content, Readability doc.content) is saved with Post.cook_methods[:raw_html]. Post#cook (app/models/post.rb:130-133) returns raw directly, skipping sanitization/onebox filtering. PollFeed (app/jobs/scheduled/poll_feed.rb:35-36) passes CGI.unescapeHTML(i.content) verbatim, and import_remote whitelists only extract time but import then stores raw_html, allowing <script>, <iframe>, on* attributes from a compromised/attacker-controlled feed to be rendered unsanitized in embed view (post.cooked == post.raw)."
+      },
+      {
+       "lines": "13",
+       "description": "Mutates input and crashes on nil: contents << \"\\n<hr>...\" mutates the caller's String object (side-effect; repeated import with same object appends multiple footers). If contents is nil (e.g., empty RSS item, Readability returning nil), it raises NoMethodError (nil#<<). No guard for nil/empty title/contents; validation on line 11 only checks URL."
+      },
+      {
+       "lines": "15-28",
+       "description": "TOCTOU race / unhandled unique violation: embed lookup (where(embed_url: url).first) is outside Topic.transaction. Two concurrent imports/retrievals for same embed_url can both see nil and both enter the create branch, causing duplicate Topic creation and ActiveRecord::RecordNotUnique on the unique index on topic_embeds.embed_url (db/migrate/...create_topic_embeds.rb:11). No find_or_create, lock, or rescue."
+      },
+      {
+       "lines": "app/models/topic_embed.rb:11",
+       "description": "Weak URL validation `url =~ /^https?\\:\\/\\//` only checks prefix. It allows spaces, quotes, CRLF, control chars, and `javascript:` payload after prefix (e.g. `http://evil.com/'><script>`). Should use URI parsing and host validation like TopicRetriever does. PollFeed and embed controller pass user-controlled URLs here."
+      },
+      {
+       "lines": "app/models/topic_embed.rb:13",
+       "description": "Stored XSS via unsanitized URL interpolation: `I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")` inserts raw `url` into HTML attribute/body without `ERB::Util.html_escape`/`CGI.escapeHTML`. Combined with `cook_method: Post.cook_methods[:raw_html]` (line 22) which makes `Post#cook` return `raw` bypassing the markdown/sanitize pipeline and later rendered with `<%= raw post.cooked %>` in `app/views/embed/best.html.erb:19`, attacker-controlled feed/link can inject `\" onclick=` or `'><svg onload=` payload that persists."
+      },
+      {
+       "lines": "app/models/topic_embed.rb:13",
+       "description": "Mutates caller’s `contents` string with `contents << \"\\n<hr>...\"`. If `contents` is `nil` (e.g. `i.content` nil in PollFeed:35) raises NoMethodError; if frozen raises FrozenError; if same String object reused across calls suffix is appended repeatedly, bloating `content_sha1` and causing spurious `PostRevisor` updates. Should `dup`/`+` instead of `<<`."
+      },
+      {
+       "lines": "app/models/topic_embed.rb:22",
+       "description": "External feed/Readability HTML is stored with `cook_method: :raw_html` and `skip_validations: true` without sanitization. PollFeed does `CGI.unescapeHTML(i.content.scrub)` and Readability allows `div p code pre h1 h2 h3 b em i strong a img` but no sanitizer strip of `script`/`on*` attributes; `Post#cook` (app/models/post.rb:133) returns `raw` verbatim for `raw_html`, so malicious RSS/remote page yields persistent XSS for all viewers of the embed."
+      },
+      {
+       "lines": "app/models/topic_embed.rb:16,22,36",
+       "description": "`content_sha1` is computed on `contents` before `absolutize_urls`, but the persisted `post.raw`/`cooked` is the absolutized version. A feed that flips between relative `/path` and absolute `http://host/path` (or different port handling) will have different stored raw but same SHA or vice-versa, causing missed updates or infinite update loops. SHA should be of the normalized/absolutized content."
+      },
+      {
+       "lines": "app/models/topic_embed.rb:15,20",
+       "description": "TOCTOU race: `TopicEmbed.where(embed_url: url).first` is outside the `Topic.transaction`, then `TopicEmbed.create!` inside. Concurrent `Jobs::RetrieveTopic`/`PollFeed` for same `embed_url` can both see `embed.blank?` and attempt creation, hitting unique index on `embed_url` (db/migrate/*create_topic_embeds.rb:11) or creating duplicate Topics. Needs locking/`find_or_create` with rescue/retry."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "6 (identical duplicate is 1)"
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "app/views/embed/best.html.erb:6",
+       "description": "Invalid ERB/Ruby syntax `<%- end if %>` . Ruby does not allow `end if` as a block terminator (would be parsed as `end` + postfix `if` without condition). The template fails to compile with SyntaxError/ActionView::Template::Error, so EmbedController#best never renders. Should be `<% end %>` (or `<%- end -%>`)."
+      },
+      {
+       "lines": "app/views/embed/best.html.erb:19",
+       "description": "Stored XSS via `raw post.cooked`. For imported posts Post#cook returns `raw` unchanged when `cook_method == Post.cook_methods[:raw_html]` (app/models/post.rb:133, app/models/topic_embed.rb:22), so feed/Readability HTML is never cooked/sanitized. `<%= raw post.cooked %>` then emits attacker-controlled `<script>`, `<img onerror>`, etc. from external RSS/HTML directly in the Discourse-origin iframe (X-Frame-Options ALLOWALL)."
+      },
+      {
+       "lines": "app/views/embed/best.html.erb:16-17",
+       "description": "Nil dereference on deleted author: `post.user.small_avatar_url` and `post.user.username` assume `post.user` present. If the user is deleted/blank, `post.user` is nil and the template raises NoMethodError for every post in the loop, breaking the entire embed view. Needs safe navigation / fallback."
+      },
+      {
+       "lines": "app/views/embed/best.html.erb:6",
+       "description": "Invalid ERB/Ruby syntax `<%- end if %>`. Ruby `end if` without a condition is a SyntaxError (expects `end` alone, `if` requires an expression). Rendering embed/best will raise SyntaxError. Should be `<% end %>` (or `<%- end -%>`). Only file in repo with `end if` in ERB is this template."
+      },
+      {
+       "lines": "app/views/embed/best.html.erb:19",
+       "description": "Stored XSS via `<%= raw post.cooked %>`. `Post#cook` (post.rb:130-133) bypasses the sanitizing pipeline when `cook_method == :raw_html` and returns `raw` verbatim. `TopicEmbed.import` (topic_embed.rb:22) and `import_remote` (topic_embed.rb:44-52) create/update posts with `cook_method: :raw_html` from external RSS (`i.content` in poll_feed.rb) and Readability HTML (only partially filtered tags/attributes) without sanitization, and `absolutize_urls` does not strip `javascript:`/event handlers. `raw` then outputs unsanitized HTML, allowing script, iframe, `onerror`, `javascript:` links, etc."
+      },
+      {
+       "lines": "app/views/embed/best.html.erb:16-17",
+       "description": "Nil-dereference when `post.user` is nil (deleted/anonymous user). `post.user.small_avatar_url` and `post.user.username` will raise NoMethodError and break the iframe render. `TopicView` can return posts whose user has been deleted; view should guard (`post.user.try(...)` / fallback) instead of unconditional dereference."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "28",
+       "description": "response.headers['X-Frame-Options'] = \"ALLOWALL\" is not a valid X-Frame-Options directive (valid are DENY, SAMEORIGIN, ALLOW-FROM). Browsers ignore unknown values and may default to DENY/SAMEORIGIN, so legitimate embeds will remain blocked. To allow framing from the embeddable_host the header should be removed (or set to ALLOW-FROM). The helper also caches headers via AnonymousCache, so the invalid value gets cached."
+      },
+      {
+       "lines": "24-27",
+       "description": "ensure_embeddable authorizes solely on URI(request.referer || '').host == SiteSetting.embeddable_host. Referer is a client-controlled header trivially spoofed with curl, so it is not an access control. It also breaks when browsers suppress Referer (Referrer-Policy: no-referrer) as URI('').host is nil != host, denying legitimate iframe loads. No check of params[:embed_url] host is done here; authorization is deferred to async TopicRetriever."
+      },
+      {
+       "lines": "9-19",
+       "description": "params.require(:embed_url) is used unvalidated (no URL format/host allowlist) and directly used for TopicEmbed lookup, Jobs.enqueue, and anon cache key (REQUEST_URI). An attacker can enqueue arbitrary embed_url values (including arrays => WHERE embed_url IN (...), or paths with query/credentials) causing Sidekiq flood/SSRF to embeddable_host, cache-key explosion/pollution, and stale cache: discourse_expires_in caches the 'loading' response for 1 minute via AnonymousCache (key = host+uri) so after the topic is created anonymous users still get the cached loading page until expiry."
+      },
+      {
+       "lines": "app/controllers/embed_controller.rb:28",
+       "description": "X-Frame-Options \"ALLOWALL\" is not a valid directive (valid values are DENY, SAMEORIGIN, ALLOW-FROM). Browsers treat an invalid value as DENY/SAMEORIGIN or ignore it, so the iframe will be blocked despite the controller intending to allow framing. Correct fix is to delete the header (response.headers.delete('X-Frame-Options')) or set CSP frame-ancestors. Spec at spec/controllers/embed_controller_spec.rb:37 asserts the invalid value, so test enforces the bug."
+      },
+      {
+       "lines": "app/controllers/embed_controller.rb:24-30",
+       "description": "ensure_embeddable validates only URI(request.referer || '').host == SiteSetting.embeddable_host. Referer is client-controlled and trivially spoofed with curl, so direct GETs bypass the check. Comparison is host-only without case/ port normalization and does not handle subdomains, and fails closed for browsers that suppress Referer (Referrer-Policy). This interacts with app/views/layouts/embed.html.erb:11 where the full unescaped request.referer is reflected into JS as postMessage targetOrigin: parent.postMessage(..., '<%= request.referer %>'). The host-only check lets attacker control path/query (e.g., http://eviltrout.com/' + XSS payload) and inject into the JS string context (HTML-escaped but still breaks JS string) and the targetOrigin is full URL not origin, so browsers drop the message."
+      },
+      {
+       "lines": "app/controllers/embed_controller.rb:8-15",
+       "description": "best action never validates that params[:embed_url] host matches embeddable_host. It does params.require(:embed_url) then TopicEmbed.topic_id_for_embed(embed_url) and else Jobs.enqueue(:retrieve_topic, embed_url: embed_url). An attacker with a spoofed valid Referer can enqueue arbitrary embed_url jobs, causing job-spam/DoS and driving TopicRetriever to open() URLs. TopicRetriever#invalid_host? later blocks mismatched hosts, but the controller still enqueues and caches the work. No scheme/host validation or allowlist at the controller boundary."
+      },
+      {
+       "lines": "app/controllers/embed_controller.rb:19",
+       "description": "discourse_expires_in 1.minute is called unconditionally after both the TopicView branch and the render 'loading' branch. For anonymous users Middleware::AnonymousCache caches the response for 1 minute, so the 'loading' placeholder is cached and subsequently served even after Jobs::RetrieveTopic creates the TopicEmbed, delaying visibility and causing stale cache. Should not cache the loading case or use no-cache."
+      },
+      {
+       "lines": "spec/controllers/embed_controller_spec.rb:40-45",
+       "description": "Test claims to verify 'tells the topic retriever to work' but mocks TopicRetriever.new/retrieve, while the actual controller at app/controllers/embed_controller.rb:15 does Jobs.enqueue(:retrieve_topic, ...). The test does not exercise the real code path and will either fail or give false confidence; it never asserts that the job is enqueued or that the correct embed_url/user_id are passed."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "2",
+       "description": "Wrong dependency: `require_dependency 'jobs/regular/process_post'` does not load the subject `Jobs::PollFeed` (scheduled job in `app/jobs/scheduled/poll_feed.rb`). Copy-paste from `poll_mailbox_spec.rb`. Spec relies on implicit autoload/side-effect and will break or mask load errors when run in isolation; it does not guarantee the file under test is actually required."
+      },
+      {
+       "lines": "18-22",
+       "description": "Test `requires feed_polling_url` does not isolate the condition: it stubs `feed_polling_url` to `nil` but leaves `feed_polling_enabled?` at its default `false` (see `config/site_settings.yml`). `Jobs::PollFeed#execute` short-circuits on `feed_polling_enabled? && ...` so `poll_feed` is never called regardless of url. Test passes vacuously and does not prove blank URL blocks polling when polling is enabled. Must stub `feed_polling_enabled?` to true."
+      },
+      {
+       "lines": "24-28",
+       "description": "Test `requires embed_by_username` same isolation bug: stubs `embed_by_username` to `nil` but does not stub `feed_polling_enabled?` to true nor `feed_polling_url` to a present value. With defaults both false/blank, `execute` returns before checking username, so expectation `never` passes for wrong reason. Test does not check what it claims."
+      },
+      {
+       "lines": "18-37",
+       "description": "Coverage gap / misleading contract: `present?` rejects both `nil` and `\"\"` (default is `\"\"` in `site_settings.yml`), but failure tests only use `nil`. More importantly the spec only asserts the guard in `execute` delegates to `poll_feed`; the actual risky logic in `poll_feed` (`open(SiteSetting.feed_polling_url)`, `SimpleRSS.parse`, `i.link`/`i.id` fallback, `CGI.unescapeHTML(i.content.scrub)`, `TopicEmbed.import`, `feed_key`) is completely untested, giving false confidence for the new feed-import feature."
+      },
+      {
+       "lines": "spec/jobs/poll_feed_spec.rb:2",
+       "description": "Wrong dependency required: `require_dependency 'jobs/regular/process_post'` does not load the class under test (`Jobs::PollFeed` lives in `jobs/scheduled/poll_feed`). The spec therefore relies on incidental autoloading and copy-paste from poll_mailbox_spec.rb. If ProcessPost were not already loaded, `Jobs::PollFeed` would be uninitialized; if loading order changes the file under test is never explicitly exercised, masking load/constant errors."
+      },
+      {
+       "lines": "spec/jobs/poll_feed_spec.rb:12-16, 18-22, 24-28",
+       "description": "Each `requires ...` example stubs only the setting it claims to require and leaves the other two at their defaults (`feed_polling_enabled?` defaults to `false`, `feed_polling_url` to `''`, `embed_by_username` to `''` per config/site_settings.yml, all failing `present?`/truthiness in `Jobs::PollFeed#execute`). Thus `poller.execute` would not call `poll_feed` even without the stub, so the test passes regardless of whether the implementation actually checks that specific setting. It does not verify the claimed contract; proper isolation requires stubbing the other two settings to truthy values (as the `delegates to poll_feed` test on lines 31-37 does)."
+      },
+      {
+       "lines": "spec/jobs/poll_feed_spec.rb:6-38",
+       "description": "Spec only tests `execute` delegation and never exercises `poll_feed` itself – no coverage for RSS fetching (`open(SiteSetting.feed_polling_url)`), `SimpleRSS.parse`, URL fallback `i.link`/`i.id`, `CGI.unescapeHTML(i.content.scrub)`, or `TopicEmbed.import`. Critical new behavior (including network/SSRF and HTML handling) is completely untested, giving false confidence that PollFeed works while leaving failures in the imported PR code undetected."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "6"
+     }
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "32-35, 38-42",
+       "description": "Both valid-host examples stub `retrieved_recently?` itself (`returns(false/true)`) and then assert `perform_retrieve` was/wasn't called. They never exercise the real `retrieved_recently?` implementation ($redis.setnx/expire, `no_throttle` bypass) and never verify the `invalid_host? || retrieved_recently?` short-circuit ordering. The tests are tautological and will pass even if throttle is broken or if `retrieve` were reordered to check Redis before host validation (allowing invalid hosts to pollute Redis / DoS)."
+      },
+      {
+       "lines": "28-30",
+       "description": "Context `before` uses `SiteSetting.expects(:embeddable_host).returns(\"eviltrout.com\")` (exactly-once Mocha expectation) instead of `stubs`. This makes shared setup brittle (fails if `invalid_host?` calls it 0 or >1 times) and leaks expectation state across examples from a `before` hook. Setup should stub, with per-example expectations if count matters. Combined with shared `let(:topic_retriever)` from outside the context, call-count coupling is hidden."
+      },
+      {
+       "lines": "21-25",
+       "description": "Test 'does not call perform_retrieve when the embed url is not a url' does not stub `SiteSetting.embeddable_host` at all, so result depends on global SiteSetting default ('' in site_settings.yml vs nil) and on whether `URI('not a url')` raises `URI::InvalidURIError` (MRI does) or parses as relative URI with nil host (other versions). It coincidentally passes because '' != nil, not because the rescue path was explicitly exercised, making it flaky and not verifying that `retrieved_recently?` is correctly short-circuited for invalid URIs."
+      },
+      {
+       "lines": "spec/components/topic_retriever_spec.rb:21-25",
+       "description": "Test 'does not call perform_retrieve when the embed url is not a url' does not stub SiteSetting.embeddable_host and relies on URI('not a url').host == nil not raising URI::InvalidURIError. lib/topic_retriever.rb:14-18 only rescues InvalidURIError and compares SiteSetting.embeddable_host != nil. When embeddable_host is nil/blank (the default) the comparison is nil != nil => false, so invalid_host? returns false and the job would not be throttled/blocked. The test therefore does not prove invalid URLs are rejected in all configurations and hides that invalid_host? fails to treat host-less strings as invalid (should be `true` regardless) and that the rescue is too narrow."
+      },
+      {
+       "lines": "spec/components/topic_retriever_spec.rb:32-42",
+       "description": "Both examples in 'with a valid host' stub the method they claim to verify: `topic_retriever.expects(:retrieved_recently?).returns(false/true)` and then assert perform_retrieve was (not) called. This tautologically asserts `retrieve` respects a stubbed boolean and never exercises the real `retrieved_recently?` logic in lib/topic_retriever.rb:21-33 ($redis.setnx 'retrieved:#{embed_url}' + expire 60). A broken throttling implementation (e.g., missing expire, wrong key, never setting) would still pass, so the test does not check what it claims ('calls/doesn't call perform_retrieve if it hasn't/has been retrieved recently')."
+      },
+      {
+       "lines": "spec/components/topic_retriever_spec.rb:28-42",
+       "description": "No coverage for the `no_throttle` staff bypass introduced in app/jobs/regular/retrieve_topic.rb:17 (`TopicRetriever.new(url, no_throttle: user.try(:staff?))`) and lib/topic_retriever.rb:23 (`return false if @opts[:no_throttle]`). The region only tests throttling via mocking retrieved_recently? and never constructs TopicRetriever with `no_throttle:true` to verify staff users skip the $redis throttle. This exposes a broken contract where a regression in the bypass would not be caught."
+      },
+      {
+       "lines": "spec/components/topic_retriever_spec.rb:29",
+       "description": "The `before { SiteSetting.expects(:embeddable_host).returns('eviltrout.com') }` uses a strict mock expectation (expects exactly once) instead of stubbing/setting the setting. retrieve's `invalid_host?` at lib/topic_retriever.rb:15 calls `SiteSetting.embeddable_host` once today, but any additional read (logging, future refactor, or caching) causes a spurious failure despite correct behavior, and the mock does not verify integration with real SiteSetting. Should use `SiteSetting.stubs` or direct assignment; the strict expectation makes the suite brittle and leaks mock state."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "5"
+     }
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "35",
+       "description": "i.content can be nil (SimpleRSS varies by feed: many use description/content:encoded, Atom uses different fields). Calling i.content.scrub raises NoMethodError on NilClass, crashing the whole `rss.items.each` loop. The job has retry:false so one bad item aborts all imports. Should fallback to i.description/i.summary and handle nil/empty before CGI.unescapeHTML/scrub."
+      },
+      {
+       "lines": "29-31",
+       "description": "Network/parse errors are unhandled: `open(SiteSetting.feed_polling_url)` can raise SocketError/Timeout/OpenURI::HTTPError/URI::InvalidURIError and `SimpleRSS.parse` can return false/nil on invalid XML. No rescue/logging. Then `rss.items` raises NoMethodError if rss is nil/false. With `sidekiq_options retry:false` the hourly job silently dies until next run. Also URL is not validated to http/https before open, allowing file:// or other schemes (SSRF) and unbounded download with no timeout/size limit."
+      },
+      {
+       "lines": "35-36",
+       "description": "External RSS HTML is stored unsanitized: `CGI.unescapeHTML(i.content.scrub)` is passed directly to `TopicEmbed.import` which creates the post with `cook_method: :raw_html` and `skip_validations:true`. `Post#cook` then returns raw unconditionally and `embed/best.html.erb` renders `raw post.cooked`. No sanitization/allowlist (unlike TopicRetriever's Readability whitelist), so a compromised feed can store `<script>`/event handlers for stored XSS in the embedded iframe."
+      },
+      {
+       "lines": "20-22",
+       "description": "Dead code / broken caching: `feed_key` is defined but never read (grep shows no other reference). The intended conditional-GET / If-Modified-Since logic is not implemented, causing full download every hour. Also `Digest::SHA1.hexdigest(SiteSetting.feed_polling_url)` raises TypeError if url is nil, and `@feed_key ||=` memoizes per-instance so a URL change within same process returns stale key."
+      },
+      {
+       "lines": "app/jobs/scheduled/poll_feed.rb:35",
+       "description": "Uses CGI.unescapeHTML without ever requiring 'cgi' (no require in file, grep shows no load) → NameError at runtime if CGI not already loaded. Also calls i.content.scrub unconditionally: SimpleRSS items often have nil content (RSS uses description, ATOM may use summary/content_encoded) → NoMethodError on NilClass aborts entire poll and loses all remaining items."
+      },
+      {
+       "lines": "app/jobs/scheduled/poll_feed.rb:29",
+       "description": "Uses Kernel#open via open-uri on admin-controlled SiteSetting.feed_polling_url with no validation or rescue. open('| id') executes shell pipe (command injection), open('file:///etc/passwd') reads local files, and any network/HTTP error (OpenURI::HTTPError, SocketError, Timeout, URI::InvalidURIError) bubbles up. Job has sidekiq_options retry:false and is also called synchronously from TopicRetriever#perform_retrieve, so exception prevents fallback fetch_http and kills polling entirely."
+      },
+      {
+       "lines": "app/jobs/scheduled/poll_feed.rb:20-22",
+       "description": "Defines feed_key (\"feed-modified:\"+SHA1(url)) but never reads or writes it (grep finds only definition). Intended conditional-GET/Last-Modified caching is dead code, so poll_feed unconditionally re-fetches and calls TopicEmbed.import for every item every hour even when feed unchanged, wasting DB work and contradicting the designed throttling."
+      },
+      {
+       "lines": "app/jobs/scheduled/poll_feed.rb:29-31",
+       "description": "No validation of SimpleRSS.parse result: parse can return false/nil on malformed/empty feed or rss.items can be nil. rss.items.each then raises NoMethodError with no rescue, crashing scheduled job (and TopicRetriever caller) and dropping all entries instead of handling empty/error feeds gracefully."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "7 (4 describes the same core cause/consequence — feed_key defined but never read → unconditional fetch every hour/unnecessary fetches — with additional extra causes noted)"
+     }
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "41-50",
+       "description": "Broken double-checked locking: does RLock read then RUnlock then Lock without re-checking cache. Between RUnlock and Lock another goroutine can populate entryPointAssetsCache, yet the waiter still does I/O and overwrites it. Must re-check `entryPointAssetsCache != nil && cfg.Env != Dev` after acquiring write Lock before doing I/O (thundering herd / wasted work)."
+      },
+      {
+       "lines": "69-70",
+       "description": "Unconditional `entryPointAssetsCache = result` caches nil on error. If `readWebAssetsFromFile`/`FromCDN` fails, `result==nil` and `err!=nil` are cached (overwriting a previous valid cache). In Dev mode the early-return is bypassed so a failing Dev request poisons the global cache for subsequent Prod requests that would otherwise hit cache. Should only assign on `err==nil && result!=nil`."
+      },
+      {
+       "lines": "48-66",
+       "description": "Holds exclusive `entryPointAssetsCacheMu.Lock()` across blocking I/O (`readWebAssetsFromFile` and `GetContentDeliveryURL`/`readWebAssetsFromCDN`). While one goroutine reads `assets-manifest.json` all concurrent `GetWebAssets` readers block on Lock, turning the race fix into a contention/DoS point. Load first then lock to install, or use singleflight."
+      },
+      {
+       "lines": "42-46, 69-70",
+       "description": "Returns the same `*EntryPointAssets` pointer that is stored in the global cache without cloning. Caller can mutate the shared object (and `SetContentDeliveryURL` mutates `Dark`/`Light`/`JSFiles[i].FilePath` in-place non-idempotently by prefixing). Concurrent readers share the same mutable slice/string headers => data race and risk of double-prefixing if the cached object is ever mutated again. Return a deep copy or store immutable."
+      },
+      {
+       "lines": "40-49",
+       "description": "Broken double-checked locking: fast path does RLock, copies ret, unlocks and returns if ret!=nil && Env!=Dev. On miss it acquires write Lock but never re-checks entryPointAssetsCache before doing I/O. If multiple goroutines miss concurrently, they all serialize on Lock and each re-reads assets-manifest.json (and CDN) and overwrites the cache, instead of the second waiter re-using the value just populated. Also defeats thundering-herd protection and can clobber CDN-prefixed value with a different prefix."
+      },
+      {
+       "lines": "48-70",
+       "description": "Write lock held across blocking I/O: `Lock()` is taken at line 48 and deferred until return at line 70, while `readWebAssetsFromFile` and `readWebAssetsFromCDN` (file open + JSON decode + HTTP GET) run under the exclusive lock. All concurrent `GetWebAssets` callers block on `RLock()` (or `Lock()`) for the duration of I/O, serializing requests and negating the RWMutex. Correct pattern is to do I/O without holding the lock (or use singleflight) and only hold lock to publish the result."
+      },
+      {
+       "lines": "69-70 and 51-65",
+       "description": "Global cache ignores cache key and mutates shared object non-idempotently: cache is single `*dtos.EntryPointAssets` for all `cfg.StaticRootPath`/`cfg.GetContentDeliveryURL`/`license.ContentDeliveryPrefix()` combinations. Early return returns the same pointer with `SetContentDeliveryURL` already applied (which does `a.Dark = prefix + a.Dark` etc. non-idempotently). A later call with a different license/CDN prefix hits cache and gets stale prefix, or in Dev mode repeated overwrites would double-prefix if the same object were reused. Mutex only protects pointer assignment, not logical validity; callers share the same mutable slice header."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "6 (also 3 - both describe identical cause: exclusive Lock at line 48 held deferred to line 70 across readWebAssetsFromFile/readWebAssetsFromCDN blocking I/O, and identical consequence: serializing concurrent GetWebAssets callers into global bottleneck/contention; 6 is verbatim)"
+     }
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "65-75",
+       "description": "add_members splits usernames on ',' without stripping whitespace: `usernames.split(\",\").each do |username| ... User.find_by_username(username)` . UI sends 'alice, bob' (note space after comma) and User.find_by_username does `username_lower: username.downcase` so ' bob' never matches and the add silently does nothing yet returns success_json. Should be username.strip (and reject blank)."
+      },
+      {
+       "lines": "84-96",
+       "description": "remove_member uses `group.users.delete(user_id)` on a `has_many :through :group_users` association. Passing an Integer to a through-association delete is wrong, bypasses Group#remove / destroy_deletions callback that clears `primary_group_id`, skips validations/callbacks, and leaves `user_count` stale. Should be `group.group_users.where(user_id: user_id).destroy_all` or use the model’s `remove` method and reset counters."
+      },
+      {
+       "lines": "84-96",
+       "description": "remove_member claims success after `group.users.delete` even when user not found or not a member and then calls `group.save` which will succeed regardless, so API returns success_json for no-op or invalid user_id. No verification that deletion actually affected a row, and 0.to_i masking of non-numeric ids makes invalid input look successful."
+      },
+      {
+       "lines": "65-75",
+       "description": "add_members does `params.require(:usernames)` then `usernames.split(\",\")` assuming String. If client sends array (e.g. usernames[]=a) it raises NoMethodError 500 instead of 400, and empty/duplicate usernames are not deduplicated — `group.add(user)` via `users.push` will attempt duplicate GroupUser insert (unique index violation) without checking `group.users.exists?` first."
+      },
+      {
+       "lines": "112-117",
+       "description": "Spec for automatic-group protection of remove_member is incorrect and hides the defect: `spec/controllers/admin/groups_controller_spec.rb:115` does `xhr :put, :remove_member` but routes.rb defines `delete \"members\" => \"groups#remove_member\"`. The test never hits the routed DELETE action, so it does not verify the 422 contract it claims to test, giving false coverage."
+      },
+      {
+       "lines": "65-67, 84-86",
+       "description": "Route mismatch: `resources :groups` member routes `PUT/DELETE /admin/groups/:id/members` provide `params[:id]`, but `add_members`/`remove_member` do `params.require(:group_id)`. Real front-end calls (`/admin/groups/:id/members.json` in `group.js`) will raise `ActionController::ParameterMissing` (400). Specs mask this by passing `group_id:` directly via `xhr`, bypassing routing."
+      },
+      {
+       "lines": "90",
+       "description": "`group.users.delete(user_id)` on a `has_many :through` is wrong. It uses `delete` (no callbacks) so `GroupUser` counter_cache `user_count` is not reliably decremented and `users.primary_group_id` is left dangling. Original `Group#usernames=`/`#remove` destroyed `GroupUser` records and `after_save :destroy_deletions` cleared `primary_group_id`. Should `destroy`/`delete_all` on `group_users`."
+      },
+      {
+       "lines": "71-74",
+       "description": "`usernames.split(\",\").each` does not `strip` whitespace and does not deduplicate. `\"bob, alice\"` looks up `\" alice\"` (with leading space) via `User.find_by_username` (`username_lower = downcased with space`) and fails to find. Duplicate usernames or re-adding an existing member calls `group.add` (`users.push`) twice, violating unique `index_group_users_on_group_id_and_user_id` and raising 500, whereas old `usernames=` diffed and was idempotent."
+      },
+      {
+       "lines": "112-117 spec",
+       "description": "Tests do not check what they claim: `remove_member` spec uses `xhr :put, :remove_member` while route is `delete \"members\"` (should be `xhr :delete`), and both `add_members`/`remove_member` specs pass `group_id:` which is not the routed param (`:id`). Tests therefore pass while the actual routed contract is broken, and they cover no whitespace/duplicate/counter-cache behavior."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "1"
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "limit = (params[:limit] || 50).to_i",
+       "description": "Unbounded limit: no max cap (`|| 50` only supplies default). Attacker can send ?limit=1000000 or larger, causing `group.users.limit(huge).offset(..)` to load huge result set into memory / huge DB cost → DoS. Previous code capped to 200 for automatic groups only; new code removes cap for all groups. Fix: clamp to sane max (e.g., 100..200) and enforce minimum 1."
+      },
+      {
+       "lines": "offset = params[:offset].to_i",
+       "description": "No validation for negative / non-numeric pagination params. `params[:offset].to_i` on \"-5\" yields -5, `\"abc\".to_i` yields 0 silently; `limit` of \"0\", \"-1\", \"\" yields 0 or -1. `limit(-1)` / `offset(-1)` raises PG::InvalidRowCountInResultSetIndicator / `OFFSET must not be negative` → unhandled 500 instead of 400. Also `limit=0` returns empty page with misleading meta.total. Fix: sanitize to integers, clamp offset >=0 and 1 <= limit <= MAX."
+      },
+      {
+       "lines": "render json: {\n      members: serialize_data(members, GroupUserSerializer),\n      meta: {\n        total: total,\n        limit: limit,\n        offset: offset\n      }\n    }",
+       "description": "Breaking contract: previous implementation rendered a bare JSON array (`render_serialized(members.to_a, GroupUserSerializer)`). New code renders envelope `{members:[...], meta:{total,limit,offset}}`. Any existing API client or test expecting an array breaks (see `spec/controllers/groups_controller_spec.rb` pending test that does `members.map{...}` on top-level array and the second `members` example that erroneously calls `:posts`). No versioning / backward-compatibility or update to tests → silent contract break."
+      },
+      {
+       "lines": "22",
+       "description": "Unbounded limit: `limit = (params[:limit] || 50).to_i` has no cap or floor. Client JS sends limit 50 but attacker can request `limit=1000000` (or 0 / negative) causing full table load, memory bloat/DoS, and broken pagination (`totalPages = user_count / 0` => Infinity/NaN in admin-group.js.es6). Should clamp to e.g. 1..100 and coerce non-positive to default."
+      },
+      {
+       "lines": "23",
+       "description": "Offset nil crash and no clamp: `offset = params[:offset].to_i` lacks fallback like limit. When `offset` param absent `params[:offset]` is nil and `nil.to_i` raises NoMethodError on Ruby (500 on every first-page request without offset). Also negative or NaN offsets are not clamped to >=0, producing `OFFSET -5` SQL error in Postgres, while JS already clamps via `Math.max(offset,0)`."
+      },
+      {
+       "lines": "20",
+       "description": "Route param mismatch: `find_group(:group_id)` requires `params.require(:group_id)` but `config/routes.rb:271-275` defines `resources :groups do get 'members' end` as a member route which supplies `:id` (not `:group_id`). Real HTTP `GET /groups/:id/members` will raise `ActionController::ParameterMissing` / 400, while specs fake it by passing `group_id:` directly (`spec/controllers/groups_controller_spec.rb:61`). Same mismatch affects `counts`/`posts`."
+      },
+      {
+       "lines": "28-34",
+       "description": "Broken response contract: previously `render_serialized(members.to_a, GroupUserSerializer)` returned a flat array (or rooted `group_users`); new code returns `{members: [...], meta:{total,limit,offset}}` via `serialize_data`. Any old client/pending spec (`spec/controllers/groups_controller_spec.rb:65-85` pending pagination test and the `members` example that actually hits `posts`) still expects array, and JS `Discourse.Group#findMembers` now expects `result.members`/`result.meta` – old callers will error."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "1"
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "22-32",
+       "description": "create ignores alias_level: Discourse.Group.asJSON sends {name, alias_level, visible} on POST /admin/groups but Admin::GroupsController#create only assigns name and visible. Groups created with alias_level !=0 via UI/API silently get default 0 and require a second update. The attribute was already validated/allowed in Group model and handled in old update_put, so this is a broken contract introduced by the frontend/backend mismatch."
+      },
+      {
+       "lines": "25, 38",
+       "description": "unconditional visible coercion corrupts partial updates and mishandles types: `group.visible = params[:visible] == \"true\"` runs even when param is absent (nil == \"true\" => false), so a PATCH/PUT that only changes name or alias_level unintentionally flips visible to false. Strict `== \"true\"` also rejects JSON boolean true (`true == \"true\"` is false in Ruby) and \"1\"/\"TRUE\", so visible cannot be set to true when client sends a real boolean."
+      },
+      {
+       "lines": "40",
+       "description": "update does not strip name whitespace while create does: `create` uses `(params[:name]||'').strip` but `update` does `group.name = params[:name]` with no strip. A name like \" bob \" persists with spaces or fails UsernameValidator inconsistently, and is inconsistent with the create path and the UI expectation that names are normalized."
+      },
+      {
+       "lines": "84-91",
+       "description": "remove_member uses group.users.delete(user_id) instead of Group#remove / destroying GroupUser records. This bypasses after_save :destroy_deletions which clears users.primary_group_id and bypasses counter updates. Leaves dangling primary_group_id references and stale user_count, and group.save after a direct SQL delete is a no-op for counters."
+      },
+      {
+       "lines": "65-75",
+       "description": "add_members does usernames.split(\",\").each without String#strip or rejecting blanks. Input \"alice, bob\" looks up \" bob\" (leading space) via User.find_by_username and silently skips it. Empty entries from trailing commas also processed. No deduplication check before group.add(user) can attempt duplicate group_users inserts."
+      },
+      {
+       "lines": "65, 84 + config/routes.rb 49-50",
+       "description": "Controller requires params.require(:group_id) but routes `resources :groups do delete/put \"members\"` generates member routes with :id ( /admin/groups/:id/members ), not :group_id. Real HTTP requests raise ActionController::ParameterMissing; specs pass only because they inject group_id directly bypassing routing."
+      },
+      {
+       "lines": "spec/controllers/admin/groups_controller_spec.rb 114-116",
+       "description": "Test 'cannot remove members from automatic groups' calls xhr :put, :remove_member but route is DELETE. It actually hits add_members action, so the 422 expectation does not verify remove_member at all — test is vacuous/false-positive and will miss regressions."
+      },
+      {
+       "lines": "22-31",
+       "description": "create only assigns name and visible; alias_level param is silently ignored (always defaults to 0) while update handles alias_level. UI selection for alias_level on new groups is lost — broken contract vs. update and previous asJSON behavior."
+      },
+      {
+       "lines": "25, 38",
+       "description": "visible handled as params[:visible] == \"true\". If param is missing it coerces to false and update unintentionally disables visibility. JS asJSON sends boolean true/false (visible: !!...); comparison against string \"true\" is fragile and mismatches boolean payloads, causing create to default to false."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "1 (8 is identical duplicate - both describe same cause: create only assigns name+visible ignoring alias_level while update handles it/asJSON sends it flat, and same consequence: alias_level silently ignored/defaults to 0 on create)"
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "spec/controllers/admin/groups_controller_spec.rb:103, spec/controllers/admin/groups_controller_spec.rb:115, spec/controllers/admin/groups_controller_spec.rb:125\nconfig/routes.rb:49-50\napp/controllers/admin/groups_controller.rb:66,85",
+       "description": "Member routes `delete \"members\"` / `put \"members\"` inside `resources :groups` create `/admin/groups/:id/members` with param `:id`, but `Admin::GroupsController#add_members`/`#remove_member` do `params.require(:group_id)`. Real routed requests will raise `ActionController::ParameterMissing` (400). Specs pass `group_id:` directly to the action (controller specs bypass routing) so they stay green while masking the broken contract."
+      },
+      {
+       "lines": "spec/controllers/admin/groups_controller_spec.rb:114-116\nconfig/routes.rb:49",
+       "description": "Test `cannot remove members from automatic groups` uses `xhr :put, :remove_member` but route is `delete \"members\" => \"groups#remove_member\"`. Controller specs dispatch by action name and ignore verb, so test passes without ever exercising the real DELETE endpoint — it does not verify what it claims (wrong/bypassed contract)."
+      },
+      {
+       "lines": "spec/controllers/admin/groups_controller_spec.rb:114-115\nspec/controllers/admin/groups_controller_spec.rb:93-94",
+       "description": "Automatic-group guard tests hard-code `group_id: 1` instead of fabricating `Fabricate(:group, automatic: true)`. Relies on seeded fixture ID existence/ordering. Makes test brittle and can give false positive/negative if seed changes; does not self-contain the precondition it claims to test."
+      },
+      {
+       "lines": "103-103, 114-115, 125-125",
+       "description": "Param-name / routing contract mismatch hidden by specs. config/routes.rb:49-50 defines member routes `delete \"members\"` / `put \"members\"` inside `resources :groups`, so the group id arrives as `params[:id]` (`/admin/groups/:id/members.json` as used in discourse/models/group.js:42-53). Admin::GroupsController#add_members:66 and #remove_member:85 do `params.require(:group_id)` and will raise `ActionController::ParameterMissing` (400) on real requests. Specs bypass routing by injecting `group_id: group.id` directly via `xhr :put/:delete, :add_members/:remove_member, group_id: ...`, so they pass while production JS calls fail."
+      },
+      {
+       "lines": "114-116",
+       "description": "Wrong HTTP verb in test – misdocuments contract and bypasses routing check. Routes and JS both use DELETE for remove_member (`delete \"members\" => \"groups#remove_member\"` and `type: \"DELETE\"` in group.js:43), but the negative test `cannot remove members from automatic groups` uses `xhr :put, :remove_member`. Controller specs dispatch by action name regardless of verb, so the test passes without ever exercising the real DELETE route, giving false confidence that DELETE /admin/groups/:id/members is protected for automatic groups."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "2, 5 (both describe same bug; 2 is the exact match)"
+     }
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "pkg/services/anonymous/anonimpl/anonstore/database.go:80-86",
+       "description": "updateDevice captures `args` outside WithDbSession and mutates it inside with `args = append([]interface{}{query}, args...)`. WithDbSession retries on sqlite3.ErrLocked/ErrBusy (5 times). On retry the closure is re-invoked with args already containing the query, so it prepends query again -> Exec receives [query, query, ...] and fails with malformed SQL. Must use local sqlOrArgs copy."
+      },
+      {
+       "lines": "pkg/services/anonymous/anonimpl/anonstore/database.go:73-82, 95-96",
+       "description": "UPDATE filters by `updated_at BETWEEN device.UpdatedAt-30d AND device.UpdatedAt+1m`. An existing device whose last updated_at is >30d ago (still in DB until 61d cleanup) or clock-skewed will not match, RowsAffected==0 -> returns ErrDeviceLimitReached. That incorrectly denies update of a legitimate existing device when limit is reached, violating the \"only update, don't create\" intent. Should be WHERE device_id = ? only."
+      },
+      {
+       "lines": "pkg/services/anonymous/anonimpl/anonstore/database.go:108-117",
+       "description": "TOCTOU / non-atomic limit enforcement: CountDevices and subsequent INSERT/UPDATE are separate sessions without transaction/lock. Concurrent CreateOrUpdateDevice calls can all see count < deviceLimit and all INSERT, exceeding the limit. Also check-then-act race allows limit bypass under load; needs atomic conditional insert or serializable transaction/advisory lock."
+      },
+      {
+       "lines": "pkg/services/anonymous/anonimpl/anonstore/database.go:83-85",
+       "description": "updateDevice captures `args` outside WithDbSession and mutates it inside with `args = append([]interface{}{query}, args...)`. WithDbSession retries the callback on sqlite ErrLocked/ErrBusy (retryer.Retry). On retry the query string is prepended again, producing [query, query, ...origArgs] and causing wrong placeholder count / SQL error. Same pattern in CreateOrUpdateDevice."
+      },
+      {
+       "lines": "pkg/services/anonymous/anonimpl/anonstore/database.go:74-81",
+       "description": "updateDevice uses `?` placeholders for all DB types. CreateOrUpdateDevice correctly switches to $1..$n for Postgres. On Postgres the UPDATE with `?` will fail or not be rewritten by xorm when called via Session.Exec variadic, breaking device-limit enforcement on Postgres."
+      },
+      {
+       "lines": "pkg/services/anonymous/anonimpl/anonstore/database.go:109-117",
+       "description": "Limit check is TOCTOU: CountDevices and subsequent CreateOrUpdateDevice/updateDevice run in separate sessions without transaction/lock. Concurrent anonymous TagDevice requests can both observe count < limit and both INSERT, exceeding deviceLimit. The limit is not atomically enforced."
+      },
+      {
+       "lines": "pkg/services/anonymous/anonimpl/anonstore/database.go:94-96",
+       "description": "updateDevice returns ErrDeviceLimitReached when RowsAffected==0, conflating 'device does not exist / row outside 30d window' with 'limit reached'. When limit is reached, a new device correctly gets this error, but an existing device whose updated_at is older than 30d (expired, not counted by CountDevices) also gets ErrDeviceLimitReached. Caller in client.go treats this as limit-reached and denies anonymous authentication (return nil, err), so stale-device re-activation is denied and error is mis-reported."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "7 (defect 2 describes the identical same cause/consequence - RowsAffected==0 due to updated_at >30d window conflated with ErrDeviceLimitReached, denying update of existing stale device when limit reached; i.e. 2 and 7 are duplicates of the comment)"
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "51-70",
+       "description": "Test only verifies the rejection path (new device_id -> ErrDeviceLimitReached) but does not verify the complementary allowed path: updating an existing device when count >= limit must succeed. The PR's logic in database.go:115-116 is \"if limit reached, only updates\" via updateDevice(). This test would still pass if updateDevice were broken and always returned ErrDeviceLimitReached, so it does not check the claimed contract and gives false coverage."
+      },
+      {
+       "lines": "55-60",
+       "description": "Device literal omits CreatedAt (leaves zero time 0001-01-01) while production TagDevice in impl.go always sets CreatedAt=UpdatedAt=time.Now(). The inserted row is therefore unrealistic; SQLite accepts it but Postgres/MySQL timestamp handling/NOT NULL defaults differ, and CreatedAt handling bugs are masked."
+      },
+      {
+       "lines": "65-66",
+       "description": "Reuses the same *Device pointer and mutates DeviceID/UpdatedAt in place for the second call instead of creating a new Device struct. This aliasing loses the original reference, prevents asserting DB state after success/failure (count remains 1, original row unchanged), and implicitly reuses stale ClientIP/UserAgent, making the test confusing and incomplete."
+      },
+      {
+       "lines": "51-70",
+       "description": "Test reuses same *Device and only checks error for new ID, without verifying DB state. It never asserts CountDevices/ListDevices remains 1 or that no second row was inserted. So it would pass even if CreateOrUpdateDevice incorrectly inserted and then returned error, giving false confidence that limit is enforced."
+      },
+      {
+       "lines": "55-66",
+       "description": "CreatedAt is left as zero value and UpdatedAt is set to time.Now().Add(-1h), unlike production in anonimpl/impl.go:136-141 which uses time.Now() for both. The PR's database.go:110 counts with time.Now() window but database.go:81 updateDevice filters with device.UpdatedAt window; using stale -1h hides the mismatch and hides the bug that an existing but expired (>30d) device would fail the BETWEEN check and incorrectly return ErrDeviceLimitReached even for an allowed update."
+      },
+      {
+       "lines": "51-70",
+       "description": "Test only covers the error path (new device when limit reached) and never tests the success path required by database.go:115-116 comment 'only update devices' — i.e., that updating an existing device_id when count >= limit should succeed via updateDevice. Missing coverage hides that client.go:45-46 now turns ErrDeviceLimitReached into `return nil, err` denying anonymous authentication entirely, so limit becomes a DoS for all new anonymous users with no test for the allowed existing-device refresh."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "1"
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "80-87, 143-148",
+       "description": "tagDeviceUI inserts into localCache BEFORE CreateOrUpdateDevice succeeds (impl.go:87 SetDefault before 93). TagDevice now propagates ErrDeviceLimitReached (144-148 return err). First over-limit request correctly returns ErrDeviceLimitReached and Authenticate fails, but the failed deviceID is already cached for 29m. Next request for same deviceID hits cache (83-84) and returns nil, bypassing the limit. Transient DB errors are also cached and suppress retries for 29 minutes. This is cache-poisoning that lets limit be bypassed via retry and hides errors."
+      },
+      {
+       "lines": "131-134, 143-148",
+       "description": "ClientIP handling is wrong order and dead: clientIPStr := ip.String() is executed before len(ip)==0 check, so a nil/empty net.IP yields string \"<nil>\" stored in DB instead of \"\". The len check after String() is dead code (err already checked, ip is non-nil on success). Exposed now because TagDevice changed from async fire-and-forget to synchronous return err, so bogus IPs are now persisted synchronously on the auth path."
+      },
+      {
+       "lines": "143-148",
+       "description": "TagDevice now does synchronous DB work and returns ErrDeviceLimitReached to Authenticate (client.go:44-46 returns nil, err). Previously tagging was async in a goroutine with context.WithTimeout(2m) and panic recovery, not blocking login. Now every anonymous Authenticate blocks on CountDevices + Create/Update using the request ctx with no timeout, adding DB latency to auth hot path (DoS/timeout risk) and turning a soft limit into hard auth failure (nil Identity + error -> 401/500 for all new anon devices, no graceful 429 or allow-auth-but-not-count)."
+      },
+      {
+       "lines": "133-148 + anonimpl/client.go:44-50 + anonimpl/anonstore/database.go:73-103,105-117",
+       "description": "Poisoned localCache bypasses device limit. tagDeviceUI does Get/SetDefault before CreateOrUpdateDevice. When s.deviceLimit is reached CreateOrUpdateDevice calls updateDevice which returns ErrDeviceLimitReached for unknown deviceID (0 rows). TagDevice now returns that error (133-148 return err) so first request is denied. But the cache entry was already set, so second request for same new deviceID within 29m hits `if _,ok:=a.localCache.Get(key); ok {return nil}` and TagDevice returns nil, letting Authenticate succeed. Limit is enforced only once per cache TTL. Same for any transient DB error: cache prevents retry."
+      },
+      {
+       "lines": "144-148 + anonimpl/client.go:44",
+       "description": "Sync blocking on hot auth path + availability gate. Before: go func() with context.Background timeout 2m + recover, best-effort, never failed Authenticate. After: TagDevice is called synchronously on request ctx and TagDevice propagates error. Every anonymous login now pays CountDevices+Write latency; ctx cancel/timeout or DB slowness blocks auth. Combined with `return err` in TagDevice, any DB/count error (including ErrDeviceLimitReached) is surfaced to Anonymous.Authenticate which now denies anonymous login (returns nil,err) turning telemetry into hard auth gate."
+      },
+      {
+       "lines": "144-148",
+       "description": "Error contract broken / double logging. Service.TagDevice previously always returned nil (swallowed errors). Region now returns err, but client.go only treats ErrDeviceLimitReached as fatal (return nil,err), other errors are just Warn-logged and auth still succeeds. So TagDevice returning generic DB errors is useless work and causes duplicate logs (impl.go Debug + client.go Warn) and changes interface semantics without updating callers/tests."
+      },
+      {
+       "lines": "133-142 + anonimpl/anonstore/database.go:73-82,105-117",
+       "description": "Time-window and stale-device denial. updateDevice does `UPDATE ... WHERE device_id=? AND updated_at BETWEEN now-30d AND now+1m` using the new device.UpdatedAt (=time.Now()) as both bound and value. An existing device that hasn't been seen for >30d or whose stored updated_at is slightly in future (>1m skew) affects 0 rows and returns ErrDeviceLimitReached, which TagDevice propagates as auth denial, even though CountDevices excludes that stale device and it should be allowed to re-register."
+      },
+      {
+       "lines": "105-117",
+       "description": "TOCTOU race with no transaction. CreateOrUpdateDevice checks `count >= s.deviceLimit` then either INSERT or UPDATE. Concurrent TagDevice calls (now synchronous per request) can both see count < limit and both INSERT, exceeding limit. No SELECT FOR UPDATE / unique constraint guard on count, so limit is not enforceable under concurrency."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "6"
+     }
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "97",
+       "description": "anonymousDeviceLimit = undefined lacks explicit type annotation. GrafanaConfig defines it as `number | undefined` (packages/grafana-data/src/types/config.ts:200) so the class field must be `anonymousDeviceLimit: number | undefined = undefined`. With bare `= undefined` the inferred type is `undefined` only, breaking the implements contract and hiding type errors; `merge(this,defaults,options)` then assigns a number at runtime to a property statically typed as undefined (type unsoundness). Follow existing typed pattern."
+      },
+      {
+       "lines": "97",
+       "description": "Default/contract mismatch with backend. Go side defaults to 0 = unlimited (pkg/setting/setting.go:374 init 0, pkg/api/dtos/frontend_settings.go:195 `int64` `json:\"anonymousDeviceLimit\"` always serializes 0) while frontend GrafanaConfig types it as `number | undefined` and defaults to `undefined`. Runtime after `merge` gets 0, but code/tests that check `!== undefined` will misinterpret 0 (unlimited) as a limit, and initial `undefined` state leaks before bootData merge. DTO should be *int64 omitempty or frontend type should be `number` with consistent 0 semantics."
+      },
+      {
+       "lines": "packages/grafana-runtime/src/config.ts:97",
+       "description": "Field declared as `anonymousDeviceLimit = undefined` without explicit type. Inferred type is `undefined` literal, not `number | undefined` as required by `GrafanaConfig` (packages/grafana-data/src/types/config.ts:200). With `implements GrafanaConfig` this is a type error under strict checks; later `merge(this, defaults, options)` (lodash, `any`) hides it. Should be `anonymousDeviceLimit: number | undefined = undefined` (or explicit `number`)."
+      },
+      {
+       "lines": "packages/grafana-data/src/types/config.ts:200, packages/grafana-runtime/src/config.ts:97, pkg/api/dtos/frontend_settings.go:195",
+       "description": "Contract mismatch + information leak. Frontend type is `number | undefined` with default `undefined` meaning \"no limit\", but `FrontendSettingsDTO.AnonymousDeviceLimit int64` (no `omitempty`) always serializes as `0` for unlimited (pkg/setting/setting.go:1654 MustInt64(0), pkg/api/frontendsettings.go:198). After boot `config.anonymousDeviceLimit` becomes `0` not `undefined`, so checks for `undefined` vs `0` diverge. Limit is also exposed unauthenticated via `/api/frontend/settings` (getFrontendSettings) leaking server-side capacity controls."
+      },
+      {
+       "lines": "pkg/services/anonymous/anonimpl/anonstore/database.go:52, pkg/server/wire.go:374",
+       "description": "DI breakage linked to new config. `ProvideAnonDBStore(sqlStore db.DB, deviceLimit int64)` now requires `int64`, but `pkg/server/wire.go:374` still registers `anonstore.ProvideAnonDBStore` in `wireBasicSet` without any binding for `int64` – wire generation / compilation fails. `anonimpl.ProvideAnonymousDeviceService` (pkg/services/anonymous/anonimpl/impl.go:43) works around by manually calling `anonstore.ProvideAnonDBStore(sqlStore, cfg.AnonymousDeviceLimit)` instead of injecting `AnonStore`, leaving the wire-provided `AnonStore` orphaned/duplicate."
+      },
+      {
+       "lines": "pkg/services/anonymous/anonimpl/anonstore/database.go:73-117, pkg/services/anonymous/anonimpl/client.go:44-47, pkg/services/anonymous/anonimpl/impl.go:144-148",
+       "description": "Limit enforcement introduces synchronous auth denial. Previous `client.go:Authenticate` tagged device in fire-and-forget goroutine (best-effort, 2m timeout). Now it does `TagDevice(ctx,...)` synchronously and on `ErrDeviceLimitReached` returns `nil, err`, denying anonymous login and blocking the auth path on DB `CountDevices`+`updateDevice` latency. `updateDevice` uses `UPDATE ... WHERE device_id=? AND updated_at BETWEEN ? AND ?` and returns `ErrDeviceLimitReached` on `RowsAffected==0`, so any *new* device when at limit is rejected (intended) but also an existing device whose `updated_at` is outside the `anonymousDeviceExpiration` window cannot be re-added – count excludes expired rows but update still fails, cause indefinite denial. Race between concurrent `CountDevices` and inserts also allows limit bypass."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "1, 3"
+     }
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "271-276",
+       "description": "getSubGroupsCount() now returns null when modelSupplier.get() == null (concurrent delete). This violates GroupModel.getSubGroupsCount() contract which is documented @return Never returns null and default impl returns count. Callers like GroupUtils.populateSubGroupCount() do representation.setSubGroupCount(group.getSubGroupsCount()) and may unbox to long, causing NPE/type violation downstream. Correct behavior for deleted/unknown group should be 0L, empty stream, or IllegalStateException (as isUpdated() does), not null."
+      },
+      {
+       "lines": "253-269",
+       "description": "Fix is incomplete/inconsistent: the three getSubGroupsStream(..) overloads still do return modelSupplier.get().getSubGroupsStream(...) with no null-check. Under the same concurrent-delete race that motivated the getSubGroupsCount null-guard, they will throw NPE (modelSupplier.get() == null) instead of handling deletion gracefully, so the NPE is only moved from count to stream methods."
+      },
+      {
+       "lines": "271-276",
+       "description": "Uses LazyModel (caches first result) for the null-check. If the first modelSupplier.get() succeeds, the model is cached and later concurrent deletion is invisible — getSubGroupsCount() will return stale count instead of noticing deletion. Conversely if first call is after deletion, null is returned. Combined with isUpdated() branch which throws IllegalStateException on not-found after invalidation, the same deleted state yields two different outcomes (exception vs null vs stale value) depending on timing/cache."
+      },
+      {
+       "lines": "139-158",
+       "description": "Added test createMultiDeleteMultiReadMulti never joins the reader thread. It sets deletedAll=true and immediately asserts caughtExceptions is empty. The reader loop may still be inside managedRealm.admin().groups().groups(...) or about to do another iteration; exceptions thrown after the assert are missed, and the thread leaks. Need Thread.join (with timeout) / Executor and await termination before assertion, otherwise test is flaky and does not actually verify absence of exceptions."
+      },
+      {
+       "lines": "272-275",
+       "description": "getSubGroupsCount() now returns `null` when `modelSupplier.get()==null` (concurrent delete). This violates GroupModel.getSubGroupsCount() contract (`@return Never returns null`, default impl returns count) and breaks callers like GroupUtils.populateSubGroupCount/representation.setSubGroupCount which expect non-null Long. Unboxing or arithmetic on the result will NPE later; hiding the race with null is wrong — should return 0L (or fall back to cached empty) and be consistent with isUpdated() path which throws IllegalStateException."
+      },
+      {
+       "lines": "253-268",
+       "description": "Incomplete race fix: the three getSubGroupsStream* delegates on lines 256, 262, 268 still do `modelSupplier.get().getSubGroupsStream(...)` without null-check. Under the same concurrent delete that motivated the getSubGroupsCount null-guard they throw NullPointerException, so the PR claims to prevent NPE on concurrent read/delete but leaves 3 of 4 delegation paths vulnerable. Fix must null-guard all or return Stream.empty()/0."
+      },
+      {
+       "lines": "118-158 (GroupTest.createMultiDeleteMultiReadMulti)",
+       "description": "Test does not verify what it claims and is racy/flaky: reader thread is fire-and-forget with no join/await before `assertThat(caughtExceptions, empty())`, so assertion can run before loop body executes or before exception is added (false pass). Busy while(!deletedAll) with no backoff/join is non-deterministic and does not assert subGroupCount semantics (null vs 0) nor that briefRepresentation count path was exercised, masking defect #1."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "139-157",
+       "description": "Reader thread is started but never joined/awaited. `deletedAll.set(true)` is followed immediately by `assertThat(caughtExceptions, empty())` while the background thread may still be in-flight inside `groups(...)`. Any exception added after the assertion is missed (false-negative → test passes even if NPE/ IllegalStateException still occurs) and the thread leaks beyond the test method contaminating subsequent tests / leaving orphan HTTP calls."
+      },
+      {
+       "lines": "139-143",
+       "description": "Busy-spin `while (!deletedAll.get()) { groups(null,0,Integer.MAX_VALUE,true); }` with no sleep/yield/backoff and with `max=Integer.MAX_VALUE` hammers the server with repeated full-list fetches. Causes unbounded CPU/load, risk of OOM from huge payload, and flaky timing."
+      },
+      {
+       "lines": "139-154",
+       "description": "No coordination to guarantee concurrency window. `new Thread(...).start()` is asynchronous and deletions run sequentially immediately after; deletions of 100 groups can finish before the reader performs its first request. Test therefore often exercises no overlap at all and does not reliably verify the `GroupAdapter.getSubGroupsCount` null-model race it claims to cover, giving false confidence. Missing latch/barrier to ensure overlapping execution."
+      },
+      {
+       "lines": "139-157",
+       "description": "Reader thread is started with new Thread(...).start() but never joined/awaited before assertThat. deletedAll.set(true) is set and the assertion runs immediately while the thread may still be in-flight. An exception added after the assertion is missed (false positive) and the thread leaks beyond the test method, hammering the server during subsequent tests. Correct harness must join with timeout."
+      },
+      {
+       "lines": "139-148",
+       "description": "Busy spin while(!deletedAll.get()) with no sleep/backoff or timeout. Tight loop floods //admin/groups (Integer.MAX_VALUE) concurrently with deletes, makes test flaky/resource-heavy, masks the real race window, and can hang forever if delete loop throws before deletedAll is set. Needs throttling and timeout."
+      },
+      {
+       "lines": "143, 157",
+       "description": "Test claims to verify concurrent read+delete does not throw (NPE from GroupAdapter.getSubGroupsCount), but only checks caughtExceptions is empty at a racily-observed instant. Because there is no join, and because GroupAdapter now returns null violating GroupModel.getSubGroupsCount() 'Never returns null' contract, the test does not verify representation correctness (null subGroupCount) and can pass while server still violates contract / other getSubGroupsStream overloads still NPE. Assertion does not actually prove the fix."
+      }
+     ],
+     "casa": {
+      "match": true,
+      "which": "2"
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "etapa": "redescoberta",
+     "achados": [
+      {
+       "lines": "139:9-147:11",
+       "description": "Reader thread is started but never joined/awaited. DeletedAll is set to true and assert is executed immediately without happens-before with thread termination. Exceptions occurring after the assert or still-in-flight requests are missed (false pass) and the thread leaks beyond the test method, polluting subsequent tests."
+      },
+      {
+       "lines": "155:9-157:9",
+       "description": "Assertion assertThat(caughtExceptions, empty()) races with the reader thread. It can be evaluated before the reader has performed any concurrent read during deletes or before it observes deletedAll, so test can pass even if concurrent getSubGroupsCount would throw NPE/500. No Thread.join(timeout) or await."
+      },
+      {
+       "lines": "139:9-143:22",
+       "description": "Shares managedRealm.admin() / underlying JAX-RS admin client across two concurrent threads. Admin client / RESTEasy proxy is not documented as thread-safe; concurrent use can cause connection/ token race failures or mask the server-side race the test intends to reproduce."
+      },
+      {
+       "lines": "140:13-148:15",
+       "description": "Busy spin while(!deletedAll.get()) with no sleep/backoff, no timeout and no guaranteed termination. If group removal throws or deletedAll never set, the thread loops forever and the test hangs. Non-daemon thread will outlive the test."
+      },
+      {
+       "lines": "136:9-157:9",
+       "description": "Test checks only that client did not throw (caughtExceptions empty) and never asserts the contract the PR fixes: GroupModel.getSubGroupsCount() must never return null. The fix in GroupAdapter returns null when modelSupplier.get()==null, violating @return Never returns null and causing GroupUtils.populateSubGroupCount -> representation.setSubGroupCount(null) / potential NPE on unboxing. Test would still pass."
+      },
+      {
+       "lines": "143:21-143:71",
+       "description": "Uses groups(null,0,Integer.MAX_VALUE,true) (briefRepresentation=true) in tight loop without verifying response content. It does not assert subGroupCount presence/non-null, so NPE postponed to server inside GroupUtils/ModelToRepresentation would surface as HTTP 500 which is caught, but null-return path is not explicitly validated; test does not check what it claims to protect (concurrent getSubGroupsCount)."
+      },
+      {
+       "lines": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:272-275",
+       "description": "getSubGroupsCount now returns `null` when modelSupplier.get()==null. GroupModel.getSubGroupsCount() is documented `Never returns null` (GroupModel.java:298, default impl returns count()). JPA impl always returns 0..n. Callers like GroupUtils.populateSubGroupCount / ModelToRepresentation expect non-null (autounboxing, JSON) and will NPE or propagate null subGroupCount. Should return 0L or delegate correctly, not null."
+      },
+      {
+       "lines": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-157",
+       "description": "Reader thread is started and never joined before asserting `assertThat(caughtExceptions, empty())`. Assertion is racy: thread can add exception after the check, so test can pass while concurrent request failed. Thread also leaks beyond test method, can outlive ManagedRealm cleanup and pollute following tests; no join/timeout/interrupt handling."
+      },
+      {
+       "lines": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:253-269",
+       "description": "Fix is inconsistent: getSubGroupsCount is null-guarded but sibling methods getSubGroupsStream(search,first,max), getSubGroupsStream(first,max), getSubGroupsStream(search,exact,first,max) do `modelSupplier.get().getSubGroupsStream(...)` without null check (lines 256,262,268). Same concurrent delete race that motivated the fix still throws NPE on those paths. Test gives false confidence by only exercising the briefRepresentations path."
+      },
+      {
+       "lines": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:138-150",
+       "description": "Busy spin `while(!deletedAll.get())` with no sleep/backoff, no stored Thread handle, not daemon, no interrupt. If delete loop throws or test fails, deletedAll never becomes true and thread spins forever consuming CPU. Tight loop also starves server and makes test flaky/non-deterministic; does not actually verify what it claims beyond 'no exception seen at one instant'."
+      }
+     ],
+     "casa": {
+      "match": false,
+      "which": ""
+     }
+    }
+   ]
+  }
+ }
+}

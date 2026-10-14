@@ -1,0 +1,817 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "v3d",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment only raises a query-performance concern (possible sequential scan from the OR without a retryCount index); ignoring it causes no crash, wrong result, data loss, security hole, or broken caller, so it is a nit.",
+     "passos": 1
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": true,
+     "reason": "The comment only points out duplicated increment logic (a refactoring/DRY observation) and names no concrete failure, so ignoring it breaks nothing.",
+     "passos": 2
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure path — a null `evt.destinationCalendar` makes the optional-chained push drop the team hosts' destination calendars for COLLECTIVE events — which is a real correctness/data-loss bug, not an optional nitpick.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete regression: the non-calendar branch changes from `result.credentialId` to `undefined`, so a video reference loses its credentialId and downstream lookups (e.g. cancel/delete) can no longer resolve it — a described data-loss/behavior failure, not a speculative or stylistic nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment only suggests batching DB lookups to reduce round-trips (a performance/efficiency optimization); ignoring it causes no crash, wrong result, data loss, or caller breakage, so it is an optional nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete bug: the freshly refreshed access token is persisted but the jsforce.Connection is still built with the stale credentialKey.access_token, causing the connection to use an expired token and diverge from the stored credential—a real functional failure, not a style nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete security vulnerability — the `!==` comparison leaks the secret byte-by-byte via timing, allowing an attacker to recover CALCOM_WEBHOOK_SECRET and forge requests that write arbitrary credential keys — so ignoring it opens a security hole, which is explicitly not a nit regardless of how small the fix is.",
+     "passos": 1
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "reason": "The JSDoc contains a factually false statement: it documents `appData.type` as \"the app slug\", but callers actually pass credential types like \"zoom_video\", \"office365_video\" and \"hubspot_other_calendar\" (with the slug going in `appId`), so the doc misleads callers/readers.",
+     "passos": 2
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete, user-visible failure from the actual code paths (lines 52 and 76): a legitimate attendee whose stored email casing differs from their session email gets a FORBIDDEN error, and a case-differing guest bypasses the dedup filter and is inserted as a duplicate — both are wrong results, so this is not an optional nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "The comment points out a hard-coded, untranslated tooltip string, a localization/consistency concern; nothing crashes, miscomputes, corrupts data, or breaks callers, so it is a minor nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment makes a concrete, verifiable claim about behavior: the template literal always produces a non-empty string, so the `|| t(\"unable_to_add_guests\")` fallback is dead code and the user is shown a raw error code prefix like \"BAD_REQUEST: ...\" instead of the intended translated message; this is a concrete output/UX defect, not a speculative or stylistic nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete data-corruption path: duplicate emails within the input array are not deduplicated server-side and the tRPC schema lacks a uniqueness refine, so duplicated attendees get persisted, which is a real bug rather than a speculative concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure — concurrent addGuests calls both pass the read-then-filter check and insert the same guest, yielding duplicate attendee records (data corruption) — which is a real defect, not a speculative or stylistic nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete regression: on a successful enable the code only advances to DisplayBackupCodes, so onEnable() runs solely from the Close button, and dismissing the dialog (which fires Dialog's wired onOpenChange) skips the parent's setEnabled(true)/invalidate, leaving the 2FA switch showing disabled while the server has enabled it.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete authentication bypass (line 121 skips password verification when totpCode is present, line 131 takes the backup branch on any backupCode), so a valid backup code plus any totpCode yields a session without the password — a real security hole, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "This is a naming/readability nit: the default export's identifier has no effect on behavior or callers, so renaming it is purely cosmetic.",
+     "passos": 2
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "reason": "The comment asks for a stronger test assertion (verify clipboard content rather than just the toast), which is a request to improve test coverage/assertion quality; ignoring it causes no crash, wrong production result, data loss, or security issue, so it is a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment concretely identifies that `expect(page.locator(...).isChecked()).toBeTruthy()` always passes since a Promise is truthy, so the assertion never verifies the switch state — a definite test-correctness defect, not a speculative nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": []
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to strengthen/rework test fixtures so the test would catch a weaker implementation; the production code is correct and ignoring it causes no wrong behavior, crash, or data issue, making it a test-coverage request (a nit).",
+     "passos": 3
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: hosts accepted in uppercase by the /i validation regex are never matched because only the column is lowercased, so host_allowed?/invalid_host? wrongly reject a valid stored host.",
+     "passos": 2
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete input and failure: a request with a non-existent/stale id makes `where(...).first` return nil, and the code then calls `host.host=` (line 23) or `host.destroy` (line 16) on nil, raising NoMethodError and a 500 — a concrete bug, not a speculative defensive guard.",
+     "passos": 2
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "The comment accurately notes the test uses `:put` while the route maps `remove_member` to DELETE, but since controller specs bypass the router the example still passes and correctly exercises the action; the only consequence is an untested route pairing, i.e., a test-coverage/consistency request with no crash, wrong result, or user-facing failure — a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure with a specific mechanism (tempfile path lacks .GIF, so optimize picks downsize_instructions and `convert from[0]` flattens animated GIFs to one frame), i.e. real data loss for a named input, not a nitpick.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false statement: the code comment claims images are \"automatically reduced to allowed size,\" but the bounded 80%×5 loop can stop while the file is still over max_image_size_kb, so it misleads readers about the behavior.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "The comment merely observes that a hardcoded 10*1024 literal replaced the site-setting-derived max size, which is a configurability/design concern without naming any concrete failure path or user-visible breakage.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure (passing \"80%\" as the dimensions argument, which the deleted code built as \"WxH\" and which gifsicle's --resize-fit rejects), causing the auto-downsize to silently no-op and leave oversized uploads — a functional bug, not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete stored-XSS path (untested feed content persisted via the raw_html cook path and emitted with `raw post.cooked` on the forum's origin), which is a real security hole, not a minor optional concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The hard-coded strftime format is a localization/formatting polish issue: ignoring it causes no crash, data loss, or wrong logic — non-English viewers just see English month abbreviations, which is a consistency/style concern rather than a concrete failure.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete input and concrete wrong result: because URI host comparison is case-sensitive, a referer/embed_url whose host differs only in case (e.g. http://EVILTROUT.COM/...) is treated as a different host, so ensure_embeddable and invalid_host? reject a request that is actually from the configured host — a real behavioral bug, not a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment gives a concrete, accurate diagnosis: the two tests never stub feed_polling_enabled? to true, so the short-circuited guard means poll_feed is never reached and the tests cannot fail for the conditions they name, making them misleading rather than a mere request for extra coverage.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "The comment correctly notes the test passes for the wrong reason, but it is purely a test-quality/coverage concern — ignoring it changes no behavior, crashes nothing, and corrupts no data, so it is a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure—a check-then-insert race on the unique embed_url index causing an unhandled ActiveRecord::RecordNotUnique—with named paths (staff no_throttle bypass, throttle expiry, synchronous PollFeed), which is a real bug rather than a speculative concurrency nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete security hole (substring origin matching allows a malicious origin to post messages into the embed), not a speculative or stylistic concern.",
+     "passos": 2
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete race: the count check and the separate insert are not atomic, so concurrent first-time device registrations can both pass the check and insert, exceeding the configured device limit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete, caller-visible behavior change: Authenticate() now synchronously returns nil, err on ErrDeviceLimitReached, causing anonymous auth to fail outright once the limit is hit, rather than best-effort untagged login — a specific failure, not speculation.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment requests additional test coverage for the updateDevice success path and only speculates about a hypothetical regression the tests would miss; it identifies no concrete bug in the production code, so it is a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": true,
+     "reason": "The comment is about the tests not exercising/asserting the legacy path (a test-coverage gap), so ignoring it causes no runtime failure, wrong result, or data loss; per the rubric, requests for more test coverage are nits.",
+     "passos": 2
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": true,
+     "reason": "The only effect of passing d.Log instead of the composed log is that Storage.Delete/Legacy.Delete log lines omit the name/kind/method fields; no behavior, result, or data is affected, and metrics are recorded from explicit arguments, so this is a logging/consistency nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": true,
+     "reason": "This is a test-case naming/readability suggestion with no functional impact; the test still passes either way, so it is a nit per the definition.",
+     "passos": 1
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure — the shared `imw` is mutated (`imw.next = next`) inside the factory, which `clientFromMiddlewares` re-invokes on every request (decorator.go lines 34, 110), so concurrent requests race on `imw.next`, a real data race and potential wrong dispatch, not a speculative concern.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment only points out that a Prometheus HELP text is worded inaccurately; the metric still records the correct request-size value, so nothing breaks functionally and it is a documentation-only nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to rename a test function identifier for consistency; nothing breaks or misleads beyond a stale name, so it is an optional naming nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment asks for an additional negative test assertion; the described failure only occurs under a hypothetical future regression, so ignoring it leaves the code working correctly and is optional test-coverage feedback.",
+     "passos": 2
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure path — the new error return at NewResourceServer discards the server without calling cancel(), leaving the search.init event loop (bound to context.Background) and the watcher goroutines running with no way to stop them, a real resource leak rather than a speculative concern.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to keep/add test coverage for the postgres path and speculates it \"could regress\" — a coverage request and speculative concern with no concrete failure in the code path described.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment names concrete consequences of the change: the constructor now eagerly calls Init, returns nil on any index-build failure instead of degrading per-request, and consumes the sync.Once so a caller's later Init(ctx) (e.g. watcher_test.go:148) is a silent no-op using the constructor's ctx — behavior changes that break callers, not mere style or speculation.",
+     "passos": 3
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment describes a concrete, named failure path: the watch-event goroutine started at search.go:207-213 can call handleEvent → getOrCreateIndex → build → BuildIndex, which writes b.cache under cacheMu, while TotalDocs() at line 216 iterates b.cache without the lock, a real concurrent map iteration/write race — so it is a substantive bug report, not a nit.",
+     "passos": 3
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": []
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment flags a concrete regression: the new GrafanaRuleListItem in rules.map drops the key={key} that the replaced component and the sibling branches provide, causing React key warnings and index-based reconciliation of dynamic list rows.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result bug: with the undefined/skipToken path, useAllGrafanaPromRuleAbilities treats the rule as AlwaysSupported and derives abilities like Duplicate from permission alone, so a non-Grafana (cloud/datasource) caller ORed in AlertRuleMenu can be wrongly granted actions — a specific failure, not a speculative nitpick.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment is a request to strengthen/rename a test (add menu-item assertions or rename), i.e. a test-coverage request; ignoring it breaks no behavior, crashes nothing, and misleads no one about production code.",
+     "passos": 2
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete mechanism (string vs. symbol entries defeating `.uniq`) with specific, non-speculative consequences—duplicate fallback lookups and `load_locale` parsing the same .yml twice—so it is a real defect report, not a style, defensive, or speculative nitpick.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete wrong-result failure (fallback locales never loaded outside the request cycle, causing silent \"translation missing\" instead of fallback), which is a bug, not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete scenario (a passkey-only user with no password credential) and a concrete wrong outcome (PasswordForm being treated as configured/required and rendering an unsatisfiable password page), so it describes a real failure rather than a speculative or stylistic nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to reword a source comment so it more precisely describes the guard; it identifies no functional failure, crash, or wrong behavior, and at most is a minor readability/documentation inaccuracy, which is the classic \"comments\" nit category.",
+     "passos": 2
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The Javadoc's \"3-letters\" claim is factually false relative to the code: all shortcut implementations are 2 chars and the encoder/decoder relies on a fixed 2+2+2 (6-char) layout, so a reader following the doc could create a 3-char shortcut that produces an undecodable token id — a concrete false statement, not mere style.",
+     "passos": 2
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete owner-id mismatch: the all-clients resource is created with ownerId resourceServer.getClientId() (AdminPermissionsSchema line 104) and the default findByName(server,name) uses getClientId(), but hasPermission passes server.getId(), so if the two differ the lookup returns null and global permissions are silently ignored.",
+     "passos": 3
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment pinpoints a concrete behavioral regression (the removal cleanup is now gated behind ADMIN_FINE_GRAINED_AUTHZ, so with the feature off the pre-existing setPermissionsEnabled(false) cleanup never runs, leaving orphaned resources), which is a specific failure path rather than a speculative or stylistic nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "The comment only points out an unused private helper (dead code) whose removal changes no behavior, which is exactly the dead-code/refactoring category of a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "This is a documentation-only concern about the LoginFilter javadoc being potentially out of date, with no functional impact; the risk of a future contributor misusing it is speculative/future-proofing.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The concern is about unspecified iteration ordering: the interface's getForLogin javadoc does not promise any order, the non-cached delegate path itself concatenates two streams, and every in-repo caller (IdentityProviderBean, OrganizationAwareIdentityProviderBean) re-sorts with IDP_COMPARATOR_INSTANCE, so returning a HashSet from the cached path causes no crash, wrong result, or broken caller — a consistency/robustness nit rather than a concrete failure.",
+     "passos": 3
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete data-exposure issue: the endpoint is public/unauthenticated and the code logs the full attacker-controlled raw report (which carries sensitive CSP fields like blocked-uri, script-sample, sourceFile, and user_agent) into application logs, so it's a real security/privacy leak rather than a speculative or stylistic logging nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete path (feature flag disabled → 404) on which the assemble analytics event is still emitted, producing over-counted/incorrect analytics data, which is a real wrong-result defect rather than a style or speculative concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete, verifiable defect: the mock predicate matches on `query.query` while the hook actually sends `substringMatch` (as the first test in the same file confirms), so the number-type assertion is vacuous and the test no longer witnesses the guard it names.",
+     "passos": 3
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The docstring falsely states evaluate returns a list, contradicting the new dict return type and body, which misleads readers — a concrete factual contradiction rather than an optional style nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete behavior change: SpansBuffer.flush_segments divides the global max-flush-segments option by each sub-buffer's own shard subset, so with P flusher processes the aggregate per-cycle cap and Redis memory load become P× and the any_shard_at_limit backpressure triggers P× less readily — a real regression in a documented throttle, not a speculative concern.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment itself identifies `_create_process_for_shard` as unused dead code (confirmed by grep), and dead code removal is explicitly a nit; no current caller breaks and the described failure is speculative future wiring.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to correct an inaccurate docstring sentence; the code's shard-sharing behavior is consistent and functional, so ignoring it changes nothing at runtime and is a documentation-only nit.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete, non-speculative bug: the hard-coded `default=1` is always forwarded, so the `max_processes or len(assigned_shards)` auto-scaling path is unreachable and the advertised one-process-per-shard parallelism is silently disabled in production.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete input path (--flusher-processes is a plain type=int click option with no minimum, so 0 is accepted) and a concrete behavioral divergence: `max_processes or len(buffer.assigned_shards)` discards the falsy 0 and the flusher spawns one process per shard instead of the requested limit — a specific failure, so it is not a nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete, reachable failure (negative --flusher-processes yields an empty process_to_shards_map and a KeyError during flusher construction), so it is a bug report, not a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment points to a concrete incorrect localized value — Traditional Chinese characters in the Simplified Chinese (zh_CN) bundle, contradicting the surrounding Simplified strings — which delivers wrong user-facing text, not a stylistic nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment is a speculative/defensive concern: it names no concrete path or locale that fails, the claimed broad regex is wrong (Java's `[a-zA-Z-_]` treats `-` as a literal after the `a-z`/`A-Z` ranges, so it does not match `/` or digits), and every community messages dir has a matching English sibling, so the code works unchanged if merged.",
+     "passos": 3
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": true,
+     "reason": "The comment requests an additional test case asserting the allowed-HTML path works; it describes a test-coverage gap (the suite would still pass if the allow-list were emptied), not a concrete production failure, crash, wrong result, or security hole, so it fits the \"requests to add tests/more coverage\" nit category.",
+     "passos": 2
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "This is a naming/readability request: the code works as-is because every caller passes `self.active_organization`, and the described AttributeError only arises from a hypothetical future caller following the misleading name, which is a speculative concern rather than a concrete current failure.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment makes a concrete, verifiable claim that the test short-circuits at the state-mismatch branch (integration.py:412-413) and therefore no longer exercises the Integration.DoesNotExist path it exists for, so the test would still pass even if that handling were removed—a real false-coverage defect, not an optional test-coverage suggestion.",
+     "passos": 3
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment only flags inaccurate example strings in a docstring; the function's behavior and result are correct, so ignoring it causes no crash, wrong result, or caller breakage — a documentation/readability nit.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "It only asks the author to verify a hypothetical stale importer; no consumer actually imports SimpleCheckIn from the old location, so nothing breaks if ignored.",
+     "passos": 2
+    }
+   ]
+  }
+ }
+}

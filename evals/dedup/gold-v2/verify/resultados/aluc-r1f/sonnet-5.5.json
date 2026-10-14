@@ -1,0 +1,1364 @@
+{
+ "model": "sonnet-5.5",
+ "verificador": "claude-sonnet-5.5@sdk",
+ "versao": "r1f",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S13",
+      "S15",
+      "S18",
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8",
+      "S11",
+      "S14",
+      "S19"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S10",
+      "S21"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7",
+      "S9",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S13",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S8",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S3",
+      "S5",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S6",
+      "S7",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "scheduleSMSReminders.ts:48-55 findMany filters method: SMS, and the only retryCount increments are at lines 184 and 195 on those reminders. schema.prisma:1000 gives retryCount @default(0). A grep for retryCount in packages shows no other writer, so non-SMS reminders stay at 0 and never satisfy retryCount > 1.",
+       "reason": "The unfiltered `retryCount > 1` branch cannot match email or WhatsApp reminders, because only SMS-method reminders ever have their retryCount incremented. Their retryCount stays 0, so they are not deleted."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checkers quote repository code showing the claim is false: the findMany at scheduleSMSReminders.ts:48-55 filters method: SMS, retryCount is only incremented at lines 184 and 195 on those SMS reminders, schema.prisma:1000 defaults retryCount to 0, and a repo-wide grep finds no other writer. So email and WhatsApp reminders stay at 0 and never match retryCount > 1, which contradicts the comment's claim that they are also deleted."
+     }
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "config/site_settings.yml has only embed_truncate (line 769) and no embeddable_hosts setting; no SiteSetting.embeddable_hosts usage anywhere in the repo; db/migrate/20150818190757_create_embeddable_hosts.rb:31 deletes the 'embeddable_hosts' site setting after moving it to the embeddable_hosts table. topic.rb:868-869 is `SiteSetting.embed_truncate? && has_topic_embed?`.",
+       "reason": "The claimed dropped guard `SiteSetting.embeddable_hosts.present?` refers to a setting that was migrated into the embeddable_hosts table and no longer exists, so no working guard was lost. A topic embed also implies the topic came through an embeddable host, so the reported behaviour change is not a realistic regression."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment claims the old code had a guard `SiteSetting.embeddable_hosts.present?` that was dropped. The checkers quote repo code showing no `embeddable_hosts` setting exists in config/site_settings.yml, no `SiteSetting.embeddable_hosts` usage anywhere in the repo, and a migration (db/migrate/20150818190757_create_embeddable_hosts.rb:31) that deletes that setting after moving it to the embeddable_hosts table. This shows a factual statement of the comment about the code is false."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S7",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S5",
+      "S8",
+      "S10",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/views/layouts/embed.html.erb:11 uses `<%= request.referer %>` in an .html.erb template, which HTML-escapes output (' -> &#39;, < -> &lt;). Entities are not decoded inside <script>, so the quote cannot terminate the JS string. embed_controller.rb:26 also restricts the referer host to SiteSetting.embeddable_host.",
+       "reason": "The comment says the referer is interpolated unescaped, but ERB escapes it. A single quote cannot break out of the string, so the described XSS cannot happen. A trailing backslash would only cause a syntax error."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker quotes the template line using `<%= request.referer %>` and a host restriction in the controller, but its claim that the output is escaped depends on how ERB's `<%= %>` behaves (HTML-escaping), plus how browsers treat entities inside <script>. Those are framework and browser behaviors, not facts the repository code states. So the evidence argues against the comment rather than contradicting a statement about what the code contains."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "lib/topic_retriever.rb:14-19 invalid_host? requires URI(@embed_url).host == SiteSetting.embeddable_host and treats URI::InvalidURIError as invalid; retrieve (line 9) skips perform_retrieve when it is invalid, and the only web-facing caller is app/jobs/regular/retrieve_topic.rb:17. A '|cmd' string is not a valid URI, so it never reaches open(url) at app/models/topic_embed.rb:48. RSS links go through TopicEmbed.import, which requires /^https?:\\/\\// (line 11), and do not reach open.",
+       "reason": "The embed_url is host-validated and parsed as a URI before open is reached, so pipe-command strings are rejected as invalid URIs and file paths cannot be injected. The Disqus Thor task is the only other caller and takes its links from an admin-supplied export, not request input."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes repository code showing the comment's factual claim (no scheme validation, request-supplied URL reaches open) is false for these paths: lib/topic_retriever.rb:14-19 invalid_host? requires URI(@embed_url).host == SiteSetting.embeddable_host and treats URI::InvalidURIError as invalid, and retrieve (line 9) skips perform_retrieve when invalid. RSS links go through TopicEmbed.import, which requires /^https?:\\/\\// (line 11). The only other caller is the Disqus Thor task with admin-supplied export data, so the comment's claim about where the URL comes from is contradicted by the code."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "lib/topic_retriever.rb:14-19: `SiteSetting.embeddable_host != URI(@embed_url).host` with `rescue URI::InvalidURIError` returning true; URI(\"not a url\") raises before the comparison, so the blank default (config/site_settings.yml:354 `embeddable_host: ''`) is never compared. Without the rescue the spec would error.",
+       "reason": "The spec does depend on the rescue: URI(\"not a url\") raises InvalidURIError before the host comparison, so the exception propagates and the test fails if the rescue is removed. The claim that invalid_host? is true regardless of the rescue is wrong."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checkers quote lib/topic_retriever.rb, but their rebuttal depends on Ruby's behavior: URI('not a url') raising InvalidURIError before the host comparison. That is language/library behavior, not something the repository code states. The comment's claim concerns the test's design, namely that the unstubbed blank embeddable_host makes the rejection ambiguous. The checkers' reading of that design is a judgment about test isolation and does not show a false statement about what the repository code contains."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S6",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "impl.go:43 `anonstore.ProvideAnonDBStore(sqlStore, cfg.AnonymousDeviceLimit)` builds the store directly; AnonStore is only consumed by NewAnonDeviceServiceAPI (api.go:36), which is not a wire provider; pkg/server has no wire_gen reference to anonstore, only the unused wire.go:374-375 entries.",
+       "reason": "Wire only resolves providers that are needed by the injector output. Nothing injects AnonStore or *AnonDBStore, so the unused provider in the set with an int64 param is never resolved and does not break wire generation or the build."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checkers do quote repository code (impl.go:43 builds the store directly, AnonStore is only consumed by a non-provider, and wire_gen has no anonstore reference). But the conclusion that the unused wire.go provider with an int64 param doesn't break generation rests on how Wire behaves, namely that it resolves only providers needed by the injector output. That is a claim about tool behavior, not a repository fact that contradicts the comment."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/infra/tracing/tracing.go:91-97 registers log.RegisterContextualLogProvider returning []any{\"traceID\", traceID} when TraceIDFromContext(ctx,false) != \"\"; logger_middleware.go:58 logs via m.logger.FromContext(ctx).Info(\"Plugin Request Completed\", ...), which applies registered providers (pkg/infra/log/log.go:277, ctxLogProviders).",
+       "reason": "Trace correlation is not lost. The globally registered tracing log provider adds traceID to any logger obtained through FromContext(ctx), so the 'Plugin Request Completed' log still carries it without instrumentContext adding it."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes repository code: pkg/infra/tracing/tracing.go:91-97 registers a contextual log provider that returns traceID when TraceIDFromContext(ctx,false) is non-empty, and logger_middleware.go:58 logs via m.logger.FromContext(ctx), which applies registered providers (log.go:277). This shows what specific code does and contradicts the comment's claim that trace correlation is lost."
+     }
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S2",
+      "S8",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12",
+      "S19"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S5",
+      "S9",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S10",
+      "S11",
+      "S17",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "search.go:203-213: searchSupport.init subscribes directly via s.storage.WatchWriteEvents and runs its own handleEvent loop. server.go:752-771: initWatcher only creates the server's broadcaster for Watch subscribers (server.go:798), which the index never reads.",
+       "reason": "The index does not depend on initWatcher, so moving it after search.init cannot cause the claimed permanent staleness. Any snapshot-to-subscribe gap is inside search.init, not in the call order the comment cites."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checkers quote repository code showing that search.go:203-213 subscribes directly via s.storage.WatchWriteEvents and runs its own handleEvent loop, while initWatcher (server.go:752-771) only builds the broadcaster for Watch subscribers, which the index never reads. This contradicts the comment's claim that the index receives events through initWatcher, so the call order it cites cannot cause the stated staleness."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "DefaultTokenContextEncoderProvider.java:114-117 builds ids as sessionShortcut(2 chars)+tokenTypeShortcut(2 chars)+grantShortcut(2 chars)+':'+uuid, e.g. 'onrtac:...' (AccessTokenContext.java:37-56). AssertEvents.java:483 uses substring(3,5), which spans the token type's 2nd char and the grant's 1st char (e.g. 'ta'), so it never equals a grant shortcut like 'ac'.",
+       "reason": "The comment says the matcher rejects ids whose grant matches. That can't happen: the substring never equals the shortcut, so the check never returns false and accepts all UUID-valid ids. The real bug is the wrong offset, and the suggested negation would reject every valid id."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes repository code (DefaultTokenContextEncoderProvider.java:114-117 and AccessTokenContext.java:37-56) showing ids are built as session(2)+tokenType(2)+grant(2)+':'+uuid, and that AssertEvents.java:483 uses substring(3,5), which spans the token type's second char and the grant's first char. That substring never equals a grant shortcut, so the `equals` is never true and the check never returns false. This directly contradicts the comment's claim that the matcher rejects ids whose grant matches."
+     }
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S7",
+      "S8",
+      "S10",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S7",
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "VerifyMessageProperties.java:74-75 rewrite maps themes/src/main/resources-community/.../messages_xx.properties -> resources/.../messages_en.properties and js/apps/*/maven-resources-community/... -> maven-resources/...messages_en.properties; messages_en.properties exists in every scanned dir (themes/src/main/resources/theme/base/{account,admin,email,login}/messages, js/apps/account-ui and admin-ui maven-resources). Plugin used only in themes/pom.xml and js/pom.xml; MessagePropertiesFilter selects only messages_*.properties.",
+       "reason": "Every messages_*.properties file the plugin scans has an English counterpart at the path the regex produces, so the RuntimeException and build failure are not triggered in this repository. The comment describes only a hypothetical translation directory with no English source."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checkers do not dispute what the code does: the regex rewrite and the RuntimeException on a missing English file are both as the comment says. They argue that in this repository every scanned messages file happens to have an English counterpart at the rewritten path, so the failure never triggers. That is a claim about the problem being hypothetical or harmless, not a quote of code showing a statement in the comment is false."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S4",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/eventstore/models.py:599-602: BaseEvent.__repr__ returns only '<sentry.eventstore.models.Event at 0x..: event_id=...>'; GroupEvent (line 690) inherits it. WorkflowEventData (types.py:61-67) is a dataclass with GroupEvent plus small state flags, so its repr contains no payload data.",
+       "reason": "Logging workflow_event_data renders the event via repr, which exposes only event_id, not messages, tags, user or request context, so the claimed data leak does not happen."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes repository code (BaseEvent.__repr__ in eventstore/models.py, inherited by GroupEvent, and the WorkflowEventData dataclass in types.py) showing that logging workflow_event_data renders only the event_id via repr, not the payload. This contradicts the comment's factual claim that the full event payload (messages, tags, user and request context) gets written to logs."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S5",
+      "S7",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  }
+ },
+ "sobre": "r1",
+ "prompt": "c3"
+}

@@ -1,0 +1,693 @@
+{
+ "model": "muse-spark-1.2",
+ "verificador": "muse-spark-1.2",
+ "versao": "d1",
+ "sobre": "aluc-h1t10f",
+ "prs": {
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "certificado",
+     "ex": {
+      "failure": "External callers invoking the former public method InsightsBookingService.findMany(findManyArgs) will throw TypeError at runtime after it is deleted and replaced by getBaseConditions() returning Prisma.Sql with no adapter.",
+      "scenario": {
+       "condition": "Code that previously called InsightsBookingService.findMany with a Prisma BookingTimeStatusDenormalizedFindManyArgs (where-input, pagination, select) continues to call service.findMany after this diff",
+       "claimed_outcome": "the call throws TypeError at runtime because the method no longer exists, with no deprecation wrapper/adapter or major-version migration guide, silently breaking the public contract",
+       "neutral_question": "After this diff, when code attempts to call InsightsBookingService.findMany with the previous Prisma findManyArgs, what happens at runtime and what compatibility or migration handling, if any, is provided?",
+       "locations": [
+        "packages/lib/server/service/insightsBooking.ts:67-68",
+        "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts"
+       ]
+      },
+      "premises": [
+       {
+        "id": "p1",
+        "proposition": "The diff deletes the public method findMany(findManyArgs: Prisma.BookingTimeStatusDenormalizedFindManyArgs) at lines 67-68 and replaces it with getBaseConditions(): Promise<Prisma.Sql> without retaining a findMany wrapper, alias, or delegation",
+        "kind": "introduced",
+        "scope": "repository",
+        "neutral_question": "What public methods does InsightsBookingService expose in packages/lib/server/service/insightsBooking.ts around lines 67-68 before versus after this diff, and what are their signatures and return types?",
+        "locations": [
+         "packages/lib/server/service/insightsBooking.ts:67-68"
+        ]
+       },
+       {
+        "id": "p2",
+        "proposition": "After the deletion, an invocation of service.findMany(...) has no adapter and at runtime results in a missing-method TypeError rather than being handled via a deprecated wrapper composing getBaseConditions into $queryRaw or prisma findMany",
+        "kind": "semantics",
+        "scope": "repository",
+        "neutral_question": "If service.findMany is invoked on the post-diff InsightsBookingService, how does the JavaScript runtime resolve the call and does the class provide any deprecated wrapper or adapter that maps the old findManyArgs to the new SQL-based implementation?",
+        "locations": [
+         "packages/lib/server/service/insightsBooking.ts:67-81"
+        ]
+       }
+      ]
+     },
+     "cenario": {
+      "answer": "After this diff `InsightsBookingService.findMany(where, pagination, select: Prisma.BookingTimeStatusDenormalizedFindManyArgs)` no longer exists and no compatibility/migration shim is provided.\n\nRuntime: `service.findMany` is `undefined`. Continuing to call `service.findMany(oldFindManyArgs)` throws `TypeError: service.findMany is not a function` (TS compile: `Property 'findMany' does not exist on type 'InsightsBookingService'`). `where`/`pagination`/`select` are not forwarded/translated.\n\nMigration: none. The class was converted to a pure `Prisma.Sql` condition builder (`getBaseConditions`/`getAuthorizationConditions`/`getFilterConditions`) requiring callers to rewrite to `const cond = await service.getBaseConditions(); await prisma.$queryRaw`SELECT ... WHERE ${cond}`` manually. No overload, no deprecated alias, no args-adapter, no runtime fallback that accepts `BookingTimeStatusDenormalizedFindManyArgs`.",
+      "coverage_complete": true,
+      "facts": [
+       {
+        "statement": "Head insightsBooking.ts at 67-68 is now getBaseConditions, not findMany",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:67-68: \"  async getBaseConditions(): Promise<Prisma.Sql> {\""
+       },
+       {
+        "statement": "InsightsBookingService class contains no findMany method; only condition builders",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:45: \"export class InsightsBookingService {\""
+       },
+       {
+        "statement": "Full method list has no findMany: constructor, getBaseConditions, getAuthorizationConditions, getFilterConditions, buildFilterConditions, buildAuthorizationConditions, buildOrgAuthorizationCondition, buildTeamAuthorizationCondition, isOrgOwnerOrAdmin",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:83: \"  async getAuthorizationConditions(): Promise<Prisma.Sql> {\""
+       },
+       {
+        "statement": "Grep for findMany in packages/lib/server/service only returns insightsRouting.ts, not insightsBooking.ts",
+        "evidence": "packages/lib/server/service/insightsRouting.ts:63: \"  async findMany(findManyArgs: Prisma.RoutingFormResponseDenormalizedFindManyArgs) {\""
+       },
+       {
+        "statement": "Integration test no longer has a findMany suite; only tests Authorization/Filter/getBaseConditions - contrast with insightsRouting integration test which still has describe findMany",
+        "evidence": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:201: \"describe(\\\"InsightsBookingService Integration Tests\\\", () => {\""
+       },
+       {
+        "statement": "Integration test file describes only Authorization Conditions, Filter Conditions, getBaseConditions with no BookingTimeStatusDenormalizedFindManyArgs usage",
+        "evidence": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:437: \"  describe(\\\"getBaseConditions\\\", () => {\""
+       },
+       {
+        "statement": "Grep for InsightsBookingService across repo shows no remaining caller wrapping findMany and no deprecated/compatibility alias",
+        "evidence": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:8: \"import { InsightsBookingService } from \\\"../../service/insightsBooking\\\";\""
+       }
+      ],
+      "unresolved": []
+     },
+     "cegos": [
+      {
+       "answer": "Before (base) at `packages/lib/server/service/insightsBooking.ts:63-76` the public method at lines 67-68 is `findMany`; After (head) at `packages/lib/server/service/insightsBooking.ts:67-81` it is `getBaseConditions` with `Promise<Prisma.Sql>`. Full public method set changed return types from `Prisma.BookingTimeStatusDenormalizedWhereInput` to `Prisma.Sql` and `findMany` was removed / `getBaseConditions` added.\n\n**BEFORE (base file):**\n- `findMany(findManyArgs: Prisma.BookingTimeStatusDenormalizedFindManyArgs)` → implicit `Promise<BookingTimeStatusDenormalized[]>` via `prisma.bookingTimeStatusDenormalized.findMany`\n- `getAuthorizationConditions(): Promise<Prisma.BookingTimeStatusDenormalizedWhereInput>`\n- `getFilterConditions(): Promise<Prisma.BookingTimeStatusDenormalizedWhereInput | null>`\n- `buildFilterConditions(): Promise<Prisma.BookingTimeStatusDenormalizedWhereInput | null>`\n- `buildAuthorizationConditions(): Promise<Prisma.BookingTimeStatusDenormalizedWhereInput>`\nNo `getBaseConditions`.\n\n**AFTER (head file):**\n- `getBaseConditions(): Promise<Prisma.Sql>` at 68\n- `getAuthorizationConditions(): Promise<Prisma.Sql>`\n- `getFilterConditions(): Promise<Prisma.Sql | null>`\n- `buildFilterConditions(): Promise<Prisma.Sql | null>`\n- `buildAuthorizationConditions(): Promise<Prisma.Sql>`\nNo `findMany`. Private helpers `buildOrgAuthorizationCondition`, `buildTeamAuthorizationCondition`, `isOrgOwnerOrAdmin` remain private in both.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "BEFORE base file public method at 63 is findMany with signature async findMany(findManyArgs: Prisma.BookingTimeStatusDenormalizedFindManyArgs)",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:63 (base) -> \"  async findMany(findManyArgs: Prisma.BookingTimeStatusDenormalizedFindManyArgs) {\""
+        },
+        {
+         "statement": "BEFORE findMany returns via prisma.bookingTimeStatusDenormalized.findMany (no explicit return type annotation)",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:67 (base) -> \"    return this.prisma.bookingTimeStatusDenormalized.findMany({\""
+        },
+        {
+         "statement": "AFTER head file public method at 68 is getBaseConditions with signature async getBaseConditions(): Promise<Prisma.Sql>",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:68 (head) -> \"  async getBaseConditions(): Promise<Prisma.Sql> {\""
+        },
+        {
+         "statement": "BEFORE getAuthorizationConditions returns Promise<Prisma.BookingTimeStatusDenormalizedWhereInput>",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:78 (base) -> \"  async getAuthorizationConditions(): Promise<Prisma.BookingTimeStatusDenormalizedWhereInput> {\""
+        },
+        {
+         "statement": "AFTER getAuthorizationConditions returns Promise<Prisma.Sql>",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:83 (head) -> \"  async getAuthorizationConditions(): Promise<Prisma.Sql> {\""
+        },
+        {
+         "statement": "BEFORE getFilterConditions returns Promise<Prisma.BookingTimeStatusDenormalizedWhereInput | null>",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:85 (base) -> \"  async getFilterConditions(): Promise<Prisma.BookingTimeStatusDenormalizedWhereInput | null> {\""
+        },
+        {
+         "statement": "AFTER getFilterConditions returns Promise<Prisma.Sql | null>",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:90 (head) -> \"  async getFilterConditions(): Promise<Prisma.Sql | null> {\""
+        },
+        {
+         "statement": "BEFORE buildFilterConditions returns Promise<Prisma.BookingTimeStatusDenormalizedWhereInput | null>",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:92 (base) -> \"  async buildFilterConditions(): Promise<Prisma.BookingTimeStatusDenormalizedWhereInput | null> {\""
+        },
+        {
+         "statement": "AFTER buildFilterConditions returns Promise<Prisma.Sql | null>",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:97 (head) -> \"  async buildFilterConditions(): Promise<Prisma.Sql | null> {\""
+        },
+        {
+         "statement": "BEFORE buildAuthorizationConditions returns Promise<Prisma.BookingTimeStatusDenormalizedWhereInput>",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:114 (base) -> \"  async buildAuthorizationConditions(): Promise<Prisma.BookingTimeStatusDenormalizedWhereInput> {\""
+        },
+        {
+         "statement": "AFTER buildAuthorizationConditions returns Promise<Prisma.Sql>",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:125 (head) -> \"  async buildAuthorizationConditions(): Promise<Prisma.Sql> {\""
+        },
+        {
+         "statement": "Private helpers remain non-public in both versions (e.g., buildOrgAuthorizationCondition)",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:143 (head) -> \"  private async buildOrgAuthorizationCondition(\""
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "Post-diff `packages/lib/server/service/insightsBooking.ts:67-81` is the SQL-condition service – `service.findMany` does **not** exist. JavaScript prototype lookup yields `undefined`; invoking `service.findMany(...)` throws `TypeError: service.findMany is not a function`. The class provides **no** deprecated wrapper/adapter mapping old `findManyArgs` to the new `Prisma.sql` implementation – `findMany`/`findManyArgs`/`deprecated`/`adapter` are absent from the class.\n\nThe new API is `getBaseConditions`/`getAuthorizationConditions`/`getFilterConditions`/`build*` returning `Prisma.Sql` fragments (`Prisma.sql`...` / `NOTHING_CONDITION = Prisma.sql`1=0``), not a Prisma `findMany` delegate.",
+       "coverage_complete": false,
+       "facts": [
+        {
+         "statement": "Class InsightsBookingService is defined at 45 and exposes only constructor + SQL-condition methods, no findMany method",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:45: `export class InsightsBookingService {`"
+        },
+        {
+         "statement": "Method list from 68-81 onward is getBaseConditions, getAuthorizationConditions, getFilterConditions, buildFilterConditions, buildAuthorizationConditions, etc., all SQL-based",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:68: `  async getBaseConditions(): Promise<Prisma.Sql> {`"
+        },
+        {
+         "statement": "getAuthorizationConditions returns Prisma.Sql via cached build",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:83: `  async getAuthorizationConditions(): Promise<Prisma.Sql> {`"
+        },
+        {
+         "statement": "buildFilterConditions and buildAuthorizationConditions build Prisma.sql fragments",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:97: `  async buildFilterConditions(): Promise<Prisma.Sql | null> {`"
+        },
+        {
+         "statement": "NOTHING_CONDITION is Prisma.sql`1=0` showing SQL-based replacement",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:43: `const NOTHING_CONDITION = Prisma.sql`1=0`;`"
+        },
+        {
+         "statement": "grep for 'findMany' inside insightsBooking.ts returned zero hits, proving no findMany definition or wrapper in file",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:1: grep pattern `findMany` returned no matches in file"
+        },
+        {
+         "statement": "grep for 'findManyArgs|deprecated|adapter' inside repo shows no hits in insightsBooking.ts – only unrelated yarn.lock/docs/eslint hits",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:1: grep pattern `findManyArgs|deprecated|adapter` returned zero matches in insightsBooking.ts (hits only in yarn.lock/docs/api-reference)"
+        },
+        {
+         "statement": "All grep hits for InsightsBookingService in repo are constructor and condition methods, no .findMany caller on the service instance",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:45: `export class InsightsBookingService {` + grep InsightsBookingService shows only `new InsightsBookingService` and `getAuthorizationConditions` usages, no `service.findMany`"
+        }
+       ],
+       "unresolved": [
+        "Could not run git diff / git log to retrieve pre-diff findMany(findManyArgs) signature due to 6-step limit",
+        "Could not exhaustively scan all external callers for service.findMany invocation beyond grep InsightsBookingService due to step limit",
+        "Could not inspect prototype chain / inheritance (extends clause) beyond the listed class body, though class has no extends"
+       ]
+      }
+     ],
+     "cert": {
+      "premise_id": "p2",
+      "certificate": "none",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:68 (head) -> \"  async getBaseConditions(): Promise<Prisma.Sql> {\"; packages/lib/server/service/insightsBooking.ts:63 (base) -> \"  async findMany(findManyArgs: Prisma.BookingTimeStatusDenormalizedFindManyArgs) {\"; packages/lib/server/service/insightsBooking.ts:1: grep pattern `findMany` returned no matches in file; packages/lib/server/service/insightsBooking.ts:67-68: \"  async getBaseConditions(): Promise<Prisma.Sql> {\"",
+      "coverage_complete": false,
+      "explanation": "Findings confirm rather than refute the comment. p1 is confirmed: base findMany deleted, head getBaseConditions(): Promise<Prisma.Sql> at 67-68. Scenario investigation confirms claimed outcome: service.findMany is undefined and throws TypeError: service.findMany is not a function with no deprecated alias/adapter. p2 investigation supports no adapter (grep findMany zero hits) but is coverage_complete:false with unresolved exhaustive scans and prototype checks, so cannot prove opposite (closed_world_absence requires complete coverage). No direct quoted code states the opposite, no invariant/ordering/pre_existing proof. External-caller premise cannot be disproved from this repo alone."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7"
+     ],
+     "nit": false,
+     "etapa": "certificado",
+     "ex": {
+      "failure": "getBaseConditions (lines 68-81) has unreachable/dead branches because authConditions is always a truthy Prisma.Sql object even when it is NOTHING_CONDITION = Prisma.sql`1=0`.",
+      "scenario": {
+       "condition": "getBaseConditions is called when getAuthorizationConditions has returned NOTHING_CONDITION (Prisma.sql`1=0` for an unauthorized/empty authorization, e.g., no options or non-owner/admin) with filterConditions either null or a Prisma.Sql value.",
+       "claimed_outcome": "The `else if (filterConditions)` and `else return NOTHING_CONDITION` branches (lines 76-79) can never execute because `if (authConditions)` is always truthy, and when a filter exists the function returns `(1=0) AND (filter)` instead of a distinct NOTHING handling, masking intent and leaving dead code sensitive to future NOTHING representation changes.",
+       "neutral_question": "When getBaseConditions executes with authConditions equal to NOTHING_CONDITION and filterConditions null versus non-null, which branches of the if/else chain on lines 72-80 are taken and what Prisma.Sql value is ultimately returned?",
+       "locations": [
+        "packages/lib/server/service/insightsBooking.ts:68-81",
+        "packages/lib/server/service/insightsBooking.ts:43"
+       ]
+      },
+      "premises": [
+       {
+        "id": "P1",
+        "proposition": "NOTHING_CONDITION defined as Prisma.sql`1=0` produces a Prisma.Sql object that is truthy in JavaScript, so `if (authConditions)` and `if (authConditions && filterConditions)` treat it as present rather than falsy.",
+        "kind": "semantics",
+        "scope": "repository",
+        "neutral_question": "What does Prisma.sql`1=0` evaluate to at runtime — what JavaScript type and structure is returned, is it null/undefined/false, and how does `if (authConditions)` / `Boolean(authConditions)` behave when authConditions holds that value?",
+        "locations": [
+         "packages/lib/server/service/insightsBooking.ts:43",
+         "packages/lib/server/service/insightsBooking.ts:69"
+        ]
+       },
+       {
+        "id": "P2",
+        "proposition": "getBaseConditions on lines 72-80 branches only on truthiness (`if (authConditions && filterConditions)`, `else if (authConditions)`, `else if (filterConditions)`, `else`) without an explicit sentinel check for NOTHING_CONDITION.",
+        "kind": "mechanism",
+        "scope": "repository",
+        "neutral_question": "What logic does getBaseConditions use to combine authConditions and filterConditions on lines 68-81 — what conditions are tested in each if/else branch and is there any comparison against a sentinel value for the NOTHING case?",
+        "locations": [
+         "packages/lib/server/service/insightsBooking.ts:68-81"
+        ]
+       },
+       {
+        "id": "P3",
+        "proposition": "The current Prisma.Sql return type for getAuthorizationConditions/getFilterConditions and the if/else implementation of getBaseConditions were introduced in this PR, replacing the previous Prisma.BookingTimeStatusDenormalizedWhereInput with `NOTHING = {id:-1}` and the `AND: [authConditions, filterConditions].filter(c=>c!==null)` logic in findMany.",
+        "kind": "introduced",
+        "scope": "repository",
+        "neutral_question": "Was the implementation of getBaseConditions, getAuthorizationConditions/buildAuthorizationConditions and NOTHING_CONDITION as Prisma.Sql`1=0` present before this diff, or did this PR change them — and what did the previous version return for unauthorized cases and how did it combine conditions?",
+        "locations": [
+         "packages/lib/server/service/insightsBooking.ts:1-81",
+         "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:1-12"
+        ]
+       }
+      ]
+     },
+     "cenario": {
+      "answer": "When `getBaseConditions()` has `authConditions === NOTHING_CONDITION` (`Prisma.sql`1=0`` - object, truthy) the `if/else` chain at `insightsBooking.ts:72-80` **never** reaches `else { return NOTHING_CONDITION }`:\n\n* **filterConditions === null (falsy):** `if (authConditions && filterConditions)` at line 72 is `false` (null is falsy). Falls to `else if (authConditions)` at line 74 which is `true` because `NOTHING_CONDITION` is a `Prisma.Sql` object truthy. Returns `authConditions` at line 75 - the identical bare `Prisma.sql`1=0`` value. `else if (filterConditions)` and final `else` not taken.\n\n* **filterConditions !== null (Prisma.Sql object truthy):** `if (authConditions && filterConditions)` at line 72 is `true` (both Sql objects truthy). Takes first branch at line 73 `return Prisma.sql`(${authConditions}) AND (${filterConditions})`` -> `Prisma.sql`(1=0) AND (<filterSql>)``. Logically still empty (`1=0 AND ... = 0`) but as combined Sql, not bare `NOTHING_CONDITION`. Does not take `else if (authConditions)` bare-return or later branches.\n\nIn neither case is `NOTHING_CONDITION` treated as falsy to reach `else if (filterConditions)` or `else { return NOTHING_CONDITION }`.",
+      "coverage_complete": true,
+      "facts": [
+       {
+        "statement": "NOTHING_CONDITION is defined as Prisma.sql`1=0`",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:43 and quoted code `const NOTHING_CONDITION = Prisma.sql`1=0`;`"
+       },
+       {
+        "statement": "getBaseConditions fetches authConditions and filterConditions before branching",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:68-71 and quoted code `async getBaseConditions(): Promise<Prisma.Sql> { const authConditions = await this.getAuthorizationConditions(); const filterConditions = await this.getFilterConditions();`"
+       },
+       {
+        "statement": "First branch checks both truthy and returns AND-combined Sql",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:72-73 and quoted code `if (authConditions && filterConditions) { return Prisma.sql`(${authConditions}) AND (${filterConditions})`;`"
+       },
+       {
+        "statement": "Second branch else if (authConditions) returns authConditions alone",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:74-75 and quoted code `} else if (authConditions) { return authConditions;`"
+       },
+       {
+        "statement": "Third branch else if (filterConditions) returns filterConditions alone",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:76-77 and quoted code `} else if (filterConditions) { return filterConditions;`"
+       },
+       {
+        "statement": "Final else returns NOTHING_CONDITION",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:78-80 and quoted code `} else { return NOTHING_CONDITION; }`"
+       },
+       {
+        "statement": "buildAuthorizationConditions returns NOTHING_CONDITION when unauthorized (no options or non-owner/admin)",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:127 and quoted code `return NOTHING_CONDITION;` for `if (!this.options)` and `if (!isOwnerOrAdmin)` path at lines 125-131"
+       },
+       {
+        "statement": "NOTHING_CONDITION as Prisma.Sql object is truthy so authConditions==NOTHING_CONDITION satisfies truthiness checks, not falsy final else",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:43 and quoted code `const NOTHING_CONDITION = Prisma.sql`1=0`;` plus branch logic at 72-75"
+       }
+      ],
+      "unresolved": []
+     },
+     "cegos": [
+      {
+       "answer": "`Prisma.sql`1=0`` does NOT evaluate to `null`/`undefined`/`false`/`0`/`\"\"` - it evaluates to an **object** (`Prisma.Sql` instance/tagged-template object) which is truthy. Therefore `if (authConditions)` when `authConditions === NOTHING_CONDITION` is `true` and `Boolean(authConditions) === true`. It will never take the falsy branches in `getBaseConditions()`.\n\nThe `NOTHING_CONDITION` sentinel is intended to be SQL `WHERE 1=0` (returns no rows) but as JavaScript it is a truthy object, so the check `if (authConditions)` / `if (authConditions && filterConditions)` treats it as *present* authorisation, wrapping it as `(${authConditions})` rather than falling through to `else if (filterConditions)` or `return NOTHING_CONDITION` fallback.",
+       "coverage_complete": false,
+       "facts": [
+        {
+         "statement": "NOTHING_CONDITION is defined as Prisma.sql`1=0`",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:43 \"const NOTHING_CONDITION = Prisma.sql`1=0`;\""
+        },
+        {
+         "statement": "cachedAuthConditions is typed as Prisma.Sql (optional undefined, not null) ",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:49 \"private cachedAuthConditions?: Prisma.Sql;\""
+        },
+        {
+         "statement": "getAuthorizationConditions returns Promise<Prisma.Sql> non-nullable",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:83 \"async getAuthorizationConditions(): Promise<Prisma.Sql> {\""
+        },
+        {
+         "statement": "buildAuthorizationConditions returns Promise<Prisma.Sql> and returns NOTHING_CONDITION on invalid options",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:125 \"async buildAuthorizationConditions(): Promise<Prisma.Sql> {\""
+        },
+        {
+         "statement": "buildAuthorizationConditions returns NOTHING_CONDITION when !this.options",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:126 \"if (!this.options) {\""
+        },
+        {
+         "statement": "buildAuthorizationConditions returns NOTHING_CONDITION when not owner/admin",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:129 \"if (!isOwnerOrAdmin) {\""
+        },
+        {
+         "statement": "buildAuthorizationConditions returns NOTHING_CONDITION in final else branch",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:140 \"} else {\""
+        },
+        {
+         "statement": "getBaseConditions assigns authConditions from getAuthorizationConditions which always resolves to Prisma.Sql object including NOTHING_CONDITION",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:69 \"const authConditions = await this.getAuthorizationConditions();\""
+        },
+        {
+         "statement": "getBaseConditions tests truthiness with if (authConditions && filterConditions) and else if (authConditions)",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:72 \"if (authConditions && filterConditions) {\""
+        },
+        {
+         "statement": "getBaseConditions else if (authConditions) returns authConditions directly",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:74 \"} else if (authConditions) {\""
+        },
+        {
+         "statement": "getFilterConditions is nullable Promise<Prisma.Sql | null> contrasting with non-nullable authConditions",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:90 \"async getFilterConditions(): Promise<Prisma.Sql | null> {\""
+        }
+       ],
+       "unresolved": [
+        "Exact runtime structure/fields of Prisma.Sql object returned by Prisma.sql`1=0` (e.g. { strings, values, sql, text } fields) - requires reading node_modules/.prisma/client runtime or @prisma/client runtime implementation which was not inspected within step limit (packages/prisma/client/index.d.ts only re-exports).",
+        "Whether Prisma.sql`1=0` has any custom toBoolean/valueOf/toString behavior - not inspected.",
+        "Prisma.sql`` empty sql handling in routing-events.ts vs NOTHING_CONDITION truthiness - not fully examined."
+       ]
+      },
+      {
+       "answer": "`getBaseConditions` at `packages/lib/server/service/insightsBooking.ts:68-81` does NOT compare against the `NOTHING_CONDITION` sentinel (`Prisma.sql`1=0``). It uses pure truthiness checks on the two awaited values:\n\n1. `if (authConditions && filterConditions)` -> `return Prisma.sql`(${authConditions}) AND (${filterConditions})``\n2. `else if (authConditions)` -> `return authConditions`\n3. `else if (filterConditions)` -> `return filterConditions`\n4. `else` -> `return NOTHING_CONDITION`\n\nBecause `getAuthorizationConditions(): Promise<Prisma.Sql>` never returns `null` (it returns `NOTHING_CONDITION` on failure, which is a truthy `Prisma.Sql` object), the `if (authConditions)` test is true even for the `1=0` case. `getFilterConditions(): Promise<Prisma.Sql | null>` can be `null` (falsy) or a `Prisma.Sql` (truthy). There is no `authConditions === NOTHING_CONDITION`, `filterConditions === NOTHING_CONDITION`, `==`, `.equals()` or similar sentinel comparison in lines 68-81; sentinel is only *returned* in the final `else`.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "NOTHING_CONDITION sentinel is defined as Prisma.sql`1=0`",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:43: `const NOTHING_CONDITION = Prisma.sql`1=0`;`"
+        },
+        {
+         "statement": "getBaseConditions method spans lines 68-81",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:68: `async getBaseConditions(): Promise<Prisma.Sql> {`"
+        },
+        {
+         "statement": "Method awaits both conditions without sentinel check",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:69: `const authConditions = await this.getAuthorizationConditions();`"
+        },
+        {
+         "statement": "Second awaited value can be null",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:70: `const filterConditions = await this.getFilterConditions();`"
+        },
+        {
+         "statement": "First branch tests truthiness of BOTH values and AND-combines them",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:72: `if (authConditions && filterConditions) {`"
+        },
+        {
+         "statement": "First branch returns AND-combined SQL",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:73: `return Prisma.sql`(${authConditions}) AND (${filterConditions})`;`"
+        },
+        {
+         "statement": "Second branch tests only authConditions truthiness",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:74: `} else if (authConditions) {`"
+        },
+        {
+         "statement": "Second branch returns authConditions directly",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:75: `return authConditions;`"
+        },
+        {
+         "statement": "Third branch tests only filterConditions truthiness",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:76: `} else if (filterConditions) {`"
+        },
+        {
+         "statement": "Third branch returns filterConditions directly",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:77: `return filterConditions;`"
+        },
+        {
+         "statement": "Final else returns NOTHING_CONDITION sentinel without any comparison",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:79: `return NOTHING_CONDITION;`"
+        },
+        {
+         "statement": "getAuthorizationConditions always returns Prisma.Sql (never null) so truthiness is always true even when it is NOTHING_CONDITION",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:83: `async getAuthorizationConditions(): Promise<Prisma.Sql> {`"
+        },
+        {
+         "statement": "getFilterConditions returns Prisma.Sql | null allowing falsy check",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:90: `async getFilterConditions(): Promise<Prisma.Sql | null> {`"
+        },
+        {
+         "statement": "No comparison against NOTHING_CONDITION exists in getBaseConditions 68-81; sentinel only appears as return value",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:68-81: no line contains `=== NOTHING_CONDITION`, `== NOTHING_CONDITION` or equivalent; grep for NOTHING_CONDITION shows only `const NOTHING_CONDITION`, returns at 79,127,131,141,187"
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "This PR **changed** `getBaseConditions`, `getAuthorizationConditions`/`buildAuthorizationConditions` and `NOTHING_CONDITION`. They were **not** `Prisma.Sql` `1=0` before.\n\n* **HEAD (this PR) introduces:**\n  * `Prisma.Sql` `1=0` sentinel and `getBaseConditions()` that concatenates raw SQL with `AND`/`OR`, falling back to `NOTHING_CONDITION`.\n\n* **BEFORE (base):** no `getBaseConditions`; `findMany()` combined Prisma `WhereInput` objects; sentinel was `{id:-1}` and unauthorized returned that object, not SQL.\n\nPrevious version combined conditions as Prisma `WhereInput` `AND`/`OR` arrays filtered for `!== null`, not as `Prisma.sql` strings.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "HEAD defines NOTHING_CONDITION as raw SQL 1=0",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:43 `const NOTHING_CONDITION = Prisma.sql`1=0`;`"
+        },
+        {
+         "statement": "HEAD adds getBaseConditions() returning Prisma.Sql that ANDs auth + filter or returns NOTHING_CONDITION",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:68 `async getBaseConditions(): Promise<Prisma.Sql> {`"
+        },
+        {
+         "statement": "HEAD getBaseConditions falls back to NOTHING_CONDITION when neither condition present",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:79 `return NOTHING_CONDITION;`"
+        },
+        {
+         "statement": "HEAD getBaseConditions combines with (auth) AND (filter) SQL",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:73 `return Prisma.sql`(${authConditions}) AND (${filterConditions})`;`"
+        },
+        {
+         "statement": "HEAD getAuthorizationConditions returns Prisma.Sql",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:83 `async getAuthorizationConditions(): Promise<Prisma.Sql> {`"
+        },
+        {
+         "statement": "HEAD buildAuthorizationConditions returns Prisma.Sql and returns NOTHING_CONDITION on unauthorized",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:125 `async buildAuthorizationConditions(): Promise<Prisma.Sql> {`"
+        },
+        {
+         "statement": "HEAD buildAuthorizationConditions returns NOTHING_CONDITION if !options",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:126 `if (!this.options) {` + 127 `return NOTHING_CONDITION;`"
+        },
+        {
+         "statement": "HEAD buildAuthorizationConditions returns NOTHING_CONDITION if not owner/admin",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:131 `return NOTHING_CONDITION;`"
+        },
+        {
+         "statement": "HEAD cachedAuthConditions is typed as Prisma.Sql",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:49 `private cachedAuthConditions?: Prisma.Sql;`"
+        },
+        {
+         "statement": "HEAD imports Prisma as value to use Prisma.sql",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:1 `import { Prisma } from \"@prisma/client\";`"
+        },
+        {
+         "statement": "BASE defined NOTHING as {id:-1} not Prisma.sql`1=0`",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:36 `const NOTHING = {` + 37 `  id: -1,`"
+        },
+        {
+         "statement": "BASE imported Prisma as type only",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:1 (base) `import type { Prisma } from \"@prisma/client\";`"
+        },
+        {
+         "statement": "BASE cachedAuthConditions typed as WhereInput not Sql",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:44 (base) `private cachedAuthConditions?: Prisma.BookingTimeStatusDenormalizedWhereInput;`"
+        },
+        {
+         "statement": "BASE had no getBaseConditions; had findMany that combined WhereInputs via AND array",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:63 (base) `async findMany(findManyArgs: Prisma.BookingTimeStatusDenormalizedFindManyArgs) {`"
+        },
+        {
+         "statement": "BASE combined auth+filter via AND: [authConditions, filterConditions].filter(c !== null)",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:71 (base) `AND: [authConditions, filterConditions].filter(` + 72 `  (c): c is Prisma.BookingTimeStatusDenormalizedWhereInput => c !== null`"
+        },
+        {
+         "statement": "BASE getAuthorizationConditions returned WhereInput",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:78 (base) `async getAuthorizationConditions(): Promise<Prisma.BookingTimeStatusDenormalizedWhereInput> {`"
+        },
+        {
+         "statement": "BASE buildAuthorizationConditions returned WhereInput and returned NOTHING if !options",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:114 (base) `async buildAuthorizationConditions(): Promise<Prisma.BookingTimeStatusDenormalizedWhereInput> {` + 116 `return NOTHING;`"
+        },
+        {
+         "statement": "BASE buildAuthorizationConditions returned NOTHING if not owner/admin",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:120 (base) `return NOTHING;`"
+        },
+        {
+         "statement": "BASE buildAuthorizationConditions fallback else returned NOTHING",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:135 (base) `return NOTHING;`"
+        },
+        {
+         "statement": "BASE buildOrgAuthorizationCondition returned OR WhereInput not SQL",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:162 (base) `return {` + 163 `  OR: [`"
+        },
+        {
+         "statement": "BASE buildTeamAuthorizationCondition returned NOTHING if not childTeamOfOrg",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:193 (base) `if (!childTeamOfOrg) {` + 194 `  return NOTHING;`"
+        },
+        {
+         "statement": "HEAD test defines NOTHING_CONDITION as Prisma.sql`1=0` (base test had none)",
+         "evidence": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:10 (head) `const NOTHING_CONDITION = Prisma.sql`1=0`;`"
+        }
+       ],
+       "unresolved": []
+      }
+     ],
+     "cert": {
+      "premise_id": "scenario",
+      "certificate": "none",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:43 \"const NOTHING_CONDITION = Prisma.sql`1=0`;\" ; packages/lib/server/service/insightsBooking.ts:72 \"if (authConditions && filterConditions) {\" ; packages/lib/server/service/insightsBooking.ts:74 \"} else if (authConditions) {\" ; packages/lib/server/service/insightsBooking.ts:76 \"} else if (filterConditions) {\" ; packages/lib/server/service/insightsBooking.ts:79 \"return NOTHING_CONDITION;\"",
+      "coverage_complete": true,
+      "explanation": "Investigations confirm rather than refute the bug: P1 - Prisma.sql`1=0` is a truthy object so `if (authConditions)` is always true; P2 - getBaseConditions 68-81 uses only truthiness checks with no `=== NOTHING_CONDITION` sentinel; P3 - this Sql/1=0 logic was introduced in this PR (base used WhereInput {id:-1}). Scenario investigation traced both null and non-null filter cases with NOTHING auth and found `else if (filterConditions)` and final `else` never reached, and `(1=0) AND (filter)` is returned for non-null filter - exactly the claimed dead-code/masked-intent outcome. No premise is proven false."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "nit": false,
+     "etapa": "certificado",
+     "ex": {
+      "failure": "Caller passing {scope:'team'} without teamId passes type-checking but gets silent empty results (NOTHING 1=0) instead of a type/validation error due to mismatch between PublicOptions type and validator.",
+      "scenario": {
+       "condition": "A caller constructs InsightsBookingService with PublicOptions {scope:'team', userId, orgId} omitting teamId",
+       "claimed_outcome": "The call type-checks, safeParse fails setting options to null, and subsequent queries return silent empty results (1=0) instead of surfacing a type or validation error",
+       "neutral_question": "When InsightsBookingService is constructed with scope 'team' without a teamId, how does type checking respond, how does validation handle the options, and what do subsequent queries return?",
+       "locations": [
+        "packages/lib/server/service/insightsBooking.ts:29-34",
+        "packages/lib/server/service/insightsBooking.ts:52-66",
+        "packages/lib/server/service/insightsBooking.ts:125-142"
+       ]
+      },
+      "premises": [
+       {
+        "id": "P1",
+        "proposition": "This PR introduces InsightsBookingServicePublicOptions (lines 29-34) as a flat type with `teamId?: number` optional for all scopes, and changes the constructor to accept this PublicOptions type instead of the inferred discriminated union.",
+        "kind": "introduced",
+        "scope": "repository",
+        "neutral_question": "When was InsightsBookingServicePublicOptions introduced and what does it declare about teamId for each scope value, and what type does the constructor accept now?",
+        "locations": [
+         "packages/lib/server/service/insightsBooking.ts:29-34",
+         "packages/lib/server/service/insightsBooking.ts:52-60"
+        ]
+       },
+       {
+        "id": "P2",
+        "proposition": "insightsBookingServiceOptionsSchema (lines 21-26) is a discriminatedUnion on scope that requires `teamId: z.number()` when scope==='team' and does not require teamId for scope 'user'|'org'.",
+        "kind": "semantics",
+        "scope": "repository",
+        "neutral_question": "What does insightsBookingServiceOptionsSchema require regarding teamId for each discriminant value of scope?",
+        "locations": [
+         "packages/lib/server/service/insightsBooking.ts:21-26"
+        ]
+       },
+       {
+        "id": "P3",
+        "proposition": "The constructor validates options with safeParse and on failure stores null in this.options, and buildAuthorizationConditions returns NOTHING_CONDITION (Prisma.sql`1=0`) when options is null, causing queries to return empty results without throwing.",
+        "kind": "mechanism",
+        "scope": "repository",
+        "neutral_question": "What does the InsightsBookingService constructor store when options fail validation, and what do buildAuthorizationConditions and getAuthorizationConditions return when options is null?",
+        "locations": [
+         "packages/lib/server/service/insightsBooking.ts:52-66",
+         "packages/lib/server/service/insightsBooking.ts:125-142"
+        ]
+       }
+      ]
+     },
+     "cenario": {
+      "answer": "When `InsightsBookingService` is constructed with `{scope:'team', userId, orgId}` omitting `teamId`:\n\n1. **Type checking passes (no error):** `InsightsBookingServicePublicOptions` makes `teamId` optional for all scopes, so `scope:'team'` without `teamId` is type-valid and constructible.\n\n2. **Runtime validation fails -> `options = null`:** Constructor does `insightsBookingServiceOptionsSchema.safeParse(options)` which is a `z.discriminatedUnion(\"scope\",...)` requiring `teamId: z.number()` for `scope: z.literal(\"team\")`. `safeParse` fails, `validation.success` is false, so `this.options = null`.\n\n3. **Subsequent queries return nothing (`WHERE 1=0`):** `buildAuthorizationConditions()` guards `if (!this.options) return NOTHING_CONDITION` where `NOTHING_CONDITION = Prisma.sql`1=0``. `getAuthorizationConditions()` caches/returns it, `getBaseConditions()` returns it (truthy `Prisma.Sql` object), so any query using base/auth conditions matches nothing/returns empty.",
+      "coverage_complete": true,
+      "facts": [
+       {
+        "statement": "PublicOptions makes teamId optional, so scope 'team' without teamId type-checks",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:29-34: export type InsightsBookingServicePublicOptions = {\n  scope: \"user\" | \"org\" | \"team\";\n  userId: number;\n  orgId: number;\n  teamId?: number;\n};"
+       },
+       {
+        "statement": "Constructor accepts PublicOptions (loose type) as its options parameter",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:52-59: constructor({\n    prisma,\n    options,\n    filters,\n  }: {\n    prisma: typeof readonlyPrisma;\n    options: InsightsBookingServicePublicOptions;"
+       },
+       {
+        "statement": "Zod discriminatedUnion requires teamId for scope 'team'",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:10-27: export const insightsBookingServiceOptionsSchema = z.discriminatedUnion(\"scope\", [\n  z.object({\n    scope: z.literal(\"user\"),\n    userId: z.number(),\n    orgId: z.number(),\n  }),\n  z.object({\n    scope: z.literal(\"org\"),\n    userId: z.number(),\n    orgId: z.number(),\n  }),\n  z.object({\n    scope: z.literal(\"team\"),\n    userId: z.number(),\n    orgId: z.number(),\n    teamId: z.number(),\n  }),\n]);"
+       },
+       {
+        "statement": "Constructor validates with safeParse and nulls options on failure instead of throwing",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:62-63: const validation = insightsBookingServiceOptionsSchema.safeParse(options);\n    this.options = validation.success ? validation.data : null;"
+       },
+       {
+        "statement": "NOTHING_CONDITION is defined as Prisma.sql`1=0`",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:43: const NOTHING_CONDITION = Prisma.sql`1=0`;"
+       },
+       {
+        "statement": "buildAuthorizationConditions returns NOTHING_CONDITION immediately when options is null (validation failed)",
+        "evidence": "packages/lib/server/service/insightsBooking.ts:125-128: async buildAuthorizationConditions(): Promise<Prisma.Sql> {\n    if (!this.options) {\n      return NOTHING_CONDITION;\n    }"
+       }
+      ],
+      "unresolved": []
+     },
+     "cegos": [
+      {
+       "answer": "Introduced in HEAD (PR) — not present in base. `InsightsBookingServicePublicOptions` is a flattened (non-discriminated) public type that makes `teamId` optional (`teamId?: number`) for *all* `scope` values (`\"user\" | \"org\" | \"team\"`), unlike the internal `insightsBookingServiceOptionsSchema`/`InsightsBookingServiceOptions` which requires `teamId: z.number()` only when `scope: \"team\"` and forbids it for `user`/`org`. Constructor now accepts `options: InsightsBookingServicePublicOptions` (public flattened type) and validates/narrows via `insightsBookingServiceOptionsSchema.safeParse(options)` to `InsightsBookingServiceOptions | null`; base constructor accepted `options: InsightsBookingServiceOptions` (strict discriminated union).",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "HEAD defines InsightsBookingServicePublicOptions at lines 29-34 as flattened type with optional teamId",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:29-34: \"export type InsightsBookingServicePublicOptions = {\\n  scope: \\\"user\\\" | \\\"org\\\" | \\\"team\\\";\\n  userId: number;\\n  orgId: number;\\n  teamId?: number;\\n};\""
+        },
+        {
+         "statement": "teamId is declared optional (?) for all scopes in PublicOptions, not per-scope required",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:33: \"  teamId?: number;\""
+        },
+        {
+         "statement": "Internal discriminated union requires teamId only for scope team, not for user/org",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:10-27: \"export const insightsBookingServiceOptionsSchema = z.discriminatedUnion(\\\"scope\\\", [\\n  z.object({\\n    scope: z.literal(\\\"user\\\"),\\n    userId: z.number(),\\n    orgId: z.number(),\\n  }),\\n  z.object({\\n    scope: z.literal(\\\"org\\\"),\\n    userId: z.number(),\\n    orgId: z.number(),\\n  }),\\n  z.object({\\n    scope: z.literal(\\\"team\\\"),\\n    userId: z.number(),\\n    orgId: z.number(),\\n    teamId: z.number(),\\n  }),\\n]);\""
+        },
+        {
+         "statement": "Base (before PR) had no InsightsBookingServicePublicOptions, only InsightsBookingServiceOptions",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:29 (base): \"export type InsightsBookingServiceOptions = z.infer<typeof insightsBookingServiceOptionsSchema>;\""
+        },
+        {
+         "statement": "HEAD constructor now accepts InsightsBookingServicePublicOptions",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:52-60: \"  constructor({\\n    prisma,\\n    options,\\n    filters,\\n  }: {\\n    prisma: typeof readonlyPrisma;\\n    options: InsightsBookingServicePublicOptions;\\n    filters?: InsightsBookingServiceFilterOptions;\\n  }) {\""
+        },
+        {
+         "statement": "Base constructor accepted InsightsBookingServiceOptions (strict inferred discriminated union)",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:47-54 (base): \"  constructor({\\n    prisma,\\n    options,\\n    filters,\\n  }: {\\n    prisma: typeof readonlyPrisma;\\n    options: InsightsBookingServiceOptions;\\n    filters?: InsightsBookingServiceFilterOptions;\\n  }) {\""
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "insightsBookingServiceOptionsSchema is a z.discriminatedUnion on \"scope\" with three variants: scope=\"user\" and scope=\"org\" require only userId and orgId with NO teamId field (teamId not required/defined), while scope=\"team\" additionally requires teamId: z.number().",
+       "facts": [
+        {
+         "statement": "Schema is defined as z.discriminatedUnion on discriminant \"scope\"",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:10 - \"export const insightsBookingServiceOptionsSchema = z.discriminatedUnion(\"scope\", [\""
+        },
+        {
+         "statement": "scope=\"user\" variant contains only scope, userId, orgId - no teamId field",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:11 - \"  z.object({\" + packages/lib/server/service/insightsBooking.ts:12 - \"    scope: z.literal(\"user\"),\" + packages/lib/server/service/insightsBooking.ts:13 - \"    userId: z.number(),\" + packages/lib/server/service/insightsBooking.ts:14 - \"    orgId: z.number(),\" + packages/lib/server/service/insightsBooking.ts:15 - \"  }),\""
+        },
+        {
+         "statement": "scope=\"org\" variant contains only scope, userId, orgId - no teamId field",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:16 - \"  z.object({\" + packages/lib/server/service/insightsBooking.ts:17 - \"    scope: z.literal(\"org\"),\" + packages/lib/server/service/insightsBooking.ts:18 - \"    userId: z.number(),\" + packages/lib/server/service/insightsBooking.ts:19 - \"    orgId: z.number(),\" + packages/lib/server/service/insightsBooking.ts:20 - \"  }),\""
+        },
+        {
+         "statement": "scope=\"team\" variant requires teamId: z.number() alongside scope, userId, orgId",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:21 - \"  z.object({\" + packages/lib/server/service/insightsBooking.ts:22 - \"    scope: z.literal(\"team\"),\" + packages/lib/server/service/insightsBooking.ts:23 - \"    userId: z.number(),\" + packages/lib/server/service/insightsBooking.ts:24 - \"    orgId: z.number(),\" + packages/lib/server/service/insightsBooking.ts:25 - \"    teamId: z.number(),\" + packages/lib/server/service/insightsBooking.ts:26 - \"  }),\""
+        }
+       ],
+       "coverage_complete": true,
+       "unresolved": []
+      },
+      {
+       "answer": "When `options` fails `insightsBookingServiceOptionsSchema.safeParse`, the `InsightsBookingService` constructor stores `null` in `this.options`. When `this.options` is `null`, `buildAuthorizationConditions()` returns `NOTHING_CONDITION` (`Prisma.sql\\`1=0\\``) and `getAuthorizationConditions()` returns the same cached `NOTHING_CONDITION`.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "Constructor validates options with safeParse and stores null on failure",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:62: `const validation = insightsBookingServiceOptionsSchema.safeParse(options);`"
+        },
+        {
+         "statement": "Constructor stores null when validation fails",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:63: `this.options = validation.success ? validation.data : null;`"
+        },
+        {
+         "statement": "Field type allows null",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:47: `private options: InsightsBookingServiceOptions | null;`"
+        },
+        {
+         "statement": "NOTHING_CONDITION is defined as 1=0",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:43: `const NOTHING_CONDITION = Prisma.sql`1=0`;`"
+        },
+        {
+         "statement": "buildAuthorizationConditions returns NOTHING_CONDITION when options is null/falsy",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:125-127: `async buildAuthorizationConditions(): Promise<Prisma.Sql> {\n    if (!this.options) {\n      return NOTHING_CONDITION;`"
+        },
+        {
+         "statement": "getAuthorizationConditions caches and returns result of buildAuthorizationConditions",
+         "evidence": "packages/lib/server/service/insightsBooking.ts:83-87: `async getAuthorizationConditions(): Promise<Prisma.Sql> {\n    if (this.cachedAuthConditions === undefined) {\n      this.cachedAuthConditions = await this.buildAuthorizationConditions();\n    }\n    return this.cachedAuthConditions;`"
+        }
+       ],
+       "unresolved": []
+      }
+     ],
+     "cert": {
+      "premise_id": "scenario",
+      "certificate": "none",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:29-34: export type InsightsBookingServicePublicOptions = {\n  scope: \"user\" | \"org\" | \"team\";\n  userId: number;\n  orgId: number;\n  teamId?: number;\n}; packages/lib/server/service/insightsBooking.ts:62-63: const validation = insightsBookingServiceOptionsSchema.safeParse(options);\n    this.options = validation.success ? validation.data : null; packages/lib/server/service/insightsBooking.ts:125-127: async buildAuthorizationConditions(): Promise<Prisma.Sql> {\n    if (!this.options) {\n      return NOTHING_CONDITION;",
+      "coverage_complete": true,
+      "explanation": "All investigations confirm the premises and the alleged failure: P1 - HEAD introduces flat PublicOptions with optional teamId while constructor now accepts it; P2 - schema is discriminatedUnion requiring teamId only for scope 'team'; P3 - safeParse failure stores null and buildAuthorizationConditions returns NOTHING_CONDITION (1=0). Scenario investigation with coverage_complete true traces {scope:'team'} without teamId through type-check pass, safeParse fail -> options=null -> WHERE 1=0 silent empty, exactly the claimed outcome. No premise is contradicted, no ordering/invariant/pre-existing disproof."
+     }
+    }
+   ]
+  }
+ }
+}

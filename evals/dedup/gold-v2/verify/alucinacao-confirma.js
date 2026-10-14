@@ -18,6 +18,7 @@ const { buildModel } = require(path.join(INV, 'eval-model'));
 const { chamadaEstruturada } = require(path.join(INV, 'eval-structured'));
 
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
+const PREFIXO = arg('prefixo', '09.10.26');
 const GOLD = arg('model'), SOBRE = arg('sobre'), VERSAO = arg('versao'), PROMPT = arg('prompt', 'c1');
 const MODELO = process.env.RECALL_MODEL;
 if (!GOLD || !SOBRE || !VERSAO || !MODELO) { console.error('RECALL_MODEL=<id> --model= --sobre= --versao='); process.exit(2); }
@@ -110,6 +111,8 @@ Answer "argues" when the evidence instead:
 - argues that the condition, flag, gate or check the comment calls wrong is actually the right one. Whether a gate is the right one is a judgment about intent, not a fact the code can contradict.
 
 When unsure, answer "argues".`,
+    // c5: o c3 com a ausencia valendo so quando o comentario afirma que a coisa existe (pareia com o g1).
+    c5: (s, g) => PROMPTS.c3(s, g).replace('when the comment\'s problem needs one to exist (a repository-wide search finding none counts);', 'when the comment states that one exists today (a repository-wide search finding none counts). A comment about what would happen if a future caller did something does not state that one exists;'),
     c4: (s, g) => `A code review comment was checked against the repository, and one or more checkers say the comment rests on a false statement about the code. Decide what kind of evidence they found.
 
 <Comment>
@@ -188,7 +191,7 @@ When unsure, answer "keep".`,
     const model = buildModel(MODELO);
     const fontes = INS.map((f) => JSON.parse(fs.readFileSync(f, 'utf8')));
     const src = fontes[0];
-    const sug = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `09.10.26_${GOLD}.json`), 'utf8')).prs;
+    const sug = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `${PREFIXO}_${GOLD}.json`), 'utf8')).prs;
     const res = { ...src, versao: VERSAO, sobre: SOBRE, prompt: PROMPT, prs: {} };
     const tarefas = [];
     for (const [cid, p] of Object.entries(src.prs)) {

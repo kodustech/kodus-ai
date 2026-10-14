@@ -1,0 +1,3851 @@
+{
+ "model": "sonnet-5.5",
+ "verificador": "claude-sonnet-5.5@sdk",
+ "versao": "e3",
+ "sobre": "aluc-h1t10f",
+ "prs": {
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Office365 credential whose key is expired or invalid, so getToken calls refreshAccessToken",
+        "admissibility": "getToken falls through to refreshAccessToken when refreshTokenResponseSchema.safeParse(o365AuthCredentials) fails or the token is expired"
+       },
+       {
+        "value": "Microsoft returns a 200 body such as {\"error\":\"x\"} that fails refreshTokenResponseSchema (defined at CalendarService.ts:51)",
+        "admissibility": "handleErrorsJson returns the JSON, and the schema is not enforced upstream of this call"
+       },
+       {
+        "value": "APP_CREDENTIAL_SHARING_ENABLED is false or CALCOM_CREDENTIAL_SYNC_ENDPOINT is unset",
+        "admissibility": "These are optional env settings that default to disabled, so the schema.safeParse branch runs"
+       }
+      ],
+      "steps": [
+       {
+        "location": "packages/app-store/office365calendar/lib/CalendarService.ts:263",
+        "source": "const tokenResponse = parseRefreshTokenResponse(responseJson, refreshTokenResponseSchema);",
+        "state_before": "responseJson fails the schema",
+        "operation": "calls parseRefreshTokenResponse",
+        "state_after": "control enters the parser"
+       },
+       {
+        "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:21",
+        "source": "if (!refreshTokenResponse.success) {\n    throw new Error(\"Invalid refreshed tokens were returned\");",
+        "state_before": "safeParse returned success:false",
+        "operation": "throws Error",
+        "state_after": "exception propagates out of refreshAccessToken and getToken"
+       },
+       {
+        "location": "packages/app-store/office365calendar/lib/CalendarService.ts:264-265",
+        "source": "o365AuthCredentials = { ...o365AuthCredentials, ...(tokenResponse.success && tokenResponse.data) };\n await prisma.credential.update({",
+        "state_before": "the throw happened on line 263",
+        "operation": "line 264 (the success guard) and the credential update on line 265 are never reached; the old console.error logging was removed",
+        "state_after": "the refresh call rejects; the stored credentials are unchanged and the failure is not logged"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "parseRefreshTokenResponse.ts:18-22 `refreshTokenResponse = schema.safeParse(response)` ... `if (!refreshTokenResponse.success) { throw new Error(\"Invalid refreshed tokens were returned\"); }`; CalendarService.ts:263-265 the update follows the parse; schema at CalendarService.ts:51-57 requires access_token and expires_in; no console.error in the file."
+     }
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Google credential id 7, type google_calendar, is in the user's calendarCredentials",
+        "admissibility": "Ordinary credential for the user; the integration-based branch at EventManager.ts:376 filters on it."
+       },
+       {
+        "value": "destinationCalendar = [{integration:'google_calendar', externalId:'work@x.com', credentialId:null}]",
+        "admissibility": "The else branch at EventManager.ts:375 exists specifically for destinations without credentialId, so the code allows it."
+       }
+      ],
+      "steps": [
+       {
+        "location": "packages/core/EventManager.ts:340",
+        "source": "if (destination.credentialId) {",
+        "state_before": "destination.credentialId is null",
+        "operation": "Condition is false, so the else branch is taken",
+        "state_after": "Enters the integration-based branch"
+       },
+       {
+        "location": "packages/core/EventManager.ts:376-380",
+        "source": "const destinationCalendarCredentials = this.calendarCredentials.filter(\n (c) => c.type === destination.integration\n);\n... createEvent(c, event)",
+        "state_before": "Credential 7 matches the integration type",
+        "operation": "Calls createEvent(credential7, event) with no externalId argument",
+        "state_after": "calendar.createEvent(event, 7) is invoked (per the diff of CalendarManager.ts)"
+       },
+       {
+        "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:147-149",
+        "source": "const selectedCalendar = calEventRaw.destinationCalendar?.find(\n (cal) => cal.credentialId === credentialId\n)?.externalId;",
+        "state_before": "credentialId=7; the only destination has credentialId null",
+        "operation": "null === 7 is false, so find returns undefined",
+        "state_after": "selectedCalendar is undefined"
+       },
+       {
+        "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:154",
+        "source": "calendarId: selectedCalendar || \"primary\",",
+        "state_before": "selectedCalendar is undefined",
+        "operation": "events.insert is called with calendarId 'primary'",
+        "state_after": "The event is created in the primary calendar, not in work@x.com as before the change"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "EventManager.ts:340,376-380 (createEvent(c, event) without externalId); CalendarManager.ts:236 `.createEvent(calEvent, credential.id)`; CalendarService.ts:147-154 `find((cal) => cal.credentialId === credentialId)?.externalId` and `calendarId: selectedCalendar || \"primary\"`"
+     }
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Booking 42 owned by user 1 with attendee bob@x.com",
+        "admissibility": "Any booking can have attendees with arbitrary emails."
+       },
+       {
+        "value": "Logged-in user 2 with email bob@x.com, not the organizer or a team admin",
+        "admissibility": "The handler only compares email strings; verification of the email is not checked in this code."
+       },
+       {
+        "value": "Input {bookingId:42, guests:['victim@example.com']}",
+        "admissibility": "Schema only requires a number and valid email strings."
+       }
+      ],
+      "steps": [
+       {
+        "location": "packages/trpc/server/routers/viewer/bookings/_router.tsx:79",
+        "source": "addGuests: authedProcedure.input(ZAddGuestsInputSchema).mutation(async ({ input, ctx }) => {",
+        "state_before": "User 2 is authenticated",
+        "operation": "The call reaches the handler with no role check",
+        "state_after": "Handler invoked"
+       },
+       {
+        "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:52",
+        "source": "const isAttendee = !!booking.attendees.find((attendee) => attendee.email === user.email);",
+        "state_before": "user.email = bob@x.com; attendees include bob@x.com",
+        "operation": "Compare emails",
+        "state_after": "isAttendee = true"
+       },
+       {
+        "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:54",
+        "source": "if (!isTeamAdminOrOwner && !isOrganizer && !isAttendee) {",
+        "state_before": "isTeamAdminOrOwner false, isOrganizer false, isAttendee true",
+        "operation": "Permission check evaluates to false, so no throw",
+        "state_after": "Execution continues"
+       },
+       {
+        "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:165",
+        "source": "await eventManager.updateCalendarAttendees(evt, booking);",
+        "state_before": "victim@example.com was added as an attendee in the DB",
+        "operation": "Calendar event updated with the new guest",
+        "state_after": "Victim is a calendar guest"
+       },
+       {
+        "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168",
+        "source": "await sendAddGuestsEmails(evt, guests);",
+        "state_before": "evt.attendees includes the victim",
+        "operation": "Send emails and ICS invites from the organizer's identity",
+        "state_after": "Victim receives an invite for the organizer's booking"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "addGuests.handler.ts:52 `const isAttendee = !!booking.attendees.find((attendee) => attendee.email === user.email);` and :54 `if (!isTeamAdminOrOwner && !isOrganizer && !isAttendee)` do not throw for an attendee; :165 updateCalendarAttendees falls back to DB credential lookup (EventManager.ts:849-868); :168 sendAddGuestsEmails(evt, guests)."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "User locale is non-English (e.g. pt)",
+        "admissibility": "useLocale supports any configured locale; the component already calls t() for other strings."
+       },
+       {
+        "value": "MultiEmail rendered with readOnly=false and value=[\"\"]",
+        "admissibility": "AddGuestsDialog passes readOnly={false} and state [\"\"]; value is string[] per MultiEmailProps."
+       }
+      ],
+      "steps": [
+       {
+        "location": "packages/ui/form/MultiEmail.tsx:13",
+        "source": "const { t } = useLocale();",
+        "state_before": "Component mounts with a pt locale.",
+        "operation": "t is obtained and is available for translating strings.",
+        "state_after": "t is available in render scope."
+       },
+       {
+        "location": "packages/ui/form/MultiEmail.tsx:46",
+        "source": "<Tooltip content=\"Remove email\">",
+        "state_before": "readOnly is false, so the addOnSuffix branch renders the Tooltip.",
+        "operation": "The literal English string is passed as the tooltip content without going through t().",
+        "state_after": "Hovering the x button shows \"Remove email\" in English to the pt user."
+       },
+       {
+        "location": "packages/ui/form/MultiEmail.tsx:69",
+        "source": "{t(\"add_another\")}",
+        "state_before": "The neighbouring button label is translated.",
+        "operation": "This label is translated, but the tooltip is not.",
+        "state_after": "The UI is inconsistent: the label is localized and the tooltip is English."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "packages/ui/form/MultiEmail.tsx:46 `<Tooltip content=\"Remove email\">` is a hard-coded English string; line 69 `{t(\"add_another\")}` is translated; line 13 `const { t } = useLocale();`"
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "addGuests mutation fails with a TRPCClientError whose err.data is undefined (e.g. network failure), err.message = 'Failed to fetch'",
+        "admissibility": "onError receives any mutation error; the code only uses optional chaining on err.data, so it expects data may be absent. I did not check tRPC's client behaviour in the repo."
+       }
+      ],
+      "steps": [
+       {
+        "location": "apps/web/components/dialog/AddGuestsDialog.tsx:43",
+        "source": "const message = `${err.data?.code}: ${t(err.message)}`;",
+        "state_before": "err.data undefined, err.message='Failed to fetch'",
+        "operation": "Template literal interpolates undefined and the translated message; the result is always a non-empty string",
+        "state_after": "message === 'undefined: Failed to fetch'"
+       },
+       {
+        "location": "apps/web/components/dialog/AddGuestsDialog.tsx:44",
+        "source": "showToast(message || t(\"unable_to_add_guests\"), \"error\");",
+        "state_before": "message is a truthy non-empty string",
+        "operation": "The || fallback is skipped because message is truthy",
+        "state_after": "Error toast shows 'undefined: Failed to fetch'; the 'Unable to add guests' fallback is never shown"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:43-44: `const message = `${err.data?.code}: ${t(err.message)}`;` then `showToast(message || t(\"unable_to_add_guests\"), \"error\");` — the template literal always yields a non-empty string, so the || fallback never runs."
+     }
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Login page renders with twoFactorRequired=true and twoFactorLostAccess=true, so the BackupCode component is rendered",
+        "admissibility": "The 'Lost access' button in login.tsx sets twoFactorLostAccess to true."
+       }
+      ],
+      "steps": [
+       {
+        "location": "apps/web/components/auth/BackupCode.tsx:7",
+        "source": "export default function TwoFactor({ center = true }) {",
+        "state_before": "BackupCode.tsx is a separate module from TwoFactor.tsx",
+        "operation": "The module declares its default export function with the name TwoFactor",
+        "state_after": "The backup-code component's function name (and its displayName in DevTools and stack traces) is 'TwoFactor'"
+       },
+       {
+        "location": "apps/web/components/auth/TwoFactor.tsx:8",
+        "source": "export default function TwoFactor({ center = true, autoFocus = true }) {",
+        "state_before": "The TOTP component is also named TwoFactor",
+        "operation": "Two distinct components now share the function name TwoFactor",
+        "state_after": "An error thrown in the backup-code input is reported in stack traces as TwoFactor, which is indistinguishable from the TOTP component"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "apps/web/components/auth/BackupCode.tsx:7 `export default function TwoFactor({ center = true })`; apps/web/components/auth/TwoFactor.tsx:8 `export default function TwoFactor({ center = true, autoFocus = true })`; login.tsx:221 renders <BackupCode center /> when twoFactorLostAccess"
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "CALENDSO_ENCRYPTION_KEY unset in the server environment",
+        "admissibility": "It is an optional environment variable, and the code checks for it being missing."
+       },
+       {
+        "value": "Authenticated user with twoFactorEnabled=true POSTs {password, backupCode:'abcde-12345'} to /api/auth/two-factor/totp/disable",
+        "admissibility": "The endpoint accepts a backupCode in the request body, and the handler gets past the twoFactorEnabled check at line 36."
+       }
+      ],
+      "steps": [
+       {
+        "location": "apps/web/pages/api/auth/two-factor/totp/disable.ts:48",
+        "source": "if (user.twoFactorEnabled && req.body.backupCode) {",
+        "state_before": "The request is authenticated, 2FA is enabled, and backupCode is present.",
+        "operation": "Evaluate the branch condition.",
+        "state_after": "Execution enters the backup-code branch."
+       },
+       {
+        "location": "apps/web/pages/api/auth/two-factor/totp/disable.ts:49",
+        "source": "if (!process.env.CALENDSO_ENCRYPTION_KEY) {",
+        "state_before": "The encryption key env var is unset.",
+        "operation": "Evaluate the missing-key check.",
+        "state_after": "The check passes and the error block runs."
+       },
+       {
+        "location": "apps/web/pages/api/auth/two-factor/totp/disable.ts:50",
+        "source": "console.error(\"Missing encryption key; cannot proceed with backup code login.\");",
+        "state_before": "The endpoint is a disable-2FA handler, not a login handler.",
+        "operation": "Log the error message.",
+        "state_after": "The log says \"backup code login\" for a 2FA-disable request, which misdescribes the operation."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "apps/web/pages/api/auth/two-factor/totp/disable.ts:48-51: `if (user.twoFactorEnabled && req.body.backupCode) { if (!process.env.CALENDSO_ENCRYPTION_KEY) { console.error(\"Missing encryption key; cannot proceed with backup code login.\"); throw new Error(...)`"
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Victim user has twoFactorEnabled=true and a stored backupCodes column holding encrypted JSON of ten 10-hex-character codes. CALENDSO_ENCRYPTION_KEY is set.",
+        "admissibility": "This is the normal state after 2FA setup; setup.ts generates the codes and the migration adds the backupCodes column."
+       },
+       {
+        "value": "Attacker knows the victim's email and password and submits credentials.backupCode = a guessed 10-character string, optionally with a dash.",
+        "admissibility": "The authorize callback accepts any string for backupCode, as declared in the credentials config."
+       }
+      ],
+      "steps": [
+       {
+        "location": "packages/features/auth/lib/next-auth-options.ts:131",
+        "source": "if (user.twoFactorEnabled && credentials.backupCode) {",
+        "state_before": "Attacker request with a correct password and a guessed backupCode",
+        "operation": "Enters the backup-code branch",
+        "state_after": "The code goes on to decrypt the stored codes"
+       },
+       {
+        "location": "packages/features/auth/lib/next-auth-options.ts:139-141",
+        "source": "const backupCodes = JSON.parse(\n          symmetricDecrypt(user.backupCodes, process.env.CALENDSO_ENCRYPTION_KEY)\n        );",
+        "state_before": "Encrypted blob read from the user row",
+        "operation": "Decrypts the blob into an array of plaintext code strings",
+        "state_after": "backupCodes is an array of 10 plaintext strings"
+       },
+       {
+        "location": "packages/features/auth/lib/next-auth-options.ts:144",
+        "source": "const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"));",
+        "state_before": "The attacker's guess and the array of plaintext stored codes",
+        "operation": "indexOf compares the guess to each stored code with ordinary string equality, which is not constant-time and returns at the first match. The comparison cost depends on how much of the guess matches, and the loop ends early on a hit.",
+        "state_after": "Response time can depend on the guess's matching prefix and on which entry matched"
+       },
+       {
+        "location": "packages/features/auth/lib/next-auth-options.ts:145",
+        "source": "if (index === -1) throw new Error(ErrorCode.IncorrectBackupCode);",
+        "state_before": "index is -1 or the matching position",
+        "operation": "Returns an error or proceeds to log in",
+        "state_after": "The attacker observes the error response and its timing"
+       },
+       {
+        "location": "apps/web/pages/api/auth/two-factor/totp/disable.ts:61",
+        "source": "const index = backupCodes.indexOf(req.body.backupCode.replaceAll(\"-\", \"\"));",
+        "state_before": "Authenticated session; the request body carries a guessed backupCode",
+        "operation": "Same non-constant-time indexOf comparison against the decrypted codes",
+        "state_after": "Same timing-dependent comparison, so the finding applies here too"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "next-auth-options.ts:144 `const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"));` and disable.ts:61 `const index = backupCodes.indexOf(req.body.backupCode.replaceAll(\"-\", \"\"));` both use plain indexOf on decrypted plaintext codes (non-constant-time, first-match exit)."
+     }
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Service built with a non-owner/admin user (or invalid options) and no filters",
+        "admissibility": "The constructor accepts any options, and a failed zod parse sets this.options to null at line 63. The unprivileged-user path is a normal case."
+       }
+      ],
+      "steps": [
+       {
+        "location": "packages/lib/server/service/insightsBooking.ts:69",
+        "source": "const authConditions = await this.getAuthorizationConditions();",
+        "state_before": "The cache is undefined.",
+        "operation": "Calls getAuthorizationConditions().",
+        "state_after": "Control goes to the build path."
+       },
+       {
+        "location": "packages/lib/server/service/insightsBooking.ts:131",
+        "source": "return NOTHING_CONDITION;",
+        "state_before": "isOwnerOrAdmin is false.",
+        "operation": "buildAuthorizationConditions returns a Prisma.Sql object. Every other return path also returns a Prisma.Sql.",
+        "state_after": "authConditions is a truthy Prisma.Sql and is never null."
+       },
+       {
+        "location": "packages/lib/server/service/insightsBooking.ts:101",
+        "source": "return null;",
+        "state_before": "this.filters is undefined.",
+        "operation": "buildFilterConditions returns null.",
+        "state_after": "filterConditions is null."
+       },
+       {
+        "location": "packages/lib/server/service/insightsBooking.ts:74",
+        "source": "} else if (authConditions) {",
+        "state_before": "authConditions is truthy and filterConditions is null.",
+        "operation": "The line 72 check is false, and the line 74 check is true, so line 75 returns authConditions.",
+        "state_after": "The branches at lines 76 and 78-79 are never executed. authConditions is always truthy, so they are dead code."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:74-79 and 125-132: buildAuthorizationConditions only returns Prisma.Sql (`return NOTHING_CONDITION;`), so `else if (authConditions)` is always true and the later branches are dead."
+     }
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "WorkflowReminder row: method=SMS, scheduled=false, retryCount=0, scheduledDate within the next 7 days; workflowStep.action=SMS_ATTENDEE; booking.smsReminderNumber=null",
+        "admissibility": "schema.prisma:561 declares `smsReminderNumber     String?`, so null is allowed. The row matches the findMany filter and is not removed by the first deleteMany."
+       }
+      ],
+      "steps": [
+       {
+        "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:48-60",
+        "source": "scheduled: false, ... lte: dayjs().add(7, \"day\").toISOString() ... retryCount: true",
+        "state_before": "The row has retryCount=0 and scheduled=false.",
+        "operation": "findMany returns the reminder with retryCount.",
+        "state_after": "reminder.retryCount = 0"
+       },
+       {
+        "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:75-78",
+        "source": ": reminder.booking?.smsReminderNumber;",
+        "state_before": "The action is SMS_ATTENDEE and smsReminderNumber is null.",
+        "operation": "sendTo is assigned the booking's smsReminderNumber.",
+        "state_after": "sendTo = null"
+       },
+       {
+        "location": "packages/features/ee/workflows/lib/alphanumericSenderIdSupport.ts:3-8",
+        "source": "code === phoneNumber?.substring(0, code.length)",
+        "state_before": "phoneNumber is null.",
+        "operation": "getSenderId uses optional chaining, returns normally, and does not throw.",
+        "state_after": "The catch block at line 189 is not entered."
+       },
+       {
+        "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:158",
+        "source": "if (message?.length && message?.length > 0 && sendTo) {",
+        "state_before": "sendTo is null.",
+        "operation": "The condition is falsy, so the whole block is skipped, including the else at 178-187 that increments retryCount.",
+        "state_after": "No prisma update runs. retryCount stays 0."
+       },
+       {
+        "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:38-42",
+        "source": "retryCount: {\n gt: 1,\n },",
+        "state_before": "retryCount=0 and scheduled=false.",
+        "operation": "The next cron run repeats the same path. The retryCount>1 deletion never matches.",
+        "state_after": "The reminder is retried on every cron run until its scheduledDate passes."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "scheduleSMSReminders.ts:158 `if (message?.length && message?.length > 0 && sendTo) {` skips the retryCount increment (178-187) when sendTo is null; alphanumericSenderIdSupport.ts:5 `phoneNumber?.substring(0, code.length)` does not throw on null; scheduleSMSReminders.ts:29-45 deletes rows only when scheduledDate has passed or retryCount>1."
+     }
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": []
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Visible group 'biggroup' with 100,000 members; request GET /groups/biggroup/members.json?limit=1000000",
+        "admissibility": "limit is a free-form param, converted with to_i and never validated; any user who can see the group can send it"
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/controllers/groups_controller.rb:22",
+        "source": "limit = (params[:limit] || 50).to_i",
+        "state_before": "params[:limit]='1000000'",
+        "operation": "to_i with no clamp",
+        "state_after": "limit=1000000"
+       },
+       {
+        "location": "app/controllers/groups_controller.rb:23",
+        "source": "offset = params[:offset].to_i",
+        "state_before": "params[:offset] is nil",
+        "operation": "nil.to_i",
+        "state_after": "offset=0, with no non-negative check"
+       },
+       {
+        "location": "app/controllers/groups_controller.rb:26",
+        "source": "members = group.users.order(:username_lower).limit(limit).offset(offset)",
+        "state_before": "limit=1000000, offset=0",
+        "operation": "build the query with the unbounded limit",
+        "state_after": "the query returns all 100,000 members"
+       },
+       {
+        "location": "app/controllers/groups_controller.rb:29",
+        "source": "members: serialize_data(members, GroupUserSerializer),",
+        "state_before": "100,000 member rows loaded",
+        "operation": "serialize every member into the response",
+        "state_after": "one request does the full-group load and serialization work"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "app/controllers/groups_controller.rb:22-29: `limit = (params[:limit] || 50).to_i`; `members = group.users.order(:username_lower).limit(limit).offset(offset)`; `members: serialize_data(members, GroupUserSerializer)`. There is no clamp on limit, and find_group only checks guardian.ensure_can_see!."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Routes: delete 'members' => groups#remove_member; put 'members' => groups#add_members",
+        "admissibility": "Defined in config/routes.rb lines 49-50"
+       },
+       {
+        "value": "Admin-logged-in controller spec; automatic group id 1 exists",
+        "admissibility": "Standard spec harness; the spec file already uses group_id: 1"
+       }
+      ],
+      "steps": [
+       {
+        "location": "config/routes.rb:49",
+        "source": "delete \"members\" => \"groups#remove_member\"",
+        "state_before": "Routes loaded",
+        "operation": "Only DELETE maps to remove_member",
+        "state_after": "PUT is not routed to remove_member (PUT goes to add_members)"
+       },
+       {
+        "location": "spec/controllers/admin/groups_controller_spec.rb:115",
+        "source": "xhr :put, :remove_member, group_id: 1, user_id: 42",
+        "state_before": "Spec runs as admin",
+        "operation": "Calls remove_member with the PUT verb, which production never routes there",
+        "state_after": "The test exercises the action with an unrouted verb, so it does not match the real DELETE request"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "config/routes.rb:49 `delete \"members\" => \"groups#remove_member\"`, line 50 `put \"members\" => \"groups#add_members\"`; spec/controllers/admin/groups_controller_spec.rb:115 `xhr :put, :remove_member, group_id: 1, user_id: 42` (line 125 uses :delete)."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Non-automatic visible group with 120 members; regular user views the public group members page",
+        "admissibility": "Any group the user can see passes find_group's guardian.ensure_can_see! check; membership count is unconstrained"
+       },
+       {
+        "value": "Request omits limit/offset or uses defaults (limit 50, offset 0)",
+        "admissibility": "The Group model default is limit: 50, offset: 0, and the server defaults limit to 50"
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/assets/javascripts/discourse/routes/group-members.js.es6:11",
+        "source": "model.findMembers();",
+        "state_before": "Public members page is loading for the 120-member group; model.members is unset",
+        "operation": "Route setupController triggers the member fetch",
+        "state_after": "findMembers is invoked with the model defaults limit 50, offset 0"
+       },
+       {
+        "location": "app/assets/javascripts/discourse/models/group.js:25-29",
+        "source": "return Discourse.ajax('/groups/' + this.get('name') + '/members.json', { data: { limit: this.get(\"limit\"), offset: offset } })",
+        "state_before": "limit=50, offset=0",
+        "operation": "Sends GET /groups/<name>/members.json?limit=50&offset=0",
+        "state_after": "Request reaches GroupsController#members"
+       },
+       {
+        "location": "app/controllers/groups_controller.rb:22-23",
+        "source": "limit = (params[:limit] || 50).to_i\n    offset = params[:offset].to_i",
+        "state_before": "params limit=50, offset=0",
+        "operation": "Parses the paging parameters",
+        "state_after": "limit=50, offset=0; no automatic? branch, so the cap applies to every group"
+       },
+       {
+        "location": "app/controllers/groups_controller.rb:26",
+        "source": "members = group.users.order(:username_lower).limit(limit).offset(offset)",
+        "state_before": "Group has 120 users",
+        "operation": "Builds the capped query; previously the limit applied only when group.automatic?",
+        "state_after": "Relation returns 50 users; meta.total is 120"
+       },
+       {
+        "location": "app/assets/javascripts/discourse/templates/group/members.hbs:6",
+        "source": "{{#each m in members}}",
+        "state_before": "members holds 50 users; user_count is 120",
+        "operation": "Renders the rows; the group template directory has no next/previous/offset controls (search returned no matches)",
+        "state_after": "Page lists 50 members; members 51-120 are unreachable, so the list is silently truncated"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "app/controllers/groups_controller.rb:22-26 applies limit(limit).offset(offset) to all groups with default 50; app/assets/javascripts/discourse/templates/group/members.hbs:6 iterates members with no paging controls; group.js:25-29 sends limit/offset."
+     }
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "Admin loads /admin/customize/embedding; embedding model has only id 'default' and the embeddable_hosts list",
+        "admissibility": "fetch_embedding builds an OpenStruct with just id and embeddable_hosts"
+       },
+       {
+        "value": "Host edits are saved through EmbeddableHostsController, not the embedding update",
+        "admissibility": "embeddable-host component calls host.save / destroyRecord"
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/assets/javascripts/admin/controllers/admin-embedding.js.es6:6",
+        "source": "this.get('embedding').update({});",
+        "state_before": "saveChanges action is invoked (hypothetically)",
+        "operation": "PUT /admin/customize/embedding with empty payload",
+        "state_after": "request reaches Admin::EmbeddingController#update"
+       },
+       {
+        "location": "app/controllers/admin/embedding_controller.rb:10",
+        "source": "render_serialized(@embedding, EmbeddingSerializer, root: 'embedding', rest_serializer: true)",
+        "state_before": "@embedding is an in-memory OpenStruct with id and hosts",
+        "operation": "re-renders the embedding; persists nothing",
+        "state_after": "no DB change, but there was no embedding-level data to persist; hosts are saved separately"
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "No user-facing caller of saveChanges (embedding.hbs binds only addHost/deleteHost) and no embedding-level state exists to persist; host changes are persisted via EmbeddableHostsController, so no user data is lost."
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "admin-embedding.js.es6:6 `this.get('embedding').update({});` ; routes.rb:139 `put \"customize/embedding\" => \"embedding#update\"`; embedding_controller.rb:10 render_serialized only; fetch_embedding builds OpenStruct id 'default' + embeddable_hosts (lines 16-19)"
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "Fabrication loads all files in spec/fabricators regardless of file name (not verified in the repo)",
+        "admissibility": "Standard Fabrication gem behavior; I did not open the gem or spec_helper to confirm it."
+       }
+      ],
+      "steps": [
+       {
+        "location": "spec/fabricators/embeddable_host_fabricator.rb:1",
+        "source": "Fabricator(:category) do",
+        "state_before": "File named for embeddable_host",
+        "operation": "Defines the :category fabricator and its variants",
+        "state_after": ":category, :diff_category, :happy_category and :private_category are registered"
+       },
+       {
+        "location": "spec/fabricators/category_fabricator.rb:1",
+        "source": "Fabricator(:embeddable_host) do",
+        "state_before": "File named for category",
+        "operation": "Defines the :embeddable_host fabricator",
+        "state_after": ":embeddable_host is registered with host 'eviltrout.com' and a category association"
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "Fabrication loads every file in spec/fabricators regardless of name, so both fabricators are registered and Fabricate(:category) and Fabricate(:embeddable_host) still work. Only the file names are wrong."
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "spec/fabricators/embeddable_host_fabricator.rb:1 `Fabricator(:category) do` (plus :diff_category, :happy_category, :private_category at lines 6, 11, 17); spec/fabricators/category_fabricator.rb:1-3 `Fabricator(:embeddable_host) do host \"eviltrout.com\"; category`; spec/spec_helper.rb:32 `Dir[Rails.root.join(\"spec/fabricators/*.rb\")].each {|f| require f}`"
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "etapa": "exclusao",
+     "trace": {
+      "setup": [
+       {
+        "value": "topic = Fabricate.build(:topic) (unsaved, id nil); no EmbeddableHost rows",
+        "admissibility": "Matches the let(:topic) in the spec; the table is empty by default in tests."
+       },
+       {
+        "value": "Variant: SiteSetting.embed_truncate = true and topic.stubs(:has_topic_embed?).returns(true)",
+        "admissibility": "Same stubs used in the before block of the sibling describe at spec lines 1410-1411."
+       }
+      ],
+      "steps": [
+       {
+        "location": "spec/models/topic_spec.rb:1404",
+        "source": "expect(topic.expandable_first_post?).to eq(false)",
+        "state_before": "No stubs, no hosts, unsaved topic",
+        "operation": "Call expandable_first_post?",
+        "state_after": "Evaluates the method in topic.rb"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "incorrect",
+      "first_incorrect_step": 1,
+      "corrected_transition": "With embed_truncate = true and has_topic_embed? stubbed to true, expandable_first_post? evaluates true && true and returns true, not false. The empty EmbeddableHost table is irrelevant. `false` is only returned in the no-stub case, where embed_truncate defaults to false and the && short-circuits.",
+      "evidence": "app/models/topic.rb:868-870 `SiteSetting.embed_truncate? && has_topic_embed?`; spec/models/topic_spec.rb:1414-1415 expects true with these same stubs"
+     },
+     "exclui": {
+      "verdict": "trace_only_invalid",
+      "evidence": "topic.rb:868-870 is `SiteSetting.embed_truncate? && has_topic_embed?` with no host check. The test at spec:1403-1405 is unstubbed, so it returns false from the default embed_truncate=false short-circuit and would return false even with a host present. It never exercises host logic, so the name/body mismatch stands. The finding's suggested fix (stubs on, no host, expect false) would actually return true.",
+      "scope": "The mismatch between the test name and what it exercises survives the trace correction. The finding's suggested remediation is partly wrong, and removing the test would be the valid fix."
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "embeddable_hosts table is empty (no EmbeddableHost rows)",
+        "admissibility": "Admins can delete all hosts, and a fresh install has none."
+       },
+       {
+        "value": "SiteSetting.embed_truncate = true",
+        "admissibility": "It is a boolean site setting, default false at config/site_settings.yml:769, and an admin can enable it."
+       },
+       {
+        "value": "Topic has a TopicEmbed row",
+        "admissibility": "Topics may have embed rows from earlier embedding or from hosts that were later deleted."
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/serializers/topic_view_serializer.rb:211",
+        "source": "object.topic.expandable_first_post?",
+        "state_before": "Topic view is being serialized with the setup state above.",
+        "operation": "Calls Topic#expandable_first_post?",
+        "state_after": "Control enters Topic#expandable_first_post?."
+       },
+       {
+        "location": "app/models/topic.rb:869",
+        "source": "SiteSetting.embed_truncate? && has_topic_embed?",
+        "state_before": "No EmbeddableHost rows exist and embed_truncate is true.",
+        "operation": "Evaluates embed_truncate?. The old host-presence guard is no longer in the expression.",
+        "state_after": "embed_truncate? is true, so has_topic_embed? is evaluated."
+       },
+       {
+        "location": "app/models/topic.rb:865",
+        "source": "TopicEmbed.where(topic_id: id).exists?",
+        "state_before": "The topic has a TopicEmbed row.",
+        "operation": "Runs the existence query.",
+        "state_after": "Returns true, so the method returns true even though no embeddable hosts exist."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "app/models/topic.rb:869 `SiteSetting.embed_truncate? && has_topic_embed?`; topic.rb:865 `TopicEmbed.where(topic_id: id).exists?`; topic_view_serializer.rb:211 `object.topic.expandable_first_post?`"
+     }
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Non-controller context (job/mailer/rake); SiteSetting.default_locale='fr'; I18n.locale=:de; key foo.bar exists only in fr/en; only de loaded",
+        "admissibility": "ensure_loaded! is only called in ApplicationController; translate can be called from anywhere"
+       }
+      ],
+      "steps": [
+       {
+        "location": "lib/freedom_patches/translate_accelerator.rb:68",
+        "source": "load_locale(config.locale) unless @loaded_locales.include?(config.locale)",
+        "state_before": "@loaded_locales empty",
+        "operation": "loads only :de",
+        "state_after": "@loaded_locales=[:de]; fr and en not loaded"
+       },
+       {
+        "location": "lib/freedom_patches/translate_accelerator.rb:74",
+        "source": "@cache.getset(k) do",
+        "state_before": "cache has no entry for foo.bar+de",
+        "operation": "enters the block to compute the value",
+        "state_after": "calls translate_no_cache"
+       },
+       {
+        "location": "config/initializers/i18n.rb:17",
+        "source": "[locale, SiteSetting.default_locale.to_sym, :en].uniq.compact",
+        "state_before": "fallback chain requested for :de",
+        "operation": "returns [:de, :fr, :en]; the backend looks up fr and en, which hold no loaded data",
+        "state_after": "translate_no_cache returns 'translation missing: de.foo.bar'"
+       },
+       {
+        "location": "lib/freedom_patches/translate_accelerator.rb:75",
+        "source": "translate_no_cache(key).freeze",
+        "state_before": "result is the missing-translation string",
+        "operation": "getset stores it in the LRU cache",
+        "state_after": "cache serves 'translation missing' for foo.bar/de on later calls"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "lib/freedom_patches/translate_accelerator.rb:68 `load_locale(config.locale) unless @loaded_locales.include?(config.locale)`; :74-75 `@cache.getset(k) do translate_no_cache(key).freeze end`; config/initializers/i18n.rb:17 `[locale, SiteSetting.default_locale.to_sym, :en].uniq.compact`; ensure_loaded! is called only at app/controllers/application_controller.rb:159"
+     }
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": []
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "ProvideAnonDBStore(store, 1), so deviceLimit is 1",
+        "admissibility": "The deviceLimit parameter is an int64 and any positive value is accepted."
+       },
+       {
+        "value": "Hypothetical mutation: updateDevice always returns ErrDeviceLimitReached",
+        "admissibility": "A code change that is possible to make. The test is meant to catch exactly this kind of regression."
+       }
+      ],
+      "steps": [
+       {
+        "location": "pkg/services/anonymous/anonimpl/anonstore/database_test.go:62",
+        "source": "err := anonDBStore.CreateOrUpdateDevice(context.Background(), anonDevice)",
+        "state_before": "The table is empty and the limit is 1.",
+        "operation": "The count is 0, which is below the limit, so the insert path runs and updateDevice is never called.",
+        "state_after": "One row exists with device_id 32mdo31deeqwes."
+       },
+       {
+        "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:115",
+        "source": "if count >= s.deviceLimit {\n\t\t\treturn s.updateDevice(ctx, device)",
+        "state_before": "DeviceID is now \"keep\" and the count is 1.",
+        "operation": "updateDevice is called for the new device. The real code returns the error because no row matches, and the always-failing mutant returns it unconditionally.",
+        "state_after": "ErrDeviceLimitReached is returned and the stored row is unchanged."
+       },
+       {
+        "location": "pkg/services/anonymous/anonimpl/anonstore/database_test.go:69",
+        "source": "require.ErrorIs(t, err, ErrDeviceLimitReached)",
+        "state_before": "err is ErrDeviceLimitReached.",
+        "operation": "The assertion passes. The existing device 32mdo31deeqwes is never re-submitted at the limit.",
+        "state_after": "The test passes for both the real code and the always-failing mutant."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "database.go:115-116 `if count >= s.deviceLimit { return s.updateDevice(ctx, device) }`; database.go:95-96 returns ErrDeviceLimitReached when rowsAffected == 0; database_test.go:65-69 only submits the new device \"keep\" at the limit and asserts ErrDeviceLimitReached, so an always-failing updateDevice also passes."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "auth.anonymous device_limit=1, anonymous enabled; DB already has 1 recent device 'A' (count=1)",
+        "admissibility": "MustInt64(0) accepts any int64 limit; the device row can exist from an earlier request"
+       },
+       {
+        "value": "New device 'B' sends the device-id header, with no DB row and no cache entry",
+        "admissibility": "Any client can send an arbitrary device id header"
+       }
+      ],
+      "steps": [
+       {
+        "location": "pkg/services/anonymous/anonimpl/impl.go:83-87",
+        "source": "if _, ok := a.localCache.Get(key); ok { return nil }\n\na.localCache.SetDefault(key, struct{}{})",
+        "state_before": "B not cached; DB count=1, limit=1",
+        "operation": "First request: cache miss, then cache key for B is set before the DB write",
+        "state_after": "B cached for 29 minutes"
+       },
+       {
+        "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:115-116",
+        "source": "if count >= s.deviceLimit {\n\t\t\treturn s.updateDevice(ctx, device)",
+        "state_before": "count=1 >= limit=1; B has no row",
+        "operation": "updateDevice affects 0 rows and returns ErrDeviceLimitReached",
+        "state_after": "B is not stored; error propagates"
+       },
+       {
+        "location": "pkg/services/anonymous/anonimpl/impl.go:144-147",
+        "source": "err = a.tagDeviceUI(ctx, httpReq, taggedDevice)\nif err != nil {\n\ta.log.Debug(\"Failed to tag device for UI\", \"error\", err)\n\treturn err",
+        "state_before": "tagDeviceUI returned ErrDeviceLimitReached",
+        "operation": "TagDevice returns the error; the cache entry is not removed, so the first request is rejected",
+        "state_after": "B rejected once, but cache key for B persists"
+       },
+       {
+        "location": "pkg/services/anonymous/anonimpl/impl.go:83-85",
+        "source": "if _, ok := a.localCache.Get(key); ok {\n\t\treturn nil\n\t}",
+        "state_before": "Second request from B; cache key present; B not in DB",
+        "operation": "Cache hit, so tagDeviceUI returns nil without calling the store",
+        "state_after": "No limit check performed"
+       },
+       {
+        "location": "pkg/services/anonymous/anonimpl/client.go:44-52",
+        "source": "if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {\n\t\tif errors.Is(err, anonstore.ErrDeviceLimitReached) {\n\t\t\treturn nil, err\n...\nreturn &authn.Identity{\n\t\tID:           authn.AnonymousNamespaceID,",
+        "state_before": "TagDevice returned nil",
+        "operation": "Authenticate returns the anonymous identity",
+        "state_after": "Rejected device B has anonymous access for about 29 minutes; the limit is bypassed"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "impl.go:83-87 caches the key before the DB call (`a.localCache.SetDefault(key, struct{}{})`) and never removes it on error. database.go:115-116 returns `s.updateDevice(ctx, device)` when the limit is reached, and database.go:95-97 returns ErrDeviceLimitReached when 0 rows are affected. impl.go:42 sets a 29-minute cache TTL. client.go:44-52 returns the anonymous identity when TagDevice returns nil."
+     }
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Regression: CheckHealth in metrics_middleware.go also calls m.instrumentPluginRequestSize(...) before instrumentPluginRequest",
+        "admissibility": "instrumentPluginRequestSize is an existing method with the signature needed, so adding the call compiles."
+       },
+       {
+        "value": "Test case endpointCheckHealth with shouldInstrumentRequestSize=false; the plugin 'plugin-id' is registered in the fake registry",
+        "admissibility": "This is the existing table entry in the test, at lines 39-46."
+       }
+      ],
+      "steps": [
+       {
+        "location": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:169",
+        "source": "func (m *MetricsMiddleware) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {",
+        "state_before": "The regression is applied, so CheckHealth observes pluginRequestSize with source=grafana-backend and endpoint=CheckHealth.",
+        "operation": "The test calls cdt.Decorator.CheckHealth, which reaches the regressed method. The request size histogram gets one sample and the other metrics are recorded as normal.",
+        "state_after": "metric grafana_plugin_request_size_bytes has 1 series. request_total, duration_ms and duration_s also have 1 series each."
+       },
+       {
+        "location": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:88",
+        "source": "require.Equal(t, 1, testutil.CollectAndCount(promRegistry, metricRequestTotal))",
+        "state_before": "The size histogram is wrongly populated.",
+        "operation": "These assertions only check the total, duration_ms and duration_s metrics, and all of them still hold.",
+        "state_after": "All three assertions pass."
+       },
+       {
+        "location": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:101",
+        "source": "if tc.shouldInstrumentRequestSize {",
+        "state_before": "tc.shouldInstrumentRequestSize is false.",
+        "operation": "The if body is skipped and there is no else branch, so metricRequestSize is never checked.",
+        "state_after": "The subtest finishes and passes even though the size metric was wrongly recorded for CheckHealth."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "metrics_middleware_test.go:101 `if tc.shouldInstrumentRequestSize {` with no else (101-109); metrics_middleware.go:94-101 instrumentPluginRequestSize observes pluginRequestSize with \"grafana-backend\"; test lines 88-90 only check total/duration metrics"
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "Tracing service initialised via tracing.ProvideService, which registers the traceID contextual log provider; request ctx carries a valid span so TraceIDFromContext returns non-empty",
+        "admissibility": "Normal Grafana startup; ProvideService is the standard tracing service provider"
+       },
+       {
+        "value": "LoggerMiddleware logger is the plog wrapper around infra ConcreteLogger",
+        "admissibility": "pluginsintegration passes log.New(\"plugin.instrumentation\"), wrapped by the plugin log package"
+       }
+      ],
+      "steps": [
+       {
+        "location": "pkg/infra/tracing/tracing.go:91",
+        "source": "log.RegisterContextualLogProvider(func(ctx context.Context) ([]any, bool) {\n\t\tif traceID := TraceIDFromContext(ctx, false); traceID != \"\" {\n\t\t\treturn []any{\"traceID\", traceID}, true",
+        "state_before": "Tracing service starting",
+        "operation": "Registers a provider that emits traceID from ctx",
+        "state_after": "ctxLogProviders includes the traceID provider"
+       },
+       {
+        "location": "pkg/infra/log/log.go:206",
+        "source": "for _, p := range ctxLogProviders {\n\t\tif pArgs, exists := p(ctx); exists {\n\t\t\targs = append(args, pArgs...)",
+        "state_before": "LoggerMiddleware.logRequest calls m.logger.FromContext(ctx)",
+        "operation": "FromContext runs all providers, including the traceID one, and builds a logger with those args",
+        "state_after": "Returned logger carries traceID, so the 'Plugin Request Completed' log includes it"
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "pkg/infra/log/log.go:206 FromContext iterates ctxLogProviders, which includes the tracing provider registered at pkg/infra/tracing/tracing.go:91 that adds traceID"
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "pkg/infra/log/log.go:206-213 loops ctxLogProviders and returns cl.New(args...); pkg/infra/tracing/tracing.go:91-93 registers the traceID provider; pkg/plugins/log/logger.go:49 asserts the result to *log.ConcreteLogger and re-wraps it; logger_middleware.go:58 `m.logger.FromContext(ctx).Info(\"Plugin Request Completed\"...)`"
+     }
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "embeddable_host = example.com; Referer: http://example.com/a'+alert(1)+'",
+        "admissibility": "The controller only compares the referer's host to the setting."
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/controllers/embed_controller.rb:26",
+        "source": "raise Discourse::InvalidAccess.new('invalid referer host') if URI(request.referer || '').host != SiteSetting.embeddable_host",
+        "state_before": "Referer host matches, path contains a quote",
+        "operation": "Host-only check passes",
+        "state_after": "Request proceeds and the layout renders"
+       },
+       {
+        "location": "app/views/layouts/embed.html.erb:11",
+        "source": "parent.postMessage({type: 'discourse-resize', height: document['body'].offsetHeight}, '<%= request.referer %>');",
+        "state_before": "request.referer contains a raw single quote",
+        "operation": "ERB <%= %> HTML-escapes the referer, turning ' into &#39; and < into &lt;",
+        "state_after": "The script string literal contains the text &#39; and is never terminated early, so no injected code runs"
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "app/views/layouts/embed.html.erb:11 — <%= request.referer %> is HTML-escaped by ERB (' becomes &#39;, < becomes &lt;), so the quote cannot terminate the JS string and </script> cannot be injected"
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "app/views/layouts/embed.html.erb:11 `'<%= request.referer %>'` is HTML-escaped by ERB (' -> &#39;), so the JS string is not terminated; app/controllers/embed_controller.rb:26 only checks the host, so the quote-containing path passes as the trace says."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "Attacker sends GET /embed/best?embed_url=|touch /tmp/pwn with a Referer whose host equals SiteSetting.embeddable_host, which is non-blank",
+        "admissibility": "The controller only requires a non-blank embeddable_host and a matching referer host. It places no restriction on the embed_url value."
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/controllers/embed_controller.rb:15",
+        "source": "Jobs.enqueue(:retrieve_topic, user_id: current_user.try(:id), embed_url: embed_url)",
+        "state_before": "embed_url is '|touch /tmp/pwn' and no embed exists for it",
+        "operation": "Enqueue the RetrieveTopic job with the unchecked URL",
+        "state_after": "The job is queued with the raw string"
+       },
+       {
+        "location": "app/jobs/regular/retrieve_topic.rb:17",
+        "source": "TopicRetriever.new(args[:embed_url], no_throttle: user.try(:staff?)).retrieve",
+        "state_before": "The job is running with the malicious string",
+        "operation": "Call TopicRetriever#retrieve",
+        "state_after": "Control moves to the host check in retrieve"
+       },
+       {
+        "location": "lib/topic_retriever.rb:15",
+        "source": "SiteSetting.embeddable_host != URI(@embed_url).host",
+        "state_before": "@embed_url is '|touch /tmp/pwn'",
+        "operation": "URI() raises URI::InvalidURIError because the string contains '|' and a space. The rescue at line 16 returns true.",
+        "state_after": "invalid_host? is true"
+       },
+       {
+        "location": "lib/topic_retriever.rb:9",
+        "source": "perform_retrieve unless (invalid_host? || retrieved_recently?)",
+        "state_before": "invalid_host? is true",
+        "operation": "Skip perform_retrieve, so import_remote and open(url) at app/models/topic_embed.rb:48 are never reached",
+        "state_after": "No command runs and no local file is read"
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "lib/topic_retriever.rb:15 — invalid_host? requires URI(@embed_url).host to equal embeddable_host and treats URI::InvalidURIError as an invalid host. That stops pipe-prefixed strings and bare local paths before TopicEmbed.import_remote runs."
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "lib/topic_retriever.rb:9 `perform_retrieve unless (invalid_host? || retrieved_recently?)`; lib/topic_retriever.rb:15-18 `URI(@embed_url).host ... rescue URI::InvalidURIError  true`; app/controllers/embed_controller.rb:15 enqueues the raw embed_url; app/jobs/regular/retrieve_topic.rb:17 calls TopicRetriever#retrieve"
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "exclusao",
+     "trace": {
+      "setup": [
+       {
+        "value": "SiteSetting.feed_polling_enabled=true, feed_polling_url points to an attacker-influenced RSS feed, embed_by_username is a valid user. One feed item has link 'http://x.com/a' and content (after CGI.unescapeHTML) '<img src=x onerror=alert(document.domain)>'.",
+        "admissibility": "PollFeed#execute only requires these settings. Feed content is arbitrary remote data, and the code applies no filtering."
+       },
+       {
+        "value": "SiteSetting.embeddable_host is set to the embedding blog's host, and a visitor loads /embed/best with that referer.",
+        "admissibility": "This is the normal configuration of the embed feature."
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/jobs/scheduled/poll_feed.rb:35-36",
+        "source": "content = CGI.unescapeHTML(i.content.scrub)\n        TopicEmbed.import(user, url, i.title, content)",
+        "state_before": "The feed item content contains an HTML payload.",
+        "operation": "The content is unescaped, which turns escaped markup back into live HTML, and passed to TopicEmbed.import. `scrub` here is not an HTML sanitizer.",
+        "state_after": "contents holds '<img src=x onerror=...>'."
+       },
+       {
+        "location": "app/models/topic_embed.rb:22",
+        "source": "creator = PostCreator.new(user, title: title, raw: absolutize_urls(url, contents), skip_validations: true, cook_method: Post.cook_methods[:raw_html])",
+        "state_before": "contents is unsanitized. absolutize_urls only rewrites relative hrefs and srcs.",
+        "operation": "A post is created with raw equal to the payload and cook_method set to raw_html.",
+        "state_after": "The post row stores the payload in raw, with the raw_html cook method."
+       },
+       {
+        "location": "lib/post_creator.rb:216",
+        "source": "post.cook_method = @opts[:cook_method] if @opts[:cook_method].present?",
+        "state_before": "The post is built without a cook method.",
+        "operation": "The cook method is copied onto the post.",
+        "state_after": "post.cook_method == raw_html."
+       },
+       {
+        "location": "app/models/post.rb:133",
+        "source": "return raw if cook_method == Post.cook_methods[:raw_html]",
+        "state_before": "The post has cook_method raw_html.",
+        "operation": "cook returns raw directly, skipping the post analyzer and sanitizer. The spec at topic_embed_spec.rb:31 asserts cooked == raw.",
+        "state_after": "post.cooked contains the unsanitized '<img onerror>' payload."
+       },
+       {
+        "location": "app/views/embed/best.html.erb:19",
+        "source": "<div class='cooked'><%= raw post.cooked %></div>",
+        "state_before": "The embed controller shows the topic with this post. Its host and referer check passes.",
+        "operation": "The cooked HTML is output with raw, so it is not escaped.",
+        "state_after": "The response served from the forum origin contains the live <img onerror> tag, so the script runs when the visitor loads the embed."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "incorrect",
+      "first_incorrect_step": 5,
+      "corrected_transition": "The embed controller builds TopicView with best: 5, and FilterBestPosts filters on post_number > 1. The imported raw_html post is post #1, so it is excluded from @topic_view.posts. best.html.erb renders only replies, which are cooked normally. The raw_html payload is not output on /embed/best, so the script does not execute through this path.",
+      "evidence": "lib/filter_best_posts.rb:37 `@posts = @filtered_posts.order('percent_rank asc, sort_order asc').where(\"post_number > 1\")`; app/controllers/embed_controller.rb:13 `TopicView.new(topic_id, current_user, {best: 5})`; app/views/embed/best.html.erb:12-19 iterates @topic_view.posts"
+     },
+     "exclui": {
+      "verdict": "trace_only_invalid",
+      "evidence": "post.rb:133 returns raw for raw_html posts, and topic_embed.rb:22 creates posts with cook_method raw_html. The stored cooked therefore holds unsanitized HTML, which the normal topic page would serve for post #1. The best-5 filter only removes post #1 from /embed/best (best.html.erb:19 uses raw post.cooked). It does not stop the stored payload from being served elsewhere.",
+      "scope": "Step 5 (/embed/best rendering) is wrong. The stored-XSS finding still holds through the standard topic view and any raw_html post that is not post #1. I did not read the topic-page rendering code to confirm this."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "url = 'http://eviltrout.com/123'; s = String 'hello world' (mutable, kept by the caller); user is any valid user",
+        "admissibility": "import accepts any http(s) URL and any String for contents; nothing copies or checks the string before line 13"
+       },
+       {
+        "value": "Variant: s is frozen (s.freeze)",
+        "admissibility": "A frozen String is a valid String argument and nothing in import dups it"
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/models/topic_embed.rb:11",
+        "source": "return unless url =~ /^https?\\:\\/\\//",
+        "state_before": "url='http://eviltrout.com/123', s='hello world'",
+        "operation": "URL matches, so execution continues",
+        "state_after": "proceeds to line 13"
+       },
+       {
+        "location": "app/models/topic_embed.rb:13",
+        "source": "contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+        "state_before": "s = 'hello world'",
+        "operation": "<< appends in place to the caller's string object",
+        "state_after": "s = 'hello world' + footer; the caller's object is mutated"
+       },
+       {
+        "location": "app/models/topic_embed.rb:13",
+        "source": "contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', ...)}</small>\\n\"",
+        "state_before": "second import call with the same s, which already ends with one footer",
+        "operation": "<< appends the footer again",
+        "state_after": "s ends with two footers; with a frozen s, FrozenError is raised here instead"
+       },
+       {
+        "location": "app/models/topic_embed.rb:16",
+        "source": "content_sha1 = Digest::SHA1.hexdigest(contents)",
+        "state_before": "contents has the doubled footer",
+        "operation": "hashes the doubled content",
+        "state_after": "sha1 differs from the first import, so the post or embed gets the duplicated footer"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "app/models/topic_embed.rb:13 `contents << \"\\n<hr>\\n<small>...` mutates the caller's string in place; line 16 `Digest::SHA1.hexdigest(contents)` hashes the mutated string; no dup or footer check exists."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "exclusao",
+     "trace": {
+      "setup": [
+       {
+        "value": "discourseUrl = 'https://forum.example.com/'; the embedding page loads embed.js",
+        "admissibility": "discourseUrl is a global set by the embedding page; any string URL is allowed"
+       },
+       {
+        "value": "Another window posts a message to the host page with e.origin === '' (or a substring origin such as 'https://forum') and data {type:'discourse-resize', height:'9999'}",
+        "admissibility": "The message listener has no source check, and any window with a reference to the host can post a message to it"
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/assets/javascripts/embed.js:25",
+        "source": "window.addEventListener('message', postMessageReceived, false);",
+        "state_before": "Page loaded, iframe appended",
+        "operation": "Listener registered for all message events",
+        "state_after": "Any window's message reaches postMessageReceived"
+       },
+       {
+        "location": "app/assets/javascripts/embed.js:17",
+        "source": "if (discourseUrl.indexOf(e.origin) === -1) { return; }",
+        "state_before": "e.origin = '', discourseUrl = 'https://forum.example.com/'",
+        "operation": "'https://forum.example.com/'.indexOf('') returns 0, which is not -1, so the guard does not return",
+        "state_after": "Execution continues past the origin check, although the origin is not the forum's"
+       },
+       {
+        "location": "app/assets/javascripts/embed.js:20-21",
+        "source": "if (e.data.type === 'discourse-resize' && e.data.height) {\n        iframe.height = e.data.height + \"px\";",
+        "state_before": "e.data = {type:'discourse-resize', height:'9999'}",
+        "operation": "The attacker-controlled height is applied to the iframe",
+        "state_after": "iframe.height = '9999px', set by a non-forum origin"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "incorrect",
+      "first_incorrect_step": 2,
+      "corrected_transition": "The indexOf arithmetic is right for e.origin === '', but real cross-window postMessage never yields an empty origin. Opaque origins arrive as the string \"null\", and 'https://forum.example.com/'.indexOf('null') === -1, so the handler returns. The guard is bypassed only by a real attacker origin that is a substring of discourseUrl (e.g. https://forum.example.co), not by ''.",
+      "evidence": "app/assets/javascripts/embed.js:17 `if (discourseUrl.indexOf(e.origin) === -1) { return; }`"
+     },
+     "exclui": {
+      "verdict": "trace_only_invalid",
+      "evidence": "embed.js:17 uses discourseUrl.indexOf(e.origin) === -1, a substring check. A non-forum origin that is a substring of discourseUrl (e.g. https://forum.example.co) passes it. Lines 20-21 then apply e.data.height to iframe.height. The empty-origin input in the trace is impossible, but this one is admissible.",
+      "scope": "The correction only invalidates the empty-origin input. The substring-bypass failure remains. Impact is limited to the iframe height set at line 21."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Disqus XML with a thread whose link is http://dead.example.com/a (unreachable or 404); run without --dry_run, as `thor disqus:import -f export.xml -p admin`",
+        "admissibility": "Thread links come from the export file and are arbitrary URLs; the import code does not check that they are reachable."
+       },
+       {
+        "value": "A category the user previously would have passed via -c",
+        "admissibility": "The --category option no longer exists, so no category can be passed."
+       }
+      ],
+      "steps": [
+       {
+        "location": "lib/tasks/disqus.thor:116",
+        "source": "method_option :strip, aliases: '-s', required: false, desc: \"Text to strip from titles\"",
+        "state_before": "CLI option list",
+        "operation": "The --category method_option and the category_id lookup are removed",
+        "state_after": "No way to specify a category"
+       },
+       {
+        "location": "lib/tasks/disqus.thor:148",
+        "source": "post = TopicEmbed.import_remote(user, t[:link], title: t[:title])",
+        "state_before": "Looping over the threads, with no rescue around the call",
+        "operation": "Calls import_remote with only the title; no created_at or category is passed",
+        "state_after": "Date and category data are dropped; a network fetch of t[:link] begins"
+       },
+       {
+        "location": "app/models/topic_embed.rb:48",
+        "source": "doc = Readability::Document.new(open(url).read,",
+        "state_before": "url = http://dead.example.com/a, which is unreachable",
+        "operation": "open(url) raises and nothing in import_remote rescues it",
+        "state_after": "The exception propagates out of the thor import; the remaining threads are not imported"
+       },
+       {
+        "location": "app/models/topic_embed.rb:22",
+        "source": "creator = PostCreator.new(user, title: title, raw: absolutize_urls(url, contents), skip_validations: true, cook_method: Post.cook_methods[:raw_html])",
+        "state_before": "Fetch succeeded for a reachable link",
+        "operation": "The post is created without category or created_at",
+        "state_after": "The topic is in the default category with a creation time of now, not the Disqus thread date"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "lib/tasks/disqus.thor:148 `TopicEmbed.import_remote(user, t[:link], title: t[:title])` with no rescue; app/models/topic_embed.rb:48 `open(url).read` has no rescue; topic_embed.rb:22 PostCreator.new has no category or created_at."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "etapa": "exclusao",
+     "trace": {
+      "setup": [
+       {
+        "value": "url = http://x.com/'><script>alert(1)</script><a href='  (attacker-influenced feed item link or embed_url)",
+        "admissibility": "The only check is the /^https?:\\/\\// prefix regex at topic_embed.rb:11, so quotes and markup after the prefix are accepted."
+       },
+       {
+        "value": "SiteSetting.embeddable_host and embed_by_username are configured, and feed polling or import_remote supplies the URL",
+        "admissibility": "These are the intended settings for the embedding feature."
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/models/topic_embed.rb:11",
+        "source": "return unless url =~ /^https?\\:\\/\\//",
+        "state_before": "url is the malicious string",
+        "operation": "The prefix check passes",
+        "state_after": "Execution continues with the unescaped URL"
+       },
+       {
+        "location": "app/models/topic_embed.rb:13",
+        "source": "contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+        "state_before": "contents is the article body",
+        "operation": "The URL is interpolated into the href and the link text without escaping",
+        "state_after": "contents contains a live <script> element"
+       },
+       {
+        "location": "app/models/topic_embed.rb:22",
+        "source": "creator = PostCreator.new(user, title: title, raw: absolutize_urls(url, contents), skip_validations: true, cook_method: Post.cook_methods[:raw_html])",
+        "state_before": "contents holds the injected markup",
+        "operation": "absolutize_urls re-serialises the HTML through Nokogiri and keeps the script; the post is created as raw_html",
+        "state_after": "The post's raw contains the script and cook_method is raw_html"
+       },
+       {
+        "location": "app/models/post.rb:133",
+        "source": "return raw if cook_method == Post.cook_methods[:raw_html]",
+        "state_before": "The post is being cooked",
+        "operation": "Cooking returns raw unchanged",
+        "state_after": "post.cooked contains the script"
+       },
+       {
+        "location": "app/views/embed/best.html.erb:19",
+        "source": "<div class='cooked'><%= raw post.cooked %></div>",
+        "state_before": "The embed page renders the post",
+        "operation": "raw outputs the cooked HTML unescaped",
+        "state_after": "The script executes in the Discourse origin inside the embed iframe"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "incorrect",
+      "first_incorrect_step": 3,
+      "corrected_transition": "absolutize_urls calls URI(url) first (line 57). The URL contains '<' and '>', so URI() raises URI::InvalidURIError. The exception propagates out of the Topic.transaction block, so no post is created and no script is stored or cooked.",
+      "evidence": "app/models/topic_embed.rb:57 `uri = URI(url)` inside absolutize_urls, called at line 22 `raw: absolutize_urls(url, contents)`"
+     },
+     "exclui": {
+      "verdict": "trace_only_invalid",
+      "evidence": "topic_embed.rb:13 interpolates url unescaped into href='...'. URI() at line 57 rejects '<', '>' and spaces, but single quotes are valid URI characters. A url like http://a.com/x'onmouseover='alert(1) passes the line 11 check and URI() parsing, breaks out of the href attribute, and survives Nokogiri re-serialisation. It is stored as raw_html (line 22) and rendered raw.",
+      "scope": "Only the <script>-element payload is blocked by URI(). Quote-based attribute injection (e.g. event handlers) in the url remains reachable on both the create path (line 22) and the update path (line 36). I did not read post.rb or embed/best.html.erb; the cooking and rendering steps are taken from the trace."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "feed_polling_enabled=true, feed_polling_url and embed_by_username set; user with that username exists",
+        "admissibility": "Ordinary site settings; execute (line 15-17) only requires these to be present, and line 26 returns early only if the user is blank."
+       },
+       {
+        "value": "Feed has item1 with a valid link and only a <description> (so i.content == nil), followed by item2 with normal content",
+        "admissibility": "RSS items commonly have only a description; nothing validates item shape. Assumes simple-rss returns nil for a missing tag (not verified in gem source)."
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/jobs/scheduled/poll_feed.rb:31",
+        "source": "rss.items.each do |i|",
+        "state_before": "item1.content == nil; item2 unprocessed",
+        "operation": "Begin iterating at item1",
+        "state_after": "i = item1"
+       },
+       {
+        "location": "app/jobs/scheduled/poll_feed.rb:32-33",
+        "source": "url = i.link\n        url = i.id if url.blank? || url !~ /^https?\\:\\/\\//",
+        "state_before": "i = item1 with a valid link",
+        "operation": "Compute url",
+        "state_after": "url = item1 link"
+       },
+       {
+        "location": "app/jobs/scheduled/poll_feed.rb:35",
+        "source": "content = CGI.unescapeHTML(i.content.scrub)",
+        "state_before": "i.content is nil; scrub is only defined on String (lib/freedom_patches/scrub.rb:2-4)",
+        "operation": "Call nil.scrub",
+        "state_after": "NoMethodError raised; no rescue in the block or in execute (line 14), so poll_feed aborts"
+       },
+       {
+        "location": "app/jobs/scheduled/poll_feed.rb:36",
+        "source": "TopicEmbed.import(user, url, i.title, content)",
+        "state_before": "exception propagated out of the each loop",
+        "operation": "Never executed for item1 or item2",
+        "state_after": "item1 and item2 are not imported"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "unknown",
+      "first_incorrect_step": 0,
+      "corrected_transition": "Steps 1, 2 and 4 follow from the repo code. Step 3 holds only if simple-rss 1.3.1 returns nil for `content` on an item with only a `<description>`. The gem source was not available to check this.",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:35 `content = CGI.unescapeHTML(i.content.scrub)` with no rescue; lib/freedom_patches/scrub.rb:2-4 defines scrub only on String; Gemfile_rails4.lock:344 `simple-rss (1.3.1)`, gem source not available."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "topic_embeds row for http://eviltrout.com/123 with post_id pointing to a post that has been trashed via PostDestroyer (deleted_at set); row not removed",
+        "admissibility": "PostDestroyer only trashes the post and topic; nothing in the diff deletes topic_embeds rows. The post_id column has no FK constraint."
+       },
+       {
+        "value": "TopicEmbed.import called with the same URL and contents whose SHA1 differs from the stored content_sha1",
+        "admissibility": "Any PollFeed run or import_remote with updated article text does this."
+       }
+      ],
+      "steps": [
+       {
+        "location": "app/models/topic_embed.rb:15",
+        "source": "embed = TopicEmbed.where(embed_url: url).first",
+        "state_before": "embed row exists, its post is trashed",
+        "operation": "Load the existing embed",
+        "state_after": "embed present, so embed.blank? is false"
+       },
+       {
+        "location": "app/models/topic_embed.rb:32",
+        "source": "post = embed.post",
+        "state_before": "Post default_scope excludes rows with deleted_at set (lib/trashable.rb:5)",
+        "operation": "belongs_to lookup applies the default scope",
+        "state_after": "post = nil"
+       },
+       {
+        "location": "app/models/topic_embed.rb:34",
+        "source": "if content_sha1 != embed.content_sha1",
+        "state_before": "new contents differ from the stored digest",
+        "operation": "Condition evaluates true",
+        "state_after": "enters the update branch"
+       },
+       {
+        "location": "app/models/topic_embed.rb:35",
+        "source": "revisor = PostRevisor.new(post)",
+        "state_before": "post is nil",
+        "operation": "Constructor stores @post = nil (lib/post_revisor.rb:8)",
+        "state_after": "revisor with nil @post"
+       },
+       {
+        "location": "lib/post_revisor.rb:27",
+        "source": "@post.raw != @new_raw",
+        "state_before": "revise! at app/models/topic_embed.rb:36 calls should_revise? (lib/post_revisor.rb:13)",
+        "operation": "Call .raw on nil",
+        "state_after": "NoMethodError raised; update_column on line 37 never runs, so the stale embed persists and later imports fail the same way"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "app/models/topic_embed.rb:32-37 `post = embed.post ... PostRevisor.new(post) ... revise!`; lib/trashable.rb:5 `default_scope { where(with_deleted_scope_sql) }`; lib/post_revisor.rb:27 `@post.raw != @new_raw` raises NoMethodError on nil"
+     }
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "feed_polling_enabled left at default false; feed_polling_url or embed_by_username stubbed nil; mutation: remove the corresponding present? check",
+        "admissibility": "config/site_settings.yml:355 sets default false; spec stubs only the one setting under test"
+       }
+      ],
+      "steps": [
+       {
+        "location": "config/site_settings.yml:355",
+        "source": "feed_polling_enabled: false",
+        "state_before": "test does not stub feed_polling_enabled?",
+        "operation": "setting resolves to its default",
+        "state_after": "feed_polling_enabled? == false"
+       },
+       {
+        "location": "spec/jobs/poll_feed_spec.rb:19-21",
+        "source": "SiteSetting.stubs(:feed_polling_url).returns(nil)\n      poller.expects(:poll_feed).never\n      poller.execute({})",
+        "state_before": "url nil, enabled false",
+        "operation": "call execute",
+        "state_after": "execute entered"
+       },
+       {
+        "location": "app/jobs/scheduled/poll_feed.rb:15",
+        "source": "poll_feed if SiteSetting.feed_polling_enabled? &&",
+        "state_before": "feed_polling_enabled? false",
+        "operation": "&& short-circuits; the url/username checks on lines 16-17 are never evaluated",
+        "state_after": "poll_feed not called; .never satisfied; test passes even with the url/username checks removed"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:15-17 `poll_feed if SiteSetting.feed_polling_enabled? && SiteSetting.feed_polling_url.present? && SiteSetting.embed_by_username.present?`; config/site_settings.yml:355 `feed_polling_enabled: false`; spec/jobs/poll_feed_spec.rb:19-21 stubs only feed_polling_url"
+     }
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "SiteSetting.embeddable_host is '' (default); not stubbed in the test",
+        "admissibility": "config/site_settings.yml sets embeddable_host: '' and the spec at lines 8-11 does not stub it"
+       },
+       {
+        "value": "get :best with no embed_url param and no referer",
+        "admissibility": "This is exactly what the spec does at line 9"
+       }
+      ],
+      "steps": [
+       {
+        "location": "spec/controllers/embed_controller_spec.rb:9",
+        "source": "get :best",
+        "state_before": "embeddable_host blank, no embed_url, no referer",
+        "operation": "Controller test dispatches the best action, which runs before_filters first",
+        "state_after": "The ensure_embeddable filter is invoked"
+       },
+       {
+        "location": "app/controllers/embed_controller.rb:25",
+        "source": "raise Discourse::InvalidAccess.new('embeddable host not set') if SiteSetting.embeddable_host.blank?",
+        "state_before": "embeddable_host is ''",
+        "operation": "blank? is true, so InvalidAccess is raised",
+        "state_after": "The request is rejected before the action body runs"
+       },
+       {
+        "location": "app/controllers/embed_controller.rb:9",
+        "source": "embed_url = params.require(:embed_url)",
+        "state_before": "The action was never entered",
+        "operation": "The line is never executed, so the missing param is never checked",
+        "state_after": "No embed_url validation has taken place"
+       },
+       {
+        "location": "spec/controllers/embed_controller_spec.rb:10",
+        "source": "response.should_not be_success",
+        "state_before": "The response is a failure caused by the host check",
+        "operation": "The assertion passes",
+        "state_after": "The test is green without exercising the embed_url requirement"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "app/controllers/embed_controller.rb:4,25 (before_filter :ensure_embeddable; raise Discourse::InvalidAccess.new('embeddable host not set') if SiteSetting.embeddable_host.blank?); spec/controllers/embed_controller_spec.rb:8-11 has no stub for embeddable_host"
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": true,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "SiteSetting.embeddable_host left at default ''; TopicRetriever.new(\"not a url\"); hypothetical regression: rescue removed or returning false",
+        "admissibility": "Default site setting is '' per config; spec does not stub it."
+       }
+      ],
+      "steps": [
+       {
+        "location": "lib/topic_retriever.rb:9",
+        "source": "perform_retrieve unless (invalid_host? || retrieved_recently?)",
+        "state_before": "retrieve called on 'not a url' retriever",
+        "operation": "calls invalid_host? first",
+        "state_after": "invalid_host? evaluating"
+       },
+       {
+        "location": "lib/topic_retriever.rb:15",
+        "source": "SiteSetting.embeddable_host != URI(@embed_url).host",
+        "state_before": "@embed_url='not a url'",
+        "operation": "URI('not a url') raises InvalidURIError before the comparison with the blank host is made",
+        "state_after": "exception raised; blank host never consulted"
+       },
+       {
+        "location": "lib/topic_retriever.rb:16",
+        "source": "rescue URI::InvalidURIError\n  # An invalid URI is an invalid host\n  true",
+        "state_before": "exception raised",
+        "operation": "rescue returns true so perform_retrieve is skipped; without the rescue the test errors, and with it returning false perform_retrieve is called and the .never expectation fails",
+        "state_after": "test detects a broken rescue"
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "lib/topic_retriever.rb:15 — URI(@embed_url) raises before embeddable_host is compared, so the blank host cannot cause the rejection; removing or breaking the rescue makes the test fail."
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "lib/topic_retriever.rb:9 `perform_retrieve unless (invalid_host? || retrieved_recently?)`; :15 `SiteSetting.embeddable_host != URI(@embed_url).host`; :16-18 `rescue URI::InvalidURIError ... true`; config/site_settings.yml:354 `embeddable_host: ''`"
+     }
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Test case 'error when creating object in the unified store fails': input=failingObj (Name 'object-fail'), only setupLegacyFn registers Create returning errors.New(\"error\"); setupStorageFn nil",
+        "admissibility": "Literally the test table at dualwriter_mode3_test.go:37-44"
+       },
+       {
+        "value": "Single mock m := &mock.Mock{} shared by legacyStoreMock and storageMock",
+        "admissibility": "dualwriter_mode3_test.go:51-54 constructs both wrappers from the same m"
+       }
+      ],
+      "steps": [
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:40-41",
+        "source": "setupLegacyFn: func(m *mock.Mock, input runtime.Object) {\n\tm.On(\"Create\", mock.Anything, failingObj, mock.Anything, mock.Anything).Return(nil, errors.New(\"error\"))",
+        "state_before": "mock m has no expectations",
+        "operation": "Register Create expectation via the legacy setup function only",
+        "state_after": "m has one Create expectation returning error; no storage-specific expectation exists"
+       },
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:53-54",
+        "source": "ls := legacyStoreMock{m, l}\n\t\t\tus := storageMock{m, s}",
+        "state_before": "expectation registered on m",
+        "operation": "Both wrappers built on the same m",
+        "state_after": "A storage Create call consults the same expectation as legacy"
+       },
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3.go:42",
+        "source": "created, err := d.Storage.Create(ctx, obj, createValidation, options)",
+        "state_before": "dw.Create called with failingObj",
+        "operation": "Calls storageMock.Create",
+        "state_after": "enters storageMock.Create"
+       },
+       {
+        "location": "pkg/apiserver/rest/storage_mocks_test.go:97",
+        "source": "args := m.Called(ctx, obj, createValidation, options)",
+        "state_before": "only 'legacy' expectation registered",
+        "operation": "Storage mock matches the expectation registered via setupLegacyFn; name == object-fail returns nil, args.Error(1) at line 104",
+        "state_after": "storage Create returns the error 'by accident'"
+       },
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3.go:43-46",
+        "source": "if err != nil {\n\t\tlog.Error(err, \"unable to create object in storage\")\n\t\td.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage)\n\t\treturn created, err",
+        "state_before": "err non-nil",
+        "operation": "Create returns error; assert.Error passes",
+        "state_after": "test passes without any storage-specific failure being configured"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3_test.go:51-54 (shared mock m); storage_mocks_test.go:96-105 (storageMock.Create calls m.Called and returns nil, args.Error(1) for object-fail); dualwriter_mode3.go:42-46 (`created, err := d.Storage.Create(...)`, `if err != nil { ... return created, err`)"
+     }
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "TestMode3_Create case 1 with legacy and storage sharing one mock.Mock; mutation removes the go func legacy Create block",
+        "admissibility": "The test constructs `m := &mock.Mock{}` and `legacyStoreMock{m, l}` / `storageMock{m, s}` itself, and the source in dualwriter_mode3.go can be edited freely."
+       }
+      ],
+      "steps": [
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:51-53",
+        "source": "m := &mock.Mock{}\n...\nls := legacyStoreMock{m, l}",
+        "state_before": "No mocks exist yet.",
+        "operation": "Legacy and storage mocks are built on the same mock.Mock.",
+        "state_after": "Legacy and storage calls are recorded in one shared mock and cannot be told apart."
+       },
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:65",
+        "source": "obj, err := dw.Create(context.Background(), tt.input, func(context.Context, runtime.Object) error { return nil }, &metav1.CreateOptions{})",
+        "state_before": "Storage Create is mocked to return exampleObj.",
+        "operation": "dw.Create runs and Storage.Create succeeds.",
+        "state_after": "created is returned; the legacy write is only spawned as a goroutine."
+       },
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3.go:50-55",
+        "source": "go func() {\n\t\tctx, cancel := context.WithTimeoutCause(...)\n\t\t_, errObjectSt := d.Legacy.Create(ctx, obj, createValidation, options)",
+        "state_before": "Storage create succeeded.",
+        "operation": "The legacy Create runs asynchronously and Create returns without waiting for it.",
+        "state_after": "The test has no synchronization with the legacy call."
+       },
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:67-75",
+        "source": "acc, err := meta.Accessor(obj)\nassert.NoError(t, err)\nassert.Equal(t, acc.GetResourceVersion(), \"1\")",
+        "state_before": "Create has returned.",
+        "operation": "The test asserts only on the returned object. It has no AssertCalled, AssertExpectations, channel or Eventually.",
+        "state_after": "The test passes even if the legacy Create goroutine is deleted, so the missing legacy write goes undetected."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "dualwriter_mode3.go:50-57 legacy Create runs in `go func()`, and Create returns `created` at line 59; dualwriter_mode3_test.go:51-54 shares one mock.Mock; test lines 72-75 only assert on the returned object, with no AssertCalled/AssertExpectations."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "DualWriterMode3 with Log = klog.NewKlogr().WithName(\"DualWriterMode3\").WithValues(\"mode\", mode3Str)",
+        "admissibility": "Set by newDualWriterMode3 constructor"
+       },
+       {
+        "value": "Delete called with name=\"foo\", options.Kind=\"Playlist\"",
+        "admissibility": "Ordinary valid call to the rest.GracefulDeleter interface"
+       },
+       {
+        "value": "Downstream Storage/Legacy Delete logs via klog.FromContext(ctx) (assumed, implementations not read)",
+        "admissibility": "Standard klog pattern; not verified in the downstream implementations"
+       }
+      ],
+      "steps": [
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3.go:96",
+        "source": "log := d.Log.WithValues(\"name\", name, \"kind\", options.Kind, \"method\", method)",
+        "state_before": "d.Log has only mode and logger name",
+        "operation": "Create enriched logger",
+        "state_after": "log has name, kind, method values"
+       },
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3.go:97",
+        "source": "ctx = klog.NewContext(ctx, d.Log)",
+        "state_before": "log is enriched; ctx has no logger from this function",
+        "operation": "Store the base logger d.Log in ctx instead of log",
+        "state_after": "ctx carries a logger without name/kind/method"
+       },
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3.go:100",
+        "source": "res, async, err := d.Storage.Delete(ctx, name, deleteValidation, options)",
+        "state_before": "ctx holds the unenriched logger",
+        "operation": "Storage.Delete receives ctx",
+        "state_after": "Logs taken from klog.FromContext(ctx) in storage lack name/kind/method"
+       },
+       {
+        "location": "pkg/apiserver/rest/dualwriter_mode3.go:112",
+        "source": "_, _, err := d.Legacy.Delete(ctx, name, deleteValidation, options)",
+        "state_before": "goroutine ctx derived from the same ctx",
+        "operation": "Legacy.Delete receives the unenriched logger",
+        "state_after": "Legacy delete logs also lack name/kind/method"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:96-97 `log := d.Log.WithValues(...)` then `ctx = klog.NewContext(ctx, d.Log)`; line 100 `d.Storage.Delete(ctx, ...)`; line 112 `d.Legacy.Delete(ctx, ...)` with ctx derived at line 110."
+     }
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Watch channel delivers an ADDED event for a NamespacedResource with no existing index, shortly after init starts the watcher goroutine",
+        "admissibility": "Any write event for a resource not covered by GetResourceStats (or below initMinSize) takes the getOrCreateIndex build path. Nothing prevents this."
+       },
+       {
+        "value": "Search backend is bleveBackend, with a non-empty or growing b.cache map",
+        "admissibility": "TotalDocs ranges over b.cache. BuildIndex adds an entry for each new index."
+       }
+      ],
+      "steps": [
+       {
+        "location": "pkg/storage/unified/resource/search.go:207-212",
+        "source": "go func() {\n\tfor {\n\t\tv := <-events\n\n\t\ts.handleEvent(watchctx, v)",
+        "state_before": "init has built the initial indexes and obtained the events channel",
+        "operation": "Start the watch goroutine, which handles events concurrently with the rest of init",
+        "state_after": "Goroutine G2 runs handleEvent while init (G1) continues"
+       },
+       {
+        "location": "pkg/storage/unified/resource/search.go:292-298",
+        "source": "idx, err := s.search.GetIndex(ctx, key)\n...\nif idx == nil {\n\tidx, _, err = s.build(ctx, key, 10, 0)",
+        "state_before": "G2 handles an event for a key not in b.cache",
+        "operation": "GetIndex returns nil, so G2 calls build, which calls BuildIndex",
+        "state_after": "G2 is inside BuildIndex, about to write the cache"
+       },
+       {
+        "location": "pkg/storage/unified/search/bleve.go:137-139",
+        "source": "b.cacheMu.Lock()\nb.cache[key] = idx\nb.cacheMu.Unlock()",
+        "state_before": "G2 has flushed the new index",
+        "operation": "G2 takes the write lock and assigns into the b.cache map",
+        "state_after": "The map is being mutated; the lock is held only by G2"
+       },
+       {
+        "location": "pkg/storage/unified/resource/search.go:216",
+        "source": "s.log.Info(\"search index initialized\", \"duration_secs\", end-start, \"total_docs\", s.search.TotalDocs())",
+        "state_before": "G1 reaches the log line right after starting the goroutine, at the same time as G2's write",
+        "operation": "G1 calls TotalDocs",
+        "state_after": "G1 enters TotalDocs"
+       },
+       {
+        "location": "pkg/storage/unified/search/bleve.go:146",
+        "source": "for _, v := range b.cache {",
+        "state_before": "G1 iterates the map without cacheMu.RLock while G2 writes under Lock",
+        "operation": "Unsynchronised map iteration races with the map assignment",
+        "state_after": "Go runtime throws fatal error: concurrent map iteration and map write"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "bleve.go:144-146 `func (b *bleveBackend) TotalDocs() ... for _, v := range b.cache {` has no cacheMu.RLock, while bleve.go:137-139 writes `b.cache[key] = idx` under cacheMu.Lock; search.go:207-216 starts the watch goroutine and then calls s.search.TotalDocs() in the log line."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "Server created with search enabled and a SQL backend",
+        "admissibility": "Standard configuration."
+       }
+      ],
+      "steps": [
+       {
+        "location": "pkg/storage/unified/resource/server.go:305",
+        "source": "s.initErr = s.search.init(ctx)",
+        "state_before": "Index not built; watcher not started",
+        "operation": "search.init builds the indexes",
+        "state_after": "Index built from the snapshot"
+       },
+       {
+        "location": "pkg/storage/unified/resource/search.go:203",
+        "source": "events, err := s.storage.WatchWriteEvents(watchctx)",
+        "state_before": "Index built",
+        "operation": "search.init opens its own event subscription, which feeds handleEvent at line 211",
+        "state_after": "The index receives events regardless of server.initWatcher; the pre-existing gap between build and this call is not caused by the reorder"
+       },
+       {
+        "location": "pkg/storage/unified/resource/server.go:310",
+        "source": "s.initErr = s.initWatcher()",
+        "state_before": "search.init finished",
+        "operation": "Creates the server broadcaster for gRPC watch clients only",
+        "state_after": "No effect on index delivery, so the reordering does not cause the claimed staleness"
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "search.go:203 — the search index subscribes to WatchWriteEvents itself inside search.init, independent of server.initWatcher, so moving initWatcher after search.init does not change which events reach the index."
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "All transitions hold: search.init builds the index and subscribes to write events itself (search.go:203), while initWatcher only creates the broadcaster for gRPC watch clients, so the order of the two calls does not affect index delivery.",
+      "evidence": "server.go:305 `s.initErr = s.search.init(ctx)`; search.go:203 `events, err := s.storage.WatchWriteEvents(watchctx)` with `s.handleEvent(watchctx, v)` at line 211; server.go:310 `s.initErr = s.initWatcher()`; server.go:752-771 initWatcher builds a NewBroadcaster over s.backend.WatchWriteEvents."
+     }
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "expected shortcut \"cc\"; actual token id \"onrtac:123e4567-e89b-12d3-a456-426614174000\" (grant ac)",
+        "admissibility": "Format produced by DefaultTokenContextEncoderProvider.encodeTokenId: session(2)+tokenType(2)+grant(2)+':'+UUID; matcher parameter is any string"
+       }
+      ],
+      "steps": [
+       {
+        "location": "AssertEvents.java:480-481",
+        "source": "String[] items = item.split(\":\"); if (items.length != 2) return false;",
+        "state_before": "item=onrtac:<uuid>",
+        "operation": "split yields 2 parts, check passes",
+        "state_after": "items[0]=\"onrtac\""
+       },
+       {
+        "location": "AssertEvents.java:483",
+        "source": "if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;",
+        "state_before": "items[0]=onrtac, expected=cc",
+        "operation": "substring(3,5)=\"ta\"; equals(\"cc\") false so no early return",
+        "state_after": "mismatched grant not rejected"
+       },
+       {
+        "location": "AssertEvents.java:484",
+        "source": "return isUUID().matches(items[1]);",
+        "state_before": "items[1] is a 36-char UUID",
+        "operation": "isUUID true",
+        "state_after": "matcher returns true, accepting an id with a different grant"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "No incorrect transition. The trace matches the code: substring(3,5) of \"onrtac\" is \"ta\", it is not equal to \"cc\", so there is no early return and the matcher returns true (mismatched grant accepted, because the condition is inverted and the slice is off by one).",
+      "evidence": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:480-484 `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false; return isUUID().matches(items[1]);`"
+     }
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": []
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "100 groups created; server still has the NPE race bug in GroupAdapter.getSubGroupsCount",
+        "admissibility": "Test creates groups at lines 122-134; the bug is the pre-fix behavior"
+       },
+       {
+        "value": "Reader thread is scheduled late, or is mid-read when the flag is set",
+        "admissibility": "Thread.start gives no ordering guarantee relative to the main thread"
+       }
+      ],
+      "steps": [
+       {
+        "location": "GroupTest.java:139",
+        "source": "new Thread(() -> {",
+        "state_before": "main thread, 100 groups exist",
+        "operation": "start reader thread without waiting for it to run",
+        "state_after": "reader not yet executed any read"
+       },
+       {
+        "location": "GroupTest.java:152-154",
+        "source": "groupUuuids.forEach(groupUuid -> { managedRealm.admin().groups().group(groupUuid).remove(); });",
+        "state_before": "reader has not read",
+        "operation": "main deletes all 100 groups",
+        "state_after": "no groups remain; no concurrent read occurred"
+       },
+       {
+        "location": "GroupTest.java:155",
+        "source": "deletedAll.set(true);",
+        "state_before": "deletedAll=false",
+        "operation": "set flag",
+        "state_after": "deletedAll=true"
+       },
+       {
+        "location": "GroupTest.java:140",
+        "source": "while (!deletedAll.get()) {",
+        "state_before": "reader starts now",
+        "operation": "loop condition is false, so the loop body (read at line 143) never runs",
+        "state_after": "caughtExceptions empty, no read performed"
+       },
+       {
+        "location": "GroupTest.java:157",
+        "source": "assertThat(caughtExceptions, Matchers.empty());",
+        "state_before": "caughtExceptions empty; no join on the thread (and in the alternate interleaving a read is still in flight)",
+        "operation": "assert passes",
+        "state_after": "test passes although the race bug is present"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "All transitions hold: the reader thread is never joined and can be scheduled after the flag is set, so the loop body never runs and the assertion passes without exercising the race.",
+      "evidence": "GroupTest.java:139-157: `new Thread(() -> { while (!deletedAll.get()) {...} }).start();` ... `deletedAll.set(true); assertThat(caughtExceptions, Matchers.empty());` with no join."
+     }
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "Both ADMIN_FINE_GRAINED_AUTHZ (V1) and ADMIN_FINE_GRAINED_AUTHZ_V2 enabled at once",
+        "admissibility": "Not admissible: Profile validation throws ProfileException when multiple versions of the same feature are enabled (Profile.java:283-286)."
+       }
+      ],
+      "steps": [
+       {
+        "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:77",
+        "source": "if (Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ)) {",
+        "state_before": "ClientRemovedEvent fired",
+        "operation": "Guard passes only if V1 is the enabled version",
+        "state_after": "Under V1, management() returns MgmtPermissions, not V2"
+       },
+       {
+        "location": "common/src/main/java/org/keycloak/common/Profile.java:283-286",
+        "source": "if (isExplicitlyEnabledFeature) { throw new ProfileException(String.format(\"Multiple versions of the same feature %s, %s should not be enabled.\",",
+        "state_before": "Both versioned flags configured as enabled",
+        "operation": "Profile initialization validates versions",
+        "state_after": "Startup fails with ProfileException, so V1 and V2 never coexist"
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "Profile.java:283-286 - Profile validation throws ProfileException when two versions of the same feature (V1 and V2) are enabled, so the V1-only guard at AdminPermissions.java:77 can't pass while management() returns MgmtPermissionsV2."
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "AdminPermissions.java:77 `if (Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ)) {`; AdminPermissions.java:66-71 management() returns MgmtPermissionsV2 only if V2 is enabled; Profile.java:283-286 `if (isExplicitlyEnabledFeature) { throw new ProfileException(... \"Multiple versions of the same feature %s, %s should not be enabled.\"`"
+     }
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "promRule is a non-Grafana (cloud/Mimir) rule, so prometheusRuleType.grafana.rule(promRule) is false and skipToken is passed",
+        "admissibility": "AlertRuleMenu accepts any Rule; the Grafana check is only a type guard"
+       },
+       {
+        "value": "User has AccessControlAction.AlertingRuleCreate (Grafana rule-create permission)",
+        "admissibility": "Ordinary permission a user can hold"
+       },
+       {
+        "value": "Ruler ability for Duplicate on the cloud rule returns not supported or not allowed (ruler unavailable or no data-source create permission)",
+        "admissibility": "Ruler checks can legitimately deny; assumed, not verified in the ruler hook"
+       }
+      ],
+      "steps": [
+       {
+        "location": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:73",
+        "source": "useGrafanaPromRuleAbilities(prometheusRuleType.grafana.rule(promRule) ? promRule : skipToken, [",
+        "state_before": "promRule is a cloud rule",
+        "operation": "Guard is false, so skipToken is passed",
+        "state_after": "rule arg = skipToken"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:401",
+        "source": "const abilities = useAllGrafanaPromRuleAbilities(rule === skipToken ? undefined : rule);",
+        "state_before": "rule = skipToken",
+        "operation": "Converts skipToken to undefined",
+        "state_after": "rule = undefined"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:289",
+        "source": "const { isEditable, isRemovable, loading } = useIsGrafanaPromRuleEditable(rule); // duplicate",
+        "state_before": "rule undefined",
+        "operation": "Editable hook returns loading:false for a missing rule (per diff)",
+        "state_after": "loading = false"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:309",
+        "source": "const MaybeSupported = loading ? NotSupported : AlwaysSupported;",
+        "state_before": "loading=false, rule undefined",
+        "operation": "No undefined-rule check, so MaybeSupported = AlwaysSupported",
+        "state_after": "MaybeSupported = true"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:313",
+        "source": "const duplicateSupported = isPluginProvided ? NotSupported : MaybeSupported;",
+        "state_before": "isPluginProvided is false for undefined (getRulePluginOrigin not read)",
+        "operation": "duplicateSupported = MaybeSupported",
+        "state_after": "duplicateSupported = true"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:318",
+        "source": "[AlertRuleAction.Duplicate]: toAbility(duplicateSupported, rulesPermissions.create),",
+        "state_before": "duplicateSupported true, user has create permission",
+        "operation": "Builds the Duplicate ability",
+        "state_after": "Duplicate ability = [true, true]"
+       },
+       {
+        "location": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:91",
+        "source": "const canDuplicate =\n    (duplicateSupported && duplicateAllowed) || (grafanaDuplicateSupported && grafanaDuplicateAllowed);",
+        "state_before": "ruler side false, grafana side [true,true]",
+        "operation": "OR of the two sides",
+        "state_after": "canDuplicate = true"
+       },
+       {
+        "location": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:135",
+        "source": "{canDuplicate && (",
+        "state_before": "canDuplicate true",
+        "operation": "Renders the Duplicate menu item",
+        "state_after": "Duplicate shown for a cloud rule despite ruler denial"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "useAbilities.ts:309-318 (no undefined-rule check; `const duplicateSupported = isPluginProvided ? NotSupported : MaybeSupported;`), useAbilities.ts:354 (`if (!rule || !folderUID) return {..., loading: false}`), rules.ts:239-241 (`if (!rule) return undefined`), AlertRuleMenu.tsx:73,91-92,135"
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "GrafanaPromRuleDTO with type 'recording', folderUid and uid set; user has full folder permissions including export",
+        "admissibility": "isGrafanaPromRecordingRule exists in rules.ts, so Grafana prom recording rules are a valid input to the hook"
+       }
+      ],
+      "steps": [
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:301",
+        "source": "// All GrafanaPromRuleDTO rules are Grafana-managed by definition",
+        "state_before": "Recording rule passed to useAllGrafanaPromRuleAbilities",
+        "operation": "The comment says every GrafanaPromRuleDTO is Grafana-managed, implying every ability applies to it",
+        "state_after": "Reader expects Pause, Export and Silence to be enabled for the recording rule"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:302",
+        "source": "const isAlertingRule = prometheusRuleType.grafana.alertingRule(rule);",
+        "state_before": "rule.type === 'recording'",
+        "operation": "alertingRule resolves to isGrafanaPromAlertingRule -> isAlertingRule, which checks rule.type === PromRuleType.Alerting (rules.ts:96), and returns false",
+        "state_after": "isAlertingRule = false"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:324",
+        "source": "[AlertRuleAction.ModifyExport]: [isAlertingRule, exportAllowed],",
+        "state_before": "isAlertingRule = false, exportAllowed = true",
+        "operation": "Build the export ability",
+        "state_after": "Export ability is [false, true], so export is not supported"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:325",
+        "source": "[AlertRuleAction.Pause]: [MaybeSupportedUnlessImmutable && isAlertingRule, isEditable ?? false],",
+        "state_before": "isAlertingRule = false",
+        "operation": "Build the pause ability",
+        "state_after": "Pause is not supported"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:323",
+        "source": "[AlertRuleAction.Silence]: [silenceSupported, canSilenceInFolder && isAlertingRule],",
+        "state_before": "isAlertingRule = false",
+        "operation": "Build the silence ability",
+        "state_after": "Silence is not allowed. Pause, Export and Silence are all disabled for the recording rule, contrary to what the comment at line 301 implies"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "useAbilities.ts:302-325 `isAlertingRule = prometheusRuleType.grafana.alertingRule(rule)`; `[AlertRuleAction.ModifyExport]: [isAlertingRule, exportAllowed]`; rules.ts:96 `rule.type === PromRuleType.Alerting`"
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "GrafanaPromRuleDTO with folderUid 'f1'; useFolder('f1') still fetching, returns {folder: undefined, loading: true}",
+        "admissibility": "Any Grafana rule has a folderUid, and useFolder is an async fetch, so an in-flight state is normal."
+       }
+      ],
+      "steps": [
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:289",
+        "source": "const { isEditable, isRemovable, loading } = useIsGrafanaPromRuleEditable(rule); // duplicate",
+        "state_before": "rule defined, folder fetch in flight",
+        "operation": "call the editable hook and take its loading flag",
+        "state_after": "loading is taken from the hook result"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:351",
+        "source": "const { folder, loading } = useFolder(folderUID);",
+        "state_before": "folderUID = 'f1'",
+        "operation": "read the folder fetch state",
+        "state_after": "folder undefined, loading true"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:358-364",
+        "source": "if (!folder) {\n  // Loading or invalid folder UID\n  return {\n    isEditable: false,\n    isRemovable: false,\n    loading,\n  };\n}",
+        "state_before": "folder undefined, loading true",
+        "operation": "return the loading flag from the folder fetch",
+        "state_after": "hook result has loading true"
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:308-309",
+        "source": "// GrafanaPromRuleDTO rules are always supported (no loading state for ruler availability)\nconst MaybeSupported = loading ? NotSupported : AlwaysSupported;",
+        "state_before": "loading true",
+        "operation": "evaluate the ternary",
+        "state_after": "MaybeSupported = NotSupported, which contradicts the comment saying there is no loading state"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "No incorrect transition. While the folder fetch is in flight, loading is true and MaybeSupported becomes NotSupported. The comment at line 308 is stale.",
+      "evidence": "useAbilities.ts:309 `const MaybeSupported = loading ? NotSupported : AlwaysSupported;`; useAbilities.ts:358-364 returns `loading` when `!folder`; useFolder.ts:19 `loading: fetchFolderState.isLoading`"
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "AlertRuleMenu renders its More button regardless of which menu items are enabled, e.g. all abilities return [false,false] so the menu would be empty. I did not verify this in the component.",
+        "admissibility": "Hypothetical input within the abilities hooks' contract; the button's rendering was not read, so this is an assumption."
+       },
+       {
+        "value": "The rule list item for grafanaRulerGroup.rules[0] renders with a button whose accessible name is 'More'.",
+        "admissibility": "This is the premise of the existing test at lines 85-101."
+       }
+      ],
+      "steps": [
+       {
+        "location": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:93",
+        "source": "const ruleListItem = await ui.ruleItem(rule1.grafana_alert.title).find();",
+        "state_before": "The group is rendered with the mocked prom rules.",
+        "operation": "Finds the rule list item.",
+        "state_after": "ruleListItem is found; no menu has been opened."
+       },
+       {
+        "location": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:96-97",
+        "source": "const moreButton = ui.moreButton().get(ruleListItem);\nexpect(moreButton).toBeInTheDocument();",
+        "state_before": "The ui.moreButton selector is byRole('button', { name: 'More' }).",
+        "operation": "Gets the button by the accessible name 'More' and asserts it exists.",
+        "state_after": "The assertion passes whenever a More button is rendered, whatever the menu contents."
+       },
+       {
+        "location": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:100-101",
+        "source": "expect(moreButton).toHaveAttribute('aria-label', 'More');\nexpect(moreButton).toHaveTextContent('More');",
+        "state_before": "The button was already located by its accessible name 'More'.",
+        "operation": "Re-asserts the label and text content of the button.",
+        "state_after": "The label assertion is redundant with the lookup. No click happens, and ui.menuItems is never queried in this test. The test passes even if the menu would be empty."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "GrafanaGroupLoader.test.tsx:96-101 only gets the More button and asserts its label and text, with no click and no ui.menuItems query. AlertRuleMenu.tsx:179-183 `return (<Dropdown overlay={<Menu>{menuItems}</Menu>} placement=\"bottom\"><MoreButton .../></Dropdown>)` renders the button unconditionally."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "CombinedRule for a Mimir rule whose group has source_tenants = ['t1']",
+        "admissibility": "isFederatedRuleGroup at utils/rules.ts:374 treats any array source_tenants as federated, so this is a valid input."
+       },
+       {
+        "value": "Ruler API is available for the data source, and the user has update and delete permissions",
+        "admissibility": "These are ordinary runtime states, so useIsRuleEditable can return isRulerAvailable, isEditable and isRemovable as true."
+       }
+      ],
+      "steps": [
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:180",
+        "source": "const abilities = useAllAlertRuleAbilities(rule);",
+        "state_before": "Caller passes a CombinedRule whose group.source_tenants is ['t1'].",
+        "operation": "useAlertRuleAbility calls the wrapper.",
+        "state_after": "Control enters useAllAlertRuleAbilities with the full CombinedRule."
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:227-228",
+        "source": "const groupIdentifierV2 = useMemo(() => groupIdentifier.fromCombinedRule(rule), [rule]);\n  return useAllRulerRuleAbilities(rule.rulerRule, groupIdentifierV2);",
+        "state_before": "The wrapper holds rule.group.source_tenants.",
+        "operation": "It delegates with only rulerRule and a group identifier; no federation info is passed.",
+        "state_after": "The shared hook has no access to source_tenants."
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:245",
+        "source": "const isFederated = false;",
+        "state_before": "The shared hook is computing the abilities memo.",
+        "operation": "isFederated is hardcoded to false.",
+        "state_after": "isFederated = false for the federated rule."
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:250",
+        "source": "const immutableRule = isProvisioned || isFederated || isPluginProvided;",
+        "state_before": "isProvisioned, isFederated and isPluginProvided are all false.",
+        "operation": "immutableRule is evaluated.",
+        "state_after": "immutableRule = false."
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:254",
+        "source": "const MaybeSupportedUnlessImmutable = immutableRule ? NotSupported : MaybeSupported;",
+        "state_before": "immutableRule is false and isRulerAvailable is true.",
+        "operation": "The supported flag falls through to MaybeSupported.",
+        "state_after": "MaybeSupportedUnlessImmutable = true."
+       },
+       {
+        "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:264-265",
+        "source": "[AlertRuleAction.Update]: [MaybeSupportedUnlessImmutable, isEditable ?? false],\n      [AlertRuleAction.Delete]: [MaybeSupportedUnlessImmutable, isRemovable ?? false],",
+        "state_before": "MaybeSupportedUnlessImmutable is true and the user can edit and remove.",
+        "operation": "The abilities map is built.",
+        "state_after": "Update and Delete are [true, true] for a federated rule, so edit and delete are shown."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "useAbilities.ts:245 `const isFederated = false;` (TODO at 243-244); :250 immutableRule; :254 MaybeSupportedUnlessImmutable; :264-265 Update/Delete use it, so a federated rule shows edit and delete."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "A GrafanaPromRuleDTO that is a recording rule (type 'recording', with folderUid and uid), in a folder where the user has edit permission and export permission",
+        "admissibility": "isGrafanaPromRecordingRule at rules.ts:107 accepts such rules, and prometheusRuleType.grafana.rule accepts them at rules.ts:133"
+       }
+      ],
+      "steps": [
+       {
+        "location": "public/app/features/alerting/unified/utils/rules.ts:103",
+        "source": "function isGrafanaPromAlertingRule(rule?: Rule): rule is GrafanaPromAlertingRuleDTO {\n  return isAlertingRule(rule) && 'folderUid' in rule && 'uid' in rule;",
+        "state_before": "rule is a Grafana recording rule",
+        "operation": "isAlertingRule(rule) is false for a recording rule (not read; inferred from the name and from the sibling isRecordingRule at line 108), so the function returns false",
+        "state_after": "grafana.alertingRule(rule) === false"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "rules.ts:95-97 `isAlertingRule` returns `typeof rule === 'object' && rule.type === PromRuleType.Alerting`; rules.ts:103-104 `isGrafanaPromAlertingRule` returns `isAlertingRule(rule) && 'folderUid' in rule && 'uid' in rule`, so a recording rule gives false."
+     }
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Test reauthenticationOfUserWithoutPasskey uses getWebAuthnRealmUpdater().setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE)",
+        "admissibility": "Present at line 283 of PasskeysUsernamePasswordFormTest.java"
+       }
+      ],
+      "steps": [
+       {
+        "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java:281",
+        "source": "// set passwordless policy for discoverable keys",
+        "state_before": "Updater only disables passkeys at line 283",
+        "operation": "Comment is read; it is not executed",
+        "state_after": "The comment text does not match the code at line 283; no runtime effect"
+       }
+      ],
+      "result": "unresolved",
+      "blocking_step": "The finding concerns a stale comment, which has no runtime failure to reach."
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "PasskeysUsernamePasswordFormTest.java:281-283: comment '// set passwordless policy for discoverable keys' followed by getWebAuthnRealmUpdater().setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE).update()"
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Realm has passkeys enabled; browser flow uses the username form followed by PasswordForm",
+        "admissibility": "Supported configuration; the diff's tests PasskeysUsernameFormTest and PasskeysOrganizationAuthenticationTest use it"
+       },
+       {
+        "value": "User 'victim' has at least one passkey credential and a password",
+        "admissibility": "Ordinary user state"
+       },
+       {
+        "value": "Attacker is unauthenticated and knows only the username 'victim'",
+        "admissibility": "The login form accepts any typed username"
+       }
+      ],
+      "steps": [
+       {
+        "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java:52",
+        "source": "if (isConditionalPasskeysEnabled(context.getUser())) {",
+        "state_before": "The attacker has submitted the username 'victim'. context.getUser() is set to victim, with no credential verified.",
+        "operation": "PasswordForm.authenticate checks isConditionalPasskeysEnabled(victim). Per UsernamePasswordForm.java:160-162 it returns true because passkeys are enabled and victim has a passkey credential.",
+        "state_after": "The branch is taken."
+       },
+       {
+        "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java:53",
+        "source": "webauthnAuth.fillContextForm(context);",
+        "state_before": "Branch taken, user = victim",
+        "operation": "Calls fillContextForm, which does not require prior authentication",
+        "state_after": "Control enters WebAuthnAuthenticator.fillContextForm"
+       },
+       {
+        "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java:100-108",
+        "source": "if (user != null) { ... new WebAuthnAuthenticatorsBean(context.getSession(), context.getRealm(), user, getCredentialType()); ... form.setAttribute(WebAuthnConstants.ALLOWED_AUTHENTICATORS, authenticators);",
+        "state_before": "user = victim, who has passkeys",
+        "operation": "Builds the bean of victim's passkey credentials and puts it in the form attributes under 'authenticators'",
+        "state_after": "The form model carries victim's credential IDs"
+       },
+       {
+        "location": "themes/src/main/resources/theme/base/login/passkeys.ftl:11-15",
+        "source": "<#if authenticators??> ... <input type=\"hidden\" name=\"authn_use_chk\" value=\"${authenticator.credentialId}\"/>",
+        "state_before": "The 'authenticators' attribute is present",
+        "operation": "The template renders one hidden input per credential ID in the password page response",
+        "state_after": "The unauthenticated attacker receives victim's credential IDs and learns that the account has passkeys"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "PasswordForm.java:52-53 `if (isConditionalPasskeysEnabled(context.getUser())) { webauthnAuth.fillContextForm(context);`; WebAuthnAuthenticator.java:100-108 builds WebAuthnAuthenticatorsBean for context.getUser() and sets ALLOWED_AUTHENTICATORS (\"authenticators\"); WebAuthnConditionalUIAuthenticator.java:43 sets enableWebAuthnConditionalUI; passkeys.ftl:11-14 renders hidden authn_use_chk inputs; keycloak.v2/login/login-password.ftl:18 invokes <@passkeys.conditionalUIData />"
+     }
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "testCacheIDPForLogin runs in the shared test realm, and no IDP with alias \"alias\" exists",
+        "admissibility": "The test creates only aliases named \"idp-alias-N\", so \"alias\" is never created"
+       }
+      ],
+      "steps": [
+       {
+        "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java:380-381",
+        "source": "testRealm().identityProviders().create(idpRep).close();\n getCleanup().addCleanup(testRealm().identityProviders().get(\"alias\")::remove);",
+        "state_before": "Loop iteration i creates IDP \"idp-alias-i\"",
+        "operation": "The IDP is created, then cleanup is registered for the literal alias \"alias\"",
+        "state_after": "The IDP exists in the realm; its cleanup targets a nonexistent alias"
+       },
+       {
+        "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java:425",
+        "source": "getCleanup().addCleanup(testRealm().identityProviders().get(\"alias\")::remove);",
+        "state_before": "\"idp-alias-20\" was just created",
+        "operation": "Cleanup is again registered for \"alias\"",
+        "state_after": "\"idp-alias-20\" has no valid cleanup"
+       },
+       {
+        "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/admin/AbstractOrganizationTest.java:90-91",
+        "source": "protected TestCleanup getCleanup() {\n return getCleanup(TEST_REALM_NAME);",
+        "state_before": "Test finished",
+        "operation": "Teardown runs the registered cleanups, each removing \"alias\"",
+        "state_after": "\"idp-alias-0\" through \"idp-alias-20\" remain in the realm, except \"idp-alias-1\", which the test removed itself"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "OrganizationCacheTest.java:381 and :425 `getCleanup().addCleanup(testRealm().identityProviders().get(\"alias\")::remove);` while the IDPs created are `idp-alias-N` (:374, :419); TestCleanup.java:66-72 wraps c.close() in `catch (Exception ex) { // ignore }`; the test removes idp-alias-1 itself at :428."
+     }
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "CLI flag --flusher-processes 0, so factory flusher_processes=0",
+        "admissibility": "click option is type=int with no minimum, so 0 is accepted; the factory and SpanFlusher signatures accept int | None"
+       },
+       {
+        "value": "buffer.assigned_shards has 4 shards",
+        "admissibility": "Any partition assignment is allowed"
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/consumers/__init__.py:433",
+        "source": "[\"--flusher-processes\", \"flusher_processes\"],",
+        "state_before": "user passes 0",
+        "operation": "click parses it as int with no range validation",
+        "state_after": "flusher_processes=0"
+       },
+       {
+        "location": "src/sentry/spans/consumers/process/factory.py:74",
+        "source": "max_processes=self.flusher_processes,",
+        "state_before": "self.flusher_processes == 0",
+        "operation": "passes 0 to SpanFlusher",
+        "state_after": "max_processes=0 (not None)"
+       },
+       {
+        "location": "src/sentry/spans/consumers/process/flusher.py:51",
+        "source": "self.max_processes = max_processes or len(buffer.assigned_shards)",
+        "state_before": "max_processes=0, 4 assigned shards",
+        "operation": "0 is falsy so the `or` falls through to len(shards)",
+        "state_after": "self.max_processes == 4, the explicit 0 is silently ignored"
+       },
+       {
+        "location": "src/sentry/spans/consumers/process/flusher.py:60",
+        "source": "self.num_processes = min(self.max_processes, len(buffer.assigned_shards))",
+        "state_before": "self.max_processes == 4",
+        "operation": "min(4, 4)",
+        "state_after": "num_processes == 4, one process per shard, with no validation error"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "flusher.py:51 `self.max_processes = max_processes or len(buffer.assigned_shards)`; flusher.py:60 `min(self.max_processes, len(buffer.assigned_shards))`; consumers/__init__.py:433-435 `type=int` with no range limit; factory.py:74 `max_processes=self.flusher_processes`"
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "monkeypatch.setattr(\"time.sleep\", lambda _: None) is active in test_basic; flusher runs as a thread via produce_to_pipe",
+        "admissibility": "This is how the test is written. The patch is applied to the global time module attribute."
+       }
+      ],
+      "steps": [
+       {
+        "location": "tests/sentry/spans/consumers/process/test_consumer.py:15",
+        "source": "monkeypatch.setattr(\"time.sleep\", lambda _: None)",
+        "state_before": "time.sleep is the real sleep",
+        "operation": "Patch the time module's sleep attribute",
+        "state_after": "time.sleep is a no-op lambda for everything that looks it up on the module"
+       },
+       {
+        "location": "tests/sentry/spans/consumers/process/test_consumer.py:58",
+        "source": "fac._flusher.current_drift.value = 9000  # \"advance\" our \"clock\"",
+        "state_before": "Segment is buffered but not yet flushed",
+        "operation": "Advance the drift so the segment becomes flushable",
+        "state_after": "The flusher thread can flush on its next loop, but may not have yet"
+       },
+       {
+        "location": "tests/sentry/spans/consumers/process/test_consumer.py:62",
+        "source": "time.sleep(0.1)",
+        "state_before": "The flusher may not have produced yet; messages may be empty",
+        "operation": "Call the patched no-op sleep, which returns immediately",
+        "state_after": "No delay occurred; the state is unchanged"
+       },
+       {
+        "location": "tests/sentry/spans/consumers/process/test_consumer.py:66",
+        "source": "(msg,) = messages",
+        "state_before": "messages is possibly still empty, because nothing waited for the flusher",
+        "operation": "Unpack messages after join, with no wait on the produce result",
+        "state_after": "If the flusher thread has not produced yet, ValueError is raised, so the test is flaky"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "All transitions hold. One nuance on step 4: join does wait for the flusher thread to exit, but it sets stopped first, so a thread that has not yet flushed exits without producing, leaving messages empty.",
+      "evidence": "flusher.py:166 `while not stopped.value:`, flusher.py:331 `self.stopped.value = True`, flusher.py:343-344 `while process.is_alive()...: time.sleep(0.1)`; test_consumer.py:15,58,62,66"
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "buffer.assigned_shards = [0,1,2,3]; max_processes=2 (--flusher-processes=2)",
+        "admissibility": "The constructor accepts `max_processes: int | None`, and the CLI option `--flusher-processes` is an int. The existing test `test_flusher_processes_limit` also uses 2 processes with 4 shards."
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/spans/consumers/process/flusher.py:32",
+        "source": "Creates one process per shard for parallel processing.",
+        "state_before": "The docstring claims one process per shard, which would mean 4 processes for 4 shards.",
+        "operation": "Read the documented contract.",
+        "state_after": "The documented expectation is 4 processes."
+       },
+       {
+        "location": "src/sentry/spans/consumers/process/flusher.py:51",
+        "source": "self.max_processes = max_processes or len(buffer.assigned_shards)",
+        "state_before": "max_processes=2, so the `or` fallback is not used.",
+        "operation": "Store the cap.",
+        "state_after": "self.max_processes = 2"
+       },
+       {
+        "location": "src/sentry/spans/consumers/process/flusher.py:60",
+        "source": "self.num_processes = min(self.max_processes, len(buffer.assigned_shards))",
+        "state_before": "max_processes=2, and there are 4 shards.",
+        "operation": "Compute the number of processes.",
+        "state_after": "num_processes = 2, not 4."
+       },
+       {
+        "location": "src/sentry/spans/consumers/process/flusher.py:65",
+        "source": "process_index = i % self.num_processes",
+        "state_before": "Shards 0, 1, 2, 3 are enumerated with num_processes=2.",
+        "operation": "Assign each shard to a process by modulo.",
+        "state_after": "process_to_shards_map = {0:[0,2], 1:[1,3]}. Two processes each share two shards, which contradicts the docstring's 'one process per shard'."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "none",
+      "evidence": "flusher.py:51 `self.max_processes = max_processes or len(buffer.assigned_shards)`; :60 `self.num_processes = min(self.max_processes, len(buffer.assigned_shards))`; :65 `process_index = i % self.num_processes`; docstring at :32 'Creates one process per shard'"
+     }
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "organization.features includes 'use-table-widget-visualization'",
+        "admissibility": "Feature flag is read directly from organization.features at chart.tsx:164; any org can have it."
+       },
+       {
+        "value": "Table widget with tableResults=[{title:'t', data:[{id:'1'}], meta:{...}}] and fields ['count()']",
+        "admissibility": "A normal table widget query result passed to tableResultComponent."
+       }
+      ],
+      "steps": [
+       {
+        "location": "static/app/views/dashboards/widgetCard/chart.tsx:157",
+        "source": "return tableResults.map((result, i) => {",
+        "state_before": "tableResults has one result with one data row",
+        "operation": "Iterate over the results",
+        "state_after": "result.data holds 1 row"
+       },
+       {
+        "location": "static/app/views/dashboards/widgetCard/chart.tsx:164",
+        "source": "{organization.features.includes('use-table-widget-visualization') ? (",
+        "state_before": "flag present on the org",
+        "operation": "Evaluate the condition, which is true",
+        "state_after": "the TableWidgetVisualization branch is taken"
+       },
+       {
+        "location": "static/app/views/dashboards/widgetCard/chart.tsx:166",
+        "source": "columns={[]}\n tableData={{\n data: [],\n meta: {\n fields: {},\n units: {},",
+        "state_before": "result.data and fields are available but unused in this branch",
+        "operation": "Render TableWidgetVisualization with hardcoded empty columns, data and meta",
+        "state_after": "the widget shows no columns and no rows, although the query returned data"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "static/app/views/dashboards/widgetCard/chart.tsx:164-173: flag check is true, then `<TableWidgetVisualization columns={[]} tableData={{data: [], meta: {fields: {}, units: {}}}} />` is rendered with hardcoded empty values, ignoring result.data and fields."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Report payload: valid body, type='crash', url, user_agent, destination, attempts=1, age=0, timestamp=5000. The endpoint option issues.browser_reporting.collector_endpoint_enabled is true.",
+        "admissibility": "age is IntegerField(required=False) with no min_value, so 0 is valid. timestamp is IntegerField(required=False, min_value=0), so 5000 is valid. Nothing else rejects having both fields."
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:47-48",
+        "source": "age = serializers.IntegerField(required=False)\n    timestamp = serializers.IntegerField(required=False, min_value=0)",
+        "state_before": "Payload has age=0 and timestamp=5000.",
+        "operation": "Field-level validation accepts both values individually, then DRF calls validate_age and validate_timestamp.",
+        "state_after": "Both field validators run."
+       },
+       {
+        "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:56-59",
+        "source": "def validate_age(self, value: int) -> int:\n        \"\"\"Validate that age is present, but not timestamp.\"\"\"\n        if self.initial_data.get(\"timestamp\"):",
+        "state_before": "value=0, initial_data['timestamp']=5000.",
+        "operation": "The timestamp check is truthy (5000), so validate_age raises ValidationError.",
+        "state_after": "Not a failure for this ordering: the error is raised. Switch to timestamp=0 with age=5 and this path is skipped."
+       },
+       {
+        "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:50-53",
+        "source": "def validate_timestamp(self, value: int) -> int:\n        \"\"\"Validate that age is absent, but timestamp is present.\"\"\"\n        if self.initial_data.get(\"age\"):",
+        "state_before": "Use payload age=5, timestamp=0. For validate_timestamp, value=0, initial_data['age']=5.",
+        "operation": "The age check is truthy (5), so validate_timestamp raises. Now take the payload age=0, timestamp=0 instead. Both validators run with falsy partners.",
+        "state_after": "Both validators see 0 as the other field's value, so both checks are falsy."
+       },
+       {
+        "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:52,58",
+        "source": "if self.initial_data.get(\"age\"):  ...  if self.initial_data.get(\"timestamp\"):",
+        "state_before": "Payload age=0, timestamp=0 (both present).",
+        "operation": "validate_timestamp evaluates .get('age') = 0, which is falsy, so no error. validate_age evaluates .get('timestamp') = 0, which is falsy, so no error.",
+        "state_after": "Neither validator raises, although both fields are present."
+       },
+       {
+        "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:110-120",
+        "source": "if not serializer.is_valid():\n ...\nvalidated_reports.append(serializer.validated_data)",
+        "state_before": "No validation errors were recorded for the age=0, timestamp=0 payload.",
+        "operation": "is_valid() returns True and the report is accepted.",
+        "state_after": "The endpoint returns 200 for a report that has both age and timestamp, which violates the either/or rule."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "browser_reporting_collector.py:52 `if self.initial_data.get(\"age\"):` and :58 `if self.initial_data.get(\"timestamp\"):` use truthiness, so age=0/timestamp=0 passes both validators; line 110-120 accepts and :130 returns 200."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "Hook called with type='number' and the short-circuit `|| type === 'number'` removed; tag.kind=TAG; queryString='search-query'",
+        "admissibility": "Hypothetical regression the test is meant to catch."
+       },
+       {
+        "value": "Mock registered with matcher query.query === 'search-query'",
+        "admissibility": "As written in the spec at lines 117-122."
+       }
+      ],
+      "steps": [
+       {
+        "location": "useGetTraceItemAttributeValues.tsx:52-53",
+        "source": "if (search) {\n    query.substringMatch = search;\n  }",
+        "state_before": "search='search-query'",
+        "operation": "Builds the query with substringMatch, not query",
+        "state_after": "query={itemType, attributeType:'number', substringMatch:'search-query', ...}"
+       },
+       {
+        "location": "static/app/__mocks__/api.tsx:237-240",
+        "source": "if (!response || !mock) {\n const err = new Error(`No mocked response found for request: ${methodAndUrl}`);",
+        "state_before": "Request sent; matcher sees query.query === undefined, so no match",
+        "operation": "MockApiClient throws instead of calling the mock",
+        "state_after": "searchQueryMock not called, but the request errors"
+       },
+       {
+        "location": "useGetTraceItemAttributeValues.tsx:114-115",
+        "source": "} catch (e) {\n throw new Error(`Unable to fetch trace item attribute values: ${e}`);",
+        "state_before": "requestPromise rejected",
+        "operation": "Hook rethrows",
+        "state_after": "await result.current(...) in the test at spec line 144 rejects, so the test fails"
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "static/app/__mocks__/api.tsx:237-240 — an unmatched request throws 'No mocked response found', which the hook rethrows at useGetTraceItemAttributeValues.tsx:115, so the test fails at the await (spec line 144) if the short-circuit is removed. The not-called assertion is vacuous, but the test does not pass silently."
+     },
+     "checa": {
+      "verdict": "incorrect",
+      "first_incorrect_step": 2,
+      "corrected_transition": "With no matching mock, MockApiClient.request does not throw. It records the error in Client.errors (warned about after each test) and never calls the success or error callback. The requestPromise promise therefore stays pending, the hook's catch is never reached, and the test's await hangs until it times out. The test fails by timeout and the afterEach warning, not by rejection.",
+      "evidence": "static/app/__mocks__/api.tsx:237-253: `if (!response || !mock) { ... const err = new Error(`No mocked response found...`); ... Client.errors[methodAndUrl] = err; } else {...}` with no call to the error callback; requestPromise (216-226) only settles via the success/error callbacks."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "A GroupEvent whose data contains user messages, tags and request context",
+        "admissibility": "Normal events carry such data."
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/workflow_engine/processors/delayed_workflow.py:583",
+        "source": "\"event_data\": workflow_event_data,",
+        "state_before": "workflow_event_data = WorkflowEventData(event=group_event)",
+        "operation": "The object is passed as logging extra and rendered via the dataclass repr, which calls repr(GroupEvent).",
+        "state_after": "The GroupEvent repr comes from object.__repr__ (no __repr__ defined in GroupEvent or BaseEvent)."
+       },
+       {
+        "location": "src/sentry/eventstore/models.py:690",
+        "source": "class GroupEvent(BaseEvent):",
+        "state_before": "GroupEvent has no __repr__ (only Event at line 599 does, and it prints just event_id).",
+        "operation": "The default object repr is used.",
+        "state_after": "Logged string is like WorkflowEventData(event=<GroupEvent object at 0x...>, ...), with no payload data."
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "src/sentry/eventstore/models.py:690 - GroupEvent defines no __repr__, so logging the WorkflowEventData emits only an opaque object repr, not the message, tags, user or request data."
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "src/sentry/eventstore/models.py:599 defines __repr__ only on Event (class at 578); GroupEvent at line 690 and BaseEvent at line 53 define none. delayed_workflow.py:583 has \"event_data\": workflow_event_data, and types.py:62 defines WorkflowEventData as a frozen dataclass with event: GroupEvent."
+     }
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "AssignmentSource(source_name='foo-source', integration_id=123) with queued left unset",
+        "admissibility": "queued has a dataclass default, so the constructor accepts omitting it, as the test does"
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/integrations/services/assignment_source.py:18",
+        "source": "queued: datetime = timezone.now()",
+        "state_before": "queued not supplied by caller",
+        "operation": "Dataclass applies the default value",
+        "state_after": "queued is a non-None datetime"
+       },
+       {
+        "location": "src/sentry/integrations/services/assignment_source.py:28",
+        "source": "return asdict(self)",
+        "state_before": "instance with queued set to the default datetime",
+        "operation": "to_dict serializes all fields",
+        "state_after": "dict contains a non-None 'queued' key"
+       },
+       {
+        "location": "tests/sentry/integrations/services/test_assignment_source.py:36",
+        "source": "assert result.get(\"queued\") is not None",
+        "state_before": "result['queued'] is the default datetime",
+        "operation": "Evaluate the assertion",
+        "state_after": "Assertion passes whatever the value, so it cannot detect a wrong or altered queued"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "src/sentry/integrations/services/assignment_source.py:18 `queued: datetime = timezone.now()` (evaluated once at class definition, still a non-None datetime); :28 `return asdict(self)`; tests/sentry/integrations/services/test_assignment_source.py:36 `assert result.get(\"queued\") is not None`"
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Test module tests/sentry/integrations/services/test_assignment_source.py as in the diff",
+        "admissibility": "The file exists in the repository at the PR head."
+       }
+      ],
+      "steps": [
+       {
+        "location": "tests/sentry/integrations/services/test_assignment_source.py:8",
+        "source": "def test_from_dict_empty_array(self):",
+        "state_before": "Test is collected by pytest",
+        "operation": "Test name says 'array'",
+        "state_after": "Name implies the input is an array"
+       },
+       {
+        "location": "tests/sentry/integrations/services/test_assignment_source.py:9",
+        "source": "data: dict[str, Any] = {}",
+        "state_before": "Inside the test body",
+        "operation": "Builds an empty dict, not an array",
+        "state_after": "data is {} of type dict"
+       },
+       {
+        "location": "tests/sentry/integrations/services/test_assignment_source.py:10-11",
+        "source": "result = AssignmentSource.from_dict(data)\n        assert result is None",
+        "state_before": "data = {}",
+        "operation": "from_dict calls cls(**{}), which raises TypeError for missing required args; the function returns None",
+        "state_after": "The test passes, but its name does not match its input (dict, not array)"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "tests/sentry/integrations/services/test_assignment_source.py:8-11 (def test_from_dict_empty_array; data: dict[str, Any] = {}; assert result is None); src/sentry/integrations/services/assignment_source.py:31-35 (try: return cls(**input_dict) except (ValueError, TypeError): return None)"
+     }
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Any StatefulDetectorHandler subclass and any DataPacket",
+        "admissibility": "evaluate() is a public method on the handler, so any subclass can be called with any packet."
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/workflow_engine/processors/detector.py:226-228",
+        "source": "def evaluate(\n        self, data_packet: DataPacket[T]\n    ) -> dict[DetectorGroupKey, DetectorEvaluationResult]:",
+        "state_before": "Handler instance exists",
+        "operation": "Read the declared return type",
+        "state_after": "Signature says the return type is a dict"
+       },
+       {
+        "location": "src/sentry/workflow_engine/processors/detector.py:230",
+        "source": "Evaluates a given data packet and returns a list of `DetectorEvaluationResult`.",
+        "state_before": "Signature says dict",
+        "operation": "Read the docstring",
+        "state_after": "Docstring says list, which contradicts the signature"
+       },
+       {
+        "location": "src/sentry/workflow_engine/processors/detector.py:237-243",
+        "source": "results = {}\n ... results[result.group_key] = result",
+        "state_before": "group_values holds one or more keys",
+        "operation": "Build the results as a dict keyed by group key",
+        "state_after": "results is a dict"
+       },
+       {
+        "location": "src/sentry/workflow_engine/processors/detector.py:244",
+        "source": "return results",
+        "state_before": "results is a dict",
+        "operation": "Return the dict",
+        "state_after": "Caller receives a dict, not the list the docstring describes"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "detector.py:226-228 signature returns dict[DetectorGroupKey, DetectorEvaluationResult]; :230 docstring says 'returns a list'; :237-244 `results = {}` ... `results[result.group_key] = result` ... `return results`."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "The repository at the PR head, with src/sentry/incidents/grouptype.py as shown in the diff.",
+        "admissibility": "This is the checked-out code, so no extra input or state is needed."
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/incidents/grouptype.py:10",
+        "source": "# TODO: This will be a stateful detector when we build that abstraction",
+        "state_before": "A reader opens the file.",
+        "operation": "The reader reads the TODO comment, which says the handler will become stateful in the future.",
+        "state_after": "The reader believes the handler is not yet stateful."
+       },
+       {
+        "location": "src/sentry/incidents/grouptype.py:11",
+        "source": "class MetricAlertDetectorHandler(StatefulDetectorHandler[QuerySubscriptionUpdate]):",
+        "state_before": "The reader holds the belief from the TODO.",
+        "operation": "The very next line shows the class already subclasses StatefulDetectorHandler, which contradicts the TODO.",
+        "state_after": "The TODO is stale and misleading, so the finding holds."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "src/sentry/incidents/grouptype.py:10-11 — \"# TODO: This will be a stateful detector when we build that abstraction\" directly above \"class MetricAlertDetectorHandler(StatefulDetectorHandler[QuerySubscriptionUpdate]):\""
+     }
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Monitor with config {'schedule_type': 2, ...} and an associated MonitorEnvironment",
+        "admissibility": "schedule_type is a normal key in the monitor config dict, and the code explicitly checks for it"
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/monitors/logic/incident_occurrence.py:89",
+        "source": "\"contexts\": {\"monitor\": get_monitor_environment_context(monitor_env)},",
+        "state_before": "Incident occurrence is being created for a failed check-in",
+        "operation": "Calls get_monitor_environment_context",
+        "state_after": "Enters the function"
+       },
+       {
+        "location": "src/sentry/monitors/logic/incident_occurrence.py:160",
+        "source": "config = monitor_environment.monitor.config.copy()",
+        "state_before": "monitor.config['schedule_type'] == 2",
+        "operation": "Make a shallow copy",
+        "state_after": "local config is a copy, with schedule_type still 2"
+       },
+       {
+        "location": "src/sentry/monitors/logic/incident_occurrence.py:161-162",
+        "source": "if \"schedule_type\" in config:\n    config[\"schedule_type\"] = monitor_environment.monitor.get_schedule_type_display()",
+        "state_before": "local config['schedule_type'] == 2",
+        "operation": "Replace the value in the local copy only",
+        "state_after": "local config['schedule_type'] is the display string; monitor.config is unchanged"
+       },
+       {
+        "location": "src/sentry/monitors/logic/incident_occurrence.py:168",
+        "source": "\"config\": monitor_environment.monitor.config,",
+        "state_before": "local config holds the display value but is never used again",
+        "operation": "Return the original monitor.config instead of the local copy",
+        "state_after": "Returned context has config.schedule_type == 2 (numeric), so the transformed copy is dead code"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "src/sentry/monitors/logic/incident_occurrence.py:160-168: config = monitor.config.copy(); config['schedule_type'] = get_schedule_type_display(); returned dict uses \"config\": monitor_environment.monitor.config (the original), so the copy is unused."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "failed_checkins = [{'id':1,'date_added':<dt>,'status':CheckInStatus.MISSED}]",
+        "admissibility": "SimpleCheckIn TypedDict allows any int status; MISSED is a key in HUMAN_FAILURE_STATUS_MAP"
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/monitors/logic/incident_occurrence.py:131-137",
+        "source": "\"A failed check-in was detected\"",
+        "state_before": "docstring documents example outputs",
+        "operation": "read documented example, which has no matching string in the code",
+        "state_after": "documented output 'A failed check-in was detected' is not producible"
+       },
+       {
+        "location": "src/sentry/monitors/logic/incident_occurrence.py:139-143",
+        "source": "status_counts = Counter(checkin[\"status\"] for checkin in failed_checkins if checkin[\"status\"] in HUMAN_FAILURE_STATUS_MAP.keys())",
+        "state_before": "one MISSED check-in",
+        "operation": "count statuses",
+        "state_after": "{MISSED: 1}"
+       },
+       {
+        "location": "src/sentry/monitors/logic/incident_occurrence.py:145-146",
+        "source": "if sum(status_counts.values()) == 1:\n        return SINGULAR_HUMAN_FAILURE_MAP[list(status_counts.keys())[0]]",
+        "state_before": "{MISSED: 1}",
+        "operation": "sum == 1, return singular map entry",
+        "state_after": "returns SINGULAR_HUMAN_FAILURE_MAP[MISSED]"
+       },
+       {
+        "location": "src/sentry/monitors/logic/incident_occurrence.py:125",
+        "source": "CheckInStatus.MISSED: _(\"A missed check-in was detected\"),",
+        "state_before": "lookup for MISSED",
+        "operation": "resolve string",
+        "state_after": "actual output 'A missed check-in was detected', which differs from the docstring's 'A failed check-in was detected'"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "incident_occurrence.py:136 docstring 'A failed check-in was detected'; :145-146 'if sum(status_counts.values()) == 1: return SINGULAR_HUMAN_FAILURE_MAP[...]'; :125 'CheckInStatus.MISSED: _(\"A missed check-in was detected\")'"
+     }
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Victim's GitHub App installation INSTALL_V exists on GitHub, but no Sentry Integration row exists yet (webhook not processed)",
+        "admissibility": "The Integration row is only created by the installation webhook or the pipeline, so a race window exists; the code at line 481 explicitly handles DoesNotExist."
+       },
+       {
+        "value": "Attacker has a Sentry org and GitHub account 'attacker', and starts the pipeline with ?installation_id=INSTALL_V",
+        "admissibility": "installation_id is read unchecked from request.GET at line 397 and is not secret."
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/integrations/github/integration.py:397-399",
+        "source": "installation_id = request.GET.get(\"installation_id\")\n if installation_id:\n pipeline.bind_state(\"installation_id\", installation_id)",
+        "state_before": "Empty pipeline state",
+        "operation": "Attacker-supplied installation id is bound into pipeline state",
+        "state_after": "installation_id=INSTALL_V"
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:438-439",
+        "source": "pipeline.bind_state(\"github_authenticated_user\", authenticated_user_info[\"login\"])\n return pipeline.next_step()",
+        "state_before": "Attacker completed OAuth with their own GitHub account",
+        "operation": "Authenticated user recorded, advance to GitHubInstallation",
+        "state_after": "github_authenticated_user='attacker'"
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:478-482",
+        "source": "integration=Integration.objects.get(external_id=installation_id)\n...\nexcept Integration.DoesNotExist:\n return pipeline.next_step()",
+        "state_before": "No Integration row with external_id INSTALL_V",
+        "operation": "DoesNotExist raised; handler advances the pipeline without comparing github_authenticated_user to the installer (check at lines 500-505 skipped)",
+        "state_after": "Pipeline advances unverified"
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:353-362",
+        "source": "installation = self.get_installation_info(state[\"installation_id\"])\n...\"external_id\": installation[\"id\"],",
+        "state_before": "Pipeline state has installation_id=INSTALL_V",
+        "operation": "App-authenticated GitHub call succeeds for the victim's installation and the integration is built for the attacker's org",
+        "state_after": "Attacker's org is linked to the victim's GitHub installation"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "integration.py:475-482 `except Integration.DoesNotExist: return pipeline.next_step()` skips the sender check at 500-505; installation_id bound unchecked at 397-399; build_integration uses state['installation_id'] at 353."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "User is in the GitHub integration pipeline, OAuthLoginView is the current step, and the callback request has code=X and state equal to pipeline.signature",
+        "admissibility": "This is the normal GitHub OAuth redirect back to the setup URL, and the state check at line 412 passes."
+       },
+       {
+        "value": "GitHub's token endpoint returns a valid access_token, but https://api.github.com/user returns 5xx/401/403 or times out",
+        "admissibility": "Any external API can fail or rate-limit, and no code rules this out."
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/integrations/github/integration.py:412",
+        "source": "if request.GET.get(\"state\") != pipeline.signature:",
+        "state_before": "The callback has a matching state.",
+        "operation": "The mismatch check is false, so execution continues.",
+        "state_after": "Execution continues to the token exchange."
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:423",
+        "source": "req = safe_urlopen(url=ghip.get_oauth_access_token_url(), data=data)",
+        "state_before": "This call is not inside a try block.",
+        "operation": "The token exchange succeeds in this scenario. If it hit a network error, the exception would propagate (assumed, SafeSession not read).",
+        "state_after": "req is a successful response."
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:425-429",
+        "source": "try:\n    body = safe_urlread(req).decode(\"utf-8\")\n    payload = dict(parse_qsl(body))\nexcept Exception:\n    payload = {}",
+        "state_before": "req is a successful response.",
+        "operation": "The body is parsed and the try covers only this parsing.",
+        "state_after": "payload contains access_token."
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:434",
+        "source": "authenticated_user_info = get_user_info(payload[\"access_token\"])",
+        "state_before": "payload has access_token. This call is not inside a try block.",
+        "operation": "get_user_info is called.",
+        "state_after": "Control enters get_user_info."
+       },
+       {
+        "location": "src/sentry/identity/github/provider.py:16",
+        "source": "resp.raise_for_status()",
+        "state_before": "api.github.com/user returned a 5xx or 4xx response.",
+        "operation": "raise_for_status raises requests.HTTPError, which nothing in dispatch catches.",
+        "state_after": "The exception propagates out of OAuthLoginView.dispatch and error() is never reached, so the user gets a 500."
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "integration.py:434 `authenticated_user_info = get_user_info(payload[\"access_token\"])` is not in a try block; identity/github/provider.py:16 `resp.raise_for_status()` raises HTTPError on 4xx/5xx and nothing in dispatch catches it, so error() at line 436 is skipped."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "etapa": "bloqueado",
+     "trace": {
+      "setup": [
+       {
+        "value": "GitHub pipeline with views OAuthLoginView and GitHubInstallation; attacker sends arbitrary state values to the setup endpoint",
+        "admissibility": "The setup endpoint accepts any GET query parameters."
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/pipeline/base.py:133",
+        "source": "self.signature = md5_text(*pipe_ids).hexdigest()",
+        "state_before": "pipe_ids are module.class names of the pipeline views, which are public constants",
+        "operation": "The signature is computed deterministically from class names, with no secret or randomness",
+        "state_after": "The signature is the same constant for every user and session, so it is not a secret"
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:402",
+        "source": "state = pipeline.signature",
+        "state_before": "The user starts the flow without a state parameter",
+        "operation": "The signature is sent to the user's browser in the GitHub authorize redirect URL",
+        "state_after": "The client already knows the value"
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:412",
+        "source": "if request.GET.get(\"state\") != pipeline.signature:",
+        "state_before": "The attacker supplies a guessed state",
+        "operation": "Plain comparison; a timing leak could only reveal a value that is already public and constant",
+        "state_after": "No secret is disclosed, so no security failure results"
+       }
+      ],
+      "result": "blocked",
+      "blocking_step": "src/sentry/pipeline/base.py:133 - the signature is an md5 of public class names, not a secret token, so a non-constant-time comparison leaks nothing"
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "",
+      "evidence": "src/sentry/pipeline/base.py:132-133 `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" ...]; self.signature = md5_text(*pipe_ids).hexdigest()`; src/sentry/integrations/github/integration.py:401-408 `state = pipeline.signature` in the authorize redirect URL; integration.py:412 `if request.GET.get(\"state\") != pipeline.signature:`"
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "checagem",
+     "trace": {
+      "setup": [
+       {
+        "value": "Request with installation_id whose Integration already has an OrganizationIntegration on another org (or pending deletion, or an invalid request using the default)",
+        "admissibility": "Handled by the existing branches in GitHubInstallation.dispatch; the existing tests exercise them."
+       },
+       {
+        "value": "Translation extraction run over the source (makemessages-style literal scanning)",
+        "admissibility": "The standard Django i18n workflow only extracts string literals passed directly to gettext calls."
+       }
+      ],
+      "steps": [
+       {
+        "location": "src/sentry/integrations/github/integration.py:488",
+        "source": "error_short=\"Github installed on another Sentry organization.\",",
+        "state_before": "Installed-on-another-org branch reached",
+        "operation": "Passes a bare string literal, not wrapped in _()",
+        "state_after": "Literal is invisible to the extractor"
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:132",
+        "source": "error_short=\"Invalid installation request.\",",
+        "state_before": "Function definition",
+        "operation": "The default value is also a bare literal",
+        "state_after": "Not marked for translation"
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:141",
+        "source": "\"data\": {\"error\": _(error_short)},",
+        "state_before": "error_short holds a plain str",
+        "operation": "Calls gettext_lazy on a variable; the extractor only picks up literal arguments",
+        "state_after": "The short messages are not in the catalog, so they are not translatable"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "valid",
+      "first_incorrect_step": 0,
+      "corrected_transition": "All transitions hold. A fresh extraction would not pick up these strings because they are bare literals and the gettext call receives a variable. The existing .po catalogs still contain the 'installed on another organization' message from before the change.",
+      "evidence": "src/sentry/integrations/github/integration.py:132 `error_short=\"Invalid installation request.\"`; :141 `\"data\": {\"error\": _(error_short)}`; :488 `error_short=\"Github installed on another Sentry organization.\"`; :12 `gettext_lazy as _`"
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "etapa": "exclusao",
+     "trace": {
+      "setup": [
+       {
+        "value": "pipeline.signature for org_2 differs from hardcoded state 9cae5e88803f35ed7970fc131e6e65d3; webhook sender is 'octocat' (matching login)",
+        "admissibility": "The test hardcodes the state literal (test line 445) rather than deriving it from pipeline.signature, so any signature change makes them differ."
+       }
+      ],
+      "steps": [
+       {
+        "location": "tests/sentry/integrations/github/test_integration.py:445",
+        "source": "{\"code\": \"12345678901234567890\", \"state\": \"9cae5e88803f35ed7970fc131e6e65d3\"}",
+        "state_before": "Pipeline started for org_2; actual signature differs from the literal",
+        "operation": "Test GETs setup_path_2 with the hardcoded state",
+        "state_after": "Request reaches OAuthLoginView.dispatch with a mismatched state"
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:412-413",
+        "source": "if request.GET.get(\"state\") != pipeline.signature:\n            return error(request, self.active_organization)",
+        "state_before": "state != signature",
+        "operation": "Returns error() early, before the token exchange and the sender/login comparison",
+        "state_after": "Failure page rendered; GitHubInstallation never runs"
+       },
+       {
+        "location": "src/sentry/integrations/github/integration.py:132",
+        "source": "error_short=\"Invalid installation request.\",",
+        "state_before": "error() called with default arguments",
+        "operation": "Renders the generic message",
+        "state_after": "Response contains 'Invalid installation request.'"
+       },
+       {
+        "location": "tests/sentry/integrations/github/test_integration.py:454",
+        "source": "assert b\"Invalid installation request.\" in resp.content",
+        "state_before": "Response is from the state-mismatch path, not the sender mismatch at integration.py:505",
+        "operation": "Assertion checks only the generic text",
+        "state_after": "Test passes without exercising the sender/login mismatch"
+       }
+      ],
+      "result": "failure_reached",
+      "blocking_step": ""
+     },
+     "checa": {
+      "verdict": "incorrect",
+      "first_incorrect_step": 1,
+      "corrected_transition": "The state literal equals pipeline.signature, because the signature is an md5 of the view class names and does not depend on the org. The state check at integration.py:412 passes. The flow goes on to the token exchange and the sender/login comparison, which is what the test is meant to cover.",
+      "evidence": "src/sentry/pipeline/base.py:132-133: `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" ...]; self.signature = md5_text(*pipe_ids).hexdigest()`. tests/sentry/integrations/github/test_integration.py:235 expects the same literal in the authorize redirect state, which is built from pipeline.signature."
+     },
+     "exclui": {
+      "verdict": "trace_only_invalid",
+      "evidence": "integration.py:412 passes because the test's state literal equals pipeline.signature (md5 of the view class names), so the trace's step 1 is wrong. The test at line 454 still asserts only the generic 'Invalid installation request.' text. error() returns that text from line 413, from lines 432 and 436 (token or user-info failure), and from later GitHubInstallation branches. The test also has no control case showing success when the sender is 'octocat'. The test could therefore still pass without exercising the sender/login mismatch.",
+      "scope": "tests/sentry/integrations/github/test_integration.py:398-454 (test_github_user_mismatch) and the error() paths in integration.py OAuthLoginView and GitHubInstallation"
+     }
+    }
+   ]
+  }
+ }
+}

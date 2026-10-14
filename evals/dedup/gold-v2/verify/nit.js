@@ -26,12 +26,17 @@ const { prepareRepo } = require(path.join(INV, 'prepare-repo'));
 const { LocalRepoCommands } = require(path.join(INV, 'local-repo-commands'));
 
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
+// --prefixo: outro conjunto de PRs (ex.: holdout) no lugar do light de 09/10.
+const PREFIXO = arg('prefixo', '09.10.26');
 const GOLD = arg('model'), VERSAO = arg('versao', 'v1'), PAR = Number(arg('par', '3')), DEDUP = arg('dedup', 'v9-cobertura');
 const TETO = 3;
 const MODELO = process.env.RECALL_MODEL;
 if (!GOLD || !MODELO) { console.error('RECALL_MODEL=<id> --model=<gold model>'); process.exit(2); }
 const semToolChoiceNomeado = /muse|kimi|glm/i.test(MODELO);
-const OUT = path.join(__dirname, 'resultados', `nit-${VERSAO}`, `${GOLD}.json`);
+const OUT = path.join(__dirname, 'resultados', arg('saida', `nit-${VERSAO}`), `${GOLD}.json`);
+// --so1: julga so os grupos de um membro que o verify --sobre manteve.
+const SO1 = arg('so1') === '1';
+const SOBRE = SO1 ? JSON.parse(fs.readFileSync(path.join(__dirname, 'resultados', arg('sobre', 'aluc-h1t10f'), `${GOLD}.json`), 'utf8')).prs : null;
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 
 const MESA = VERSAO.startsWith('mesa');
@@ -214,8 +219,32 @@ function normaliza(d) {
     return { nit: d.nit, reason: d.reason || '' };
 }
 
+// Claude por assinatura: sessao do Agent SDK com Read/Grep/Glob no worktree, JSON no fim.
+const TIER0 = require(path.join(INV, '..', 'shared', 'tier0-models')).TIER0;
+const PELO_SDK = TIER0[MODELO]?.provider === 'claude_agent_sdk';
+async function julgaSdk(s, diff, dir, schema) {
+    const { carregaSdk, envDoProcesso } = require(path.join(INV, 'claude-sdk-runner'));
+    const sdk = await carregaSdk();
+    const texto = textoDe(s, diff).replace(/grep, readFile and listDir/g, 'Grep, Read and Glob')
+        .replace('Answer with submit.', `End your answer with ONLY a JSON object matching this schema, no code fence:\n${JSON.stringify(schema)}`);
+    let saida = '';
+    try {
+        for await (const msg of sdk.query({ prompt: texto, options: {
+            model: TIER0[MODELO].sdkModel,
+            systemPrompt: 'You can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
+            tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'],
+            disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
+            settingSources: [], cwd: dir, maxTurns: TETO + 2, env: envDoProcesso() } })) {
+            if (msg.type === 'assistant') for (const b of msg.message.content || []) if (b.type === 'text') saida += b.text + '\n';
+            if (msg.type === 'result' && msg.result) saida += '\n' + msg.result;
+        }
+    } catch (e) { if (!saida) throw e; }
+    return { ...normaliza(extraiJson(saida)), passos: 0 };
+}
+
 async function julga(model, cmd, s, diff) {
     const schema = MESA ? SCHEMA_MESA : SCHEMA;
+    if (PELO_SDK && LOOP) return julgaSdk(s, diff, cmd.repoRoot, schema);
     if (!LOOP) {
         const r = await chamadaEstruturada({ model, modelId: MODELO, nome: 'submit', schema, prompt: textoDe(s, diff) });
         return { ...normaliza(r.dados), passos: 1 };
@@ -239,8 +268,8 @@ async function julga(model, cmd, s, diff) {
 (async () => {
     const model = buildModel(MODELO);
     console.log(`[verify-nit] ${VERSAO} · ${descreveModelo(MODELO)} · ${GOLD}`);
-    const sug = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `09.10.26_${GOLD}.json`), 'utf8')).prs;
-    const fin = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `09.10.26_${GOLD}.final.json`), 'utf8')).prs;
+    const sug = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `${PREFIXO}_${GOLD}.json`), 'utf8')).prs;
+    const fin = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `${PREFIXO}_${GOLD}.final.json`), 'utf8')).prs;
     const real = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'dedup-real', DEDUP, `${GOLD}.json`), 'utf8')).prs;
     const vars = {};
     for (const f of fs.readdirSync(path.join(INV, 'datasets')).filter((x) => x.endsWith('.json'))) {
@@ -253,7 +282,8 @@ async function julga(model, cmd, s, diff) {
     const um = async (cid) => {
         let h;
         try {
-            const gs = grupos(sug[cid].suggestions, fin[cid], real[cid].idsEntradaDedup || []);
+            const caiu = new Set(SO1 ? (SOBRE[cid]?.grupos || []).filter((g) => g.nit).map((g) => g.rep) : []);
+            const gs = grupos(sug[cid].suggestions, fin[cid], real[cid].idsEntradaDedup || []).filter((g) => !SO1 || (g.membros.length === 1 && !caiu.has(g.rep)));
             const out = [];
             if (gs.length) {
                 let cmd = null;

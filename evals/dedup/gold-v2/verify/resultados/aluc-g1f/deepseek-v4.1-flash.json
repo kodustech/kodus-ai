@@ -1,0 +1,1591 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "g1f",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "apps/web/components/security/TwoFactorAuthSection.tsx:7 — `import EnableTwoFactorModal from \"./EnableTwoFactorModal\";` (the security copy, not the settings one), and apps/web/components/security/EnableTwoFactorModal.tsx:113-114 — `if (response.status === 200) { onEnable();` . That modal has no open/onOpenChange props (`<Dialog open={true}>`, line 143), so the named consumer is not wired to setEnableModalOpen and its onEnable (setEnabled(true)) is not skipped on success.",
+       "reason": "The comment names TwoFactorAuthSection.tsx as a consumer of the settings EnableTwoFactorModal whose setEnabled(true) is skipped, but that file imports the separate security/EnableTwoFactorModal, which already calls onEnable() on HTTP 200 and has no dismiss/onOpenChange wiring."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's central causal claim names apps/web/components/security/TwoFactorAuthSection.tsx as a consumer of the settings EnableTwoFactorModal — i.e., that it passes onEnable (setEnabled(true)) which gets skipped on ESC/overlay dismissal. The quoted code shows this is factually false: TwoFactorAuthSection.tsx:7 does `import EnableTwoFactorModal from \"./EnableTwoFactorModal\"`, importing the separate security copy (apps/web/components/security/EnableTwoFactorModal.tsx), and that file at lines 113-114 already calls `onEnable()` on `response.status === 200` and renders with `<Dialog open={true}>` (line 143), having no open/onOpenChange props. So the named consumer is not wired to setEnableModalOpen and its onEnable is not skipped on success — a statement about which imports/callers exist, contradicted by the repository code."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "lib/file_helper.rb:13-14: `extension = File.extname(uri.path)` / `tmp = Tempfile.new([tmp_file_name, extension])` and app/models/upload.rb:98: `OptimizedImage.resize(file.path, file.path, width, height, allow_animation: allow_animation)`",
+       "reason": "The uploaded tempfile carries the original file's extension (FileHelper.download builds it from the URL path into the Tempfile name, and the pre-existing avatar/thumbnail path in upload.rb relies on the same `from =~ /\\.GIF$/i` check against file.path), so the `.GIF` substring is present and the animated path is selected."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual premise is that the tempfile passed to the auto-downsize call has a name without a `.GIF` extension, so the `from =~ /\\.GIF$/i` check fails. The cited repository code directly refutes this: `lib/file_helper.rb:13-14` shows `FileHelper.download` derives `extension = File.extname(uri.path)` and builds the tempfile with `Tempfile.new([tmp_file_name, extension])`, i.e. the tempfile name carries the original file's extension. The pre-existing `upload.rb:98` path relies on the same `from =~ /\\.GIF$/i` check against `file.path`, confirming that the tempfile path does contain the extension. That is a statement about what these specific repository functions store/build, so the comment's claim that the `.GIF` substring is absent (and thus the animated branch is never selected) is factually false."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/controllers/uploads_controller.rb:66 — `while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes`",
+       "reason": "The loop's own condition compares `tempfile.size` to `SiteSetting.max_image_size_kb.kilobytes` on every attempt, so it does not stop \"without any check\" that the result meets the allowed size — the check the reviewer says is absent is right there in the loop guard."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment asserts the loop stops \"without any check that the result actually meets max_image_size_kb\". The checker quotes the loop guard at uploads_controller.rb:66 (`while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes`), which is a direct, repository-internal statement about what that line contains and does: it re-evaluates `tempfile.size` against `max_image_size_kb` on every attempt and only exits when either the size is within the limit or attempts run out. That is exactly the check the comment claims is absent, so the comment's factual statement about the code is false."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "test/javascripts/lib/utilities-test.js.es6:52-61 expects the size check to use Discourse.SiteSettings.max_image_size_kb (set to 5, alert max_size_kb:5), and app/assets/javascripts/discourse/controllers/upload-selector.js.es6:17 uses setting('max_attachment_size_kb'), so the site-setting-derived max size is still the governing size limit in the codebase, contradicting the claim that it was replaced.",
+       "reason": "The comment's factual premise that a site-setting-derived max size was replaced is contradicted by the tests and upload-selector which still derive max size from Discourse.SiteSettings."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment asserts that a hardcoded 10*1024 literal replaced the site-setting-derived max size in utilities.js. The evidence quotes concrete code on the same size-check code path: test/javascripts/lib/utilities-test.js.es6:52-61 expects the size check to use Discourse.SiteSettings.max_image_size_kb (set to 5, asserting max_size_kb:5), and upload-selector.js.es6:17 uses setting('max_attachment_size_kb'). These show the site-setting-derived max size is still the governing limit rather than having been replaced by the hardcoded literal, making the comment's factual premise about what the code does false."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/models/optimized_image.rb:149-150 `def self.downsize(from, to, dimensions, opts={})` / `optimize(\"downsize\", from, to, dimensions, opts)` forwards the generic `dimensions` string unchanged, and app/models/optimized_image.rb:132 builds `-resize #{dimensions}#{...}` — so line 67's `\"80%\"` becomes ImageMagick `-resize 80%`, a valid geometry that resizes rather than no-oping.",
+       "reason": "`OptimizedImage.downsize` takes an arbitrary `dimensions` geometry string passed straight to ImageMagick's `-resize` (which accepts percentages), so the claim that the consumer \"requires explicit WxH geometry\" and that `\"80%\"` silently no-ops is false."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker's refutation hinges on how ImageMagick's `-resize` behaves — i.e. that it accepts percentage geometries like `80%` and therefore resizes rather than no-oping. Whether `\"80%\"` is a valid, non-no-op geometry is a claim about an external tool's argument handling, not about what this repository's code contains or does. The quoted repository lines (downsize forwarding `dimensions` unchanged, and building `-resize #{dimensions}`) merely illustrate the value being passed along; per the rules, quoting the code that passes a value to an external command does not turn the external-tool behavior into a statement about this repository. That is an argument about tool semantics, so the evidence \"argues\" rather than contradicts."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6",
+      "S7",
+      "S11",
+      "S12",
+      "S13",
+      "S18",
+      "S19",
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S4",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:115-116 — `if count >= s.deviceLimit { return s.updateDevice(ctx, device) }`. updateDevice is the only source of ErrDeviceLimitReached (line 96) and the only call site is line 116, guarded by `count >= s.deviceLimit`. The upsert path (lines 120-155) never returns that sentinel.",
+       "reason": "updateDevice is invoked only after CountDevices has already reached the configured device limit, so the sentinel cannot be produced for reasons unrelated to the limit; there is no path where a device outside the time window triggers ErrDeviceLimitReached while the limit is not reached."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checkers' evidence does not show that any factual statement about the code (what updateDevice contains or does, what callers exist) is false. The comment's literal claim — that updateDevice returns ErrDeviceLimitReached on rowsAffected == 0 — is not disputed. Instead, the evidence argues that the reported branch cannot be reached: because the only call site (line 116) is gated by `count >= s.deviceLimit` and no other path returns the sentinel, a device outside the time window cannot trigger ErrDeviceLimitReached while the limit is unreached. That is the \"the function never returns the bad value / the reported branch cannot be reached\" style of reasoning about reachability and intent, not a quotation showing the comment's stated fact about the code is wrong. Hence it argues rather than contradicts."
+     }
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/storage/unified/resource/broadcaster.go:92-102 and 159-182: `func (b *broadcaster[T]) init(ctx context.Context, connect ConnectFunc[T]) error { stream := make(chan T, 100); if err := connect(stream); err != nil { return err }; ... go b.stream(stream); ... }` — NewBroadcaster only launches the `b.stream` goroutine AFTER connect succeeds. pkg/storage/unified/resource/server.go:752-770: initWatcher's connect closure `events, err := s.backend.WatchWriteEvents(s.ctx); if err != nil { return err }` returns the error BEFORE `go func(){...}()`, so if initWatcher fails, no watcher goroutine (nor the outer broadcaster goroutine) was ever started. Also pkg/storage/unified/resource/search.go:202 `watchctx := context.Background()` means the one goroutine that does survive (the search event loop) is not bound to s.ctx, so the missing cancel() cannot stop it.",
+       "reason": "Contrary to the comment, when initWatcher returns an error its watcher goroutine has not been started (connect fails before `go b.stream`/the inner goroutine), so no watcher goroutine leaks on that path, and the surviving search loop runs on context.Background() and is unaffected by cancel() — the leak the comment attributes to the missing cancel does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual claim is that on the initWatcher error path a watcher goroutine (and broadcaster goroutine) is already running bound to s.ctx and thus leaks because cancel() is not called. The quoted repository code shows otherwise: in broadcaster.go the `go b.stream(stream)` is only launched after `connect(stream)` returns nil, and in server.go:752-770 initWatcher's connect closure returns the WatchWriteEvents error before the inner goroutine is started. So on the error path no watcher goroutine exists to leak — a factual statement about what these named functions do on that branch, not a judgment about intent or external behavior. The evidence also quotes search.go:202 (`watchctx := context.Background()`), showing the surviving search loop is not bound to s.ctx, so the missing cancel() could not stop it either. The comment's asserted leak (goroutines kept running with no way to stop them, tied to the uncalled cancel) is contradicted by the code."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S11",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S3",
+      "S7",
+      "S8",
+      "S9",
+      "S10",
+      "S12",
+      "S13",
+      "S14",
+      "S16",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4",
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "public/app/features/alerting/unified/hooks/useAbilities.ts:243-245: `// TODO: Add support for federated rules` / `// const isFederated = isFederatedRuleGroup();` / `const isFederated = false;`",
+       "reason": "The block at the cited lines carries an \"Add support for federated rules\" TODO and an argument-less commented placeholder, showing federated detection was never implemented in this hook (the deprecated useAllAlertRuleAbilities, lines 222-229, is only a thin delegation), so the consolidation could not have \"silently dropped\" an `isFederatedRuleGroup(rule.group)` check that never existed."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes the cited code in public/app/features/alerting/unified/hooks/useAbilities.ts (lines 243-245), which contains a `// TODO: Add support for federated rules` comment plus the commented-out, argument-less placeholder `// const isFederated = isFederatedRuleGroup();` followed by `const isFederated = false;`. It also notes the deprecated useAllAlertRuleAbilities (lines 222-229) is only a thin delegation. This directly falsifies the comment's factual claim that the old implementation used `isFederated = isFederatedRuleGroup(rule.group)` and that the consolidation \"silently dropped\" that check — no such federated detection ever existed in this hook, and the placeholder shows it was never wired up (hence the TODO)."
+     }
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/utils/GroupUtils.java:90 `representation.setSubGroupCount(group.getSubGroupsCount());` (setter is `setSubGroupCount(Long)` at core/src/main/java/org/keycloak/representations/idm/GroupRepresentation.java:94). A repo-wide search for `getSubGroupsCount` finds this as the *only* consumer of `GroupModel.getSubGroupsCount()`; it passes the value straight to a boxed `Long` parameter and never unboxes it (no `> 0`, no `long n = ...`, no primitive parameter).",
+       "reason": "The reported NPE bug rests on there being consumers that unbox the result and thus rely on the old non-null contract, but the sole caller of GroupModel.getSubGroupsCount() forwards it to a boxed Long setter, so no such caller exists and no NPE path is created."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment asserts that consumers relying on the old non-null contract exist — callers that unbox the result (`getSubGroupsCount() > 0`, `long n = ...`, primitive parameter) and would now throw an NPE. The evidence is a repository-wide search establishing the opposite fact: the *only* consumer of `GroupModel.getSubGroupsCount()` is `GroupUtils.java:90`, which forwards the value straight to the boxed `setSubGroupCount(Long)` setter and never unboxes it. Since the setter parameter is a boxed `Long`, no unboxing caller exists, so the NPE path the comment describes is not created by the code in this repository. This is a factual statement about which callers exist (a search finding none counts), not a judgment about intent or language behavior, so it contradicts the comment."
+     }
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:77 `if (Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ)) {`; common/src/main/java/org/keycloak/common/Profile.java:56 `ADMIN_FINE_GRAINED_AUTHZ(\"Fine-Grained Admin Permissions\", Type.PREVIEW, 1),` and Profile.java:58 `ADMIN_FINE_GRAINED_AUTHZ_V2(\"Fine-Grained Admin Permissions version 2\", Type.EXPERIMENTAL, 2, Feature.AUTHORIZATION),`; tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/KeycloakAdminPermissionsV1ServerConfig.java:28 `return config.features(Feature.ADMIN_FINE_GRAINED_AUTHZ);`",
+       "reason": "ADMIN_FINE_GRAINED_AUTHZ is precisely the V1 (\"non-V2\") feature that enables the permission model, so when that feature is disabled no realm uses the non-V2 model and the cleanup correctly runs whenever V1 is enabled, contradicting the reported V1 orphaning."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker's evidence quotes the same gate line and the Profile feature definitions, but its reasoning is that ADMIN_FINE_GRAINED_AUTHZ is \"precisely the V1 feature,\" so gating the cleanup on it is the correct behavior. That is a judgment about whether the gate the comment calls wrong is actually the right one (and whether the resulting behavior is intended/harmless), not a factual refutation of what the code contains or does. Per the rules, an argument that the flag/gate is the right one counts as \"argues.\""
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "common/src/main/java/org/keycloak/common/Profile.java:162-164 (ADMIN_FINE_GRAINED_AUTHZ_V2 strips the \"v2\" suffix, giving unversionedKey \"admin-fine-grained-authz\", the same as ADMIN_FINE_GRAINED_AUTHZ), Profile.java:355-361 (features aggregated by unversionedKey), and Profile.java:305-307 `features.put(f, f == enabledFeature);` with Profile.java:284-286 \"Multiple versions of the same feature %s, %s should not be enabled.\" — only one version per unversioned feature can ever be enabled, so `isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ)` is false whenever V2 is active, and the guard at services/.../AdminPermissions.java:77 never passes.",
+       "reason": "ADMIN_FINE_GRAINED_AUTHZ and ADMIN_FINE_GRAINED_AUTHZ_V2 are two versions of the same unversioned feature and are mutually exclusive, so \"both FGAP features enabled\" never happens, the V1 guard at AdminPermissions.java:77 cannot pass while MgmtPermissionsV2 is returned, and the listener never invokes the throwing ClientPermissionsV2.setPermissionsEnabled."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's core premise is that ADMIN_FINE_GRAINED_AUTHZ and ADMIN_FINE_GRAINED_AUTHZ_V2 can both be enabled (\"when both FGAP features are enabled\"). The checkers quote repository code in Profile.java showing this is impossible: ADMIN_FINE_GRAINED_AUTHZ_V2 strips the \"v2\" suffix to the unversioned key \"admin-fine-grained-authz\" (Profile.java:162-164), features are aggregated by that unversionedKey (Profile.java:355-361), and `features.put(f, f == enabledFeature)` (Profile.java:305-307) with the guard \"Multiple versions of the same feature %s, %s should not be enabled.\" (Profile.java:284-286) means only one version per unversioned feature can ever be enabled. Thus isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ) is false whenever V2 is active, so the V1 guard at AdminPermissions.java:77 cannot pass while MgmtPermissionsV2 is returned and the listener never calls the throwing ClientPermissionsV2.setPermissionsEnabled. This is a statement about what the repository's Profile.java code contains/does, showing a factual statement of the comment is false."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75 — `.replaceAll(\"_[a-zA-Z-_]*\\\\.properties\", \"_en.properties\");`. The character class `[a-zA-Z-_]` is parsed by Java's Pattern as the ranges `a-z` and `A-Z` plus the literal `-` (the second `-` is a standalone literal, since the preceding `Z` was already consumed as the end of the `A-Z` range) plus `_`. It matches only ASCII letters, `-` and `_`; it does not match `/` (0x2F) or digits (0x30–0x39).",
+       "reason": "The regex never matches `/`, so the match is confined to the final path segment and the reported parent-directory-underscore rewrite to a non-existent `_en.properties` cannot occur."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker's refutation does not quote any repo fact (a call, definition, branch, or configuration) that contradicts the comment; it rests on how Java's regex engine parses the character class `[a-zA-Z-_]` — i.e., library/language semantics — and then concludes that because the pattern \"never matches `/`\" the described rewrite \"cannot occur.\" That is reasoning about behavior of the regex library and about a branch being unreachable, which is the \"argues\" category rather than a statement that the code contains something different."
+     }
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "misc/theme-verifier/src/test/resources/changedAnchor_en.properties:17 -> `key=Some <a href=\"http://example.com\">link</a>` (the English source of verifyNoChangedAnchors, since changedAnchor_de.properties maps to changedAnchor_en.properties). Its value contains an HTML tag, so at misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:91 `containsHtml(englishValue)` is true and `POLICY_SOME_HTML` is selected too — verifyIllegalHtmlTagDetected is therefore not the only such test.",
+       "reason": "A second test (verifyNoChangedAnchors) also selects POLICY_SOME_HTML because its English fixture contains an `<a href=...>` tag, contradicting the comment's \"only test\" premise."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment states verifyIllegalHtmlTagDetected is the only test that selects POLICY_SOME_HTML (the containsHtml(englishValue) branch at VerifyMessageProperties.java:91). The checker quotes the English fixture changedAnchor_en.properties:17, whose value `key=Some <a href=\"http://example.com\">link</a>` contains an HTML tag, so verifyNoChangedAnchors (which uses that fixture) also drives containsHtml(englishValue) true and selects POLICY_SOME_HTML. This is a factual statement about what repository code contains/does that is false — there is a second such test, so the \"only test\" premise fails."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S6",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:226-254 — the \"not cached yet\" branch does not return the delegate's ordered stream; it only populates `cached` and then falls through to the shared HashSet: line 226 `if (query == null) { // not cached yet`, lines 229-231 `cached = idpDelegate.getForLogin(mode, organizationId).map(IdentityProviderModel::getInternalId).collect(Collectors.toSet()); query = new IdentityProviderListQuery(loaded, cacheKey, getRealm(), searchKey, cached); cache.addRevisioned(query, startupRevision);`, then line 244 `Set<IdentityProviderModel> identityProviders = new HashSet<>();` and line 254 `return identityProviders.stream();`. The non-cached/cache-miss path therefore loses delegate ordering in exactly the same way as the cached path.",
+       "reason": "The comment's premise that the non-cached (cache-miss) branch preserves the delegate's ordering is false: that branch falls through to the identical `new HashSet<>()` construction at line 244, so cache-hit and cache-miss are not inconsistent in the way the reported bug claims."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the actual code at lines 226-254 showing that the \"not cached yet\" (cache-miss) branch does not return the delegate's ordered stream. It only populates `cached` from the delegate (line 229-231) and then falls through to the shared `Set<IdentityProviderModel> identityProviders = new HashSet<>();` at line 244 and `return identityProviders.stream();` at line 254. Thus the non-cached path loses delegate ordering exactly like the cached path, making the comment's factual premise—that the non-cached branch preserves the delegate's ordering and is therefore inconsistent with a hash-ordered cached path—false."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S4",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  }
+ },
+ "sobre": "g1",
+ "prompt": "c5"
+}

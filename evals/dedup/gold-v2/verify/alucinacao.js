@@ -22,6 +22,8 @@ const { prepareRepo } = require(path.join(INV, 'prepare-repo'));
 const { LocalRepoCommands } = require(path.join(INV, 'local-repo-commands'));
 
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
+// --prefixo: outro conjunto de PRs (ex.: holdout) no lugar do light de 09/10.
+const PREFIXO = arg('prefixo', '09.10.26');
 const GOLD = arg('model'), VERSAO = arg('versao', 'h1'), PAR = Number(arg('par', '3')), DEDUP = arg('dedup', 'v9-cobertura');
 const MODELO = process.env.RECALL_MODEL;
 if (!GOLD || !MODELO) { console.error('RECALL_MODEL=<id> --model=<gold model>'); process.exit(2); }
@@ -30,6 +32,11 @@ const OUT = path.join(__dirname, 'resultados', `aluc-${VERSAO}`, `${GOLD}.json`)
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 
 const TETO = Number(arg('teto', '6'));
+// --esforco: reasoning effort no provedor openai_compatible (Muse); --prs: lista de PRs;
+// --apos: pula os grupos que esse resultado ja derrubou.
+const ESFORCO = arg('esforco');
+const SO_PRS = arg('prs') ? new Set(fs.readFileSync(arg('prs'), 'utf8').split(/\s+/).filter(Boolean)) : null;
+const APOS = arg('apos') ? JSON.parse(fs.readFileSync(path.join(__dirname, 'resultados', arg('apos'), `${GOLD}.json`), 'utf8')).prs : null;
 const VEREDITOS = VERSAO.startsWith('u') ? ['refuted', 'nit', 'confirmed', 'unverified'] : ['refuted', 'confirmed', 'unverified'];
 const SCHEMA = {
     type: 'object',
@@ -87,6 +94,35 @@ Only code in this repository counts as evidence. These do not refute a comment:
 Answer "confirmed" when the sentences you checked hold, and "unverified" when you could not check them. When in doubt, do not answer "refuted".
 
 You have at most ${TETO} steps in total. Answer with submit.`,
+    // g1: o h1, mas a ausencia vale como prova quando o comentario afirma que a coisa existe.
+    g1: (s) => PROMPTS.h1(s)
+        .replace('3. Answer "refuted" only when', 'When the comment states that something exists in this repository today (callers that still use an old form, implementations or overrides with an old signature, a consumer, a file, a setting), that is a statement of fact too: if a search of the whole repository finds none, the statement is false. A comment about what would happen if a future caller or input did something does not state that it exists.\n\n3. Answer "refuted" only when')
+        .replace('- the scenario seems unlikely, or you did not find a caller that triggers it today;', '- the scenario seems unlikely, or you did not find a caller that triggers it today, unless the comment states that such a caller exists;'),
+    // r1: como o h1, mas o estado ou o consumidor que dispara a falha tambem e um fato a checar.
+    r1: (s) => `An AI code reviewer wants to post the comment below on a pull request. Your only job is to check whether the problem it reports can actually happen in this repository.
+
+${comentario(s)}
+
+Review comments sometimes describe failures that cannot happen. They say a function is called where it is not, that a caller was not updated when it was, that a check is missing when it is there, that an expression throws when the language short-circuits it, that a value can be empty when every path that reaches the line guarantees it is not, or that "any caller still doing X" breaks when no such caller exists and the language or build would reject one. Such a comment is refuted.
+
+1. Write down the failure the comment reports and the condition that triggers it: the input, state, caller, consumer or configuration it needs.
+2. Check, with grep, readFile and listDir at this pull request's commit, whether that condition can occur: who calls the cited code, what they pass, which guards and invariants hold on every path, which implementations or consumers exist, which configurations are allowed. Start with the cited file and lines.
+3. Answer "refuted" when you found code showing that a fact the failure needs is false, or that the triggering condition cannot occur in this repository (every path that reaches the code rules it out, or the consumer it needs does not exist). Put that code, with its file and line, in evidence.
+
+Answer "confirmed" when the failure can happen, and "unverified" when you could not tell. A comment is not refuted because:
+- the failure is in new or public code that a future caller, a user input or an external client can trigger, even if no current caller does;
+- the impact seems small, or the fix is optional;
+- the comment is vague, speculative or a style remark.
+When in doubt, do not answer "refuted".
+
+You have at most ${TETO} steps in total. Answer with submit.`,
+    // r2: o r1 mais "ja existia antes do PR" (com o base) e sem o escudo de API publica sem caminho concreto.
+    r2: (s) => PROMPTS.r1(s)
+        .replace('Answer "refuted" when you found code showing', 'Also check, with readBaseFile, whether the reported behavior was already there before this pull request: if the same code did the same thing under the same conditions before the change, and the pull request neither introduced, moved nor changed it, the comment blames the pull request for something it did not do, and that is a false fact too.\\n\\nAnswer "refuted" when you found code showing')
+        .replace('- the failure is in new or public code that a future caller, a user input or an external client can trigger, even if no current caller does;', '- the failure is in new or changed code and you can name a concrete input path that reaches it (a request field, a user action, a configuration value, a caller in this repository). Being public, exported or "callable by an external client" is not enough on its own: name the path;'),
+    // r3: o r1 mais "ja existia antes do PR" (com o base), mantendo o escudo de codigo novo ou publico.
+    r3: (s) => PROMPTS.r1(s)
+        .replace('Answer "refuted" when you found code showing', 'Also check, with readBaseFile, whether the reported behavior was already there before this pull request: if the same code did the same thing under the same conditions before the change, and the pull request neither introduced, moved nor changed it, the comment blames the pull request for something it did not do, and that is a false fact too.\\n\\nAnswer "refuted" when you found code showing'),
     // u1: um veredito so, com nit como valor; refuted e nit seguem para o filtro.
     u1: (s) => `An AI code reviewer wants to post the comment below on a pull request. Check the comment against the code in this repository and give it one verdict.
 
@@ -150,6 +186,17 @@ function grupos(sugs, final, entrada) {
 
 function ferramentas(cmd) {
     return {
+        ...(cmd.baseRef ? { readBaseFile: tool({
+            description: 'Read a file as it was BEFORE the pull request (base commit), optionally a line range.',
+            inputSchema: jsonSchema({ type: 'object', properties: { path: { type: 'string' }, startLine: { type: 'number' }, endLine: { type: 'number' } }, required: ['path'], additionalProperties: false }),
+            execute: async ({ path: p, startLine, endLine }) => {
+                try {
+                    const out = require('child_process').execFileSync('git', ['-C', cmd.repoRoot, 'show', `${cmd.baseRef}:${String(p).replace(/^\/+/, '')}`], { maxBuffer: 32 * 1024 * 1024 }).toString();
+                    const ls = out.split('\n'); const a = Math.max(1, Number(startLine) || 1), b = Math.min(ls.length, Number(endLine) || ls.length);
+                    return ls.slice(a - 1, b).map((l, k) => `${a + k}: ${l}`).join('\n').slice(0, 12000);
+                } catch { return 'file not found at the base commit (new in this pull request, or wrong path)'; }
+            },
+        }) } : {}),
         grep: tool({
             description: 'Search the repository for a regex pattern.',
             inputSchema: jsonSchema({ type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, glob: { type: 'string' } }, required: ['pattern'], additionalProperties: false }),
@@ -186,7 +233,7 @@ async function julgaSdk(s, dir) {
                 systemPrompt: 'You can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
                 tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'],
                 disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
-                settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso(),
+                settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso(), ...(ESFORCO ? { effort: ESFORCO } : {}),
             },
         })) {
             if (msg.type === 'assistant') { turnos++; for (const b of msg.message.content || []) if (b.type === 'text') saida += b.text + '\n'; }
@@ -210,6 +257,7 @@ async function julga(model, cmd, s, diff) {
     };
     const r = await generateText({
         model, prompt: PROMPTS[arg('prompt', VERSAO)](s, diff), tools,
+        ...(ESFORCO ? { providerOptions: { openaiCompatible: { reasoningEffort: ESFORCO } } } : {}),
         stopWhen: (x) => !!resp || (x.steps?.length ?? 0) >= TETO,
         prepareStep: ({ stepNumber, messages }) => stepNumber >= TETO - 1
             ? { activeTools: ['submit'], ...(semToolChoiceNomeado ? {} : { toolChoice: { type: 'tool', toolName: 'submit' } }),
@@ -222,8 +270,8 @@ async function julga(model, cmd, s, diff) {
 (async () => {
     const model = buildModel(MODELO);
     console.log(`[verify-alucinacao] ${VERSAO} · ${descreveModelo(MODELO)} · ${GOLD}`);
-    const sug = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `09.10.26_${GOLD}.json`), 'utf8')).prs;
-    const fin = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `09.10.26_${GOLD}.final.json`), 'utf8')).prs;
+    const sug = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `${PREFIXO}_${GOLD}.json`), 'utf8')).prs;
+    const fin = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `${PREFIXO}_${GOLD}.final.json`), 'utf8')).prs;
     const real = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'dedup-real', DEDUP, `${GOLD}.json`), 'utf8')).prs;
     const vars = {};
     for (const f of fs.readdirSync(path.join(INV, 'datasets')).filter((x) => x.endsWith('.json'))) {
@@ -231,12 +279,13 @@ async function julga(model, cmd, s, diff) {
     }
     const diffDe = (v) => { let a = v?.changedFilesFull; if (typeof a === 'string') a = JSON.parse(a); return (a || []).map((x) => `--- ${x.filename}\n${x.patchWithLinesStr || x.patch || ''}`).join('\n\n').slice(0, 40000); };
     const res = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')) : { model: GOLD, verificador: MODELO, versao: VERSAO, versaoDedup: DEDUP, prs: {} };
-    const fila = Object.keys(sug).filter((c) => !res.prs[c] || res.prs[c].erro);
+    const fila = Object.keys(sug).filter((c) => (!SO_PRS || SO_PRS.has(c)) && (!res.prs[c] || res.prs[c].erro));
     let i = 0;
     const um = async (cid) => {
         let h;
         try {
-            const gs = grupos(sug[cid].suggestions, fin[cid], real[cid].idsEntradaDedup || []);
+            const caiu = new Set(APOS ? (APOS[cid]?.grupos || []).filter((g) => g.nit).map((g) => g.rep) : []);
+            const gs = grupos(sug[cid].suggestions, fin[cid], real[cid].idsEntradaDedup || []).filter((g) => !caiu.has(g.rep));
             const out = [];
             if (gs.length) {
                 let cmd = null;
@@ -244,6 +293,7 @@ async function julga(model, cmd, s, diff) {
                     h = await prepareRepo(vars[cid], `${cid}-nit-${process.pid}`);
                     if (!h) throw new Error('sem repo');
                     cmd = new LocalRepoCommands(h.dir);
+                    if (arg('base') === '1') cmd.baseRef = vars[cid].benchmarkBaseRef;
                 }
                 const diff = '';
                 let j = 0;

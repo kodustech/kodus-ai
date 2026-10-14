@@ -1,0 +1,1358 @@
+{
+ "model": "muse-spark-1.2",
+ "verificador": "muse-spark-1.2",
+ "versao": "r1f",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/lib/package.json:3:   \"private\": true,  and grep for InsightsBookingService shows only packages/lib/server/service/insightsBooking.ts:45: export class InsightsBookingService and packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:8: import { InsightsBookingService } — zero callers of .findMany exist in the repository",
+       "reason": "The package is private (not a published public API) and exhaustive grep shows no caller of InsightsBookingService.findMany exists in the repo, so the TypeError condition cannot occur and TypeScript would reject any new caller at build time."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "Evidence quotes package.json \"private\": true contradicting the \"public API\" claim and reports an exhaustive grep finding zero callers of InsightsBookingService.findMany in the repo, directly contradicting the comment's factual premise that external callers still using service.findMany exist and will throw TypeError. Repository-wide caller non-existence is explicitly defined as contradicts."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:80-81: if (uniqueGuests.length === 0) throw new TRPCError({ code: \"BAD_REQUEST\", message: \"emails_must_be_unique_valid\" }); and packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:92-120: const bookingAttendees = await prisma.booking.update({ ... data: { attendees: { createMany: { data: guestsFullDetails } } } }); const attendeesList = await Promise.all(bookingAttendees.attendees.map(...)); const evt: CalendarEvent = { ... attendees: attendeesList ... } - so every call to sendAddGuestsEmails (the only caller of OrganizerAddGuestsEmail) builds attendees from the DB after creating at least one new guest, guaranteeing attendees.length >=1",
+       "reason": "Every path that reaches OrganizerAddGuestsEmail is via sendAddGuestsEmails from addGuestsHandler, which rejects zero new guests and constructs evt.attendees from the updated booking that includes the newly created attendees, so attendees[0] is always defined and the claimed throw cannot occur."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "Evidence does not quote the commented file to show the guard exists or the access does not exist; it quotes a different file (addGuests.handler.ts) and argues an invariant - that sendAddGuestsEmails (claimed only caller) always rejects zero guests and rebuilds evt.attendees from DB with >=1 entry, so attendees[0] never undefined. This is a 'never returns bad value / unreachable branch' argument from a different code path, not a direct factual contradiction of what organizer-add-guests-email.ts lines 28-29 contain or do."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S8",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S12",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S13",
+      "S14",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S16",
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S2",
+      "S6",
+      "S21"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S3",
+      "S15",
+      "S19",
+      "S22"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S7",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12",
+      "S13",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "README.md:208: \"Set a 32 character random string in your `.env` file for the `CALENDSO_ENCRYPTION_KEY` (You can use a command like `openssl rand -base64 24` to generate one).\" and packages/lib/crypto.ts:16: \"const _key = Buffer.from(key, \"latin1\");\" with packages/lib/crypto.ts:3: \"const ALGORITHM = \"aes256\";\" — `openssl rand -base64 24` outputs 24 random bytes as 32 base64 chars, and latin1 makes 32 chars = 32 bytes, so the documented 32-byte requirement is already satisfied.",
+       "reason": "`openssl rand -base64 24` generates 24 bytes of entropy encoded as a 32-character base64 string, which is 32 bytes under the latin1 encoding used for the AES256 key, so the requirement and command are already aligned and ` -base64 32` would produce 44 bytes and break."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "Evidence does not quote .env.example 241-244 to show comment false. It quotes README.md and crypto.ts (different places) and relies on external-tool/library behavior: that `openssl rand -base64 24` outputs 24 bytes encoded as 32 base64 chars, and that Node Buffer latin1 makes 32 chars = 32 bytes for aes256. How a CLI encodes output and how latin1 converts length is an argument about language/library behavior, not a repository fact contradicting the comment's file."
+     }
+    },
+    {
+     "rep": "S26",
+     "membros": [
+      "S26"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S16",
+      "S20",
+      "S23"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/app-store/_utils/useAddAppMutation.ts:52-65: `const state: IntegrationOAuthCallbackState = { returnTo: returnTo || WEBAPP_URL + getInstalledAppPath(...), ...(type === \"google_calendar\" && { installGoogleVideo: options?.installGoogleVideo }), ...(teamId && { teamId }), }; const stateStr = encodeURIComponent(JSON.stringify(state)); const searchParams = `?state=${stateStr}${teamId ? `&teamId=${teamId}` : \"\"}`; const res = await fetch(`/api/integrations/${type}/add` + searchParams);` and packages/app-store/_utils/oauth/encodeOAuthState.ts:5-11: `export function encodeOAuthState(req: NextApiRequest) { if (typeof req.query.state !== \"string\") { return undefined; } const state: IntegrationOAuthCallbackState = JSON.parse(req.query.state); return JSON.stringify(state); }`",
+       "reason": "Actual caller useAddAppMutation already constructs IntegrationOAuthCallbackState with teamId/returnTo/installGoogleVideo and passes it as ?state= to the /add handlers, so encodeOAuthState's echo of req.query.state preserves team context and state is not undefined on the real path, so callbacks still receive teamId via decodeOAuthState."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "Evidence does not show the comment's description of encodeOAuthState.ts is false - the quoted encodeOAuthState still only echoes req.query.state and never builds from teamId/returnTo. It quotes a different file useAddAppMutation.ts to argue the undefined branch is not reached in practice because that caller already constructs IntegrationOAuthCallbackState and passes ?state= to the /add handlers, so decodeOAuthState still receives teamId. That is an argument about reachability/harmlessness on the real path and quoting a different code place as example, not a contradiction of what the commented file contains/does."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S28"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S19",
+      "S22"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S25",
+     "membros": [
+      "S5",
+      "S14",
+      "S24",
+      "S25",
+      "S27",
+      "S29"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S6",
+      "S15",
+      "S21"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/controllers/application_controller.rb:86-87: `rescue_from Discourse::InvalidAccess do` `rescue_discourse_actions(\"[error: 'invalid access']\", 403)` and app/controllers/application_controller.rb:90-92: `def rescue_discourse_actions(message, error)` renders the hard-coded `\"[error: 'invalid access']\"` (or `build_not_found_page`) and never `e.message` — so literals at app/controllers/embed_controller.rb:25 `raise Discourse::InvalidAccess.new('embeddable host not set')` and :26/:30 `'invalid referer host'` are discarded and never user-visible unlike `I18n.t('embed.*')` at app/views/embed/best.html.erb:3",
+       "reason": "The literals are exception messages discarded by the global InvalidAccess handler which renders a generic string, so they are not user-visible and do not bypass the I18n path used for surrounding embed view strings."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "Evidence does not quote embed_controller.rb:25-26 showing literals don't exist or already use I18n.t. It quotes a different file's global handler (application_controller.rb rescue_from/rescue_discourse_actions) and relies on Rails framework rescue dispatch to argue the raised messages are discarded/never rendered and thus never user-visible, i.e. the reported branch cannot be reached/harmless, not a direct factual contradiction of what the commented lines contain."
+     }
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S19",
+      "S22"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S8",
+      "S20",
+      "S23",
+      "S24"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S6",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S5",
+      "S10",
+      "S12",
+      "S13",
+      "S15",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S4",
+      "S6",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/services/anonymous/anonimpl/client.go:44-46: `if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil { if errors.Is(err, anonstore.ErrDeviceLimitReached) { return nil, err }` — sole production caller already handles ErrDeviceLimitReached; grep for `.TagDevice\\(` finds only this production site plus pkg/services/anonymous/anonimpl/impl_test.go:120 and :172 (tests) and the definition pkg/services/anonymous/anonimpl/impl.go:118, with no other production consumer.",
+       "reason": "Exhaustive grep shows TagDevice has only one non-test production caller (client.go) and that caller was updated to handle ErrDeviceLimitReached, so the condition \"any other direct caller will now see failures\" cannot occur in this repository."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "Evidence shows via exhaustive grep that the factual premise of the comment is false: TagDevice has no other production callers that would newly see failures. Only client.go calls TagDevice in production (plus tests and the definition), and that sole caller was updated to handle ErrDeviceLimitReached, so the claimed \"any other direct caller will now see failures\" cannot occur."
+     }
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/grafana-runtime/src/config.ts:253: `const bootData = (window as any).grafanaBootData` and packages/grafana-runtime/src/config.ts:191: `merge(this, defaults, options)` and packages/grafana-runtime/src/config.ts:152: `googleAnalyticsId: undefined;` (same `undefined`-only pattern for `string | undefined` interface members compiles)",
+       "reason": "Boot-config number flows via `any`-typed window.grafanaBootData and lodash.merge (erased at runtime), so TS does not reject and JS assigns the number at runtime, and narrowing `undefined` to `number | undefined` is allowed for implements."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "Evidence does not quote lines 94-98 to show their content is different; it argues about TypeScript/library behavior - that `any`-typed `window.grafanaBootData` plus lodash.merge erasure lets the number assign at runtime without TS error, that `undefined` narrowing to `number|undefined` is allowed for `implements`, and cites a different member `googleAnalyticsId: undefined` (line 152) as an analogous pattern that compiles. This is an argument about how the language/library handles types/merge and an example from a different place, not a factual contradiction about what the commented code contains/does."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/plugins/log/logger.go:15-16 `type grafanaInfraLogWrapper struct { l *log.ConcreteLogger }` and pkg/infra/log/log.go:203-217 `func (cl *ConcreteLogger) FromContext(ctx context.Context) Logger { ... if len(args) > 0 { return cl.New(args...) } return cl }` where `cl.New` returns `*ConcreteLogger` — so the asserted value is always *ConcreteLogger and the `!ok` branch is unreachable.",
+       "reason": "Field l is concretely typed *ConcreteLogger (not Logger interface) and ConcreteLogger.FromContext always returns a *ConcreteLogger, so the non-ConcreteLogger condition that would trigger d.New() with empty context cannot occur."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "Evidence does not show lines 48-53 do not contain the asserted type-assert/fallback; it argues the !ok branch is unreachable because field l is *ConcreteLogger and ConcreteLogger.FromContext always returns *ConcreteLogger. This is the 'never returns the bad value / unreachable branch' pattern explicitly classified as 'argues', not a direct factual contradiction of what the cited lines contain."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/infra/tracing/tracing.go:91: log.RegisterContextualLogProvider(func(ctx context.Context) ([]any, bool) { if traceID := TraceIDFromContext(ctx, false); traceID != \"\" { return []any{\"traceID\", traceID}, true } -- with pkg/infra/log/log.go:203: func (cl *ConcreteLogger) FromContext(ctx context.Context) Logger { args := []any{}; for _, p := range ctxLogProviders { if pArgs, exists := p(ctx); exists { args = append(args, pArgs...) } }",
+       "reason": "TraceID is already propagated via the global tracing contextual log provider and merged by FromContext, so instrumentContext/logger_middleware do not need explicit TraceIDFromContext handling and correlation is not lost."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "Comment correctly notes instrumentContext does not append traceID and logger_middleware relies solely on FromContext. Evidence does not quote those files to show they do contain TraceIDFromContext handling; it quotes a different subsystem (tracing.go global RegisterContextualLogProvider and log.go FromContext merger) to argue the system still propagates traceID elsewhere and the missing explicit code is intentional/harmless, which is a design-intent argument rather than a direct contradiction of what the reviewed files contain."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S8",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S1",
+      "S7",
+      "S11",
+      "S12",
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S2",
+      "S8",
+      "S10",
+      "S16",
+      "S17",
+      "S19"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S15"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/protocol/oidc/endpoints/TokenEndpoint.java:112-116: MultivaluedMap<String, String> formParameters = request.getDecodedFormParameters(); if (formParameters == null) { formParameters = new MultivaluedHashMap<>(); }",
+       "reason": "The sole in-repo caller of the Context constructor normalizes null to empty map before construction and no Context(Context) caller exists in the repository, so the triggering null and the quoted breakage cannot occur on any path that reaches the code."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "Evidence quotes TokenEndpoint.java (different file than the commented OAuth2GrantType.java) to argue the null branch is unreachable because the sole in-repo caller normalizes null to empty map, and asserts no in-repo Context(Context) caller exists. This is a reachability / absence-of-caller argument about a different code path, not a quote of OAuth2GrantType.java lines 99-103 showing the factual claim (missing null-check / deleted copy constructor) is false. Under the rules, quoting a different place as an example and claiming a value never reaches the code is argues, not contradicts."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:106-119: \"protected String getShortcutByGrantType(String grantType) { String grantShortcut = grantsToShortcuts.get(grantType); if (grantShortcut == null) { OAuth2GrantTypeFactory factory = (OAuth2GrantTypeFactory) sessionFactory.getProviderFactory(OAuth2GrantType.class, grantType); if (factory != null) { String shortcut = factory.getShortcut(); grantsByShortcuts.put(shortcut, grantType); grantsToShortcuts.put(grantType, shortcut); } grantShortcut = grantsToShortcuts.get(grantType); } return grantShortcut; }\" plus services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:57-60: \"String grantType = clientSessionContext.getAttribute(Constants.GRANT_TYPE, String.class); if (grantType == null) { grantType = UNKNOWN; }\" and 46-52: sessionType set to TRANSIENT/OFFLINE/ONLINE never UNKNOWN, so UNKNOWN/registered-custom path does not throw via initToken",
+       "reason": "The comment's custom-grantType null-path cannot happen: null is coalesced to UNKNOWN which is pre-populated, and registered custom grantTypes are dynamically resolved via getProviderFactory lookup in getShortcutByGrantType, and initToken never produces UNKNOWN sessionType."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "Evidence does not quote TokenManager.java 1048-1055 to show it lacks encodeTokenId/IllegalStateException. Instead it quotes DefaultTokenContextEncoderProvider[Factory] from different files and argues the throwing branch is unreachable: null is coalesced to UNKNOWN (pre-populated) and registered custom grantTypes are resolved via getProviderFactory lookup, and initToken never produces UNKNOWN sessionType. This is a 'never returns bad value / branch cannot be reached' reachability argument and quoting a different place than the commented code, which is defined as argues, not a direct contradiction of what the cited lines contain."
+     }
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S7",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "static/app/views/explore/contexts/pageParamsContext/visualizes.tsx:44: `constructor(yAxis: string, options?: VisualizeOptions) {` with all call sites passing single string e.g., static/app/views/explore/contexts/pageParamsContext/visualizes.tsx:24: `return [new Visualize(DEFAULT_VISUALIZATION, {label: 'A'})];` and static/app/views/explore/hooks/useAnalytics.tsx:379: `yAxis => new Visualize(yAxis, {label: String(index), chartType: queryParts.chartType})`; grep `new Visualize\\[` returns zero results.",
+       "reason": "No caller in the repository constructs `new Visualize` with an array; every `new Visualize(` site passes a single string (`yAxis: string`) so the array-to-string corruption and stack-compat break cannot be triggered."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "Evidence quotes the repository code showing the comment's factual premise is false: the Visualize constructor is `constructor(yAxis: string, ...)` and a repository-wide grep for `new Visualize\\[` finds zero array callers, with quoted call sites all passing a single string (e.g., `new Visualize(DEFAULT_VISUALIZATION, ...)` and `new Visualize(yAxis, ...)`). This directly contradicts the comment's claim that callers still do `new Visualize(['count()'])` and would trigger array-to-string corruption."
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/grouping/parameterization.py:268: ParameterizationExperiment = ParameterizationCallableExperiment\nsrc/sentry/grouping/parameterization.py:200: class ParameterizationCallableExperiment(ParameterizationCallable): def run(self, content: str, callback: Callable[[str, int], None]) -> str:\nsrc/sentry/grouping/parameterization.py:263: UniqueIdExperiment = ParameterizationCallableExperiment(name=_UniqueId.NAME, apply=_UniqueId.replace_uniq_ids_in_str)",
+       "reason": "No ParameterizationRegexExperiment exists in this commit — grep finds zero definitions — and ParameterizationExperiment is aliased to only ParameterizationCallableExperiment, with all callers passing only UniqueIdExperiment (a callable experiment), so the \"any regex-based experiment\" trigger cannot occur and the uniform experiment.run(content, _incr_counter) dispatch is correct."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "Evidence quotes src/sentry/grouping/parameterization.py:268 showing ParameterizationExperiment is only ParameterizationCallableExperiment and states grep finds zero definitions of ParameterizationRegexExperiment. This directly contradicts the comment's factual premise that a ParameterizationRegexExperiment / regex-based experiment (outside UniqueIdExperiment) exists to be dispatched via _handle_regex_match/compiled_pattern.sub, which the comment needs for the \"any regex-based experiment now gets wrong callback\" bug to trigger - a repository-wide search finding none counts as contradicts."
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S7",
+      "S8",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S9",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  }
+ },
+ "sobre": "r1",
+ "prompt": "c3"
+}

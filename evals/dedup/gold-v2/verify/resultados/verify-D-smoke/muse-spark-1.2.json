@@ -1,0 +1,1186 @@
+{
+ "model": "muse-spark-1.2",
+ "verificador": "muse-spark-1.2",
+ "versao": "smoke",
+ "sobre": "aluc-h1t10f",
+ "prs": {
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "etapa": "certificado",
+     "ex": {
+      "failure": "santizeAnchors removes the wrong occurrence for duplicate/equal anchor strings and can miss or misattribute extra-anchor tags because it iterates a stale Matcher while mutating value with replaceFirst.",
+      "scenario": {
+       "condition": "santizeAnchors is called with value and englishValue containing anchor tags, including cases where value has duplicate/equal anchor strings or more anchor tags than englishValue, and the loop at lines 153-159 reassigns value via replaceFirst while continuing matcher.find() on the Matcher created at line 151",
+       "claimed_outcome": "replaceFirst removes the first matching substring in the current value rather than the occurrence at the Matcher's position, and extra-anchor detection can miss or misattribute tags",
+       "neutral_question": "Under that condition, which occurrences in value are actually removed by the replaceFirst call at line 155 on each iteration, and how does the subsequent matcher.find() / englishMatcher.find() progression determine which tags are reported as missing?",
+       "locations": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150-162"
+       ]
+      },
+      "premises": [
+       {
+        "id": "p1",
+        "proposition": "The Matcher created at line 151 is bound to the original CharSequence of value and is not re-created after value is reassigned at line 155, so matcher.find() at line 153 continues scanning the original string rather than the updated value.",
+        "kind": "semantics",
+        "scope": "repository",
+        "neutral_question": "After value is reassigned with value.replaceFirst at line 155, what CharSequence does the next matcher.find() at line 153 scan, and is a new Matcher created before that call?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:151-155"
+        ]
+       },
+       {
+        "id": "p2",
+        "proposition": "value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\") at line 155 removes the first occurrence of that quoted anchor string in the current value, not necessarily the occurrence at the position where matcher.group() was found.",
+        "kind": "mechanism",
+        "scope": "repository",
+        "neutral_question": "When value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\") executes at line 155, which occurrence in the current value string does it remove?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:155"
+        ]
+       },
+       {
+        "id": "p3",
+        "proposition": "Inputs that reach santizeAnchors via verifySafeHtml can contain multiple anchor tags in value, including duplicate equal strings and more anchor tags than are present in englishValue.",
+        "kind": "reachability",
+        "scope": "repository",
+        "neutral_question": "Which values can reach santizeAnchors when verifySafeHtml iterates bundle keys, and can value contain multiple anchor tags with duplicate strings or counts differing from englishValue?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65-89",
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150-162"
+        ]
+       }
+      ]
+     },
+     "cenario": {
+      "answer": "In `misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150-162` the loop is stale-`Matcher` + first-occurrence `replaceFirst`:\n\n`value` is mutated by `replaceFirst` at 155 but `matcher` created at 151 on the ORIGINAL `value` CharSequence is never recreated. `matcher.find()` at 153 continues scanning the original string's indices, not the current `value`. `englishMatcher` at 152 scans `englishValue` which is never mutated, so `englishMatcher.find()` at 154 simply advances ordinal 1:1.\n\nEach iteration pairs nth `matcher.group()` (nth anchor in ORIGINAL `value`) with nth `englishMatcher.group()` (nth anchor in `englishValue`) via `Objects.equals` at 154. If both `find()` succeed and equal, 155 does `value = value.replaceFirst(Pattern.quote(englishMatcher.group()),\"\")` which removes the FIRST (leftmost) literal occurrence of that exact tag string in the CURRENT `value` snapshot, NOT the occurrence at `matcher.start()`. For duplicate/equal strings (e.g. `value` `<a>...<a>`, `</a>... </a>`): iteration 1 removes leftmost `<a>` (coincidentally the matched one); iteration 2 `matcher.find()` returns 2nd original `<a>` while `replaceFirst` again removes leftmost remaining `<a>` in current `value` (2nd original, now first remaining) - works by accident but position-independent.\n\nIf `value` has more anchors than `englishValue`, after `englishValue` exhausted `englishMatcher.find()` at 154 returns false, condition fails, else at 157-158 reports `matcher.group()` for that ordinal (first excess tag in original `value` order) via `messages.add(\"Didn't find anchor tag \"+matcher.group()+\" in original string\")` and `break` - no further tags examined/reported. If tags differ at same ordinal, same else reports that `matcher.group()` as missing and aborts, leaving later tags unreported and previously `replaceFirst`'d first-occurrences already removed out-of-order if distinct strings were interleaved.",
+      "coverage_complete": true,
+      "facts": [
+       {
+        "statement": "ANCHOR_PATTERN defined as </?a[^>]*>",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:145: private static final Pattern ANCHOR_PATTERN = Pattern.compile(\"</?a[^>]*>\");"
+       },
+       {
+        "statement": "santizeAnchors creates matcher on original value snapshot",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:151: Matcher matcher = ANCHOR_PATTERN.matcher(value);"
+       },
+       {
+        "statement": "creates englishMatcher on englishValue which is never mutated",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:152: Matcher englishMatcher = ANCHOR_PATTERN.matcher(englishValue);"
+       },
+       {
+        "statement": "loop advances matcher on original CharSequence, not reassigned value",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:153: while (matcher.find()) {"
+       },
+       {
+        "statement": "pairs nth value/english tags and checks existence and equality",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:154: if (englishMatcher.find() && Objects.equals(matcher.group(), englishMatcher.group())) {"
+       },
+       {
+        "statement": "on match removes FIRST occurrence of literal english tag in current value, not matched position",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:155: value = value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\");"
+       },
+       {
+        "statement": "on mismatch or english exhausted reports current matcher.group() as missing and breaks",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:157: messages.add(\"Didn't find anchor tag \" + matcher.group() + \" in original string\");"
+       },
+       {
+        "statement": "break after first missing/mismatch stops further reporting",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:158: break;"
+       },
+       {
+        "statement": "sole caller is verifySafeHtml reassigning value with sanitized anchors",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88: value = santizeAnchors(key, value, englishValue);"
+       }
+      ],
+      "unresolved": [
+       "Not executed runtime test to observe Matcher internal CharSequence reference vs copy behavior on JVM version, inferred from source.",
+       "No existing unit tests for santizeAnchors found via grep; behavior for overlapping/interleaved distinct tags verified only by code reading."
+      ]
+     },
+     "cegos": [
+      {
+       "answer": "After `value = value.replaceFirst(...)` at line 155, the next `matcher.find()` at line 153 still scans the **original** CharSequence supplied at Matcher creation at line 151. No new `Matcher` is created (and no `reset()`/`matcher = ...` is executed) between the reassignment and the next loop-test. The `Matcher` therefore continues scanning the original `value` string, not the updated `value` string; the updated `value` is only returned at line 161 and later sanitized, so the loop iteration/matching is decoupled from the `replaceFirst` reassignment.\n\nThis is visible as a bug/inconsistency: the loop condition keeps finding anchor tags in the original string while `value` is mutated via `replaceFirst`, but the matcher is never rebuilt on the mutated string.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "Matcher `matcher` is created once before the loop from the original `value` parameter",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:151: `Matcher matcher = ANCHOR_PATTERN.matcher(value);`"
+        },
+        {
+         "statement": "Loop condition is `while (matcher.find())` scanning that matcher",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:153: `while (matcher.find()) {`"
+        },
+        {
+         "statement": "Inside loop `value` is reassigned via replaceFirst",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:155: `value = value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\");`"
+        },
+        {
+         "statement": "No new Matcher creation or reset occurs between line 155 reassignment and the next line 153 find() - the loop body 153-160 contains no `matcher = ANCHOR_PATTERN.matcher` or `matcher.reset`",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150-162: `private String santizeAnchors(String key, String value, String englishValue) { Matcher matcher = ANCHOR_PATTERN.matcher(value); Matcher englishMatcher = ANCHOR_PATTERN.matcher(englishValue); while (matcher.find()) { if (englishMatcher.find() && Objects.equals(matcher.group(), englishMatcher.group())) { value = value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\"); } else { messages.add(\"Didn't find anchor tag \" + matcher.group() + \" in original string\"); break; } } return value; }`"
+        },
+        {
+         "statement": "Grep for `matcher` shows only the creation at 151 and uses at 153/154/157, no reassignment after 155",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:151-157 grep result shows only: `151: Matcher matcher = ANCHOR_PATTERN.matcher(value);`, `153: while (matcher.find()) {`, `154: if (englishMatcher.find() && Objects.equals(matcher.group(), englishMatcher.group())) {`, `157: messages.add(\"Didn't find anchor tag \" + matcher.group() + \" in original string\");` with no second `Matcher matcher =` or `matcher =`"
+        },
+        {
+         "statement": "Grep for `reset|Matcher` finds no `reset()` call in the file",
+         "evidence": "grep pattern `reset|Matcher` across repo returned zero matches beyond the import `java.util.regex.Matcher;` and the two `matcher` constructions, confirming no `matcher.reset(...)` before next find()"
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "At line 155 `value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\")` removes the **first/leftmost occurrence** of the literal string `englishMatcher.group()` in the *current* (incrementally mutated) `value` string, not the occurrence at `matcher.start()`.\n\n`String.replaceFirst(regex,replacement)` always matches from the beginning of the string and replaces the first match. Because `Pattern.quote(...)` makes the regex a literal, it is the leftmost literal occurrence of that exact anchor tag (e.g. `<a href=\"...\">` or `</a>`) remaining in `value` at that iteration. The `Matcher matcher` was created once at line 151 on the original `value` and is never reset after `value` is reassigned at line 155, so its `find()` positions refer to the original string, while `replaceFirst` always re-scans the current mutated `value` from index 0. With duplicate identical anchor tags this means each iteration removes the leftmost *remaining* copy, which happens to be sequentially correct only if tags appear in order and are identical.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "ANCHOR_PATTERN matches anchor tags",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:145:    private static final Pattern ANCHOR_PATTERN = Pattern.compile(\"</?a[^>]*>\");"
+        },
+        {
+         "statement": "santizeAnchors creates matcher on original value before mutation",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:151:        Matcher matcher = ANCHOR_PATTERN.matcher(value);"
+        },
+        {
+         "statement": "englishMatcher created on englishValue",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:152:        Matcher englishMatcher = ANCHOR_PATTERN.matcher(englishValue);"
+        },
+        {
+         "statement": "loop iterates over original value's matches via matcher.find()",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:153:        while (matcher.find()) {"
+        },
+        {
+         "statement": "condition advances englishMatcher and checks equality of current groups",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:154:            if (englishMatcher.find() && Objects.equals(matcher.group(), englishMatcher.group())) {"
+        },
+        {
+         "statement": "line 155 removes first occurrence via replaceFirst with quoted literal",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:155:                value = value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\");"
+        },
+        {
+         "statement": "caller passes current value/englishValue into santizeAnchors",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88:            value = santizeAnchors(key, value, englishValue);"
+        },
+        {
+         "statement": "matcher is never re-created/reset after value reassignment inside loop",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150:    private String santizeAnchors(String key, String value, String englishValue) {"
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "Which values reach `santizeAnchors` and multi-anchor/duplicate/differing-count handling per code:\n\n* Caller is only `verifySafeHtml` iterating `bundle.getKeys()` — every key in the translation `PropertyResourceBundle` reaches `santizeAnchors` after `normalizeValue`. No key filtering, no HTML pre-check. `englishValue` is `getEnglishValue(key,bundleEnglish)` normalized the same way, or `\"\"` if missing, so `santizeAnchors` is called even when English has no entry, no anchors, or no HTML.\n* `value` as passed is `bundle.getString(key)` post `normalizeValue` replacements (`templateHelp` CLAIM.<NAME> removal, `optimizeLookupHelp` <Extensions> removal, `linkExpirationFormatter.timePeriodUnit`/`error-invalid-multivalued-size` choice removal, `StringEscapeUtils.unescapeHtml4`, email ` style=\"direction: rtl;\"` removal) and `englishValue` identically normalized. No File-name filtering inside `VerifyMessageProperties`; `ThemeVerifierMojo` upstream filters to `messages_*.properties` but `VerifyMessageProperties.verify()` itself accepts any `File`.\n* `santizeAnchors` can receive `value` containing 0,1, or multiple `<a…>`/`</a>` matches of `ANCHOR_PATTERN`. `while(matcher.find())` iterates all anchors in *original* `value` string; for each it does `englishMatcher.find()` sequential next English anchor and `Objects.equals(matcher.group(),englishMatcher.group())` then `value=value.replaceFirst(Pattern.quote(englishMatcher.group()),\"\")` else `messages.add(\"Didn't find anchor tag …\")`+`break`. So:\n  * Multiple anchors are iterated.\n  * Duplicate string anchors are allowed only if English has same duplicate string in same order; `replaceFirst(Pattern.quote(...),\"\")` removes first occurrence globally, not the matched position, so duplicates collapse to first-match removal and leaves matching dependent on order/count, but code does not explicitly forbid duplicates.\n  * Differing counts: if `value` has more anchors than `englishValue`, `englishMatcher.find()` fails → else branch adds \"Didn't find anchor tag\" and `break` leaving that and any remaining anchors in returned `value` (later sanitized by `POLICY_SOME_HTML`/`POLICY_NO_HTML` which only allows `br,p,strong,b`, so remaining anchors become `Illegal HTML`). If `englishValue` has more anchors than `value`, loop simply ends with no error — extra English anchors not validated. No count-equality check.\n",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "verifySafeHtml iterates every key from translation bundle and calls santizeAnchors",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:82-88: bundle.getKeys().asIterator().forEachRemaining(key -> {\n            String value = bundle.getString(key);\n            value = normalizeValue(key, value);\n            String englishValue = getEnglishValue(key, bundleEnglish);\n            englishValue = normalizeValue(key, englishValue);\n\n            value = santizeAnchors(key, value, englishValue);"
+        },
+        {
+         "statement": "value and englishValue are both passed through normalizeValue before santizeAnchors",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:83-86: String value = bundle.getString(key);\n            value = normalizeValue(key, value);\n            String englishValue = getEnglishValue(key, bundleEnglish);\n            englishValue = normalizeValue(key, englishValue);"
+        },
+        {
+         "statement": "normalizeValue does key-specific stripping and unescaping before anchor sanitization",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:117-136: private String normalizeValue(String key, String value) {\n        if (key.equals(\"templateHelp\")) {\n            // Allow \"CLAIM.<NAME>\" here\n            value = value.replaceAll(\"CLAIM\\\\.<[A-Z]*>\", \"\");\n        } else if (key.equals(\"optimizeLookupHelp\")) {\n            // Allow \"<Extensions>\" here\n            value = value.replaceAll(\"<Extensions>\", \"\");\n        } else if (key.startsWith(\"linkExpirationFormatter.timePeriodUnit\") || key.equals(\"error-invalid-multivalued-size\")) {\n            // The problem is the \"<\" that appears in the choice\n            value = value.replaceAll(\"\\\\{[0-9]+,choice,[^}]*}\", \"...\");"
+        },
+        {
+         "statement": "normalizeValue also unescapes Html4 and strips email RTL style",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:130-135: value = org.apache.commons.text.StringEscapeUtils.unescapeHtml4(value);\n\n        if (file.getAbsolutePath().contains(\"email\")) {\n            // TODO: move the RTL information for emails\n            value = value.replaceAll(Pattern.quote(\" style=\\\"direction: rtl;\\\"\"), \"\");"
+        },
+        {
+         "statement": "getEnglishValue returns empty string when key missing in english bundle",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:164-172: private static String getEnglishValue(String key, PropertyResourceBundle bundleEnglish) {\n        String englishValue;\n        try {\n            englishValue = bundleEnglish.getString(key);\n        } catch (MissingResourceException ex) {\n            englishValue = \"\";\n        }\n        return englishValue;\n    }"
+        },
+        {
+         "statement": "ANCHOR_PATTERN matches any opening or closing a tag",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:145: private static final Pattern ANCHOR_PATTERN = Pattern.compile(\"</?a[^>]*>\");"
+        },
+        {
+         "statement": "santizeAnchors loops over all anchors in value and sequentially matches English anchors",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150-162: private String santizeAnchors(String key, String value, String englishValue) {\n        Matcher matcher = ANCHOR_PATTERN.matcher(value);\n        Matcher englishMatcher = ANCHOR_PATTERN.matcher(englishValue);\n        while (matcher.find()) {\n            if (englishMatcher.find() && Objects.equals(matcher.group(), englishMatcher.group())) {\n                value = value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\");\n            } else {\n                messages.add(\"Didn't find anchor tag \" + matcher.group() + \" in original string\");\n                break;\n            }\n        }\n        return value;\n    }"
+        },
+        {
+         "statement": "replaceFirst uses Pattern.quote of the English anchor group, removing first occurrence globally not at matcher position",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:155: value = value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\");"
+        },
+        {
+         "statement": "when value has more anchors than english, else branch adds message and breaks leaving remaining anchors",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:156-158: } else {\n                messages.add(\"Didn't find anchor tag \" + matcher.group() + \" in original string\");\n                break;"
+        },
+        {
+         "statement": "ThemeVerifierMojo is sole production caller of VerifyMessageProperties.verify and filters files to messages_*.properties",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:48-51: Iterator<File> fileIterator = FileUtils.iterateFiles(dir, MessagePropertiesFilter.INSTANCE, DirectoryFileFilter.INSTANCE);\n            while (fileIterator.hasNext()) {\n                File file = fileIterator.next();\n                messages.addAll(new VerifyMessageProperties(file).verify());"
+        },
+        {
+         "statement": "MessagePropertiesFilter accepts only messages_*.properties",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/MessagePropertiesFilter.java:27-29: public boolean accept(File file) {\n        return file.getName().startsWith(\"messages_\") && file.getName().endsWith(\".properties\");\n    }"
+        },
+        {
+         "statement": "santizeAnchors has only one call site in codebase",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88: value = santizeAnchors(key, value, englishValue);"
+        }
+       ],
+       "unresolved": [
+        "Actual .properties fixture contents for multiple/duplicate anchors not read (head commit fixtures not listed via grep, no file read of test resources).",
+        "Runtime englishFile resolution via replaceAll resources-community->resources and _[a-zA-Z-_]*\\.properties->_en.properties not validated for existence when file is already _en.properties.",
+        "Dynamic effect of Matcher on original CharSequence vs mutated value string after replaceFirst not executed, only statically inferred."
+       ]
+      }
+     ],
+     "cert": {
+      "certificate": "none",
+      "coverage_complete": true,
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:151: `Matcher matcher = ANCHOR_PATTERN.matcher(value);` ; misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:153: `while (matcher.find()) {` ; misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:155: `value = value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\");` ; misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150-162: `private String santizeAnchors(...) { Matcher matcher = ANCHOR_PATTERN.matcher(value); Matcher englishMatcher = ANCHOR_PATTERN.matcher(englishValue); while (matcher.find()) { if (englishMatcher.find() && Objects.equals(matcher.group(), englishMatcher.group())) { value = value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\"); } else { messages.add(\"Didn't find anchor tag \" + matcher.group() + \" in original string\"); break; } } return value; }`",
+      "explanation": "Investigations confirm p1 (Matcher created at 151 on original value never recreated/reset before next matcher.find() at 153), p2 (replaceFirst at 155 removes first/leftmost literal occurrence via Pattern.quote, not at matcher.start()), and p3 (verifySafeHtml iterates every bundle key and calls santizeAnchors with normalized value/englishValue allowing 0..n anchors, duplicate strings and value-count > english-count). Scenario investigation traces exact same stale-Matcher + first-occurrence behavior and sequential ordinal pairing with break after first missing/mismatch, which matches rather than refutes the claimed outcome (even noting duplicate identical case works by accident but remains position-independent). No premise is quoted as opposite and scenario does not show outcome absent.",
+      "premise_id": "scenario"
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "etapa": "certificado",
+     "ex": {
+      "failure": "HTML injected inside the {n,choice,...} block for error-invalid-multivalued-size bypasses HTML verification and reaches runtime MessageFormat rendering.",
+      "scenario": {
+       "condition": "A message value for error-invalid-multivalued-size (or linkExpirationFormatter.timePeriodUnit) contains HTML inside the MessageFormat choice expression, e.g., {2,choice,0#<img src=x onerror=alert(1)>|1#value}",
+       "claimed_outcome": "normalizeValue replaces the entire {n,choice,...} block with \"...\" before HTML policy sanitizing, so the malicious HTML is not checked, verification passes, and the payload is rendered at runtime.",
+       "neutral_question": "When a value for those keys contains a {n,choice,...} expression with markup inside, what does normalizeValue do to that substring and what input does the HTML sanitizer subsequently receive and report?",
+       "locations": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:117-127",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:82-94"
+       ]
+      },
+      "premises": [
+       {
+        "id": "P1",
+        "proposition": "normalizeValue replaces the entire substring matching \\{[0-9]+,choice,[^}]*} (including its interior) with \"...\" for keys starting with linkExpirationFormatter.timePeriodUnit or equal to error-invalid-multivalued-size",
+        "kind": "mechanism",
+        "scope": "repository",
+        "neutral_question": "For keys error-invalid-multivalued-size and linkExpirationFormatter.timePeriodUnit, what transformation does normalizeValue apply to a substring matching \\{[0-9]+,choice,[^}]*} — does it preserve, validate, or replace the interior content?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:124-127"
+        ]
+       },
+       {
+        "id": "P2",
+        "proposition": "In verifySafeHtml, normalizeValue is called on the value (and englishValue) before PolicyFactory.sanitize, so the sanitizer operates on the already-stripped \"...\" placeholder",
+        "kind": "ordering",
+        "scope": "repository",
+        "neutral_question": "In verifySafeHtml, what is the order of operations between normalizeValue, santizeAnchors, and policy.sanitize, and which intermediate value is passed to the sanitizer?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:82-94",
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:117-137"
+        ]
+       },
+       {
+        "id": "P3",
+        "proposition": "The textual alternatives inside the choice format (e.g., the strings after 0# or 1# ) are emitted as part of the final MessageFormat output and rendered in an HTML context at runtime, so HTML inside them would be rendered",
+        "kind": "consumer",
+        "scope": "repository",
+        "neutral_question": "How is the error-invalid-multivalued-size message string with its {2,choice,...} clause consumed at runtime — what does MessageFormat produce from the choice alternatives and in what rendering context is the result displayed?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:124-127",
+         "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties:188",
+         "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties:3138"
+        ]
+       }
+      ]
+     },
+     "cenario": {
+      "answer": "For `linkExpirationFormatter.timePeriodUnit*` / `error-invalid-multivalued-size` the `normalizeValue` regex strips the **entire** `{n,choice,...}` block **including any HTML inside it** before the OWASP sanitizer runs, so the sanitizer receives `...` placeholder and reports `sanitized == value` (no Illegal HTML).\n\n`normalizeValue` branch replaces whole choice expression with literal `...`: the pattern `\\{[0-9]+,choice,[^}]*\\}` matches `{2,choice,0#<img src=x onerror=alert(1)>|1#value}` end-to-end because `[^}]*` includes `<`, `>`, `|`, `#`. Markup inside is removed, not examined.\n\nCall chain in `verifySafeHtml` normalizes **both** translation and English source before `containsHtml`/ `policy.sanitize`: therefore `englishValue` also becomes `...` ( `containsHtml==false` → `POLICY_NO_HTML`) and `value` sent to `policy.sanitize(value)` no longer contains `<img...>`; `Objects.equals(sanitized,value)` is true so the `Illegal HTML in key ...` message is never added → bypass/false-negative for HTML injected inside the choice.",
+      "coverage_complete": true,
+      "facts": [
+       {
+        "statement": "normalizeValue for key.startsWith(\"linkExpirationFormatter.timePeriodUnit\") || key.equals(\"error-invalid-multivalued-size\") replaces substring matching \\{[0-9]+,choice,[^}]*\\} with \"...\", including any HTML inside that choice block",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:124 - `} else if (key.startsWith(\"linkExpirationFormatter.timePeriodUnit\") || key.equals(\"error-invalid-multivalued-size\")) {`"
+       },
+       {
+        "statement": "Comment indicates intent is to handle \"<\" in choice",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:125 - `// The problem is the \"<\" that appears in the choice`"
+       },
+       {
+        "statement": "Replacement implementation",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:126 - `value = value.replaceAll(\"\\\\{[0-9]+,choice,[^}]*}\", \"...\");`"
+       },
+       {
+        "statement": "verifySafeHtml normalizes both translation value and englishValue via normalizeValue before sanitization",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:84 - `value = normalizeValue(key, value);`"
+       },
+       {
+        "statement": "English value also normalized",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:86 - `englishValue = normalizeValue(key, englishValue);`"
+       },
+       {
+        "statement": "Policy selection after normalization and sanitizer input is normalized value",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:91 - `PolicyFactory policy = containsHtml(englishValue) ? POLICY_SOME_HTML : POLICY_NO_HTML;`"
+       },
+       {
+        "statement": "Sanitizer receives normalized value (with ...), not original HTML",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:92 - `String sanitized = policy.sanitize(value);`"
+       },
+       {
+        "statement": "Only reports when sanitized != value; after replacement they are equal so no Illegal HTML reported for HTML inside choice",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99 - `if (!Objects.equals(sanitized, value)) {`"
+       }
+      ],
+      "unresolved": []
+     },
+     "cegos": [
+      {
+       "answer": "For `error-invalid-multivalued-size` and keys starting with `linkExpirationFormatter.timePeriodUnit`, `normalizeValue` **replaces** (not preserves or validates) any substring matching `\\{[0-9]+,choice,[^}]*}` with the literal `\"...\"` — discarding the entire interior `choice` content including the problematic `<` (e.g. `1<values`, `1<seconds`). This is applied before HTML sanitization to avoid false positives.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "normalizeValue is defined as private String normalizeValue(String key, String value)",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:117: private String normalizeValue(String key, String value) {"
+        },
+        {
+         "statement": "Branch for the two keys is key.startsWith(\"linkExpirationFormatter.timePeriodUnit\") || key.equals(\"error-invalid-multivalued-size\")",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:124: } else if (key.startsWith(\"linkExpirationFormatter.timePeriodUnit\") || key.equals(\"error-invalid-multivalued-size\")) {"
+        },
+        {
+         "statement": "Comment explains reason is the \"<\" in choice",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:125: // The problem is the \"<\" that appears in the choice"
+        },
+        {
+         "statement": "Transformation replaces entire regex match \\{[0-9]+,choice,[^}]*} with \"...\" (replace, not preserve/validate)",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:126: value = value.replaceAll(\"\\\\{[0-9]+,choice,[^}]*}\", \"...\");"
+        },
+        {
+         "statement": "Transformation is applied to translation value before HTML sanitization",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:84: value = normalizeValue(key, value);"
+        },
+        {
+         "statement": "Same transformation is applied to English source value",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:86: englishValue = normalizeValue(key, englishValue);"
+        },
+        {
+         "statement": "grep for normalizeValue shows only this one implementation and those two call sites",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:117:    private String normalizeValue(String key, String value) {"
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "In `verifySafeHtml` the order is:\n\n1. `normalizeValue` on both `value` and `englishValue`\n2. `santizeAnchors` on the normalized values\n3. `policy.sanitize` on the result of `santizeAnchors` (which is already normalized)\n\nWhich intermediate value is passed to sanitizer: `value` after `normalizeValue` (line 84) and then `santizeAnchors` (line 88) – i.e. `String sanitized = policy.sanitize(value)` where `value` at line 92 is the return value of `santizeAnchors(key, value, englishValue)` called with normalized inputs. Policy choice at line 91 also uses the normalized `englishValue`.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "verifySafeHtml first normalizes `value` via normalizeValue",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:84 and quoted code `value = normalizeValue(key, value);`"
+        },
+        {
+         "statement": "verifySafeHtml then normalizes `englishValue` via normalizeValue before anchor handling",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:86 and quoted code `englishValue = normalizeValue(key, englishValue);`"
+        },
+        {
+         "statement": "After both normalizations, verifySafeHtml calls santizeAnchors and reassigns value to its return",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88 and quoted code `value = santizeAnchors(key, value, englishValue);`"
+        },
+        {
+         "statement": "Policy is chosen based on normalized englishValue via containsHtml",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:91 and quoted code `PolicyFactory policy = containsHtml(englishValue) ? POLICY_SOME_HTML : POLICY_NO_HTML;`"
+        },
+        {
+         "statement": "policy.sanitize is called last on the santizeAnchors result (already normalized) value",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:92 and quoted code `String sanitized = policy.sanitize(value);`"
+        },
+        {
+         "statement": "verifySafeHtml is only defined at line 65 and called at line 51, no other implementation in repo",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65 and quoted code `private void verifySafeHtml() {`"
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "Runtime consumption is `java.text.MessageFormat` (with embedded `ChoiceFormat`) on the template `Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}.` :\n\n* `{0}=inputHint` (attribute name), `{1}=min`, `{2}=max` supplied by `MultiValueValidator`. `MessageFormat` evaluates the 4th argument `{2,choice,...}` against `max` (arg 2): `0#values` → `max==0` → `values`, `1#value` → `max==1` → `value`, `1<values` → `max>1` → `values`. Result e.g. `Attribute foo must have at least 1 and at most 1 value` vs `... at most 2 values`.\n\nRendering contexts where `new MessageFormat(value,locale).format(args)` is invoked:\n\n* **Server-side FreeMarker theme rendering** – `MessageFormatterMethod.exec()` exposes FreeMarker method `msg` used in login/account/admin `.ftl` pages (registration, account update, etc.). Same for `AdvancedMessageFormatterMethod`.\n* **Admin REST JSON error response** – `UsersResource.createUser()` (and `UserResource.validateUserProfile` path) does `MessageFormat.format(messages.getProperty(e.getMessage()), e.getParameters())` and throws `ErrorResponseException(BAD_REQUEST)` whose JSON `errorMessage` is shown as inline/toast error in the React Admin-UI / Account-UI.\n\nBuild-time `VerifyMessageProperties` strips `{n,choice,...}` to `...` only for OWASP HTML sanitizer check, not runtime.",
+       "coverage_complete": false,
+       "facts": [
+        {
+         "statement": "VerifyMessageProperties normalizes choice clause to avoid '<' HTML false positive",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:124: } else if (key.startsWith(\"linkExpirationFormatter.timePeriodUnit\") || key.equals(\"error-invalid-multivalued-size\")) {"
+        },
+        {
+         "statement": "VerifyMessageProperties replaces choice pattern with ...",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:126: value = value.replaceAll(\"\\\\{[0-9]+,choice,[^}]*}\", \"...\");"
+        },
+        {
+         "statement": "Account-UI English bundle defines template with {2,choice,0#values|1#value|1<values}",
+         "evidence": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties:188: error-invalid-multivalued-size=Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}."
+        },
+        {
+         "statement": "Base login theme defines same template",
+         "evidence": "themes/src/main/resources/theme/base/login/messages/messages_en.properties:530: error-invalid-multivalued-size=Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}."
+        },
+        {
+         "statement": "Base admin theme defines same template",
+         "evidence": "themes/src/main/resources/theme/base/admin/messages/messages_en.properties:69: error-invalid-multivalued-size=Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}."
+        },
+        {
+         "statement": "MultiValueValidator defines message key constant",
+         "evidence": "services/src/main/java/org/keycloak/userprofile/validator/MultiValueValidator.java:46: public static final String MESSAGE_INVALID_SIZE = \"error-invalid-multivalued-size\";"
+        },
+        {
+         "statement": "MultiValueValidator supplies min/max as MessageFormat args 1 and 2 (0=inputHint)",
+         "evidence": "services/src/main/java/org/keycloak/userprofile/validator/MultiValueValidator.java:137: context.addError(new ValidationError(ID, inputHint, MESSAGE_INVALID_SIZE, min, max));"
+        },
+        {
+         "statement": "FreeMarker MessageFormatterMethod consumes bundle string via new MessageFormat(...).format()",
+         "evidence": "services/src/main/java/org/keycloak/theme/beans/MessageFormatterMethod.java:62: return new MessageFormat(value, locale).format(resolved.toArray());"
+        },
+        {
+         "statement": "AdvancedMessageFormatterMethod also uses MessageFormat for ${} keys",
+         "evidence": "services/src/main/java/org/keycloak/theme/beans/AdvancedMessageFormatterMethod.java:46: return new MessageFormat(messages.getProperty(key, key), locale).format(list.subList(1, list.size()).toArray());"
+        },
+        {
+         "statement": "KeycloakErrorHandler exposes 'msg' as MessageFormatterMethod for FreeMarker error pages",
+         "evidence": "services/src/main/java/org/keycloak/services/error/KeycloakErrorHandler.java:205: attributes.put(\"msg\", new MessageFormatterMethod(locale, messagesBundle));"
+        },
+        {
+         "statement": "AccountConsole exposes 'msg' as MessageFormatterMethod for account theme",
+         "evidence": "services/src/main/java/org/keycloak/services/resources/account/AccountConsole.java:175: map.put(\"msg\", new MessageFormatterMethod(locale, messages));"
+        },
+        {
+         "statement": "Admin REST UsersResource formats validation error via MessageFormat.format for JSON response",
+         "evidence": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:166: throw new ErrorResponseException(e.getMessage(), MessageFormat.format(messages.getProperty(e.getMessage(), e.getMessage()), e.getParameters()),"
+        }
+       ],
+       "unresolved": [
+        "Exact quoted line js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties:3138 not read verbatim (step budget); assumed identical to other bundles via grep hit",
+        "Full FreeMarker .ftl call sites of ${msg(\"error-invalid-multivalued-size\",...)} not enumerated",
+        "Other MessageFormat callers (UserResource.validateUserProfile, Email, etc.) not exhaustively read",
+        "Client-side React i18n consumption of js/apps/account-ui and js/apps/admin-ui bundles (fetch + JS MessageFormat) not inspected",
+        "ChoiceFormat edge for non-integer / locale-specific plural rules not traced"
+       ]
+      }
+     ],
+     "cert": {
+      "certificate": "none",
+      "coverage_complete": false,
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:126 - `value = value.replaceAll(\"\\\\{[0-9]+,choice,[^}]*}\", \"...\");` ; misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:92 - `String sanitized = policy.sanitize(value);` ; services/src/main/java/org/keycloak/theme/beans/MessageFormatterMethod.java:62 - `return new MessageFormat(value, locale).format(resolved.toArray());`",
+      "explanation": "Scenario investigation with coverage_complete=true confirms the claimed outcome: normalizeValue replaces the entire {2,choice,...} including any HTML with \"...\" before policy.sanitize, so sanitizer receives \"...\" and Illegal HTML is never reported (bypass). P1 and P2 investigations (coverage_complete=true) confirm the mechanism and ordering exactly as alleged. P3 investigation (coverage_complete=false) shows MessageFormat does emit choice alternatives via MessageFormatterMethod/FreeMarker and Admin REST JSON, but leaves unresolved whether that output is HTML-escaped or rendered as HTML, provides no quoted code stating execution is escaped/safe, and does not enumerate all rendering paths. Therefore findings agree with P1/P2 and support the failure, and provide only partial, inconclusive evidence on P3 - no premise is proven false and the failure is not proven not to happen.",
+      "premise_id": "P3"
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "etapa": "certificado",
+     "ex": {
+      "failure": "English-file path derivation at VerifyMessageProperties.java:74-75 derives a wrong counterpart path because the regex character class [a-zA-Z-_] creates an unintended Z-_ range and replaceAll evaluates its first arguments as regexes.",
+      "scenario": {
+       "condition": "when verifySafeHtml() derives englishFile via file.getAbsolutePath().replaceAll(\"resources-community\",\"resources\").replaceAll(\"_[a-zA-Z-_]*\\\\.properties\",\"_en.properties\") for a file whose absolute path contains a 'resources-community' segment and/or a locale suffix with underscore/hyphen such as _pt_BR or _zh_CN",
+       "claimed_outcome": "the patterns match unintended characters/substrings (the hyphen forms Z-_ range 90-95 including [ \\ ] ^ _) and the resources-community replacement is regex-evaluated, so the resulting englishFile path is incorrect or only succeeds due to the buggy range matching underscore",
+       "neutral_question": "When deriving englishFile for files with locale suffixes containing underscores/hyphens or paths containing resources-community, what string do the two replaceAll calls at lines 74-75 produce and which substrings do their first-argument patterns match and replace?",
+       "locations": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74-75"
+       ]
+      },
+      "premises": [
+       {
+        "id": "premise_regex_range",
+        "proposition": "The character class [a-zA-Z-_] at line 75 is interpreted by Java's regex engine as containing a range Z-_ (ASCII 90-95) that covers [ \\ ] ^ _ rather than a literal hyphen.",
+        "kind": "semantics",
+        "scope": "repository",
+        "neutral_question": "How does Java's regex engine interpret the hyphen inside the character class [a-zA-Z-_] at line 75, and what set of characters does [a-zA-Z-_]* match?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75"
+        ]
+       },
+       {
+        "id": "premise_reachability_locales",
+        "proposition": "VerifyMessageProperties.verifySafeHtml is reached with file paths that contain a 'resources-community' segment and with properties filenames that contain locale suffixes with underscores/hyphens such as _pt_BR, _zh_CN, requiring the pattern to match '_' and '-' correctly.",
+        "kind": "reachability",
+        "scope": "repository",
+        "neutral_question": "Which absolute file paths and filenames actually reach lines 74-75 in VerifyMessageProperties, and do any contain a 'resources-community' segment or locale suffixes with underscores or hyphens like pt_BR or zh_CN?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65-80",
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:48-55"
+        ]
+       }
+      ]
+     },
+     "cenario": {
+      "answer": "Derived `englishFile` at `VerifyMessageProperties.verifySafeHtml()` lines 74-75 is `file.getAbsolutePath()` with two regex `replaceAll` transformations applied in sequence:\n\n1. `replaceAll(\"resources-community\",\"resources\")` takes the absolute path string and replaces every regex-match of the literal substring `resources-community` (no metacharacters, `-` literal outside `[]`) with `resources`. For a path containing a `resources-community` directory segment e.g. `.../resources-community/.../messages_pt_BR.properties` it produces `.../resources/.../messages_pt_BR.properties`.\n\n2. Chained `.replaceAll(\"_[a-zA-Z-_]*\\\\.properties\",\"_en.properties\")` treats first argument as regex `_[a-zA-Z-_]*\\.properties` : literal `_` then `*` (0+ greedy) of character class `[a-zA-Z-_]` (`a-z`, `A-Z`, literal `-`/`_` - with `Z-_` being range `Z`(90) to `_`(95) in Java regex, thus also `[ \\ ] ^` but intended to allow letters/`-`/`_`), then literal `.properties` (`\\.` escaped dot). It matches the suffix substring from the locale `_` to the end `.properties` and replaces each match with `_en.properties`. For `.../messages_pt_BR.properties` it matches `_pt_BR.properties`; for `.../messages_zh_CN.properties` it matches `_zh_CN.properties`; for hyphen variant `_pt-BR` style it matches the hyphen as well because `-` is in class. Greedy `*` makes it match longest from first `_` to `.properties` (e.g. `_pt_BR.properties` whole suffix). The resulting `englishFile` string is therefore the community-path normalized to `resources` and locale suffix normalized to `_en.properties`, e.g. `.../resources/theme/messages_en.properties`.",
+      "coverage_complete": true,
+      "facts": [
+       {
+        "statement": "Line 74 defines englishFile as file.getAbsolutePath().replaceAll(\"resources-community\",\"resources\")",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74:        String englishFile = file.getAbsolutePath().replaceAll(\"resources-community\", \"resources\")"
+       },
+       {
+        "statement": "Line 75 chains second replaceAll with pattern \"_[a-zA-Z-_]*\\.properties\" replacement \"_en.properties\"",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75:                .replaceAll(\"_[a-zA-Z-_]*\\.properties\", \"_en.properties\");"
+       },
+       {
+        "statement": "First replaceAll first-arg pattern \"resources-community\" is regex for literal substring resources-community replaced everywhere with \"resources\"",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74:        String englishFile = file.getAbsolutePath().replaceAll(\"resources-community\", \"resources\")"
+       },
+       {
+        "statement": "Second replaceAll first-arg pattern \"_[a-zA-Z-_]*\\.properties\" matches '_' + 0+ chars of class [a-zA-Z-_] (allowing underscores/hyphens like _pt_BR/_zh_CN) + literal .properties and replaces with _en.properties",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75:                .replaceAll(\"_[a-zA-Z-_]*\\.properties\", \"_en.properties\");"
+       },
+       {
+        "statement": "englishFile is then opened as FileInputStream for bundleEnglish",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:76:        try (FileInputStream fis = new FileInputStream(englishFile)) {"
+       }
+      ],
+      "unresolved": []
+     },
+     "cegos": [
+      {
+       "answer": "At `misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75` the regex is `_[a-zA-Z-_]*\\.properties` used via `String.replaceAll` to map `…_[locale].properties` -> `…_en.properties`.\n\nInside Java `java.util.regex` (used by `String.replaceAll`/`Pattern`) a `-` inside `[]` is a **range operator** when it appears between two characters (not at start/end and not escaped `\\-`). In `[a-zA-Z-_]` the structure is `a-z` + `A-Z` + `Z-_` :\n\n* `a-z` = U+0061-007A\n* `A-Z` = U+0041-005A  \n* `Z-_` = U+005A(90) to U+005F(95) = `Z [ \\ ] ^ _`\n\nTherefore `-` is **consumed as the operator**, not a member. The class does **NOT** contain literal `-` (U+002D). It is equivalent to `[a-zA-ZZ-_]` / `[A-Za-z\\[\\\\\\]^_]*` = `a-z` + `A-Z` + `[ \\ ] ^ _` ( `_` and `Z` already covered). `*` is 0 or more, so it matches the empty string and any length string consisting solely of that set (inadvertently allowing `[ \\ ] ^` and failing to match intended literal `-`). Intended literal hyphen would be `[a-zA-Z_-]` or `[a-zA-Z\\-_]`.\n\n",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "Line 75 uses String.replaceAll with regex _[a-zA-Z-_]*\\.properties to derive English file name",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75:                 .replaceAll(\"_[a-zA-Z-_]*\\\\.properties\", \"_en.properties\");"
+        },
+        {
+         "statement": "The regex character class at line 75 is [a-zA-Z-_] with hyphen between Z and _",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75:                 .replaceAll(\"_[a-zA-Z-_]*\\\\.properties\", \"_en.properties\");"
+        },
+        {
+         "statement": "File uses java.util.regex via String.replaceAll / Pattern imports",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:35: import java.util.regex.Pattern;"
+        },
+        {
+         "statement": "Only one occurrence of a-zA-Z-_ in repo is this line",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75:                 .replaceAll(\"_[a-zA-Z-_]*\\\\.properties\", \"_en.properties\");"
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "Only the code paths and expected filenames can be inferred from the committed code - not actual on-disk absolute paths without further directory listing.\n\nProduction caller is `ThemeVerifierMojo.execute()` iterating `mavenProject.getResources()` directories. Test caller bypasses the filter and directly constructs `VerifyMessageProperties`.\n\nLines 74-75 `replaceAll(\"resources-community\",\"resources\")` + `replaceAll(\"_[a-zA-Z-_]*\\\\.properties\",\"_en.properties\")` are inside `verifySafeHtml()` which is always reached from `verify()` when `new VerifyMessageProperties(file).verify()` is called. The production filter restricts *filenames* that reach there to `messages_*.properties`; the `englishFile` logic is designed to handle a `resources-community` path segment and locale suffixes with underscore/hyphen like `pt_BR`/`zh_CN`, but actual present files were not enumerated.\n\nThe code **expects/anticipates** `resources-community` and locale suffixes `_xx` / `_pt_BR` / `zh-CN` style (regex includes `a-zA-Z-_`), and declares `src/main/resources-community` as a resource root, so in a communityTranslations build absolute paths like `.../src/main/resources-community/theme/.../messages_pt_BR.properties` would reach lines 74-75 and be mapped to `.../src/main/resources/.../messages_en.properties`. No concrete absolute path instance was enumerated in this investigation.\n",
+       "coverage_complete": false,
+       "facts": [
+        {
+         "statement": "Lines 74-75 compute englishFile via two replaceAlls on file.getAbsolutePath()",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74: String englishFile = file.getAbsolutePath().replaceAll(\"resources-community\", \"resources\")"
+        },
+        {
+         "statement": "Second replaceAll handles locale suffixes with underscore/hyphen like pt_BR or zh-CN",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75: .replaceAll(\"_[a-zA-Z-_]*\\\\.properties\", \"_en.properties\");"
+        },
+        {
+         "statement": "verifySafeHtml() containing lines 74-75 is always called from verify()",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:51: verifySafeHtml();"
+        },
+        {
+         "statement": "Production caller constructs VerifyMessageProperties from iterated files and calls verify()",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:51: messages.addAll(new VerifyMessageProperties(file).verify());"
+        },
+        {
+         "statement": "Production files are iterated via FileUtils.iterateFiles(dir, MessagePropertiesFilter.INSTANCE, ...)",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:48: Iterator<File> fileIterator = FileUtils.iterateFiles(dir, MessagePropertiesFilter.INSTANCE, DirectoryFileFilter.INSTANCE);"
+        },
+        {
+         "statement": "Iterated dir comes from mavenProject.getResources() -> resource.getDirectory()",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:47: File dir = new File(resource.getDirectory());"
+        },
+        {
+         "statement": "MessagePropertiesFilter only accepts filenames starting with messages_ and ending .properties",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/MessagePropertiesFilter.java:28: return file.getName().startsWith(\"messages_\") && file.getName().endsWith(\".properties\");"
+        },
+        {
+         "statement": "themes/pom.xml declares src/main/resources as a resource directory",
+         "evidence": "themes/pom.xml:33: <directory>src/main/resources</directory>"
+        },
+        {
+         "statement": "themes/pom.xml declares src/main/resources-community as a resource directory under communityTranslations profile",
+         "evidence": "themes/pom.xml:64: <directory>src/main/resources-community</directory>"
+        },
+        {
+         "statement": "Test caller bypasses filter and passes arbitrary fixture files to VerifyMessageProperties",
+         "evidence": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:59: return new VerifyMessageProperties(new File(resource.getFile()));"
+        },
+        {
+         "statement": "Test fixtures reaching lines 74-75 are named without messages_ prefix (e.g., noHtml_de.properties)",
+         "evidence": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:44: List<String> verify = getFile(\"noHtml_de.properties\").verify();"
+        }
+       ],
+       "unresolved": [
+        "Did not listDir themes/src/main/resources and themes/src/main/resources-community to enumerate actual absolute paths/filenames that would match MessagePropertiesFilter and reach lines 74-75",
+        "Could not confirm existence of locale-suffixed files like messages_pt_BR.properties, messages_zh_CN.properties, messages_pt-BR.properties etc. on disk",
+        "Did not traverse all Maven modules' pom.xml <resources> to exhaustively list every absolute resource directory that could seed FileUtils.iterateFiles",
+        "Did not runtime-execute to capture actual file.getAbsolutePath() values seen at lines 74-75",
+        "Did not verify whether any current file on disk actually contains 'resources-community' segment in its absolute path when processed by ThemeVerifierMojo"
+       ]
+      }
+     ],
+     "cert": {
+      "certificate": "none",
+      "coverage_complete": false,
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75: .replaceAll(\"_[a-zA-Z-_]*\\\\.properties\", \"_en.properties\"); and misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74: String englishFile = file.getAbsolutePath().replaceAll(\"resources-community\", \"resources\")",
+      "explanation": "Scenario investigation asserts correct derivation for _pt_BR/_zh_CN and claims hyphen is matched because '-' is in class, but premise investigation proves Java regex interprets [a-zA-Z-_] as a-z + A-Z + Z-_ (90-95 = Z [ \\ ] ^ _) with '-' consumed as range operator not literal, so class does NOT contain '-' and does contain unintended [ \\ ] ^; underscore matches only via buggy Z-_ range, which is the claimed failure (\"only succeeds due to buggy range\"). Reachability investigation is explicitly coverage_complete:false and lists unresolved: did not listDir resources/resources-community, did not confirm existence of messages_pt_BR etc., did not runtime-capture absolute paths. Therefore findings agree with premises / are partial and do not prove the claimed outcome does not happen nor that any premise is false.",
+      "premise_id": "scenario"
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "etapa": "certificado",
+     "ex": {
+      "failure": "verifySafeHtml wraps IOException as unchecked RuntimeException which escapes verify() that only catches IOException, crashing the theme-verifier plugin execution",
+      "scenario": {
+       "condition": "verifySafeHtml encounters an IOException while opening or reading the bundle file or the derived englishFile (e.g., FileInputStream throws FileNotFoundException/IOException due to missing or unreadable file derived via replaceAll on the path)",
+       "claimed_outcome": "verify() only catches IOException, so the unchecked RuntimeException propagates out of verify() and crashes the plugin execution instead of being wrapped as MojoExecutionException or recorded as a verification message",
+       "neutral_question": "When verifySafeHtml encounters an IOException while loading the bundle or the derived englishFile, what does verify() do with the resulting exception and how is it observed by its caller?",
+       "locations": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:41-55",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65-80"
+       ]
+      },
+      "premises": [
+       {
+        "id": "P1",
+        "proposition": "verifySafeHtml catches IOException from the bundle and bundleEnglish FileInputStream/PropertyResourceBundle loads and re-throws it as an unchecked RuntimeException",
+        "kind": "mechanism",
+        "scope": "repository",
+        "neutral_question": "What does verifySafeHtml do when creating the FileInputStream or PropertyResourceBundle for bundle or englishFile throws IOException — what type of exception, if any, does it throw or return?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65-80"
+        ]
+       },
+       {
+        "id": "P2",
+        "proposition": "verify() catches and wraps only IOException as MojoExecutionException and does not catch RuntimeException or other unchecked exceptions thrown by verifySafeHtml",
+        "kind": "semantics",
+        "scope": "repository",
+        "neutral_question": "Which exception types does verify() catch, declare, or wrap, and what happens to a RuntimeException thrown by a callee such as verifySafeHtml?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:41-55"
+        ]
+       },
+       {
+        "id": "P3",
+        "proposition": "An IOException on those bundle loads is reachable in normal execution (e.g., derived englishFile path does not exist) and no caller of verify() handles the resulting RuntimeException before the Maven plugin execution would terminate",
+        "kind": "reachability",
+        "scope": "repository",
+        "neutral_question": "Can the FileInputStream for bundle or the derived englishFile throw IOException during normal theme-verifier execution, and which callers invoke verify() and how do they handle exceptions from it?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65-80",
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:41-55"
+        ]
+       }
+      ]
+     },
+     "cenario": {
+      "answer": "When `verifySafeHtml()` hits `IOException` opening/reading `file` or derived `englishFile` (via `new FileInputStream`), it does NOT throw `IOException` to `verify()`. It wraps in unchecked `RuntimeException`. `verify()`'s `try{...}catch(IOException e){throw new MojoExecutionException...}` (lines 46-54) only catches `IOException` (e.g. from `Files.readString`). Since `verifySafeHtml()` is `private void` with no `throws` and already converted to `RuntimeException`, `verify()` does not catch/wrap it - `RuntimeException` escapes `verify()` directly. Caller `ThemeVerifierMojo.execute()` line 51 `new VerifyMessageProperties(file).verify()` declares only `throws MojoExecutionException, MojoFailureException` and does not catch `RuntimeException`, so caller observes uncaught `RuntimeException` (not a `MojoExecutionException`/`MojoFailureException`).",
+      "coverage_complete": true,
+      "facts": [
+       {
+        "statement": "verify() declares throws MojoExecutionException and its try/catch only catches IOException to wrap as MojoExecutionException",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:46:    public List<String> verify() throws MojoExecutionException {"
+       },
+       {
+        "statement": "verify() catch block wraps only IOException from Files.readString/verifySafeHtml/verifyNoDuplicateKeys path as MojoExecutionException",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:52:        } catch (IOException e) {\n            throw new MojoExecutionException(\"Can not read file \" + file, e);"
+       },
+       {
+        "statement": "verifySafeHtml() signature declares no checked exception",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65:    private void verifySafeHtml() {"
+       },
+       {
+        "statement": "First bundle load catches IOException and throws RuntimeException, not IOException",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:69:        } catch (IOException e) {\n            throw new RuntimeException(\"unable to read file \" + file, e);"
+       },
+       {
+        "statement": "Derived englishFile path via replaceAll and second load also catches IOException and throws RuntimeException",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:78:        } catch (IOException e) {\n            throw new RuntimeException(\"unable to read file \" + englishFile, e);"
+       },
+       {
+        "statement": "English file derived via replaceAll on path",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74:        String englishFile = file.getAbsolutePath().replaceAll(\"resources-community\", \"resources\")"
+       },
+       {
+        "statement": "Caller ThemeVerifierMojo.execute() invokes verify() without catching RuntimeException and only declares MojoExecutionException/MojoFailureException",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:51:                messages.addAll(new VerifyMessageProperties(file).verify());"
+       }
+      ],
+      "unresolved": []
+     },
+     "cegos": [
+      {
+       "answer": "`verifySafeHtml()` does NOT declare `throws`, does NOT return a value, and does NOT throw `MojoExecutionException` or any checked exception for `IOException` from `new FileInputStream(...)` / `new PropertyResourceBundle(...)`. For **both** `bundle` (from `file`) and `bundleEnglish` (from `englishFile`) it catches `IOException` (which covers both `FileInputStream` constructor and `PropertyResourceBundle` constructor inside the same `try`) and re-throws as unchecked `RuntimeException` with message `unable to read file ` + path and cause `e`.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "verifySafeHtml has signature private void with no throws clause",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65: \"    private void verifySafeHtml() {\""
+        },
+        {
+         "statement": "Creation of bundle from file wraps IOException in RuntimeException with message unable to read file + file",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:67-71: \"        try (FileInputStream fis = new FileInputStream(file)) {\n            bundle = new PropertyResourceBundle(fis);\n        } catch (IOException e) {\n            throw new RuntimeException(\"unable to read file \" + file, e);\n        }\""
+        },
+        {
+         "statement": "Creation of bundleEnglish from englishFile wraps IOException in RuntimeException with message unable to read file + englishFile",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:76-80: \"        try (FileInputStream fis = new FileInputStream(englishFile)) {\n            bundleEnglish = new PropertyResourceBundle(fis);\n        } catch (IOException e) {\n            throw new RuntimeException(\"unable to read file \" + englishFile, e);\n        }\""
+        },
+        {
+         "statement": "verifySafeHtml is only called from verify() at line 51 inside try that only catches IOException into MojoExecutionException, so RuntimeException propagates unchecked",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:51: \"            verifySafeHtml();\""
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "`VerifyMessageProperties.verify()` (lines 46-55) declares, catches and wraps only `IOException` → `MojoExecutionException`. A `RuntimeException` thrown by a callee such as `verifySafeHtml()` is NOT caught, NOT declared and NOT wrapped — it propagates unchecked out of `verify()` (and out of `ThemeVerifierMojo.execute()`).\n\n* `verify()` signature declares `MojoExecutionException` only.\n* `try` in `verify()` catches `IOException` only and wraps it as `MojoExecutionException`.\n* `verifySafeHtml()` declares no checked exception but catches `IOException` internally and re-throws as unchecked `RuntimeException` — that `RuntimeException` is not handled by `verify()`'s `catch (IOException)`.\n\nCaller `ThemeVerifierMojo.execute()` calls `new VerifyMessageProperties(file).verify()` with no `try/catch` for `RuntimeException`; it declares `throws MojoExecutionException, MojoFailureException` so the `RuntimeException` would propagate as an unchecked failure, not as a `MojoExecutionException/MojoFailureException`.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "verify() declares throws MojoExecutionException",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:46 and quoted code: \"public List<String> verify() throws MojoExecutionException {\""
+        },
+        {
+         "statement": "verify() catches only IOException and wraps it in MojoExecutionException",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:52-53 and quoted code: \"} catch (IOException e) { throw new MojoExecutionException(\"Can not read file \" + file, e);\""
+        },
+        {
+         "statement": "verify() try block calls Files.readString, verifyNoDuplicateKeys and verifySafeHtml",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:48-51 and quoted code: \"String contents = Files.readString(file.toPath()); verifyNoDuplicateKeys(contents); verifySafeHtml();\""
+        },
+        {
+         "statement": "verifySafeHtml() declares no checked exception (void, no throws)",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65 and quoted code: \"private void verifySafeHtml() {\""
+        },
+        {
+         "statement": "verifySafeHtml() catches IOException from FileInputStream for file and throws RuntimeException wrapping it",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:69-70 and quoted code: \"} catch (IOException e) { throw new RuntimeException(\"unable to read file \" + file, e);\""
+        },
+        {
+         "statement": "verifySafeHtml() catches IOException from FileInputStream for englishFile and throws RuntimeException wrapping it",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:78-79 and quoted code: \"} catch (IOException e) { throw new RuntimeException(\"unable to read file \" + englishFile, e);\""
+        },
+        {
+         "statement": "verifyNoDuplicateKeys declares throws IOException (caught by verify's IOException catch)",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:174 and quoted code: \"private void verifyNoDuplicateKeys(String contents) throws IOException {\""
+        },
+        {
+         "statement": "getEnglishValue catches MissingResourceException separately (not in verify)",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:168 and quoted code: \"} catch (MissingResourceException ex) {\""
+        },
+        {
+         "statement": "ThemeVerifierMojo calls verify() without catching RuntimeException and declares throws MojoExecutionException, MojoFailureException",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:42 and quoted code: \"public void execute() throws MojoExecutionException, MojoFailureException {\""
+        },
+        {
+         "statement": "ThemeVerifierMojo call site is messages.addAll(new VerifyMessageProperties(file).verify()) with no surrounding try/catch for RuntimeException",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:51 and quoted code: \"messages.addAll(new VerifyMessageProperties(file).verify());\""
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "In normal `theme-verifier` execution neither `FileInputStream` should throw `IOException`, but the code defensively wraps each in `RuntimeException`; `verify()` also wraps `Files.readString` `IOException` in `MojoExecutionException`. Only two logical callers exist: `ThemeVerifierMojo.execute()` (production Mojo) and `VerifyMessagePropertiesTest` (tests). Mojo propagates both `MojoExecutionException` and unchecked `RuntimeException` to Maven; tests propagate `MojoExecutionException` via `throws` and let `RuntimeException` fail the test.\n\n* `bundle` stream uses the same `file` already read by `Files.readString` in `verify()`, so if `verify()` succeeded the file exists/readable; an `IOException` (e.g., `FileNotFoundException` if deleted between calls or unreadable) would become `RuntimeException` at 70, not the declared `MojoExecutionException` at 53. No normal race, so not expected.\n\n* `englishFile` stream is derived via string replacements from `file.getAbsolutePath()` at 74-75. In normal themes every locale file has a corresponding `_en.properties` (and `resources-community` -> `resources` mapping), so file exists and no `IOException`. If derivation fails or English file missing, `FileInputStream(englishFile)` at 76 throws `FileNotFoundException` -> `RuntimeException` at 79, aborting the mojo with unchecked exception rather than `MojoExecutionException`/`MojoFailureException`.\n\nCallers:\n* `ThemeVerifierMojo:51` iterates files from `FileUtils.iterateFiles` and calls `new VerifyMessageProperties(file).verify()` with no local try/catch; `execute()` at 42 declares `throws MojoExecutionException, MojoFailureException`, so `MojoExecutionException` from `Files.readString` propagates directly to Maven, and `RuntimeException` from either `FileInputStream` propagates unchecked (Maven wraps as build error). Validation messages are collected and later thrown as `MojoFailureException:55` if non-empty.\n* `VerifyMessagePropertiesTest:32,38,44,50` each call `getFile(...).verify()` and declare `throws MojoExecutionException`, with no catch for `RuntimeException` - test fails on either exception.",
+       "coverage_complete": false,
+       "facts": [
+        {
+         "statement": "VerifyMessageProperties.verify() declares throws MojoExecutionException and wraps Files.readString IOException as MojoExecutionException",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:46:    public List<String> verify() throws MojoExecutionException {"
+        },
+        {
+         "statement": "verify() catches IOException from Files.readString/verifyNoDuplicateKeys/verifySafeHtml and rethrows MojoExecutionException",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:52-53:        } catch (IOException e) {\n            throw new MojoExecutionException(\"Can not read file \" + file, e);"
+        },
+        {
+         "statement": "verifySafeHtml creates bundle FileInputStream on same file and catches IOException as RuntimeException",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:67-70:        try (FileInputStream fis = new FileInputStream(file)) {\n            bundle = new PropertyResourceBundle(fis);\n        } catch (IOException e) {\n            throw new RuntimeException(\"unable to read file \" + file, e);"
+        },
+        {
+         "statement": "verifySafeHtml derives englishFile via replaces on absolute path",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74-75:        String englishFile = file.getAbsolutePath().replaceAll(\"resources-community\", \"resources\")\n                .replaceAll(\"_[a-zA-Z-_]*\\\\.properties\", \"_en.properties\");"
+        },
+        {
+         "statement": "verifySafeHtml creates second FileInputStream on englishFile string and catches IOException as RuntimeException",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:76-79:        try (FileInputStream fis = new FileInputStream(englishFile)) {\n            bundleEnglish = new PropertyResourceBundle(fis);\n        } catch (IOException e) {\n            throw new RuntimeException(\"unable to read file \" + englishFile, e);"
+        },
+        {
+         "statement": "ThemeVerifierMojo.execute declares throws MojoExecutionException, MojoFailureException",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:42:    public void execute() throws MojoExecutionException, MojoFailureException {"
+        },
+        {
+         "statement": "ThemeVerifierMojo is the production caller of VerifyMessageProperties.verify() with no local exception handling",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:51:                messages.addAll(new VerifyMessageProperties(file).verify());"
+        },
+        {
+         "statement": "Test callers invoke verify() and declare throws MojoExecutionException with no catch",
+         "evidence": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:31-32:    void verifyDuplicateKeysDetected() throws MojoExecutionException {\n        List<String> verify = getFile(\"duplicateKeys_en.properties\").verify();"
+        }
+       ],
+       "unresolved": [
+        "MessagePropertiesFilter.java not read - could filter which files are passed to VerifyMessageProperties, affecting whether englishFile derivation is always valid",
+        "Whether resources/ _en.properties always exists for every locale file in themes/base and themes/community - not verified via filesystem listing or pom resources config",
+        "Race/permission edge: Files.readString succeeds but FileInputStream fails if file deleted/locked between line 49 and 67 - not observed in normal execution but not disproven",
+        "Extent of threadSafe parallel execution impact on file visibility - not examined",
+        "Other potential callers outside misc/theme-verifier not exhaustively grepped for imported VerifyMessageProperties (only grep for VerifyMessageProperties name)"
+       ]
+      }
+     ],
+     "cert": {
+      "premise_id": "P3",
+      "certificate": "none",
+      "coverage_complete": false,
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:69: \"throw new RuntimeException(\\\"unable to read file \\\" + file, e);\" ; misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:52: \"} catch (IOException e) {\\n            throw new MojoExecutionException(\\\"Can not read file \\\" + file, e);\"; misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74: \"String englishFile = file.getAbsolutePath().replaceAll(\\\"resources-community\\\", \\\"resources\\\")\"",
+      "explanation": "Investigations for P1 and P2 (coverage_complete=true) confirm the premises: verifySafeHtml wraps both bundle loads as RuntimeException and verify() only catches IOException, so RuntimeException escapes to ThemeVerifierMojo which declares only MojoExecutionException/MojoFailureException. Scenario investigation also confirms the claimed outcome under the stated IOException condition. P3 is not disproved: its investigation is coverage_complete=false and only argues the IOException is unlikely in normal themes (same file already read, English file normally exists) but leaves unresolved whether MessagePropertiesFilter, filesystem _en.properties existence, and race between Files.readString and FileInputStream were checked, and explicitly notes that if derivation fails or file missing the FileNotFoundException does become RuntimeException at lines 69/79 that propagates unchecked. Making failure seem unlikely with partial coverage is not proof that IOException is unreachable or that a caller handles RuntimeException."
+     }
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false,
+     "etapa": "certificado",
+     "ex": {
+      "failure": "Method at lines 150-162 is named `santizeAnchors` (misspelled, missing 'i' in sanitize), disagreeing with its Javadoc and its call at line 88, and declares an unused undocumented `key` parameter, breaking the name-as-contract.",
+      "scenario": {
+       "condition": "The method defined at lines 150-162 of VerifyMessageProperties.java is declared and invoked at line 88",
+       "claimed_outcome": "its identifier misspells sanitize as santize, disagrees with its Javadoc 'Allow only those anchor tags...' and with the call site, and its `key` parameter is unused and undocumented, breaking the contract callers/readers rely on",
+       "neutral_question": "Under that definition and call, what is the exact spelling of the method name at both sites, what does the Javadoc at lines 147-149 state, and how is the `key` parameter used and documented?",
+       "locations": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150-162",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:147-149"
+       ]
+      },
+      "premises": [
+       {
+        "id": "p1",
+        "proposition": "The method defined at lines 150-162 and called at line 88 is spelled `santizeAnchors` (missing 'i') rather than `sanitizeAnchors`.",
+        "kind": "introduced",
+        "scope": "repository",
+        "neutral_question": "How is the method name spelled at its definition around line 150 and at its invocation at line 88, and was that spelling introduced in this diff?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150",
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88"
+        ]
+       },
+       {
+        "id": "p2",
+        "proposition": "The Javadoc immediately above the method (lines 147-149) states 'Allow only those anchor tags...' which describes an allow-list/sanitize behavior that the misspelled name does not correctly convey.",
+        "kind": "semantics",
+        "scope": "repository",
+        "neutral_question": "What does the Javadoc comment in lines 147-149 directly above the method at line 150 say about the method's purpose?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:147-149"
+        ]
+       },
+       {
+        "id": "p3",
+        "proposition": "The method declares a `String key` parameter that is never read or used inside the body at lines 150-162 and is not described in the Javadoc.",
+        "kind": "mechanism",
+        "scope": "repository",
+        "neutral_question": "Is the method's `key` parameter referenced inside the body at lines 150-162, and what, if anything, does the method's Javadoc say about parameters?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150-162"
+        ]
+       }
+      ]
+     },
+     "cenario": {
+      "answer": "Both declaration (line 150) and call site (line 88) spell the method `santizeAnchors` (missing `i` after `n`; correctly `sanitizeAnchors`). Javadoc at 147-149 is `/** Allow only those anchor tags from the source key to also appear in the target key. */` with no `@param` tags. The `key` parameter (first param at line 150) is declared but never read/used in the body 151-162 and has no param-specific documentation.",
+      "coverage_complete": true,
+      "facts": [
+       {
+        "statement": "Method declaration at line 150 is spelled `santizeAnchors` (misspelled, missing 'i')",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150: `    private String santizeAnchors(String key, String value, String englishValue) {`"
+       },
+       {
+        "statement": "Method invocation at line 88 is spelled identically `santizeAnchors`",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88: `            value = santizeAnchors(key, value, englishValue);`"
+       },
+       {
+        "statement": "Grep confirms only two occurrences in repo, both with same misspelling, no correctly spelled `sanitizeAnchors`",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88: `            value = santizeAnchors(key, value, englishValue);` and misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150: `    private String santizeAnchors(String key, String value, String englishValue) {`"
+       },
+       {
+        "statement": "Javadoc at lines 147-149 states 'Allow only those anchor tags from the source key to also appear in the target key.'",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:147-149: `    /**` / `     * Allow only those anchor tags from the source key to also appear in the target key.` / `     */`"
+       },
+       {
+        "statement": "`key` is declared as first parameter `String key` at line 150",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150: `    private String santizeAnchors(String key, String value, String englishValue) {`"
+       },
+       {
+        "statement": "`key` is never used inside method body lines 151-162; body only uses `value`, `englishValue`, `ANCHOR_PATTERN`, `messages`",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:151-162: `        Matcher matcher = ANCHOR_PATTERN.matcher(value);` / `        Matcher englishMatcher = ANCHOR_PATTERN.matcher(englishValue);` / `        while (matcher.find()) {` / `            if (englishMatcher.find() && Objects.equals(matcher.group(), englishMatcher.group())) {` / `                value = value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\");` / `            } else {` / `                messages.add(\"Didn't find anchor tag \" + matcher.group() + \" in original string\");`"
+       },
+       {
+        "statement": "Javadoc contains no @param documentation for `key` (or other params) – only the generic one-sentence description",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:147-149: `    /**` / `     * Allow only those anchor tags from the source key to also appear in the target key.` / `     */`"
+       }
+      ],
+      "unresolved": []
+     },
+     "cegos": [
+      {
+       "answer": "At HEAD both the definition (line ~150) and the invocation (line 88) are spelled `santizeAnchors` — missing the `i` after `sant` (correct would be `sanitizeAnchors`). This identical misspelling was introduced in this diff: the base version of the file contains no such method at all.\n\n* Definition HEAD: `santizeAnchors`\n* Invocation HEAD: `santizeAnchors`\n* Base file has no `santizeAnchors` / `sanitizeAnchors` — the method is new in the diff.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "HEAD definition at line 150 is spelled santizeAnchors (missing i)",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150 `    private String santizeAnchors(String key, String value, String englishValue) {`"
+        },
+        {
+         "statement": "HEAD invocation at line 88 is spelled santizeAnchors (missing i)",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88 `            value = santizeAnchors(key, value, englishValue);`"
+        },
+        {
+         "statement": "Grep across repo finds only those two occurrences, both with the same misspelling santizeAnchors, no sanitizeAnchors",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88 `            value = santizeAnchors(key, value, englishValue);` and misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150 `    private String santizeAnchors(String key, String value, String englishValue) {` (only 2 grep hits)"
+        },
+        {
+         "statement": "Base file before PR has no santizeAnchors/sanitizeAnchors method; it is only 73 lines and only defines verifyNoDuplicateKeys",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:50 (base) `    private void verifyNoDuplicateKeys(String contents) throws IOException {` — base file ends at line 73 and contains no anchor-related method"
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "The Javadoc comment at lines 147-149 directly above the method at line 150 states the method's purpose is: \"Allow only those anchor tags from the source key to also appear in the target key.\"",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "Lines 147-149 contain a Javadoc comment stating the method allows only anchor tags from the source key to appear in the target key",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:147-149 and the quoted code \"/**\n * Allow only those anchor tags from the source key to also appear in the target key.\n */\""
+        },
+        {
+         "statement": "The method directly below at line 150 is santizeAnchors with signature private String santizeAnchors(String key, String value, String englishValue)",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150 and the quoted code \"private String santizeAnchors(String key, String value, String englishValue) {\""
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "No – the `key` parameter declared at lines 150-162 is not referenced inside the method body (151-161). The method's Javadoc at lines 147-149 contains no `@param` tags or formal parameter documentation; it is only the single sentence `Allow only those anchor tags from the source key to also appear in the target key.` which describes behavior conceptually but does not document parameters individually.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "Method santizeAnchors declares a `key` parameter at line 150",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150: private String santizeAnchors(String key, String value, String englishValue) {"
+        },
+        {
+         "statement": "Method Javadoc at 147-149 contains only a descriptive sentence with no @param tags",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:147: /**"
+        },
+        {
+         "statement": "Javadoc text does not document parameters formally",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:148: * Allow only those anchor tags from the source key to also appear in the target key."
+        },
+        {
+         "statement": "Method body lines 151-162 contains no reference to variable `key` - only value, englishValue, matcher, englishMatcher",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:151: Matcher matcher = ANCHOR_PATTERN.matcher(value);"
+        },
+        {
+         "statement": "Continued body still with no key usage",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:152: Matcher englishMatcher = ANCHOR_PATTERN.matcher(englishValue);"
+        },
+        {
+         "statement": "Rest of body up to return shows no key usage",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:153: while (matcher.find()) {"
+        },
+        {
+         "statement": "Grep for \\bkey\\b in the file shows key hits at line 150 (declaration) but none in lines 151-161 body, confirming unused",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150: private String santizeAnchors(String key, String value, String englishValue) {  // only hit in 150-162 range"
+        }
+       ],
+       "unresolved": []
+      }
+     ],
+     "cert": {
+      "premise_id": "scenario",
+      "certificate": "none",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150: `private String santizeAnchors(String key, String value, String englishValue) {` and :88: `value = santizeAnchors(key, value, englishValue);` and :147-149: `Allow only those anchor tags from the source key to also appear in the target key.`",
+      "coverage_complete": true,
+      "explanation": "All investigations confirm the premises: definition at 150 and call at 88 both spelled `santizeAnchors` (missing i), Javadoc at 147-149 is 'Allow only those anchor tags...' and contains no @param, and `key` is declared but never used in body 151-162. Scenario investigation finds claimed outcome does occur, not that it does not. No premise is contradicted."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "etapa": "certificado",
+     "ex": {
+      "failure": "StringIndexOutOfBoundsException at VerifyMessageProperties.java:111 when start+end exceeds string length, crashing the verifier instead of reporting illegal HTML.",
+      "scenario": {
+       "condition": "value and sanitized differ in length or have overlapping identical prefix and suffix such that the independently computed start (common prefix length) and end (common suffix length) satisfy start + end > value.length() (or > sanitized.length()) when execution reaches lines 99-111",
+       "claimed_outcome": "value.substring(start, value.length()-end) and/or sanitized.substring(start, sanitized.length()-end) throws StringIndexOutOfBoundsException, crashing verifySafeHtml instead of adding an \"Illegal HTML\" message",
+       "neutral_question": "When start and end computed at lines 99-111 satisfy start+end > length, what happens when evaluating value.substring(start, value.length()-end) and sanitized.substring(start, sanitized.length()-end)?",
+       "locations": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99-111"
+       ]
+      },
+      "premises": [
+       {
+        "id": "p1",
+        "proposition": "Code at lines 99-111 computes start from common prefix and end from common suffix independently and then calls value.substring(start, value.length()-end) and sanitized.substring(start, sanitized.length()-end) without clamping end to min(end, value.length()-start, sanitized.length()-start) or guarding start >= length-end.",
+        "kind": "mechanism",
+        "scope": "repository",
+        "neutral_question": "What bounds checking or clamping, if any, does the code at lines 99-111 perform on start and end before calling value.substring(start, value.length()-end) and sanitized.substring(start, sanitized.length()-end)?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99-111"
+        ]
+       },
+       {
+        "id": "p3",
+        "proposition": "The verifySafeHtml path can produce value/sanitized pairs that reach lines 99-111 with differing lengths or overlapping identical prefix/suffix so that independently computed start+end can exceed the string length.",
+        "kind": "reachability",
+        "scope": "repository",
+        "neutral_question": "Which value and sanitized strings can reach the diff logic at lines 99-111 via verifySafeHtml, and what are their possible length relationships and prefix/suffix overlaps?",
+        "locations": [
+         "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65-114"
+        ]
+       }
+      ]
+     },
+     "cenario": {
+      "answer": "When `start+end > value.length()` (or `> sanitized.length()`) the two `substring(start, length-end)` calls at line 111 have `begin > end` (`start > length-end`). The code contains no overlap guard/cap. `String.substring` then throws `StringIndexOutOfBoundsException: begin X, end Y, length Z` (begin > end). The lambda in `verifySafeHtml()` has no try/catch for this, and `verify()` only catches `IOException`, so the unchecked exception propagates and aborts verification instead of producing the `messages.add(...)` message.",
+      "coverage_complete": true,
+      "facts": [
+       {
+        "statement": "Code enters diff-reporting block only when sanitized != value with no exception handling around the trimming",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99 `if (!Objects.equals(sanitized, value)) {`"
+       },
+       {
+        "statement": "start is computed as common prefix length independently, bounded only by each string length",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:103 `while (start < sanitized.length() && start < value.length() && value.charAt(start) == sanitized.charAt(start)) {`"
+       },
+       {
+        "statement": "end is computed as common suffix length independently, bounded only by each string length, with no relation to start",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:107 `while (end < sanitized.length() && end < value.length() && value.charAt(value.length() - end - 1) == sanitized.charAt(sanitized.length() - end - 1)) {`"
+       },
+       {
+        "statement": "No guard caps end to length-start or checks start+end > length before substring",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99-111 `if (!Objects.equals(sanitized, value)) { int start =0; while(...){start++;} int end=0; while(...){end++;} messages.add(... value.substring(start, value.length() - end) ... sanitized.substring(start, sanitized.length() - end) ...` shows no `Math.min`, `if (start+end>length)`, or clamping between end-loop and substring"
+       },
+       {
+        "statement": "The offending substring calls use start as beginIndex and length-end as endIndex directly",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:111 `messages.add(\"Illegal HTML in key \" + key + \" for file \" + file + \": '\" + value.substring(start, value.length() - end) + \"' vs. '\" + sanitized.substring(start, sanitized.length() - end) + \"'\");`"
+       },
+       {
+        "statement": "When start+end > length, begin > end so substring throws StringIndexOutOfBoundsException, not handled in verifySafeHtml or verify (which only catches IOException)",
+        "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:46 `public List<String> verify() throws MojoExecutionException {` and 47-54 `try { String contents = Files.readString(file.toPath()); verifyNoDuplicateKeys(contents); verifySafeHtml(); } catch (IOException e) { throw new MojoExecutionException(\"Can not read file \" + file, e); }` shows no catch for RuntimeException/StringIndexOutOfBoundsException around line 111"
+       }
+      ],
+      "unresolved": []
+     },
+     "cegos": [
+      {
+       "answer": "No bounds checking or clamping is performed on `start`/`end` between computing them and calling `substring` at line 111. Lines 102-109 compute `start` and `end` only by incrementing while `&lt; length` and chars match. No subsequent check such as `if (start + end &gt; length)`, `Math.min`/`Math.max`, `clamp`, or try/catch is present before `value.substring(start, value.length()-end)` and `sanitized.substring(start, sanitized.length()-end)` are called. If `start + end &gt; length`, `value.length()-end &lt; start` will cause `StringIndexOutOfBoundsException`.",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "Lines 102-105 compute start with no clamping beyond loop condition start < sanitized.length() && start < value.length()",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:102-104: \"int start = 0;\\n                while (start < sanitized.length() && start < value.length() && value.charAt(start) == sanitized.charAt(start)) {\\n                    start++;\""
+        },
+        {
+         "statement": "Lines 106-109 compute end with no clamping beyond loop condition end < sanitized.length() && end < value.length()",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:106-108: \"int end = 0;\\n                while (end < sanitized.length() && end < value.length() && value.charAt(value.length() - end - 1) == sanitized.charAt(sanitized.length() - end - 1)) {\\n                    end++;\""
+        },
+        {
+         "statement": "Line 111 immediately calls value.substring(start, value.length()-end) and sanitized.substring(start, sanitized.length()-end) with no intervening bounds check, Math.min/max, clamp, or if-guard",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:111: \"messages.add(\"Illegal HTML in key \" + key + \" for file \" + file + \": '\" + value.substring(start, value.length() - end) + \"' vs. '\" + sanitized.substring(start, sanitized.length() - end) + \"'\");\""
+        },
+        {
+         "statement": "Grep for Math./clamp/min/max/bounds in the package returned no matches, confirming no hidden clamping utility is used",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java: grep pattern \"Math\\.|clamp|min|max|bounds\" -> no matches"
+        },
+        {
+         "statement": "Grep for substring in the package shows only the line 111 call in this block (and unrelated line 185), confirming no other sanitization of start/end",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:111: \"messages.add(\"Illegal HTML in key \" + key + \" for file \" + file + \": '\" + value.substring(start, value.length() - end) + \"' vs. '\" + sanitized.substring(start, sanitized.length() - end) + \"'\");\""
+        }
+       ],
+       "unresolved": []
+      },
+      {
+       "answer": "Strings reaching diff at 99-111 via `verifySafeHtml` (65-114):\n\n* `value` is not raw bundle value: `bundle.getString(key)` -> `normalizeValue` -> `santizeAnchors(key,value,englishValue)`. `englishValue` is similarly normalized and used for policy decision and anchor allow-list.\n* `sanitized` is `policy.sanitize(value)` where `policy = containsHtml(englishValue) ? POLICY_SOME_HTML : POLICY_NO_HTML` then `unescapeHtml4(sanitized)` then `replace(\"<!-- -->\",\"\")`.\n* Length: no invariant enforced. Guard is only `!Objects.equals(sanitized,value)`. Sanitizer with `POLICY_NO_HTML` (empty allow-list) typically shortens (`sanitized.length < value.length`) by stripping tags; with `POLICY_SOME_HTML` (allows br,p,strong,b) may be equal length if only allowed tags, or shorter if disallowed tags/attributes stripped; replacement/removal of `<!-- -->` also shortens; `unescapeHtml4` neutralizes escaping so can restore/expand but net typically `sanitized.length <= value.length`. Equal-length-different-content possible (e.g., attribute stripping/replacement). Code handles any `<,=,>` via `min(sanitized.length,value.length)` bounds but not `start+end < length`.\n* Prefix/suffix: `start` = longest common prefix bounded by `minLen`; `end` = longest common suffix bounded by `minLen`, computed independently after prefix. No overlap guard (`start+end` may exceed `minLen`). Then reported via `value.substring(start,value.length-end)` and `sanitized.substring(start,sanitized.length-end)`. If `start+end > length` substring throws `StringIndexOutOfBoundsException` (e.g., sanitized much longer or strings share overlapping prefix+suffix).",
+       "coverage_complete": true,
+       "facts": [
+        {
+         "statement": "verifySafeHtml loads bundle and for each key derives value through normalizeValue and santizeAnchors before diff",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:82-88: bundle.getKeys().asIterator().forEachRemaining(key -> {\n            String value = bundle.getString(key);\n            value = normalizeValue(key, value);\n            String englishValue = getEnglishValue(key, bundleEnglish);\n            englishValue = normalizeValue(key, englishValue);\n\n            value = santizeAnchors(key, value, englishValue);"
+        },
+        {
+         "statement": "normalizeValue conditionally strips CLAIM.<NAME>, <Extensions>, choice patterns",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:118-127: if (key.equals(\"templateHelp\")) {\n            // Allow \"CLAIM.<NAME>\" here\n            value = value.replaceAll(\"CLAIM\\\\.<[A-Z]*>\", \"\");\n        } else if (key.equals(\"optimizeLookupHelp\")) {\n            // Allow \"<Extensions>\" here\n            value = value.replaceAll(\"<Extensions>\", \"\");\n        } else if (key.startsWith(\"linkExpirationFormatter.timePeriodUnit\") || key.equals(\"error-invalid-multivalued-size\")) {\n            // The problem is the \"<\" that appears in the choice\n            value = value.replaceAll(\"\\\\{[0-9]+,choice,[^}]*}\", \"...\");"
+        },
+        {
+         "statement": "normalizeValue unescapes Html4 on value",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:130: value = org.apache.commons.text.StringEscapeUtils.unescapeHtml4(value);"
+        },
+        {
+         "statement": "normalizeValue strips RTL style for email files",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:132-135: if (file.getAbsolutePath().contains(\"email\")) {\n            // TODO: move the RTL information for emails\n            value = value.replaceAll(Pattern.quote(\" style=\\\"direction: rtl;\\\"\"), \"\");"
+        },
+        {
+         "statement": "santizeAnchors removes exact anchor tags that appear in same order in englishValue, otherwise adds message and breaks",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150-161: private String santizeAnchors(String key, String value, String englishValue) {\n        Matcher matcher = ANCHOR_PATTERN.matcher(value);\n        Matcher englishMatcher = ANCHOR_PATTERN.matcher(englishValue);\n        while (matcher.find()) {\n            if (englishMatcher.find() && Objects.equals(matcher.group(), englishMatcher.group())) {\n                value = value.replaceFirst(Pattern.quote(englishMatcher.group()), \"\");"
+        },
+        {
+         "statement": "POLICY_SOME_HTML allows br,p,strong,b; POLICY_NO_HTML allows nothing",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:58-63: PolicyFactory POLICY_SOME_HTML = new org.owasp.html.HtmlPolicyBuilder()\n            .allowElements(\n                    \"br\", \"p\", \"strong\", \"b\"\n            ).toFactory();\n\n    PolicyFactory POLICY_NO_HTML = new org.owasp.html.HtmlPolicyBuilder().toFactory();"
+        },
+        {
+         "statement": "policy chosen by containsHtml on normalized englishValue",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:91: PolicyFactory policy = containsHtml(englishValue) ? POLICY_SOME_HTML : POLICY_NO_HTML;"
+        },
+        {
+         "statement": "sanitized derived as policy.sanitize(value) then unescapeHtml4 then remove <!-- -->",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:92-97: String sanitized = policy.sanitize(value);\n\n            // Sanitizer will escape HTML entities for quotes and also for numberic tags like '<1>'\n            sanitized = org.apache.commons.text.StringEscapeUtils.unescapeHtml4(sanitized);\n            // Sanitizer will add them when there are double curly braces\n            sanitized = sanitized.replace(\"<!-- -->\", \"\");"
+        },
+        {
+         "statement": "diff logic only entered when sanitized != value",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99: if (!Objects.equals(sanitized, value)) {"
+        },
+        {
+         "statement": "start computes longest common prefix up to min lengths",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:102-105: int start = 0;\n                while (start < sanitized.length() && start < value.length() && value.charAt(start) == sanitized.charAt(start)) {\n                    start++;\n                }"
+        },
+        {
+         "statement": "end computes longest common suffix up to min lengths independently of start (allows overlap)",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:106-109: int end = 0;\n                while (end < sanitized.length() && end < value.length() && value.charAt(value.length() - end - 1) == sanitized.charAt(sanitized.length() - end - 1)) {\n                    end++;\n                }"
+        },
+        {
+         "statement": "diff message uses substring(start, length-end) on both strings without overlap check",
+         "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:111: messages.add(\"Illegal HTML in key \" + key + \" for file \" + file + \": '\" + value.substring(start, value.length() - end) + \"' vs. '\" + sanitized.substring(start, sanitized.length() - end) + \"'\");"
+        }
+       ],
+       "unresolved": [
+        "Exact runtime sanitizer output for all HTML inputs—requires OWASP java-html-sanitizer implementation not inspected beyond PolicyFactory definitions; length guarantee (sanitized <= value) not proven from code alone due to escaping/unescape interaction",
+        "Contents of messages_*.properties files not enumerated; only code path examined via VerifyMessageProperties, ThemeVerifierMojo and MessagePropertiesFilter"
+       ]
+      }
+     ],
+     "cert": {
+      "certificate": "none",
+      "coverage_complete": false,
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99-111 `if (!Objects.equals(sanitized, value)) { int start =0; while(...){start++;} int end=0; while(...){end++;} messages.add(... value.substring(start, value.length() - end) ... sanitized.substring(start, sanitized.length() - end) ...` shows no `Math.min`, `if (start+end>length)`, or clamping between end-loop and substring",
+      "explanation": "Scenario investigation proves that WHEN start+end > length the code at 111 throws StringIndexOutOfBoundsException (begin > end, no try/catch, verify() only catches IOException) – confirming the mechanism, not disproving outcome. p1 investigation confirms no clamping/guard exists. p3 investigation does NOT prove reachability false: it shows start/end are bounded only by minLen independently with no overlap guard, but leaves unresolved exact OWASP sanitizer outputs and actual messages_*.properties contents, so cannot establish invariant that start+end <= length on all paths. No premise is proven false with complete coverage.",
+      "premise_id": "scenario"
+     }
+    }
+   ]
+  }
+ }
+}
