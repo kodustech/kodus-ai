@@ -58,7 +58,7 @@ export interface CodeLocation {
     line?: number;
 }
 
-/** Someone other than the author waived a requirement or a change (UC-37). */
+/** Someone on the team waived a requirement or a change (UC-37). */
 export interface Acceptance {
     by: string;
     reason?: string;

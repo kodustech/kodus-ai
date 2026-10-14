@@ -88,12 +88,11 @@ describe('BusinessLogicReplies', () => {
                 request,
                 message: 'why?',
                 sender: { login: 'nina' },
-                authorLogin: 'rafa',
             }),
         ).resolves.toEqual({ handled: false });
     });
 
-    it('never lets the PR author waive their own requirement (UC-37)', async () => {
+    it('lets the PR author accept too, and records who accepted (UC-37)', async () => {
         const { replies, publisher } = build({
             intent: 'accept',
             findings: [1],
@@ -103,32 +102,29 @@ describe('BusinessLogicReplies', () => {
             request,
             message: 'out of scope',
             sender: { login: 'rafa' },
-            authorLogin: 'rafa',
         });
 
         expect(result).toMatchObject({
             handled: true,
-            reply: expect.stringContaining('not the PR author'),
+            reply: expect.stringContaining('accepted by @rafa'),
         });
-        expect(publisher.publish).not.toHaveBeenCalled();
+        expect(publisher.publish).toHaveBeenCalled();
     });
 
-    it('knows the author by account id when the platform sends a display name for the commenter (GitLab)', async () => {
+    it('refuses someone without write access to the repository', async () => {
         const { replies, publisher } = build({
             intent: 'accept',
             findings: [1],
         });
 
         const result = await replies.handle({
-            request: { ...request, platformType: PlatformType.GITLAB },
+            request,
             message: 'out of scope',
-            sender: { login: 'Rafa Lima' },
-            authorLogin: undefined,
-            senderIsAuthor: true,
+            sender: { login: 'drive-by', canWrite: false },
         });
 
         expect(result).toMatchObject({
-            reply: expect.stringContaining('not the PR author'),
+            reply: expect.stringContaining('write access'),
         });
         expect(publisher.publish).not.toHaveBeenCalled();
     });
@@ -140,7 +136,6 @@ describe('BusinessLogicReplies', () => {
             request: { ...request, platformType: PlatformType.GITLAB },
             message: 'out of scope',
             sender: { login: 'Nina' },
-            senderIsAuthor: false,
         });
 
         expect(result.handled && result.reply).not.toContain(
@@ -159,7 +154,6 @@ describe('BusinessLogicReplies', () => {
             request,
             message: 'Keyboard reordering is out of scope, split into SAA-102.',
             sender: { login: 'nina' },
-            authorLogin: 'rafa',
         });
 
         expect(service.tryRead).toHaveBeenCalledWith(
@@ -229,7 +223,6 @@ describe('BusinessLogicReplies', () => {
             request,
             message: "it's covered in useDrag.ts",
             sender: { login: 'rafa' },
-            authorLogin: 'rafa',
         });
 
         expect(service.validate).toHaveBeenCalledWith(
@@ -265,7 +258,6 @@ describe('BusinessLogicReplies', () => {
             request,
             message: 'moved to SAA-999',
             sender: { login: 'nina' },
-            authorLogin: 'rafa',
         });
 
         expect(publisher.publish).not.toHaveBeenCalled();
@@ -285,7 +277,6 @@ describe('BusinessLogicReplies', () => {
             request,
             message: 'out of scope',
             sender: { login: 'drive-by', canWrite: false },
-            authorLogin: 'rafa',
         });
 
         expect(publisher.publish).not.toHaveBeenCalled();

@@ -645,54 +645,6 @@ export class ChatWithKodyFromGitUseCase {
         }
     }
 
-    /**
-     * Whether the commenter opened the PR, by account id. Logins don't line
-     * up across platforms: GitLab and Azure send display names for the
-     * commenter, and a GitLab note carries only the MR author's id.
-     */
-    private senderIsPullRequestAuthor(
-        params: WebhookParams,
-    ): boolean | undefined {
-        const p = params.payload;
-        const pairs: Record<string, [unknown, unknown]> = {
-            [PlatformType.GITHUB]: [
-                p?.sender?.id,
-                p?.issue?.user?.id ?? p?.pull_request?.user?.id,
-            ],
-            [PlatformType.GITLAB]: [
-                p?.user?.id,
-                p?.merge_request?.author_id ?? p?.merge_request?.author?.id,
-            ],
-            [PlatformType.BITBUCKET]: [
-                p?.actor?.uuid ?? p?.actor?.account_id,
-                p?.pullrequest?.author?.uuid ??
-                    p?.pullrequest?.author?.account_id,
-            ],
-            [PlatformType.AZURE_REPOS]: [
-                p?.resource?.comment?.author?.id,
-                p?.resource?.pullRequest?.createdBy?.id,
-            ],
-        };
-        const [sender, author] = pairs[params.platformType] ?? [];
-        if (sender === undefined || sender === null) return undefined;
-        if (author === undefined || author === null) return undefined;
-        return String(sender) === String(author);
-    }
-
-    private getPullRequestAuthorLogin(
-        params: WebhookParams,
-    ): string | undefined {
-        const payload = params.payload;
-        return (
-            payload?.issue?.user?.login ??
-            payload?.pull_request?.user?.login ??
-            payload?.merge_request?.author?.username ??
-            payload?.pullrequest?.author?.nickname ??
-            payload?.resource?.pullRequest?.createdBy?.uniqueName ??
-            undefined
-        );
-    }
-
     /** True when the comment was a Business Logic decision and got its answer. */
     private async handleBusinessLogicReply(
         params: WebhookParams,
@@ -744,8 +696,6 @@ export class ChatWithKodyFromGitUseCase {
                     login: this.getSender(params).login,
                     canWrite: this.senderCanWrite(params),
                 },
-                authorLogin: this.getPullRequestAuthorLogin(params),
-                senderIsAuthor: this.senderIsPullRequestAuthor(params),
             })
             .catch(() => ({ handled: false as const }));
         if (!result.handled) {

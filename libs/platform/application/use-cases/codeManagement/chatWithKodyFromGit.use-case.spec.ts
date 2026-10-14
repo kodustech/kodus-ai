@@ -218,56 +218,6 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
     });
 
-    it.each([
-        [
-            PlatformType.GITLAB,
-            {
-                user: { id: 7, name: 'Rafa Lima' },
-                merge_request: { author_id: 7 },
-            },
-            true,
-        ],
-        [
-            PlatformType.GITLAB,
-            { user: { id: 8, name: 'Nina' }, merge_request: { author_id: 7 } },
-            false,
-        ],
-        [
-            PlatformType.GITHUB,
-            { sender: { id: 1, login: 'rafa' }, issue: { user: { id: 1 } } },
-            true,
-        ],
-        [
-            PlatformType.BITBUCKET,
-            {
-                actor: { uuid: '{a}' },
-                pullrequest: { author: { uuid: '{a}' } },
-            },
-            true,
-        ],
-        [
-            PlatformType.AZURE_REPOS,
-            {
-                resource: {
-                    comment: { author: { id: 'x' } },
-                    pullRequest: { createdBy: { id: 'y' } },
-                },
-            },
-            false,
-        ],
-        [PlatformType.GITLAB, { user: { id: 7 } }, undefined],
-    ])(
-        'tells the PR author by account id on %s',
-        (platformType, payload, expected) => {
-            expect(
-                (useCase as any).senderIsPullRequestAuthor({
-                    platformType,
-                    payload,
-                }),
-            ).toBe(expected);
-        },
-    );
-
     it('passes the original Jira URL command body to business logic validation', async () => {
         const jiraUrl =
             'https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1441';

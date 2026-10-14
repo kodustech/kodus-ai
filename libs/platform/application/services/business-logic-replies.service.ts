@@ -35,14 +35,6 @@ export interface BusinessLogicReplyInput {
          */
         canWrite?: boolean;
     };
-    /** The PR author, who can't waive their own requirements. */
-    authorLogin?: string;
-    /**
-     * Whether the sender is the PR author, compared by account id where the
-     * platform gives one. Logins and display names differ across platforms
-     * (GitLab notes carry the author's id only).
-     */
-    senderIsAuthor?: boolean;
 }
 
 export type BusinessLogicReplyResult =
@@ -143,16 +135,14 @@ export class BusinessLogicReplies {
                 request.organizationAndTeamData,
                 text,
             );
-        const isAuthor =
-            input.senderIsAuthor ??
-            (!!input.authorLogin &&
-                input.authorLogin.toLowerCase() ===
-                    input.sender.login.toLowerCase());
-        if (isAuthor || input.sender.canWrite === false) {
+        // Anyone on the team may accept, the author included: the comment
+        // records who and why. Only a drive-by commenter on a public GitHub
+        // repository, without write access, can't.
+        if (input.sender.canWrite === false) {
             return {
                 handled: true,
                 reply: await say(
-                    `Only a reviewer or maintainer can accept a requirement: not the PR author, and on GitHub only someone with write access to the repository. If the code already covers it, say where and I'll re-check; or comment \`@kody -v business-logic\` after a fix.`,
+                    `Only someone with write access to the repository can accept a requirement. If the code already covers it, say where and I'll re-check; or comment \`@kody -v business-logic\` after a fix.`,
                 ),
             };
         }
@@ -331,7 +321,7 @@ export class BusinessLogicReplies {
                     `I re-checked${intent.files.length ? ` ${intent.files.map((f) => `\`${f}\``).join(', ')}` : ''}:`,
                     ...lines,
                     '',
-                    'The Business Logic comment above is updated. Someone other than the author can accept a requirement that stays open.',
+                    'The Business Logic comment above is updated. If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.',
                 ].join('\n'),
             ),
         };
