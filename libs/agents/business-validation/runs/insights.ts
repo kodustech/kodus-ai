@@ -218,6 +218,7 @@ export interface IntentCockpit {
 
 const WITHOUT_TASK = new Set([
     'no_reference',
+    'task_required',
     'task_not_found',
     'task_too_thin',
     'task_missing',

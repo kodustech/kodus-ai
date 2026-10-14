@@ -3,6 +3,8 @@ export type BusinessLogicStatus = {
     state: "working" | "paused" | "idle";
     lastTaskRead?: { id: string; tracker: string; at: string };
     paused?: { tracker: string; since: string; uncheckedPullRequests: number };
+    /** Whether Kody can write the kody/business-logic check (a GitHub PAT can't). */
+    checks?: boolean;
     stats: {
         pullRequestsChecked: number;
         metRate?: number;
@@ -35,7 +37,8 @@ export type BusinessLogicSettingsValue = {
     failOn?: Array<"missing" | "partial" | "not_in_task">;
     teamGuidance?: string;
     commentWhenMet?: boolean;
-    recheckOnPush?: boolean;
+    recheckOn?: "failing" | "push" | "request";
+    requireTask?: boolean;
 };
 
 export type TryReadResult = {
@@ -134,7 +137,8 @@ export type BusinessLogicTestResult = {
             | "issues_found"
             | "skipped"
             | "task_too_thin"
-            | "task_missing";
+            | "task_missing"
+            | "task_required";
         passed: boolean;
         reason?: string;
         message?: string;

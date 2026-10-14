@@ -8,7 +8,8 @@ describe('resolveBusinessLogicSettings', () => {
             criteria: { location: 'auto' },
             failOn: ['missing'],
             commentWhenMet: false,
-            recheckOnPush: false,
+            recheckOn: 'failing',
+            requireTask: false,
         });
     });
 
@@ -21,7 +22,8 @@ describe('resolveBusinessLogicSettings', () => {
                 criteriaHeading: 'Acceptance criteria',
                 failOn: ['partial', 'bogus' as any, 'missing'],
                 teamGuidance: '  Ignore copy.  ',
-                recheckOnPush: true,
+                recheckOn: 'push',
+                requireTask: true,
             }),
         ).toMatchObject({
             taskSource: 'azure-plugin',
@@ -29,8 +31,16 @@ describe('resolveBusinessLogicSettings', () => {
             criteria: { location: 'heading', heading: 'Acceptance criteria' },
             failOn: ['missing', 'partial'],
             teamGuidance: 'Ignore copy.',
-            recheckOnPush: true,
+            recheckOn: 'push',
+            requireTask: true,
         });
+    });
+
+    it('re-checks while failing when the stored value is unknown', () => {
+        expect(
+            resolveBusinessLogicSettings({ recheckOn: 'sometimes' as any })
+                .recheckOn,
+        ).toBe('failing');
     });
 
     it('falls back to auto when the heading or field is empty', () => {

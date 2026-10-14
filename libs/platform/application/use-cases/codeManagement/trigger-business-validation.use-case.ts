@@ -70,7 +70,8 @@ export interface CliBusinessVerdict {
         | 'issues_found'
         | 'skipped'
         | 'task_too_thin'
-        | 'task_missing';
+        | 'task_missing'
+        | 'task_required';
     passed: boolean;
     reason?: string;
     message?: string;

@@ -8,6 +8,9 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class NullChecksAdapter implements IChecksAdapter {
+    canWriteChecks(): Promise<boolean> {
+        return Promise.resolve(false);
+    }
     createCheckRun(
         params: CreateCheckRunParams,
     ): Promise<string | number | null> {

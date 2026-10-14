@@ -19,10 +19,7 @@ import {
 } from '@libs/agents/business-validation/runs/validation-run.repository';
 import { createLogger } from '@libs/core/log/logger';
 
-import {
-    BusinessLogicPublisher,
-    hasChecks,
-} from './business-logic-publisher.service';
+import { BusinessLogicPublisher } from './business-logic-publisher.service';
 
 export interface BusinessLogicReplyInput {
     request: Omit<BusinessValidationRequest, 'door'>;
@@ -224,12 +221,16 @@ export class BusinessLogicReplies {
         const names = chosen.map((c) => `“${c.finding.text}”`).join(', ');
         const passed =
             published.outcome.kind === 'validated' && published.outcome.passed;
+        const checks = await this.publisher.checksWritable(
+            request.organizationAndTeamData,
+            request.platformType as PlatformType | undefined,
+        );
         return {
             handled: true,
             reply: await say(
                 [
                     `Got it.${intent.movedTo ? ` ${intent.movedTo} exists,` : ''} I marked ${names} as accepted by @${input.sender.login} and updated the table above.`,
-                    hasChecks(request.platformType as PlatformType | undefined)
+                    checks
                         ? passed
                             ? 'The kody/business-logic check is now green. This decision is recorded on the PR.'
                             : 'Other findings still keep the kody/business-logic check from passing.'

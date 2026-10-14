@@ -29,9 +29,10 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
  * task referenced, a tracker that can't read it, a tracker that is down) is
  * silent on the PR: the check says "skipped" and the run records why.
  *
- * Automatic validation runs on the first review, or on every push when the
- * team turned that on. `@kody -v business-logic` and `@kody review --force`
- * re-run it on demand. A re-run edits the same comment.
+ * Automatic validation runs on the first review, then on each push while the
+ * last check failed (or on every push, or never, as the team set it).
+ * `@kody -v business-logic` and `@kody review --force` re-run it on demand.
+ * A re-run edits the same comment.
  */
 @Injectable()
 export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -59,7 +60,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         // IMPORTANT: do NOT mutate context.statusInfo from this stage. The
         // executor treats SKIPPED as "abort the pipeline"; the outcome travels
         // in businessLogicOutcome instead.
-        const skip = this.evaluateSkip(context);
+        const skip = await this.evaluateSkip(context);
         if (skip) {
             return this.skipped(context, skip.reason, skip.message);
         }
@@ -206,6 +207,13 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                         message: `Skipped: ${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}.`,
                     };
                     break;
+                case 'task_required':
+                    draft.businessLogicOutcome = {
+                        kind: 'gap_found',
+                        message:
+                            'No task referenced, and this repository requires one.',
+                    };
+                    break;
                 case 'validated': {
                     // The verdict decides; the report's wording never does (#2019).
                     const ids = outcome.checks.map((c) => c.task.id).join(', ');
@@ -222,9 +230,9 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         });
     }
 
-    private evaluateSkip(
+    private async evaluateSkip(
         context: CodeReviewPipelineContext,
-    ): { reason: string; message: string } | null {
+    ): Promise<{ reason: string; message: string } | null> {
         if (!context?.organizationAndTeamData) {
             return {
                 reason: 'missing_org',
@@ -250,14 +258,14 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     'Business logic validation is disabled in the code review configuration.',
             };
         }
-        // `@kody review --force`, or a team that asked for a re-check on every
-        // push, revalidates a PR that already got a message. `forceFullRerun`
-        // is NOT that signal: a force-push and a retried partial review both
-        // set it.
+        // `@kody review --force` revalidates a PR that already got a message,
+        // and so does a push, while the last check failed or on every push
+        // when the team asked for that. `forceFullRerun` is NOT that signal: a
+        // force-push and a retried partial review both set it.
         if (
             context.origin !== 'command-force' &&
-            !this.settingsOf(context).recheckOnPush &&
-            this.wasAlreadyValidated(context)
+            this.wasAlreadyValidated(context) &&
+            !(await this.recheckThisPush(context))
         ) {
             return {
                 reason: 'already_validated',
@@ -265,6 +273,24 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             };
         }
         return null;
+    }
+
+    private async recheckThisPush(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
+        switch (this.settingsOf(context).recheckOn) {
+            case 'push':
+                return true;
+            case 'request':
+                return false;
+            default:
+                return this.publisher.lastCheckFailed({
+                    organizationId:
+                        context.organizationAndTeamData.organizationId,
+                    repositoryId: String(context.repository.id),
+                    pullRequestNumber: context.pullRequest.number,
+                });
+        }
     }
 
     /**

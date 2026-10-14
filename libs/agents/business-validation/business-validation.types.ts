@@ -221,6 +221,11 @@ export type BusinessValidationOutcome =
           message: string;
       }
     /**
+     * No task is referenced and the team requires one: the author
+     * is asked to reference it, and the check fails.
+     */
+    | { kind: 'task_required'; message: string }
+    /**
      * Nothing was judged. `message` explains why, for a door that must answer
      * (command, CLI); the automatic review posts nothing.
      */

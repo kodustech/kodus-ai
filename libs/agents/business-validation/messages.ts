@@ -52,6 +52,16 @@ export function noReferenceMessage(): string {
 This pull request doesn't reference a task. Reference it in the title, description or branch (\`PROJ-123\`, \`#123\` or a link), or run ${RERUN} followed by the task id or link. A \`#123\` the description only mentions isn't read as the task: write \`Closes #123\`.`;
 }
 
+/** No task referenced, and the repository's settings require one. */
+export function taskRequiredMessage(): string {
+    return `## 🤔 This repository requires a task
+
+This pull request doesn't reference a task, and the Business Logic settings of this repository require one.
+
+### 💡 Next step
+Reference the task in the title, description or branch (\`PROJ-123\`, \`Closes #123\` or a link) and comment ${RERUN}.`;
+}
+
 export function noTrackerMessage(
     /** The repository reads tasks from one chosen source, and it is gone. */
     sourceChosen = false,

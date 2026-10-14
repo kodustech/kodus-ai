@@ -21,6 +21,10 @@ export type CriteriaLocation = NonNullable<
     BusinessLogicConfig['criteriaLocation']
 >;
 
+export type RecheckOn = NonNullable<BusinessLogicConfig['recheckOn']>;
+
+const RECHECK_ON: readonly RecheckOn[] = ['failing', 'push', 'request'];
+
 /** `auto`: every connected tracker, in connection order. */
 export const AUTO_TASK_SOURCE = 'auto';
 
@@ -38,7 +42,8 @@ export interface BusinessLogicSettings {
     failOn: FailOnState[];
     teamGuidance?: string;
     commentWhenMet: boolean;
-    recheckOnPush: boolean;
+    recheckOn: RecheckOn;
+    requireTask: boolean;
 }
 
 export const DEFAULT_BUSINESS_LOGIC_SETTINGS: BusinessLogicSettings = {
@@ -46,7 +51,8 @@ export const DEFAULT_BUSINESS_LOGIC_SETTINGS: BusinessLogicSettings = {
     criteria: { location: 'auto' },
     failOn: ['missing'],
     commentWhenMet: false,
-    recheckOnPush: false,
+    recheckOn: 'failing',
+    requireTask: false,
 };
 
 export function resolveBusinessLogicSettings(
@@ -76,7 +82,10 @@ export function resolveBusinessLogicSettings(
         failOn,
         ...(guidance ? { teamGuidance: guidance } : {}),
         commentWhenMet: config.commentWhenMet === true,
-        recheckOnPush: config.recheckOnPush === true,
+        recheckOn: RECHECK_ON.includes(config.recheckOn as RecheckOn)
+            ? (config.recheckOn as RecheckOn)
+            : DEFAULT_BUSINESS_LOGIC_SETTINGS.recheckOn,
+        requireTask: config.requireTask === true,
     };
 }
 

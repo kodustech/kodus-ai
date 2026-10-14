@@ -1157,7 +1157,8 @@ businessLogic:
     failOn: ['missing'] # missing | partial | not_in_task; CHECK MANUALLY never fails
     teamGuidance: '' # added to what Kody follows (max 2000)
     commentWhenMet: false # off: a PR that meets its task gets only the green check
-    recheckOnPush: false # off: checked on the first review; @kody -v business-logic re-checks
+    recheckOn: 'failing' # failing | push | request: when a push re-checks a PR already checked
+    requireTask: false # on: a PR that references no task fails instead of being skipped
 
 # deterministic evidence (opt-in)
 deterministicEvidence:

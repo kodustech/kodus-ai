@@ -283,7 +283,14 @@ export class BusinessValidationService {
 
         switch (resolution.kind) {
             case 'no_reference':
-                return skip('no_reference', messages.noReferenceMessage());
+                return settings.requireTask
+                    ? {
+                          kind: 'task_required',
+                          message: await translate(
+                              messages.taskRequiredMessage(),
+                          ),
+                      }
+                    : skip('no_reference', messages.noReferenceMessage());
             case 'too_many_references':
                 return skip(
                     'too_many_references',

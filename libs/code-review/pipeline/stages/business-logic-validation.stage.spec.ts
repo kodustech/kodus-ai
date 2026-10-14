@@ -10,6 +10,7 @@ const TASK = { tracker: 'Linear', id: 'PLAT-41', title: 'Scale servings' };
 function build(
     outcome: BusinessValidationOutcome | Error,
     wholeDiff?: Array<{ filename: string; status: string; patch: string }>,
+    { lastCheckFailed = false } = {},
 ) {
     const service = {
         validate: jest.fn(async () => {
@@ -24,6 +25,7 @@ function build(
             outcome: input.result.outcome,
             comment: 'created',
         })),
+        lastCheckFailed: jest.fn(async () => lastCheckFailed),
     };
     const pullRequests = {
         getChangedFilesMetadata: jest.fn(async () => wholeDiff ?? []),
@@ -111,7 +113,7 @@ describe('BusinessLogicValidationStage', () => {
                 lastExecution: { lastAnalyzedCommit: 'old1234' },
                 codeReviewConfig: {
                     reviewOptions: { business_logic: true },
-                    businessLogic: { recheckOnPush: true },
+                    businessLogic: { recheckOn: 'push' },
                 },
             } as any),
         );
@@ -222,6 +224,68 @@ describe('BusinessLogicValidationStage', () => {
         expect(result.businessLogicResults).toEqual([]);
     });
 
+    it('re-checks a PR already validated on a push while its last check failed', async () => {
+        const { stage, service, publisher } = build(validated(true), [], {
+            lastCheckFailed: true,
+        });
+
+        await stage.execute(
+            context({
+                pipelineMetadata: {
+                    lastExecution: { businessLogicValidatedAt: 'x' },
+                },
+            } as any),
+        );
+
+        expect(publisher.lastCheckFailed).toHaveBeenCalledWith({
+            organizationId: 'org-1',
+            repositoryId: 'repo-1',
+            pullRequestNumber: 42,
+        });
+        expect(service.validate).toHaveBeenCalled();
+        expect(publisher.publish).toHaveBeenCalledWith(
+            expect.objectContaining({ trigger: 'push' }),
+        );
+    });
+
+    it('re-checks only on request when the team chose that, even after a failed check', async () => {
+        const { stage, service } = build(validated(true), [], {
+            lastCheckFailed: true,
+        });
+
+        const result = await stage.execute(
+            context({
+                codeReviewConfig: {
+                    reviewOptions: { business_logic: true },
+                    businessLogic: { recheckOn: 'request' },
+                },
+                pipelineMetadata: {
+                    lastExecution: { businessLogicValidatedAt: 'x' },
+                },
+            } as any),
+        );
+
+        expect(service.validate).not.toHaveBeenCalled();
+        expect(result.businessLogicOutcome).toMatchObject({
+            kind: 'skipped',
+            reason: 'already_validated',
+        });
+    });
+
+    it('fails the review outcome when no task is referenced and the repository requires one', async () => {
+        const { stage } = build({
+            kind: 'task_required',
+            message: 'This repository requires a task',
+        });
+
+        const result = await stage.execute(context());
+
+        expect(result.businessLogicOutcome).toMatchObject({
+            kind: 'gap_found',
+        });
+        expect(result.businessLogicValidatedAt).toBeDefined();
+    });
+
     it('re-checks a PR already validated when the team turned on re-check on every push (UC-35)', async () => {
         const { stage, service, publisher } = build(validated(true));
 
@@ -229,7 +293,7 @@ describe('BusinessLogicValidationStage', () => {
             context({
                 codeReviewConfig: {
                     reviewOptions: { business_logic: true },
-                    businessLogic: { recheckOnPush: true },
+                    businessLogic: { recheckOn: 'push' },
                 },
                 pipelineMetadata: {
                     lastExecution: { businessLogicValidatedAt: 'x' },

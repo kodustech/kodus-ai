@@ -101,6 +101,7 @@ export function buildRun(
         outcome: outcome.kind,
         ...(outcome.kind === 'skipped' ? { skipReason: outcome.reason } : {}),
         ...(outcome.kind === 'validated' ? { passed: outcome.passed } : {}),
+        ...(outcome.kind === 'task_required' ? { passed: false } : {}),
         references: result.references.map((r) => ({
             kind: r.kind,
             id: r.id,

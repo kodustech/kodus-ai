@@ -442,8 +442,12 @@ class BusinessLogicDto {
     commentWhenMet?: boolean;
 
     @IsOptional()
+    @IsIn(['failing', 'push', 'request'])
+    recheckOn?: 'failing' | 'push' | 'request';
+
+    @IsOptional()
     @IsBoolean()
-    recheckOnPush?: boolean;
+    requireTask?: boolean;
 }
 
 class CodeReviewConfigWithoutLLMProviderDto {

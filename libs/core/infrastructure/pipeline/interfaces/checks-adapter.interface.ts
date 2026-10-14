@@ -56,6 +56,10 @@ export interface UpdateCheckRunParams {
 }
 
 export interface IChecksAdapter {
+    /** Whether this connection can write checks at all (a GitHub PAT can't). */
+    canWriteChecks(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean>;
     createCheckRun(
         params: CreateCheckRunParams,
     ): Promise<string | number | null>;

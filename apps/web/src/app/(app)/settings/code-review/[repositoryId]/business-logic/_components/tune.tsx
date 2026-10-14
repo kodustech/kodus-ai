@@ -91,8 +91,8 @@ export const Tune = ({
                                     </Label>
                                     <Label className="flex cursor-pointer items-center gap-3 text-sm">
                                         <RadioGroup.Item value="field" />
-                                        In a custom field · for Jira, the field
-                                        your team fills
+                                        In a custom field · Jira or Azure
+                                        Boards, the field your team fills
                                     </Label>
                                 </RadioGroup.Root>
                             )}
@@ -148,39 +148,59 @@ export const Tune = ({
                                     "missing",
                                 ]) as string[];
                                 return (
-                                    <div className="flex flex-wrap gap-4">
-                                        {FAIL_ON.map((option) => (
-                                            <Label
-                                                key={option.value}
-                                                className="flex cursor-pointer items-center gap-2 text-sm">
-                                                <Checkbox
-                                                    checked={value.includes(
-                                                        option.value,
-                                                    )}
-                                                    disabled={
-                                                        !canEdit ||
-                                                        field.disabled
-                                                    }
-                                                    onCheckedChange={(
-                                                        checked,
-                                                    ) =>
-                                                        field.onChange(
-                                                            checked
-                                                                ? [
-                                                                      ...value,
-                                                                      option.value,
-                                                                  ]
-                                                                : value.filter(
-                                                                      (v) =>
-                                                                          v !==
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex flex-wrap gap-4">
+                                            {FAIL_ON.map((option) => (
+                                                <Label
+                                                    key={option.value}
+                                                    className="flex cursor-pointer items-center gap-2 text-sm">
+                                                    <Checkbox
+                                                        className="size-5 rounded-md"
+                                                        checked={value.includes(
+                                                            option.value,
+                                                        )}
+                                                        disabled={
+                                                            !canEdit ||
+                                                            field.disabled
+                                                        }
+                                                        onCheckedChange={(
+                                                            checked,
+                                                        ) =>
+                                                            field.onChange(
+                                                                checked
+                                                                    ? [
+                                                                          ...value,
                                                                           option.value,
-                                                                  ),
-                                                        )
-                                                    }
-                                                />
-                                                {option.label}
-                                            </Label>
-                                        ))}
+                                                                      ]
+                                                                    : value.filter(
+                                                                          (v) =>
+                                                                              v !==
+                                                                              option.value,
+                                                                      ),
+                                                            )
+                                                        }
+                                                    />
+                                                    {option.label}
+                                                </Label>
+                                            ))}
+                                        </div>
+                                        {value.length === 0 && (
+                                            <p className="text-text-secondary text-xs">
+                                                {platformHasChecks
+                                                    ? "Nothing selected: the check never fails, it only reports."
+                                                    : "Nothing selected: the comment never asks to fix anything before merging."}
+                                            </p>
+                                        )}
+                                        {value.includes("partial") && (
+                                            <p className="text-warning text-xs">
+                                                Whether a requirement is half
+                                                done is a judgment call, so the
+                                                same code can pass one run and
+                                                fail the next. Use PARTIAL where
+                                                a stricter, less stable gate is
+                                                worth it.
+                                            </p>
+                                        )}
                                     </div>
                                 );
                             }}
@@ -192,7 +212,7 @@ export const Tune = ({
                             missing without failing for it.{" "}
                             {platformHasChecks
                                 ? "A failing check only blocks merging where your repository requires it."
-                                : "This repository's platform has no checks, so the comment is the only signal; the check is available on GitHub and Forgejo."}
+                                : "There is no check here, so the comment is the only signal. The check needs GitHub connected through the Kodus app, or Forgejo."}
                         </p>
                     </div>
 

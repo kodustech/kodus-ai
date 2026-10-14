@@ -47,7 +47,14 @@ const request = {
     diff: '',
 };
 
-function build(previous: { verdict?: any; comment?: any; runs?: any[] } = {}) {
+function build(
+    previous: {
+        verdict?: any;
+        comment?: any;
+        runs?: any[];
+        canWriteChecks?: boolean;
+    } = {},
+) {
     const service = {
         commentFor: jest.fn(async () => '<!-- kody-business-logic -->\nbody'),
     };
@@ -57,6 +64,7 @@ function build(previous: { verdict?: any; comment?: any; runs?: any[] } = {}) {
         getAllCommentsInPullRequest: jest.fn(async () => []),
     };
     const adapter = {
+        canWriteChecks: jest.fn(async () => previous.canWriteChecks ?? true),
         findCheckRun: jest.fn(async () => null),
         createCheckRun: jest.fn(async () => 9001),
         updateCheckRun: jest.fn(async () => true),
@@ -123,6 +131,35 @@ describe('BusinessLogicPublisher', () => {
                 passed: false,
                 comment: { id: 501 },
                 checkRunId: '9001',
+            }),
+        );
+    });
+
+    it('asks for a task and fails the check when the repository requires one', async () => {
+        const { publisher, code, adapter, runs } = build();
+
+        await publisher.publish({
+            request,
+            result: {
+                outcome: {
+                    kind: 'task_required',
+                    message: 'This repository requires a task',
+                },
+                references: [],
+                attempts: [],
+                trackers: ['Linear'],
+            },
+            headSha: 'abc1234',
+        });
+
+        expect(code.createIssueComment).toHaveBeenCalled();
+        expect(adapter.updateCheckRun).toHaveBeenCalledWith(
+            expect.objectContaining({ conclusion: CheckConclusion.FAILURE }),
+        );
+        expect(runs.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                outcome: 'task_required',
+                passed: false,
             }),
         );
     });
@@ -195,6 +232,23 @@ describe('BusinessLogicPublisher', () => {
         );
         expect(preview.comment.body).toContain('kody-business-logic');
         expect(preview.check.conclusion).toBe(CheckConclusion.SUCCESS);
+    });
+
+    it('promises no check where GitHub is connected with a personal access token', async () => {
+        const { publisher } = build({ canWriteChecks: false });
+
+        const preview = await publisher.preview({
+            request,
+            result: {
+                outcome: validated('met'),
+                references: [],
+                attempts: [],
+                trackers: ['Linear'],
+            },
+        });
+
+        expect(preview.check.supported).toBe(false);
+        expect(preview.comment.reason).toContain('no check to turn green');
     });
 
     it('never promises a green check on a platform without checks', async () => {
@@ -421,5 +475,54 @@ describe('checkFor', () => {
             checkFor({ kind: 'skipped', reason: 'no_reference', message: '' })
                 .title,
         ).toBe('Skipped · no task referenced');
+    });
+
+    it('fails when no task is referenced and the repository requires one', () => {
+        expect(checkFor({ kind: 'task_required', message: '' })).toEqual({
+            conclusion: CheckConclusion.FAILURE,
+            title: 'No task referenced · this repository requires one',
+        });
+    });
+});
+
+describe('lastCheckFailed', () => {
+    const scope = {
+        organizationId: 'org-1',
+        repositoryId: 'repo-1',
+        pullRequestNumber: 47,
+    };
+
+    it('reads the last verdict, past runs that were skipped', async () => {
+        const { publisher } = build({
+            runs: [
+                { outcome: 'skipped', skipReason: 'tracker_unavailable' },
+                { outcome: 'validated', passed: false },
+            ],
+        });
+        await expect(publisher.lastCheckFailed(scope)).resolves.toBe(true);
+    });
+
+    it('is false once an acceptance or a fix made the last verdict pass', async () => {
+        const { publisher } = build({
+            runs: [
+                { outcome: 'validated', passed: true },
+                { outcome: 'validated', passed: false },
+            ],
+        });
+        await expect(publisher.lastCheckFailed(scope)).resolves.toBe(false);
+    });
+
+    it('counts a missing task reference the repository requires as failing', async () => {
+        const { publisher } = build({
+            runs: [{ outcome: 'task_required', passed: false }],
+        });
+        await expect(publisher.lastCheckFailed(scope)).resolves.toBe(true);
+    });
+
+    it('is false for a task too thin or a typo, which the check leaves neutral', async () => {
+        const { publisher } = build({
+            runs: [{ outcome: 'task_missing' }],
+        });
+        await expect(publisher.lastCheckFailed(scope)).resolves.toBe(false);
     });
 });

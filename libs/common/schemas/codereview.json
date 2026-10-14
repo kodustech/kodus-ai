@@ -336,10 +336,16 @@
                     "default": false,
                     "description": "Comment even when every requirement is met; off leaves only the green check."
                 },
-                "recheckOnPush": {
+                "recheckOn": {
+                    "type": "string",
+                    "enum": ["failing", "push", "request"],
+                    "default": "failing",
+                    "description": "When a push re-checks a PR already checked: while its last check failed, on every push, or only on @kody -v business-logic. A re-check edits the same comment."
+                },
+                "requireTask": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Re-check on every push, editing the same comment."
+                    "description": "A PR that references no task fails instead of being skipped."
                 }
             },
             "additionalProperties": false

@@ -63,6 +63,10 @@ function build(intent: any, revalidated?: any) {
     const publisher = {
         settingsFor: jest.fn(async () => DEFAULT_BUSINESS_LOGIC_SETTINGS),
         headShaOf: jest.fn(async () => 'def5678'),
+        checksWritable: jest.fn(
+            async (_org: unknown, platform?: string) =>
+                platform === PlatformType.GITHUB,
+        ),
         publish: jest.fn(async (input: any) => ({
             outcome: input.result.outcome,
             comment: 'updated',

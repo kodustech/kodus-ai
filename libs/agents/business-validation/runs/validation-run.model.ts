@@ -89,7 +89,7 @@ export class BusinessValidationRunModel extends CoreDocument {
     @Prop({ type: String, required: false })
     headSha?: string;
 
-    /** `validated`, `task_too_thin`, `task_missing` or `skipped`. */
+    /** `validated`, `task_too_thin`, `task_missing`, `task_required` or `skipped`. */
     @Prop({ type: String, required: true })
     outcome: string;
 

@@ -368,7 +368,13 @@ export type BusinessLogicConfig = {
     failOn?: Array<'missing' | 'partial' | 'not_in_task'>;
     teamGuidance?: string;
     commentWhenMet?: boolean;
-    recheckOnPush?: boolean;
+    /**
+     * When the automatic review checks a PR again after a push: while the
+     * last check failed (default), on every push, or only on request.
+     */
+    recheckOn?: 'failing' | 'push' | 'request';
+    /** A PR that references no task fails instead of being skipped. */
+    requireTask?: boolean;
 };
 
 export type CodeReviewConfig = {

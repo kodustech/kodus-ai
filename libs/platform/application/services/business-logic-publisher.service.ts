@@ -138,6 +138,43 @@ export class BusinessLogicPublisher {
         }
     }
 
+    /**
+     * Whether Kody can put the `kody/business-logic` check on this team's
+     * PRs: a platform with checks, connected in a way that can write them
+     * (on GitHub, an app; a personal access token can't).
+     */
+    async checksWritable(
+        organizationAndTeamData: OrganizationAndTeamData,
+        platform?: PlatformType,
+    ): Promise<boolean> {
+        const type =
+            platform ??
+            (await this.codeManagementService
+                .getTypeIntegration(organizationAndTeamData)
+                .catch(() => undefined));
+        if (!hasChecks(type)) {
+            return false;
+        }
+        return this.checksAdapterFactory
+            .getAdapter(type)
+            .canWriteChecks(organizationAndTeamData)
+            .catch(() => false);
+    }
+
+    /**
+     * Whether the PR's last verdict failed: no task when one is required, or
+     * a requirement the team fails on and nobody accepted. A skipped run
+     * (a tracker down, a diff that didn't load) doesn't change that.
+     */
+    async lastCheckFailed(scope: {
+        organizationId: string;
+        repositoryId: string;
+        pullRequestNumber: number;
+    }): Promise<boolean> {
+        const runs = await this.runs.forPullRequest(scope).catch(() => []);
+        return runs.find((r) => r.outcome !== 'skipped')?.passed === false;
+    }
+
     /** The commit a PR is at, for the check. */
     async headShaOf(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -172,7 +209,10 @@ export class BusinessLogicPublisher {
             request,
             { headSha: input.headSha, history, failOn: settings.failOn },
         );
-        const platform = request.platformType as PlatformType | undefined;
+        const checks = await this.checksWritable(
+            request.organizationAndTeamData,
+            request.platformType as PlatformType | undefined,
+        );
         return {
             outcome,
             comment: {
@@ -185,13 +225,13 @@ export class BusinessLogicPublisher {
                           reason:
                               outcome.kind === 'skipped'
                                   ? 'Nothing was checked, so nothing is posted.'
-                                  : hasChecks(platform)
+                                  : checks
                                     ? 'Every requirement is met: only the check turns green. Turn on "Comment when every requirement is met" to post it anyway.'
-                                    : 'Every requirement is met, so Kody stays quiet: this platform has no check to turn green. Turn on "Comment when every requirement is met" to post it anyway.',
+                                    : 'Every requirement is met, so Kody stays quiet: there is no check to turn green here. Turn on "Comment when every requirement is met" to post it anyway.',
                       }),
             },
             check: {
-                supported: hasChecks(platform),
+                supported: checks,
                 ...checkFor(outcome, settings.failOn),
             },
         };
@@ -523,6 +563,11 @@ export function checkFor(
             return {
                 conclusion: CheckConclusion.NEUTRAL,
                 title: `${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}`,
+            };
+        case 'task_required':
+            return {
+                conclusion: CheckConclusion.FAILURE,
+                title: 'No task referenced · this repository requires one',
             };
         case 'skipped':
             return {

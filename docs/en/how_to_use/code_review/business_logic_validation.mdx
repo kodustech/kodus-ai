@@ -55,7 +55,7 @@ Every row cites the file and line it is based on, and says what to change.
 
 ## On the pull request
 
-- Kody checks the PR on its **first review**. Turn on **Re-check on every push** to check every push instead.
+- Kody checks the PR on its **first review**, then again on each push while the check fails, so a fix turns it green without anyone asking. **Re-check** can also be set to every push, or only when someone comments `@kody -v business-logic`.
 - Re-check any time with `@kody -v business-logic`. The **same comment is edited**; Kody never posts a second one.
 - A PR that meets its task gets only the green `kody/business-logic` check. Turn on **Comment when every requirement is met** to get the comment too.
 - The check exists on GitHub and Forgejo. Make it required in your branch protection to block merging on a failing check. On GitLab, Bitbucket and Azure Repos the comment is the signal.
@@ -65,7 +65,7 @@ Every row cites the file and line it is based on, and says what to change.
 Reply to the Business Logic comment and mention `@kody`:
 
 - **Disagree**: "It's covered in `useDrag.ts`". Kody re-checks what you pointed at and either marks it MET or says what it looked at and keeps it.
-- **Accept a finding** (never the PR author; on GitHub, only people with write access to the repository — other platforms don't report the commenter's role, so there anyone but the author can): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and the check passes if nothing else blocks it. The decision stays on later re-checks.
+- **Accept a finding** (on GitHub, anyone with write access to the repository, the author included; other platforms don't report the commenter's role, so there anyone can): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and the check passes if nothing else blocks it. The decision stays on later re-checks.
 
 ## When Kody stays quiet
 
@@ -75,7 +75,7 @@ Kody comments only when the author can do something about it:
 |---|---|
 | The task has only a title | A comment asking for acceptance criteria |
 | `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks |
-| No task referenced | Nothing; the check is skipped |
+| No task referenced | Nothing; the check is skipped. With **Require a task** on, a comment asking for one, and the check fails |
 | A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page |
 | The tracker is down or its token expired | Nothing; the check is skipped, owners are notified, and Kody re-checks once the tracker answers |
 
@@ -94,8 +94,10 @@ Comment on the PR (not on a line of code):
 Open **Code review → What to review → Business Logic → Configure**. Every setting can be set globally and overridden per repository or directory.
 
 - **Task source**: every connected tracker, or one plugin. For a custom plugin (for example Azure DevOps), pick the tool that reads one task by its id; only read-only tools are offered. Use **Try it with a real task** to check what Kody reads before saving.
-- **Where acceptance criteria live**: detected automatically, under a heading in the description, or in a field (for Jira, the custom field your team fills).
-- **What fails the check**: MISSING by default; add PARTIAL and NOT IN TASK if you want.
+- **Where acceptance criteria live**: detected automatically, under a heading in the description, or in a custom field (Jira or Azure Boards).
+- **What fails the check**: MISSING by default. PARTIAL is stricter, and where a requirement is half done is a judgment call, so a PR can go from passing to failing between two checks of the same code. NOT IN TASK suits teams where one PR is one task. With nothing selected, the check never fails.
+- **Require a task**: a PR that references no task fails the check and gets a comment asking for one, instead of being skipped.
+- **Re-check**: while the check fails (default), on every push, or only on request.
 - **Team guidance**: notes Kody follows when it judges, for example "Feature flags count as implemented when the flag exists and defaults to off". It can't change the verdict format or make Kody invent requirements.
 
 The same settings in `kodus-config.yml`:
@@ -107,7 +109,8 @@ businessLogic:
   criteriaLocation: 'heading'
   criteriaHeading: 'Acceptance criteria'
   commentWhenMet: false
-  recheckOnPush: false
+  recheckOn: 'failing' # failing | push | request
+  requireTask: false
 ```
 
 ## From the CLI
