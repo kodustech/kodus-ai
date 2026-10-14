@@ -111,7 +111,7 @@ jobs:
             # night, measured or not; the finder's row comes from the measure job.
             - name: Stage signals (wiring)
               if: always()
-              run: node evals/stage-signals.js --wiring=wiring-results.json --nightly-model="$MODEL" --out=stage-rows.json
+              run: node evals/stage-signals.js --wiring=wiring-results.json --out=stage-rows.json
             - name: Report stage signals (wiring)
               if: always()
               uses: ./.github/actions/report-signal

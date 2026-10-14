@@ -11,6 +11,8 @@
 // so adding a pipeline stage means saying how it is tested.
 //
 //   id       — signal suffix
+//   name     — short name, one line in the panel's step list
+//   phase    — the part of the review it belongs to (PHASES), for grouping
 //   label    — what the stage does, for the panel
 //   pipeline — the pipeline stage class(es) it lives in; null outside the review
 //              pipeline (the PR conversation)
@@ -25,14 +27,21 @@
 //   wiring   — evals/wiring-smoke.js steps that run it (scripted or mocked)
 //   nightly  — true when the nightly measures it with a real model; its row then
 //              comes only from the nightly, never from the wiring smoke
-//   friday   — true when the Friday check (evals/tier0-smoke.js) runs it on
-//              every tier-0 model: proves it still runs there, measures nothing
+//   friday   — when the Friday check (evals/tier0-smoke.js) runs it on every
+//              tier-0 model: the key of its outcome in that check's
+//              `evals.tier0.<model>` meta. Proves it still runs there, measures
+//              nothing
 //   history  — an older signal carrying the same number, for the panel's chart
 //              until this stage's own rows have a history
 //   note     — shown by the panel next to the status
+// The parts of the review, in order; every stage names one, and a phase's stages are adjacent.
+const PHASES = ['Before the agents', 'Finding issues', 'On the PR', 'In PR threads'];
+
 const STAGES = [
     {
         id: 'business-logic',
+        name: 'Business logic',
+        phase: 'Before the agents',
         label: 'Business-logic validation against the linked task',
         pipeline: ['BusinessLogicValidationStage'],
         eval: null,
@@ -42,6 +51,8 @@ const STAGES = [
     },
     {
         id: 'analyzers',
+        name: 'Static analyzers',
+        phase: 'Before the agents',
         label: 'Static analyzers run before the agents',
         pipeline: ['RunAnalyzersStage'],
         eval: 'evals/security-analyzers',
@@ -51,18 +62,22 @@ const STAGES = [
     },
     {
         id: 'finder',
+        name: 'Finder',
+        phase: 'Finding issues',
         label: 'Finder: the agent that looks for bugs (verify included)',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/investigation',
         model: 'real',
         wiring: ['finder-recall'],
         nightly: true,
-        friday: true,
+        friday: 'review',
         history: 'evals.nightly.recall',
         note: 'recall on the nightly light set against its floor; tools answered from a recording',
     },
     {
         id: 'kody-rules',
+        name: 'Kody Rules',
+        phase: 'Finding issues',
         label: 'Kody Rules agent',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/kody-rules',
@@ -72,6 +87,8 @@ const STAGES = [
     },
     {
         id: 'verify',
+        name: 'Verify',
+        phase: 'Finding issues',
         label: 'Verify: keeps or drops each finder candidate',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/verifier-verdict',
@@ -81,6 +98,8 @@ const STAGES = [
     },
     {
         id: 'parse',
+        name: 'Output parsing',
+        phase: 'Finding issues',
         label: 'Output recovery: every LLM call parses its answer',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/review-chain',
@@ -90,6 +109,8 @@ const STAGES = [
     },
     {
         id: 'severity',
+        name: 'Severity',
+        phase: 'Finding issues',
         label: 'Severity of each finding',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/severity',
@@ -99,6 +120,8 @@ const STAGES = [
     },
     {
         id: 'dedup',
+        name: 'Dedup',
+        phase: 'Finding issues',
         label: 'Dedup of findings',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/dedup',
@@ -108,6 +131,8 @@ const STAGES = [
     },
     {
         id: 'format',
+        name: 'Formatting',
+        phase: 'Finding issues',
         label: 'Formatting of each suggestion',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/format',
@@ -117,6 +142,8 @@ const STAGES = [
     },
     {
         id: 'anchoring',
+        name: 'Anchoring',
+        phase: 'Finding issues',
         label: 'Anchoring findings to diff lines',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/anchoring',
@@ -126,6 +153,8 @@ const STAGES = [
     },
     {
         id: 'review-rounds',
+        name: 'Later rounds',
+        phase: 'Finding issues',
         label: 'Later review rounds: no reposts, nothing lost',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/review-rounds',
@@ -135,6 +164,8 @@ const STAGES = [
     },
     {
         id: 'pr-comments',
+        name: 'PR-level comments',
+        phase: 'On the PR',
         label: 'PR-level comments (findings without a diff line)',
         pipeline: ['CreatePrLevelCommentsStage'],
         eval: null,
@@ -144,6 +175,8 @@ const STAGES = [
     },
     {
         id: 'posting',
+        name: 'Posting',
+        phase: 'On the PR',
         label: 'Validation and posting of comments on the PR',
         pipeline: ['ValidateSuggestionsStage', 'CreateFileCommentsStage'],
         eval: null,
@@ -153,16 +186,20 @@ const STAGES = [
     },
     {
         id: 'pr-summary',
+        name: 'PR summary',
+        phase: 'On the PR',
         label: 'PR summary',
         pipeline: ['UpdateCommentsAndGenerateSummaryStage'],
         eval: 'evals/pr-summary',
         model: 'scripted',
         wiring: ['pr-summary'],
-        friday: true,
+        friday: 'pr_summary',
         note: 'scripted model nightly; every tier-0 model on Friday',
     },
     {
         id: 'approval',
+        name: 'Approval',
+        phase: 'On the PR',
         label: 'Approve or request changes on the PR',
         pipeline: ['RequestChangesOrApproveStage'],
         eval: null,
@@ -172,6 +209,8 @@ const STAGES = [
     },
     {
         id: 'reply-addressing',
+        name: 'Thread replies',
+        phase: 'In PR threads',
         label: 'Replies to Kody in PR threads',
         pipeline: null,
         eval: 'evals/reply-addressing',
@@ -196,4 +235,4 @@ const PLUMBING = {
     AggregateResultsStage: 'counts what was posted',
 };
 
-module.exports = { STAGES, PLUMBING };
+module.exports = { STAGES, PHASES, PLUMBING };

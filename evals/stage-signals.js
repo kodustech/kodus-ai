@@ -2,7 +2,7 @@
 // `quality.signals`, for every stage in evals/stages.js, so the quality panel
 // lists each stage with its eval, or `none`.
 //
-//   node evals/stage-signals.js --wiring=<results.json> --nightly-model=<id> --out=<rows.json>
+//   node evals/stage-signals.js --wiring=<results.json> --out=<rows.json>
 //       results from `evals/wiring-smoke.js --results`. Every stage except the
 //       nightly-measured ones: green or red from its wiring steps, infra when a
 //       step did not run, skipped for a stage with no scheduled eval.
@@ -29,39 +29,36 @@ const VERDICT_STATUS = {
     infra: 'infra',
 };
 
-// What runs on each model customers use: the nightly measures one model; the
-// Friday check runs the tier-0 models and only proves the stage still runs.
-function byModel(stage, nightlyModel) {
-    const fridayModels = tier0();
-    const models = [...new Set([nightlyModel, ...fridayModels].filter(Boolean))];
-    return models.map((model) => {
-        if (stage.nightly && model === nightlyModel) return { model, coverage: 'measured', schedule: 'nightly' };
-        if (stage.friday && fridayModels.includes(model)) return { model, coverage: 'runs', schedule: 'friday' };
-        return { model, coverage: 'none', schedule: null };
-    });
+// The Friday check runs these stages on every tier-0 model and only proves they
+// still run there. Its per-model result is `evals.tier0.<model>`; `result` is
+// the key of this stage's outcome in that row's meta.
+function fridayMeta(stage) {
+    return stage.friday ? { friday: { models: tier0(), result: stage.friday } } : {};
 }
 
-function baseMeta(stage, nightlyModel) {
+function baseMeta(stage) {
     // order: position in the review, so the panel lists stages as they run.
     const index = STAGES.findIndex((s) => s.id === stage.id);
     return {
         stage: stage.label,
+        name: stage.name,
+        phase: stage.phase,
         order: index >= 0 ? index + 1 : null,
         eval: stage.eval,
         measured: stage.model,
         wiring: stage.wiring,
         note: stage.note,
         ...(stage.history ? { history: stage.history } : {}),
-        by_model: byModel(stage, nightlyModel),
+        ...fridayMeta(stage),
     };
 }
 
-function wiringRows(results, nightlyModel, stages = STAGES) {
+function wiringRows(results, stages = STAGES) {
     const byStep = new Map((results || []).map((r) => [r.step, r]));
     return stages
         .filter((stage) => !stage.nightly)
         .map((stage) => {
-            const meta = baseMeta(stage, nightlyModel);
+            const meta = baseMeta(stage);
             if (!stage.wiring.length) {
                 return { name: NAME_PREFIX + stage.id, status: 'skipped', value: null, unit: null, meta };
             }
@@ -92,7 +89,7 @@ function nightlyRows(nightly, verdict, stages = STAGES) {
     return stages
         .filter((stage) => stage.nightly)
         .map((stage) => {
-            const meta = baseMeta(stage, nightly?.model || null);
+            const meta = baseMeta(stage);
             const recall = nightly?.metrics?.recall_mean;
             if (!nightly || !Number.isFinite(recall)) {
                 return {
@@ -144,7 +141,7 @@ function main() {
         console.error('usage: stage-signals.js (--wiring=<results.json> | --nightly=<nightly.json> --verdict=<v>) --out=<rows.json>');
         return 2;
     }
-    const rows = wiring ? wiringRows(readJson(wiring), arg('nightly-model') || null) : nightlyRows(readJson(nightly), arg('verdict'));
+    const rows = wiring ? wiringRows(readJson(wiring)) : nightlyRows(readJson(nightly), arg('verdict'));
     fs.writeFileSync(out, `${JSON.stringify(rows, null, 2)}\n`);
     for (const row of rows) console.log(`${row.status.padEnd(7)} ${row.name}${row.value === null ? '' : ` = ${row.value}`}`);
     return 0;

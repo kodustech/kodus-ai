@@ -2,11 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { STAGES, PLUMBING } = require('./stages');
+const { STAGES, PHASES, PLUMBING } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { wiringRows, nightlyRows } = require('./stage-signals');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { tier0 } = require('./shared/tier0-models');
 
-type Stage = { id: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: boolean; friday?: boolean };
+type Stage = { id: string; name: string; phase: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: boolean; friday?: string };
 type Row = { name: string; status: string; value: number | null; meta: Record<string, unknown> };
 
 // Steps of evals/wiring-smoke.js that check the harness, not a review stage.
@@ -34,6 +36,17 @@ describe('evals/stages.js', () => {
         for (const id of ids) expect(`evals.stage.${id}`).toMatch(/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/);
     });
 
+    // The panel lists stages by phase, one line each.
+    it('gives every stage a short name and a phase, with each phase in one run', () => {
+        for (const stage of STAGES as Stage[]) {
+            expect(stage.name.length).toBeGreaterThan(0);
+            expect(stage.name.length).toBeLessThanOrEqual(20);
+            expect(PHASES).toContain(stage.phase);
+        }
+        const runs = (STAGES as Stage[]).map((s) => s.phase).filter((p, i, all) => p !== all[i - 1]);
+        expect(runs).toEqual(PHASES);
+    });
+
     // A new eval added to the wiring smoke without a stage would never reach the panel.
     it('claims every wiring smoke step, and names only steps that exist', () => {
         const claimed = STAGES.flatMap((s: Stage) => s.wiring);
@@ -50,6 +63,15 @@ describe('evals/stages.js', () => {
         expect(pipelineStages.filter((c) => !staged.includes(c) && !plumbing.includes(c))).toEqual([]);
         expect([...staged, ...plumbing].filter((c) => !pipelineStages.includes(c))).toEqual([]);
         expect(plumbing.filter((c) => staged.includes(c))).toEqual([]);
+    });
+
+    // The panel reads a Friday stage's outcome from this key of evals.tier0.<model>'s meta.
+    it('names, for a Friday stage, a key the Friday check writes', () => {
+        const tier0Meta = fs.readFileSync(path.join(__dirname, '../.github/workflows/code-review-evals-tier0.yml'), 'utf8').match(/out\(\\?"meta\\?", JSON\.stringify\(\{ review:.*$/m)?.[0] ?? '';
+        expect(tier0Meta).not.toBe('');
+        const keys = (STAGES as Stage[]).filter((s) => s.friday).map((s) => s.friday as string);
+        expect(keys.sort()).toEqual(['pr_summary', 'review']);
+        for (const key of keys) expect(tier0Meta).toContain(`${key}:`);
     });
 
     it('points every eval at a folder that exists, and only "none" at no eval', () => {
@@ -77,6 +99,7 @@ describe('stage-signals', () => {
         expect(posting?.status).toBe('skipped');
         expect(posting?.meta.note).toBe('no eval for this stage');
         expect(posting?.meta.order).toBe(STAGES.findIndex((s: Stage) => s.id === 'posting') + 1);
+        expect(posting?.meta).toMatchObject({ name: 'Posting', phase: 'On the PR' });
     });
 
     it('turns a failed step red and a step that did not run into infra', () => {
@@ -106,12 +129,11 @@ describe('stage-signals', () => {
         expect(nightlyRows(null, 'infra')[0]).toMatchObject({ status: 'infra', value: null });
     });
 
-    it('says, per model, what runs: the nightly measures one, Friday only runs the tier-0 ones', () => {
+    it('lists the tier-0 models a Friday stage runs on, and no models for any other stage', () => {
         const nightly = { model: 'deepseek-v4-flash@fireworks', metrics: { recall_mean: 0.4 }, gate: {} };
-        const finder = nightlyRows(nightly, 'pass')[0].meta.by_model;
-        expect(finder).toContainEqual({ model: 'deepseek-v4-flash@fireworks', coverage: 'measured', schedule: 'nightly' });
-        expect(finder).toContainEqual({ model: 'gpt-6-sol', coverage: 'runs', schedule: 'friday' });
-        const dedup = wiringRows(allOk(wiringSteps), 'deepseek-v4-flash@fireworks').find((r: Row) => r.name === 'evals.stage.dedup');
-        expect((dedup.meta.by_model as { coverage: string }[]).every((m) => m.coverage === 'none')).toBe(true);
+        expect(nightlyRows(nightly, 'pass')[0].meta.friday).toEqual({ models: tier0(), result: 'review' });
+        const rows: Row[] = wiringRows(allOk(wiringSteps));
+        expect(rows.find((r) => r.name === 'evals.stage.pr-summary')?.meta.friday).toEqual({ models: tier0(), result: 'pr_summary' });
+        expect(rows.find((r) => r.name === 'evals.stage.dedup')?.meta.friday).toBeUndefined();
     });
 });

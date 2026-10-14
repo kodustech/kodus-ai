@@ -39,7 +39,7 @@ shows it grey.
 | `evals.wiring` | `code-review-evals-pr.yml` | status only |
 | `evals.nightly.recall`, `evals.nightly.precision` | `code-review-evals-nightly.yml` (notify) | ratio; status from the nightly verdict |
 | `evals.tier0.<model>` | `code-review-evals-tier0.yml` (one row per matrix model) | review seconds (ms); red when review or PR summary is broken |
-| `evals.stage.<stage>` | `code-review-evals-nightly.yml`, one row per stage in `evals/stages.js` (`evals/stage-signals.js`) | finder: nightly recall (ratio), with `meta.floor` and `meta.baseline`; every other stage: status of its eval in tonight's wiring smoke, `skipped` when no eval runs on a schedule. `meta.measured` says how: `real`, `scripted`, `mocked`, `on-demand` or `none`; `meta.by_model` says, per model, whether the nightly measures the stage, the Friday check only runs it, or nothing does |
+| `evals.stage.<stage>` | `code-review-evals-nightly.yml`, one row per stage in `evals/stages.js` (`evals/stage-signals.js`) | finder: nightly recall (ratio), with `meta.floor` and `meta.baseline`; every other stage: status of its eval in tonight's wiring smoke, `skipped` when no eval runs on a schedule. `meta.measured` says how: `real`, `scripted`, `mocked`, `on-demand` or `none`; `meta.friday` lists the tier-0 models the Friday check runs the stage on (it proves it runs, measures nothing) and the key of its outcome in `evals.tier0.<model>`'s meta |
 | `evals.benchmark` | `code-review-model-benchmark.yml` | lowest F1 across models; `meta.models` has each model's precision/recall/f1 |
 | `prod.errors.<group>`, `.total`, `.noise`, `.new_signatures`, `.spikes` | kodus-insights `nightly-errors.yml` (CloudWatch) | counts |
 | `prod.betterstack.monitors_down` | kodus-quality `pull.yml` | count |
