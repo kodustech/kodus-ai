@@ -6,14 +6,11 @@ import * as yaml from 'js-yaml';
  *
  * These files are authored against OUR OWN template (YAML frontmatter +
  * `## Instructions` + Bad/Good examples), so they must be imported
- * verbatim — no LLM conversion. The LLM path (see
- * `KodyRulesSyncService.convertFileToKodyRules`) remains the fallback for
- * free-form sources (CLAUDE.md, .cursorrules, ...) and for `.kody` files
- * that don't parse as the template.
+ * verbatim — no LLM conversion. It is the only way a repository file
+ * becomes a Kody Rule.
  *
  * Returns `null` when the content doesn't look like the template
- * (no/invalid frontmatter or no title), so callers can fall back to the
- * LLM importer instead of failing the sync.
+ * (no/invalid frontmatter or no title); the sync skips such files.
  */
 
 export interface ParsedKodyRuleFile {
@@ -199,11 +196,11 @@ function hasDirSegment(pathLower: string, dirPrefix: string): number {
 }
 
 /**
- * Whether `filePath` is a structured Kody rule template file (the only
- * sources parsed verbatim): anything under `.kody/rules/`, or a `.md`
- * file under `rules/` — at the repo root or any subdirectory, matching
- * the discovery globs (dot-files like `rules/.md` included, since the
- * globs run with `dot: true`).
+ * Whether `filePath` sits in a Kody rule template location, at the repo root
+ * or any subdirectory, matching `KODY_RULE_FILE_PATTERNS`: anything under
+ * `.kody/rules/`, `.rules/` or `docs/coding-standards/`, or a `.md` file under
+ * `rules/`. Being in the location is not enough to become a rule: the file
+ * must also parse (`parseKodyRuleFile`).
  */
 export function isKodyRuleTemplateFile(
     filePath: string | null | undefined,
@@ -211,10 +208,15 @@ export function isKodyRuleTemplateFile(
     if (!filePath) return false;
     const lower = filePath.replace(/\\/g, '/').toLowerCase();
 
-    const kodyEnd = hasDirSegment(lower, '.kody/rules/');
-    if (kodyEnd >= 0 && lower.length > kodyEnd) return true;
+    // `.agents/rules/` is a coding-agent location; the generic `rules/`
+    // segment below would otherwise claim it.
+    if (hasDirSegment(lower, '.agents/rules/') >= 0) return false;
 
-    // `rules/**/*.md` is the second documented template location.
+    for (const dir of ['.kody/rules/', '.rules/', 'docs/coding-standards/']) {
+        const end = hasDirSegment(lower, dir);
+        if (end >= 0 && lower.length > end) return true;
+    }
+
     const rulesEnd = hasDirSegment(lower, 'rules/');
     return rulesEnd >= 0 && lower.length > rulesEnd && lower.endsWith('.md');
 }

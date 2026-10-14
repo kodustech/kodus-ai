@@ -1,9 +1,76 @@
 import {
+    AGENT_INSTRUCTION_FILE_PATTERNS,
+    KODY_RULE_FILE_PATTERNS,
+    isAgentInstructionProseFile,
+    isAgentInstructionSource,
     isIdeRuleSource,
+    isKodyRuleFileSource,
     RULE_FILE_PATTERNS,
     extensionScopeAppliesToFile,
     extractRepoSubdirFromIdeSource,
 } from './file-patterns';
+
+describe('file-patterns — agent instructions are not Kody Rules', () => {
+    it('keeps the two lists disjoint and RULE_FILE_PATTERNS as their union', () => {
+        const agent = new Set<string>(AGENT_INSTRUCTION_FILE_PATTERNS);
+        for (const p of KODY_RULE_FILE_PATTERNS) {
+            expect(agent.has(p)).toBe(false);
+        }
+        expect([...RULE_FILE_PATTERNS].sort()).toEqual(
+            [...AGENT_INSTRUCTION_FILE_PATTERNS, ...KODY_RULE_FILE_PATTERNS].sort(),
+        );
+    });
+
+    it.each([
+        'CLAUDE.md',
+        'AGENTS.md',
+        'services/billing/CLAUDE.md',
+        'claude.md',
+        '.cursorrules',
+        '.cursor/rules/style.mdc',
+        '.github/copilot-instructions.md',
+        '.github/instructions/api.instructions.md',
+        '.agents/rules/architecture.md',
+        '.windsurfrules',
+        '.claude/settings.json',
+    ])('classifies %s as a coding-agent instruction file', (file) => {
+        expect(isAgentInstructionSource(file)).toBe(true);
+        expect(isKodyRuleFileSource(file)).toBe(false);
+    });
+
+    it.each([
+        '.kody/rules/no-console.md',
+        'apps/api/.kody/rules/no-console.md',
+        'rules/naming.md',
+        '.rules/naming.md',
+        'docs/coding-standards/errors.md',
+    ])('classifies %s as a Kody rule file', (file) => {
+        expect(isKodyRuleFileSource(file)).toBe(true);
+        expect(isAgentInstructionSource(file)).toBe(false);
+    });
+
+    it('keeps recognising both kinds as legacy synced sources', () => {
+        expect(isIdeRuleSource('CLAUDE.md')).toBe(true);
+        expect(isIdeRuleSource('.kody/rules/a.md')).toBe(true);
+        expect(isIdeRuleSource('src/index.ts')).toBe(false);
+    });
+
+    it('rejects empty paths', () => {
+        expect(isAgentInstructionSource(undefined)).toBe(false);
+        expect(isKodyRuleFileSource(null)).toBe(false);
+    });
+
+    it('separates prose instructions from tool config files', () => {
+        expect(isAgentInstructionProseFile('CLAUDE.md')).toBe(true);
+        expect(isAgentInstructionProseFile('.cursor/rules/a.mdc')).toBe(true);
+        expect(isAgentInstructionProseFile('.cursorrules')).toBe(true);
+        expect(isAgentInstructionProseFile('.claude/settings.json')).toBe(false);
+        expect(isAgentInstructionProseFile('.opencode.json')).toBe(false);
+        expect(isAgentInstructionProseFile('.aider.conf.yml')).toBe(false);
+        expect(isAgentInstructionProseFile('.aiderignore')).toBe(false);
+        expect(isAgentInstructionProseFile('src/CLAUDE.ts')).toBe(false);
+    });
+});
 
 describe('file-patterns — .agents/rules discovery', () => {
     it('ships the .agents/rules/** pattern in RULE_FILE_PATTERNS', () => {
