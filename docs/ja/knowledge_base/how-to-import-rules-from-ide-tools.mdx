@@ -1,30 +1,31 @@
 ---
-title: "Cursor、Copilot、またはClaudeからルールをインポートする方法"
-description: "既存のAIコーディングツールのルールをKodusに同期して、IDEとコードレビューで同じ標準が適用されるようにします。"
+title: "Cursor、Copilot、またはClaudeの指示をコードレビューで使う方法"
+description: "チームがコーディングエージェント向けにすでに書いた指示とプルリクエストをKodyに照らし合わせさせ、強制したい規約はKodyルールとして管理します。"
 ---
 
-Cursor、GitHub Copilot、Claude、またはその他のAIコーディングツールにすでにルールが定義されている場合、それらをKodusにインポートして、コードレビュー中も同じ規約が適用されるようにできます。
+Cursor、GitHub Copilot、Claude、またはその他のコーディングエージェント向けの指示をすでに管理している場合、Kodyはコードレビュー中にそれらを読み、反する変更を指摘できます。
 
 ## 動作方法
 
-Kodusはリポジトリ内のルールファイルを検出し、Kodyルールとして同期します。サポートされているファイル形式には以下が含まれます：
+Kodyは、プルリクエストで変更されたファイルをカバーする指示ファイルを読みます。サポートされているファイルには以下が含まれます：
 
-- `.cursorrules`（Cursor）
-- `.github/copilot-instructions.md`（GitHub Copilot）
+- `.cursorrules` と `.cursor/rules/**/*.mdc`（Cursor）
+- `.github/copilot-instructions.md` と `.github/instructions/**/*.instructions.md`（GitHub Copilot）
 - `CLAUDE.md`（Claude）
-- その他のAIツール設定ファイル
+- `AGENTS.md` と `.agents/rules/**`（agents.md 規約）
+
+これらに反する変更は **Repo Instruction** ラベル付きで報告され、指示とその取得元ファイルが引用されます。これらのファイルがKodyルールに変換されることはないため、レビューポリシーが知らないうちに変わることはありません。
 
 ## セットアップ方法
 
-1. サイドバーの **Code review** グループ上部にあるスコープピッカーでリポジトリを選択し、**Kody Rules** を開いて **Configuration** をクリックします
-2. **Auto-sync rules from repo** をオンにします。初回は、すぐにリポジトリをスキャンするか（**Sync now**）、**Skip initial scan** するかを尋ねられます
-3. Kodusは見つかったルールファイルをKodyルール（オリジン **Auto-sync**）としてインポートし、以降は同期を維持します
-4. インポートされたルールはすぐにコードレビュー中に適用されます。先にレビューしたい場合は、同じ **Configuration** シートで **Kody knowledge approval** をオンにします。インポートされたルールは **Approve** または **Discard** するまで **Pending review** セクションで待機します
+1. サイドバーの **Code review** グループ上部にあるスコープピッカーで **Global** またはリポジトリを選択し、**Kody Rules** を開いて **Configuration** をクリックします
+2. **Use coding-agent instructions in reviews** をオンにします
+3. そのスコープで次にレビューされるプルリクエストから、変更をカバーする指示ファイルと照らし合わせてチェックされます
 
-## なぜ重要か
+新しいワークスペースでは、オンボーディング中に各リポジトリで見つかったコーディングエージェント向けファイルの一覧とともに、この設定について尋ねられます。
 
-同期しないと、IDEとコードレビューツールが異なる標準を適用します。Cursorのルールに従っている開発者が、IDEでは検出されなかったことでレビュー中にフラグされる可能性があります（またはその逆）。
+## すべてのレビューで規約を強制する
 
-インポートにより、ワークフロー全体でコーディング標準の**単一の信頼できる情報源**が確保されます。
+コーディングエージェント向けの指示はコンテキストです。Kodyが指示違反を報告するのは、その指示が変更された行に明確に当てはまる場合だけです。他のレビュールールと同じように強制したい規約は、`.kody/rules` に[リポジトリルール](/ja/how_to_use/code_review/configs/repository_rules)として記述してください。ルールファイルはマージ時に同期され、1ファイルが1ルールとなり、書いたとおりに取り込まれます。
 
-詳細については、[IDEルールの同期](/ja/how_to_use/code_review/configs/rules_file_detection)を参照してください。
+詳細については、[コーディングエージェント向け指示](/ja/how_to_use/code_review/configs/rules_file_detection)を参照してください。

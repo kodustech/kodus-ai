@@ -1,30 +1,31 @@
 ---
-title: "Como importar regras do Cursor, Copilot ou Claude"
-description: "Sincronize suas regras existentes de ferramentas de codificação com IA no Kodus para que os mesmos padrões se apliquem na sua IDE e na revisão de código."
+title: "Como usar suas instruções do Cursor, Copilot ou Claude na revisão de código"
+description: "Deixe o Kody verificar pull requests contra as instruções que sua equipe já escreveu para agentes de código, e mantenha como Regras do Kody as convenções que você quer aplicar."
 ---
 
-Se você já tem regras definidas no Cursor, GitHub Copilot, Claude ou outras ferramentas de codificação com IA, pode importá-las para o Kodus para que as mesmas convenções sejam aplicadas durante a revisão de código.
+Se sua equipe já mantém instruções para o Cursor, GitHub Copilot, Claude ou outros agentes de código, o Kody pode lê-las durante a revisão de código e apontar mudanças que as quebram.
 
 ## Como funciona
 
-O Kodus detecta arquivos de regras no seu repositório e os sincroniza como Regras do Kody. Os formatos de arquivo suportados incluem:
+O Kody lê os arquivos de instrução que cobrem os arquivos alterados por um pull request. Os arquivos suportados incluem:
 
-- `.cursorrules` (Cursor)
-- `.github/copilot-instructions.md` (GitHub Copilot)
+- `.cursorrules` e `.cursor/rules/**/*.mdc` (Cursor)
+- `.github/copilot-instructions.md` e `.github/instructions/**/*.instructions.md` (GitHub Copilot)
 - `CLAUDE.md` (Claude)
-- Outros arquivos de configuração de ferramentas de IA
+- `AGENTS.md` e `.agents/rules/**` (convenção agents.md)
+
+Uma mudança que quebra uma delas é reportada com o rótulo **Repo Instruction**, citando a instrução e o arquivo de onde ela vem. Os arquivos nunca são transformados em Regras do Kody, então não podem mudar sua política de revisão sem que você perceba.
 
 ## Configurando
 
-1. Selecione o repositório no seletor de escopo no topo do grupo **Code review** na barra lateral, abra **Kody Rules** e clique em **Configuration**
-2. Ative **Auto-sync rules from repo**. Na primeira vez, o Kodus pergunta se deve escanear o repositório imediatamente (**Sync now**) ou pular a varredura inicial (**Skip initial scan**)
-3. O Kodus importa os arquivos de regras que encontrar como Regras do Kody (origem **Auto-sync**) e os mantém sincronizados a partir de então
-4. As regras importadas são aplicadas durante a revisão de código imediatamente. Para revisá-las antes, ative **Kody knowledge approval** na mesma tela de **Configuration**: as regras importadas passam a aguardar na seção **Pending review** até você aprová-las (**Approve**) ou descartá-las (**Discard**)
+1. Selecione **Global** ou um repositório no seletor de escopo no topo do grupo **Code review** na barra lateral, abra **Kody Rules** e clique em **Configuration**
+2. Ative **Use coding-agent instructions in reviews**
+3. O próximo pull request revisado nesse escopo é verificado contra os arquivos de instrução que cobrem suas mudanças
 
-## Por que isso importa
+Novos workspaces recebem essa pergunta durante o onboarding, com a lista de arquivos de agentes de código encontrados em cada repositório.
 
-Sem sincronização, sua IDE e as ferramentas de revisão de código aplicam padrões diferentes. Um desenvolvedor seguindo as regras do Cursor ainda pode ser sinalizado durante a revisão por algo que a IDE não identificou — ou vice-versa.
+## Aplicando uma convenção em toda revisão
 
-A importação garante **uma única fonte de verdade** para padrões de codificação em todo o seu fluxo de trabalho.
+Instruções para agentes de código são contexto: o Kody só reporta uma instrução quebrada quando ela claramente se aplica às linhas alteradas. Para uma convenção que você quer aplicar como qualquer outra regra de revisão, escreva-a como uma [Regra de Repositório](/pt-BR/how_to_use/code_review/configs/repository_rules) em `.kody/rules`. Arquivos de regra sincronizam no merge, um arquivo por regra, exatamente como escritos.
 
-Para detalhes, consulte [Sincronização de Regras de IDE](/pt-BR/how_to_use/code_review/configs/rules_file_detection).
+Para detalhes, consulte [Instruções para Agentes de Código](/pt-BR/how_to_use/code_review/configs/rules_file_detection).
