@@ -516,11 +516,12 @@ function buildCurrentPrompts(caseData) {
     };
 }
 
-// The commands production's local sandbox (the self-hosted path) hands the
-// agent, over a prepared worktree: the same grep, read and listDir output, the
-// same errors, the same exec whitelist. Built by the sandbox's own method, so
-// they cannot drift from production. Wrapped only to count calls for the
-// fidelity metric: a real answer, empty or not, is never an unserved call.
+// The grep, read and listDir production's local sandbox (the self-hosted path)
+// hands the agent, over a prepared worktree: the same output and the same
+// errors. Built by the sandbox's own method, so they cannot drift from
+// production. exec is left out for now, so the tools take their no-exec path.
+// Wrapped only to count calls for the fidelity metric: a real answer, empty or
+// not, is never an unserved call.
 function sandboxCommands(repoDir) {
     const { LocalSandboxService } = require(
         path.join(
@@ -534,8 +535,8 @@ function sandboxCommands(repoDir) {
         repoDir,
     );
     const commands = { calls: [], unexpectedCalls: [] };
-    for (const [name, fn] of Object.entries(inner)) {
-        if (typeof fn !== 'function') continue;
+    for (const name of ['grep', 'read', 'listDir']) {
+        const fn = inner[name];
         const kind = name === 'read' ? 'readFile' : name;
         commands[name] = (...args) => {
             commands.calls.push({ kind, actual: args, matched: true });

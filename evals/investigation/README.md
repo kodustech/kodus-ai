@@ -77,8 +77,8 @@ Scope/model env: `RECALL_ALL=1` (all PRs) or `RECALL_CASES=id1,id2` (subset);
 `RECALL_MODEL=<id>` overrides the model from this one config.
 
 Real repository instead of the replay: `RECALL_REAL_REPO=1` checks out the PR's
-head in a worktree (`prepare-repo.js`) and answers the tools with the commands
-production's local sandbox builds (`libs/sandbox/infrastructure/providers/local-sandbox.service.ts`),
+head in a worktree (`prepare-repo.js`) and answers grep, readFile and listDir with
+the commands production's local sandbox builds (`libs/sandbox/infrastructure/providers/local-sandbox.service.ts`),
 so a call outside the recording gets the answer the repository would give. Needs
 `rg` on the PATH. Clones live under `BENCH_REPOS_ROOT` (default
 `~/projects/benchmark`, one folder per repo, names in `prepare-repo.js`); with
