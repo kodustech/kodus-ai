@@ -35,6 +35,64 @@ const TETO = Number(arg('teto', '6'));
 // --esforco: reasoning effort no provedor openai_compatible (Muse); --prs: lista de PRs;
 // --apos: pula os grupos que esse resultado ja derrubou.
 const ESFORCO = arg('esforco');
+// --h3=1: passo 1 le o arquivo na base e o diff do PR. --h4=1: passo 1 roda um trecho isolado num sandbox E2B.
+const H3 = arg('h3') === '1', H4 = arg('h4') === '1', H2 = arg('h2') === '1';
+const EXTRA = [
+    H3 ? 'To check what the pull request changed, or how the code behaved before it, read the file at the base commit with readBaseFile and the pull request diff of a file with prDiff.' : '',
+    H2 ? 'To check who calls a function or method (and whether those callers are tests), use getCallers; it reads the repository call graph.' : '',
+    H4 ? 'To check how a language, library or command-line tool behaves (what a regex matches, what an expression evaluates to, what a command outputs), run a small self-contained snippet with runSnippet (python, node or bash) and read its output. Snippets cannot import this repository.' : '',
+].filter(Boolean).join(' ');
+const comExtra = (t) => (EXTRA ? t.replace(/\n\nYou have at most /, `\n\n${EXTRA}\n\nYou have at most `) : t);
+// Um sandbox E2B por PR, criado no primeiro uso e encerrado no fim do PR.
+async function rodaTrecho(cmd, language, code) {
+    if (!cmd.sandbox) {
+        const { Sandbox } = require('e2b');
+        cmd.sandbox = await Sandbox.create({ apiKey: process.env.API_E2B_KEY, timeoutMs: 10 * 60 * 1000 });
+    }
+    const arq = { python: '/tmp/s.py', node: '/tmp/s.js', bash: '/tmp/s.sh' }[language];
+    const bin = { python: 'python3', node: 'node', bash: 'bash' }[language];
+    if (!arq) return 'language must be python, node or bash';
+    await cmd.sandbox.files.write(arq, String(code));
+    try {
+        const r = await cmd.sandbox.commands.run(`${bin} ${arq}`, { timeoutMs: 20000 });
+        return `exit ${r.exitCode}\nstdout:\n${r.stdout}\nstderr:\n${r.stderr}`.slice(0, 6000);
+    } catch (e) {
+        return `exit ${e?.exitCode ?? '?'}\nstdout:\n${e?.stdout ?? ''}\nstderr:\n${e?.stderr ?? e?.message ?? e}`.slice(0, 6000);
+    }
+}
+// H2: grafo de chamadas = baseline do repo inteiro na base (cache do eval) sem
+// as arestas dos arquivos alterados, mais o grafo do PR (arquivos alterados, no head).
+function carregaGrafo(v) {
+    const { repoDirFor } = require(path.join(INV, 'prepare-repo'));
+    const repoDir = repoDirFor(v.repositoryFullName);
+    let base = v.benchmarkBaseRef;
+    if (!base) base = require('child_process').execFileSync('git', ['-C', repoDir, 'rev-parse', `${v.benchmarkHeadRef}^`]).toString().trim();
+    const arq = path.join(require('os').homedir(), 'projects', 'benchmark', '.callgraph', '_baselines', `${path.basename(repoDir)}-${base.slice(0, 12)}.json`);
+    const pr = typeof v.callGraphJson === 'string' ? JSON.parse(v.callGraphJson) : (v.callGraphJson || { nodes: [], edges: [] });
+    let cf = v.changedFilesFull || v.changedFiles; if (typeof cf === 'string') cf = JSON.parse(cf);
+    const alterados = new Set((cf || []).map((x) => x.filename));
+    const b = fs.existsSync(arq) ? JSON.parse(fs.readFileSync(arq, 'utf8')) : { nodes: [], edges: [] };
+    const teste = new Map([...b.nodes, ...pr.nodes].map((n) => [n.qualified_name, !!n.is_test]));
+    const edges = [...b.edges.filter((e) => !alterados.has(e.file_path)), ...pr.edges].filter((e) => e.kind === 'CALLS');
+    return { edges, teste, temBaseline: b.edges.length > 0 };
+}
+function getCallers(cmd, nome) {
+    const n = String(nome || '').trim().split(/::|\.|#/).pop();
+    if (!n) return 'give a function or method name';
+    const hits = cmd.grafo.edges.filter((e) => { const t = e.target_qualified || ''; return t.endsWith(`::${n}`) || t.endsWith(`.${n}`); });
+    if (!hits.length) return `no callers of ${n} in the call graph${cmd.grafo.temBaseline ? '' : ' (only the changed files are indexed)'}; the graph can miss dynamic calls, so confirm with grep before concluding none exist`;
+    const linhas = [...new Set(hits.map((e) => `${e.file_path}:${e.line}  ${e.source_qualified} -> ${e.target_qualified}${cmd.grafo.teste.get(e.source_qualified) ? '  [test]' : ''}`))];
+    return `${linhas.length} call sites of ${n}:\n${linhas.slice(0, 40).join('\n')}${linhas.length > 40 ? `\n... ${linhas.length - 40} more` : ''}`;
+}
+function prDiff(cmd, p) {
+    try {
+        const a = ['-C', cmd.repoRoot, 'diff', `${cmd.baseRef}...${cmd.headRef}`];
+        if (p) a.push('--', String(p).replace(/^\/+/, ''));
+        else a.push('--stat');
+        const out = require('child_process').execFileSync('git', a, { maxBuffer: 32 * 1024 * 1024 }).toString();
+        return (out || 'no changes in this file').slice(0, 12000);
+    } catch (e) { return `diff failed: ${String(e?.message || e).slice(0, 200)}`; }
+}
 const SO_PRS = arg('prs') ? new Set(fs.readFileSync(arg('prs'), 'utf8').split(/\s+/).filter(Boolean)) : null;
 const APOS = arg('apos') ? JSON.parse(fs.readFileSync(path.join(__dirname, 'resultados', arg('apos'), `${GOLD}.json`), 'utf8')).prs : null;
 const VEREDITOS = VERSAO.startsWith('u') ? ['refuted', 'nit', 'confirmed', 'unverified'] : ['refuted', 'confirmed', 'unverified'];
@@ -197,6 +255,21 @@ function ferramentas(cmd) {
                 } catch { return 'file not found at the base commit (new in this pull request, or wrong path)'; }
             },
         }) } : {}),
+        ...(H3 ? { prDiff: tool({
+            description: 'Show the pull request diff of one file (or, with no path, the list of changed files).',
+            inputSchema: jsonSchema({ type: 'object', properties: { path: { type: 'string' } }, additionalProperties: false }),
+            execute: async ({ path: p }) => prDiff(cmd, p),
+        }) } : {}),
+        ...(H2 ? { getCallers: tool({
+            description: 'List the call sites of a function or method in the repository call graph, marking callers that are tests.',
+            inputSchema: jsonSchema({ type: 'object', properties: { name: { type: 'string' } }, required: ['name'], additionalProperties: false }),
+            execute: async ({ name }) => getCallers(cmd, name),
+        }) } : {}),
+        ...(H4 ? { runSnippet: tool({
+            description: 'Run a small self-contained snippet in an isolated sandbox and return its exit code, stdout and stderr. No access to this repository.',
+            inputSchema: jsonSchema({ type: 'object', properties: { language: { type: 'string', enum: ['python', 'node', 'bash'] }, code: { type: 'string' } }, required: ['language', 'code'], additionalProperties: false }),
+            execute: async ({ language, code }) => rodaTrecho(cmd, language, code),
+        }) } : {}),
         grep: tool({
             description: 'Search the repository for a regex pattern.',
             inputSchema: jsonSchema({ type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, glob: { type: 'string' } }, required: ['pattern'], additionalProperties: false }),
@@ -218,12 +291,24 @@ function ferramentas(cmd) {
 // Claude por assinatura: a fachada do Agent SDK nao chama ferramenta; a sessao
 // roda pelo proprio SDK com Read/Grep/Glob no worktree e o veredito em JSON no fim.
 const PELO_SDK = require(path.join(INV, '..', 'shared', 'tier0-models')).TIER0[MODELO]?.provider === 'claude_agent_sdk';
-async function julgaSdk(s, dir) {
+async function julgaSdk(s, dir, cmd) {
     const { carregaSdk, envDoProcesso } = require(path.join(INV, 'claude-sdk-runner'));
     const sdk = await carregaSdk();
-    const texto = PROMPTS[arg('prompt', VERSAO)](s)
+    const texto = comExtra(PROMPTS[arg('prompt', VERSAO)](s))
         .replace(/grep, readFile and listDir/g, 'Grep, Read and Glob')
         .replace('Answer with submit.', `End your answer with ONLY this JSON object, no code fence: {"verdict": ${JSON.stringify(VEREDITOS.join('|'))}, "evidence": "...", "reason": "..."}`);
+    const z = sdk.z;
+    const txt = (t) => ({ content: [{ type: 'text', text: String(t) }] });
+    const extras = [
+        ...(H3 ? [
+            sdk.tool('readBaseFile', 'Read a file as it was BEFORE the pull request (base commit), optionally a line range.', { path: z.string(), startLine: z.number().optional(), endLine: z.number().optional() },
+                async (a) => txt(await ferramentas(cmd).readBaseFile.execute(a))),
+            sdk.tool('prDiff', 'Show the pull request diff of one file (or, with no path, the list of changed files).', { path: z.string().optional() }, async (a) => txt(prDiff(cmd, a.path))),
+        ] : []),
+        ...(H2 ? [sdk.tool('getCallers', 'List the call sites of a function or method in the repository call graph, marking callers that are tests.', { name: z.string() }, async (a) => txt(getCallers(cmd, a.name)))] : []),
+        ...(H4 ? [sdk.tool('runSnippet', 'Run a small self-contained snippet in an isolated sandbox and return its exit code, stdout and stderr. No access to this repository.', { language: z.enum(['python', 'node', 'bash']), code: z.string() },
+            async (a) => txt(await rodaTrecho(cmd, a.language, a.code)))] : []),
+    ];
     let saida = '', turnos = 0;
     try {
         for await (const msg of sdk.query({
@@ -231,7 +316,8 @@ async function julgaSdk(s, dir) {
             options: {
                 model: require(path.join(INV, '..', 'shared', 'tier0-models')).TIER0[MODELO].sdkModel,
                 systemPrompt: 'You can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
-                tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'],
+                tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob', ...extras.map((t) => `mcp__extra__${t.name}`)],
+                ...(extras.length ? { mcpServers: { extra: sdk.createSdkMcpServer({ name: 'extra', version: '1', tools: extras }) } } : {}),
                 disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
                 settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso(), ...(ESFORCO ? { effort: ESFORCO } : {}),
             },
@@ -248,7 +334,7 @@ async function julgaSdk(s, dir) {
 }
 
 async function julga(model, cmd, s, diff) {
-    if (PELO_SDK) return julgaSdk(s, cmd.repoRoot);
+    if (PELO_SDK) return julgaSdk(s, cmd.repoRoot, cmd);
     const schema = SCHEMA;
     let resp = null;
     const tools = {
@@ -256,7 +342,7 @@ async function julga(model, cmd, s, diff) {
         submit: tool({ description: 'Submit your answer. Call exactly once.', inputSchema: jsonSchema(schema), execute: async (x) => { resp = x; return 'recorded'; } }),
     };
     const r = await generateText({
-        model, prompt: PROMPTS[arg('prompt', VERSAO)](s, diff), tools,
+        model, prompt: comExtra(PROMPTS[arg('prompt', VERSAO)](s, diff)), tools,
         ...(ESFORCO ? { providerOptions: { openaiCompatible: { reasoningEffort: ESFORCO } } } : {}),
         stopWhen: (x) => !!resp || (x.steps?.length ?? 0) >= TETO,
         prepareStep: ({ stepNumber, messages }) => stepNumber >= TETO - 1
@@ -282,7 +368,7 @@ async function julga(model, cmd, s, diff) {
     const fila = Object.keys(sug).filter((c) => (!SO_PRS || SO_PRS.has(c)) && (!res.prs[c] || res.prs[c].erro));
     let i = 0;
     const um = async (cid) => {
-        let h;
+        let h, cmdPr;
         try {
             const caiu = new Set(APOS ? (APOS[cid]?.grupos || []).filter((g) => g.nit).map((g) => g.rep) : []);
             const gs = grupos(sug[cid].suggestions, fin[cid], real[cid].idsEntradaDedup || []).filter((g) => !caiu.has(g.rep));
@@ -293,7 +379,10 @@ async function julga(model, cmd, s, diff) {
                     h = await prepareRepo(vars[cid], `${cid}-nit-${process.pid}`);
                     if (!h) throw new Error('sem repo');
                     cmd = new LocalRepoCommands(h.dir);
+                    cmdPr = cmd;
                     if (arg('base') === '1') cmd.baseRef = vars[cid].benchmarkBaseRef;
+                    if (H2) cmd.grafo = carregaGrafo(vars[cid]);
+                    if (H3) { cmd.headRef = vars[cid].benchmarkHeadRef; cmd.baseRef = vars[cid].benchmarkBaseRef || `${cmd.headRef}^`; }
                 }
                 const diff = '';
                 let j = 0;
@@ -311,6 +400,7 @@ async function julga(model, cmd, s, diff) {
             res.prs[cid] = { erro: String(e?.message || e).slice(0, 300) };
             console.log(`  ${cid.slice(0, 46).padEnd(48)} FALHOU: ${res.prs[cid].erro}`);
         } finally {
+            if (cmdPr?.sandbox) await cmdPr.sandbox.kill().catch(() => {});
             if (h) await h.cleanup();
             fs.writeFileSync(OUT, JSON.stringify(res, null, 1));
         }

@@ -1,0 +1,1823 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "h2t10f",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:83-90 `const guestsFullDetails = uniqueGuests.map((guest) => { return { name: \"\", email: guest, ...` ; :100-104 `attendees: { createMany: { data: guestsFullDetails, }, }` ; :168 `await sendAddGuestsEmails(evt, guests);`",
+       "reason": "The \"stored attendee emails\" for newly added guests are created verbatim from the very same `newGuests` strings passed to `sendAddGuestsEmails`, so a new guest's stored email casing can never differ from its entry in `newGuests` and the reported misrouting cannot occur."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual premise is that the \"stored attendee emails\" for newly added guests can have different casing from the entries in `newGuests`, causing the case-sensitive `includes` check to misroute. The cited code directly refutes this: in addGuests.handler.ts, `guestsFullDetails` is built with `email: guest` from each entry of the unique/new guests list, and those same records are persisted via `attendees: { createMany: { data: guestsFullDetails } }`, while `sendAddGuestsEmails(evt, guests)` is passed that very same list. Since the stored attendee emails are created verbatim from the same `newGuests` strings being compared against, a newly added guest's stored casing cannot differ from its `newGuests` entry, so the described misrouting cannot occur. This is a statement about what the repository's code stores and passes along, not about external library behavior."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-186 — the failed-send branch (`} else {` after `if (scheduledSMS)`) contains `data: { retryCount: reminder.retryCount + 1, }` at line 184, i.e. it explicitly increments retryCount. It is the success path (lines 168-177) that does not touch retryCount.",
+       "reason": "The reported problem depends on the failed-send branch not incrementing retryCount, but that branch does increment it at line 184; only the success path leaves retryCount unchanged."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the exact lines of the file (178-186) showing the failed-send branch (`} else {`) explicitly contains `data: { retryCount: reminder.retryCount + 1 }` at line 184, and that only the success path (168-177) leaves retryCount untouched. This directly shows the comment's factual claim—that the failed-send branch does not increment retryCount—is false for this repository's code."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "apps/web/components/security/DisableTwoFactorModal.tsx:10 `import TwoFactorAuthAPI from \"./TwoFactorAuthAPI\";` — this resolves to apps/web/components/security/TwoFactorAuthAPI.ts, whose function is still `async disable(password: string, code: string)` (security/TwoFactorAuthAPI.ts:22), with no `backupCode` parameter. The changed three-parameter `disable` lives in the separate apps/web/components/settings/TwoFactorAuthAPI.ts:22, and its consumer apps/web/components/settings/DisableTwoFactorModal.tsx:58 already calls `TwoFactorAuthAPI.disable(password, totpCode, backupCode)`.",
+       "reason": "The named caller uses a different, unchanged module (security/TwoFactorAuthAPI.ts) whose disable takes only two parameters, so the claimed missing-argument type error does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment claims the caller at apps/web/components/security/DisableTwoFactorModal.tsx:38 invokes the changed three-parameter `disable` from apps/web/components/settings/TwoFactorAuthAPI.ts. The checker quotes the actual repository code: DisableTwoFactorModal.tsx:10 imports `TwoFactorAuthAPI from \"./TwoFactorAuthAPI\"`, which resolves to apps/web/components/security/TwoFactorAuthAPI.ts — a separate, unchanged module whose `disable(password, code)` still takes only two parameters. The changed three-parameter `disable` lives in settings/TwoFactorAuthAPI.ts, and its own consumer settings/DisableTwoFactorModal.tsx:58 already passes three arguments. So the named caller does not reference the changed signature at all, and the claimed missing-argument type error does not exist. This is a factual claim about which file/function the named caller imports and calls, disproven by quoted repository code."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:480-481 `const baseConditions = await service.getBaseConditions();` / `const results = await prisma.$queryRaw<{ id: number }[]>`` — the integration test is the only file that imports/uses `InsightsBookingService` (grep for `InsightsBookingService` matches only insightsBooking.ts and this test). No file calls `service.findMany(...)` on `InsightsBookingService` or spreads its conditions into a Prisma `where`; the only `findMany` methods on insights services belong to the unrelated class in packages/lib/server/service/insightsRouting.ts:63 (used only by insightsRouting.integration-test.ts:518,585,675). There are therefore no remaining `InsightsBookingService.findMany` / `where: <conditions>` call sites to migrate.",
+       "reason": "The cited file's service has exactly one consumer (the integration test, already migrated), so the comment's factual claim that other un-migrated `InsightsBookingService.findMany`/`where: <conditions>` call sites exist is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual claim is that there exist remaining un-migrated `InsightsBookingService.findMany(...)` / `where: <conditions>` call sites that need migration. The evidence is a repository-wide search showing the service has exactly one consumer — the integration test, which the PR already migrated to `getBaseConditions()` + `$queryRaw` — and no file calls `InsightsBookingService.findMany` or spreads its conditions into a Prisma `where` (the only other `findMany` belongs to an unrelated class in insightsRouting.ts). A repo-wide search finding no such callers is a factual statement about which callers exist in this repository, directly contradicting the comment's premise."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/lib/server/service/insightsBooking.ts:83 `async getAuthorizationConditions(): Promise<Prisma.Sql> {` (non-nullable return) — it returns `this.cachedAuthConditions`, assigned from `buildAuthorizationConditions()` (line 85). buildAuthorizationConditions always returns a truthy `Prisma.Sql`: lines 126-132 `if (!this.options) { return NOTHING_CONDITION; } ... if (!isOwnerOrAdmin) { return NOTHING_CONDITION; }`, with `NOTHING_CONDITION = Prisma.sql`1=0`` (line 43). There is no code path returning null/undefined, so `authConditions` is never falsy and the `else if (filterConditions)` branch (lines 76-77) is unreachable.",
+       "reason": "`getAuthorizationConditions()` can never yield a falsy value — missing/unauthorized access is encoded as the truthy `NOTHING_CONDITION` (`1=0`, deny-all), so the filter-only branch is dead code and no authorization-boundary bypass exists."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checkers assert that `getAuthorizationConditions()` can \"never\" yield a falsy value because `buildAuthorizationConditions()` always returns a truthy `Prisma.Sql` (`NOTHING_CONDITION` = `1=0` in the deny-all cases), so the `else if (filterConditions)` branch is unreachable and no bypass exists. This is the \"function never returns the bad value, so the reported branch cannot be reached\" pattern, which the rules classify as an argument (argues), not a factual contradiction of what the commented code contains or does. It does not quote code showing the comment's factual statement about lines 76-77 is false; instead it disputes reachability of that branch."
+     }
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/jobs/base.rb:162-172 — `if SiteSetting.queue_jobs? ... else ... # Otherwise execute the job right away ... klass.new.perform(opts)`; config/site_settings.yml:348-351 — `queue_jobs: default: { test: false, default: true }`; app/jobs/regular/retrieve_topic.rb:17 — `TopicRetriever.new(args[:embed_url], no_throttle: user.try(:staff?)).retrieve`. With queue_jobs false in test, Jobs.enqueue runs the job inline, so TopicRetriever.new is called during get :best and the mock expectation is satisfied.",
+       "reason": "In the test environment `SiteSetting.queue_jobs?` is false, so `Jobs.enqueue` executes the RetrieveTopic job inline, which calls `TopicRetriever.new`, meaning the spec's expectation is met and the cited example does not fail as the comment claims."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual claim is that during `get :best` only a Sidekiq job is enqueued and `TopicRetriever.new` is never called, so the spec's mock expectation is unmet and the example fails. The checkers quote repository code that directly falsifies this: app/jobs/base.rb:162-172 shows `Jobs.enqueue` falls back to `klass.new.perform(opts)` (\"Otherwise execute the job right away\") when queueing is not enabled, config/site_settings.yml:348-351 sets `queue_jobs` default to `false` in the test environment, and app/jobs/regular/retrieve_topic.rb:17 shows the job itself calls `TopicRetriever.new(...).retrieve`. Thus the repository's own configuration makes the test path execute the job inline, calling `TopicRetriever.new` during `get :best`, which satisfies the spec's expectation. This is a statement about what this repository's code and settings do on the cited path, so it contradicts the comment."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "chef/cookbooks/windows/providers/task.rb:99: \"  end if task_hash.respond_to? :[]\" — the `end` on this line closes the `if` opened on line 91 and is immediately followed by a modifier `if` expression, i.e. an `if` modifier on `end`, which is valid Ruby and is used in this very repository. So the rule the comment rests on (\"`if` cannot be a modifier on `end`\") is false.",
+       "reason": "The comment's stated basis for the reported SyntaxError is a grammar claim that is contradicted by existing code in the repo (chef/cookbooks/windows/providers/task.rb:99), where a modifier `if` directly follows `end`."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The comment's factual claim is a grammar/syntax claim about the Ruby language (\"`if` cannot be a modifier on `end`\"). The checker does not contradict anything about the specific file the comment targets (app/views/embed/best.html.erb); instead it quotes an unrelated file (chef/cookbooks/windows/providers/task.rb:99) merely as an example that the `end if` syntax is permitted by Ruby. Whether the language allows modifier `if` after `end` is a question about how the language behaves, not a statement about what this repository's code contains or does. Per the rules, evidence that \"relies on how a language... behaves... This includes... what syntax a language allows: quoting the repository code that passes the value along does not make it a statement about this repository\" is an argument, not a contradiction."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/controllers/uploads_controller.rb:66: `while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes` — the loop condition re-checks the file size against `max_image_size_kb` on every iteration and continues downsizing while it is exceeded, so a size check is present.",
+       "reason": "The loop's own `while` condition explicitly checks `tempfile.size > SiteSetting.max_image_size_kb.kilobytes` each pass, contradicting the comment's claim that it \"stops without any check that the result actually meets max_image_size_kb\"."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual claim is that the loop \"stops without any check that the result actually meets max_image_size_kb.\" The checker quotes the actual loop condition in the same file the comment is about (app/controllers/uploads_controller.rb:66): `while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes`. This is repository code showing the loop condition itself re-checks `tempfile.size` against `SiteSetting.max_image_size_kb.kilobytes` on every iteration, so a size check against max_image_size_kb is in fact present. That directly falsifies the comment's statement that no such check exists, making this a factual contradiction about what the named code contains/does rather than a matter of intent or external behavior."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/models/optimized_image.rb:149-151 `def self.downsize(from, to, dimensions, opts={}) optimize(\"downsize\", from, to, dimensions, opts) end` and app/models/optimized_image.rb:132 `-resize #{dimensions}` — the consumer takes a raw dimensions string and hands it to ImageMagick `convert -resize`, which accepts percentages such as \"80%\".",
+       "reason": "The `downsize` consumer accepts an arbitrary dimensions string and forwards it to `convert -resize` (which supports percentages), so passing `\"80%\"` is valid and does not require an explicit `WxH` geometry as the comment claims."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checkers' evidence rests on how an external tool behaves: it claims ImageMagick `convert -resize` accepts percentage strings like `\"80%\"`, so the pass-through of `dimensions` in `OptimizedImage.downsize` is valid. The quoted repository code (`def self.downsize(...)` and `-resize #{dimensions}`) only shows that the value is forwarded unchanged; the conclusion that `\"80%\"` is acceptable depends on ImageMagick's argument syntax, which is external-tool behavior rather than a fact about what this repository's code contains or does. Quoting the code that passes the value along does not make it a repository-level fact contradicting the comment."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "lib/freedom_patches/ams_include_without_root.rb:46-52: \"if association.embed_ids?\\n        node[association.key] = association.serialize_ids\\n        if association.embed_in_root? && hash.nil?\\n          # Don't raise an error!\\n        elsif association.embed_in_root? && association.embeddable?\\n          merge_association hash, association.root, association.serializables, unique_values\" — in AMS 0.8.x an `embed: :ids` association is also embedded in the root (sideloaded) by default, which is precisely what Discourse's client `_lookupSubType` consumes: app/assets/javascripts/discourse/models/store.js.es6:168 \"const collection = root[this.pluralize(subType)];\". Other Discourse serializers rely on the same default without `include: true`, e.g. app/serializers/similar_topic_serializer.rb:3 \"has_one :topic, serializer: TopicListItemSerializer, embed: :ids\" and app/serializers/user_serializer.rb:73 \"has_many :featured_user_badges, embed: :ids, serializer: UserBadgeSerializer, root: :user_badges\" (the `root:` sideload key is only meaningful if the records are emitted in the root).",
+       "reason": "The comment's premise that `embed: :ids` never sideloads the objects is false: in this Discourse's AMS 0.8.x the ids-embedded association is also merged into the root (`embed_in_root?`), so `embeddable_hosts` is present and `_lookupSubType` resolves the records, meaning the reported empty-table bug does not follow."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checkers' refutation does not point to what app/serializers/embedding_serializer.rb (the code the comment is about) contains or does. It rests on the default behavior of the AMS 0.8.x framework — that an `embed: :ids` association is also merged into the root via `embed_in_root?` — and illustrates that library behavior by quoting a freedom patch (lib/freedom_patches/ams_include_without_root.rb) and by citing unrelated serializers (similar_topic_serializer.rb, user_serializer.rb) as examples of the \"same default.\" That is reasoning about how the underlying library/serialization framework behaves, and about why the reported empty-table bug would not occur, rather than repository code showing a factual statement of the comment to be false. Per the guidance, reliance on framework behavior, even when repo code is quoted to illustrate it, and the use of other files as examples, counts as \"argues.\""
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "lib/freedom_patches/translate_accelerator.rb:68 `load_locale(config.locale) unless @loaded_locales.include?(config.locale)` — this runs before the cache write in translate at lines 71-76, so the requested locale is always loaded before any value is cached for it; a fallback value can never be cached under a not-yet-loaded requested locale.",
+       "reason": "The comment's stale-cache scenario requires translate to cache a fallback value for a not-yet-loaded locale, but translate loads the requested locale first (line 68) before caching (lines 74-76), so the reported bug cannot occur."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes the actual translate path in the same file the comment targets: line 68 `load_locale(config.locale) unless @loaded_locales.include?(config.locale)` runs before the cache write at lines 71–76. This is a factual claim about what that code does — the requested locale is always loaded before any value (including a fallback value) is cached under it. The comment's central factual premise, that a fallback value can be cached under a not-yet-loaded requested locale and later served stale, is therefore shown to be false by the repository code itself."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:108-117 — `// if device limit is reached, only update devices` / `if s.deviceLimit > 0 { count, err := s.CountDevices(...); ... if count >= s.deviceLimit { return s.updateDevice(ctx, device) } }`; getCallers shows updateDevice has exactly one call site (database.go:115), and grep shows ErrDeviceLimitReached is produced only at database.go:96.",
+       "reason": "updateDevice is invoked only from the branch that has already confirmed count >= deviceLimit, so ErrDeviceLimitReached is never returned for a reason unrelated to the limit — the claimed false positive/spurious auth failure cannot occur."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes this repository's own code to refute a factual claim in the comment. The comment asserts that updateDevice can return ErrDeviceLimitReached \"for any reason other than the limit\" (a stale device, a non-existent device id, etc.), producing a spurious auth failure. The evidence shows the call graph instead: database.go:108-117 shows the only invocation of updateDevice happens inside the branch that has already confirmed `count >= s.deviceLimit`, and getCallers/grep confirm updateDevice has exactly one call site (database.go:115) and that ErrDeviceLimitReached is produced only at database.go:96. So whenever updateDevice runs, the device limit has already been established as reached — the non-limit scenario the comment describes (a device outside the updated_at window being wrongly surfaced as \"limit reached\") cannot occur, and the claimed false positive/spurious Auth failure does not exist. This is a statement about which callers exist in the repository and what the named file/functions do, so it directly contradicts the comment's factual premise."
+     }
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S5",
+      "S8",
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/infra/tracing/tracing.go:91-97 registers a contextual log provider: `log.RegisterContextualLogProvider(func(ctx context.Context) ([]any, bool) { if traceID := TraceIDFromContext(ctx, false); traceID != \"\" { return []any{\"traceID\", traceID}, true } ... })`. log.ConcreteLogger.FromContext (pkg/infra/log/log.go:203-210) iterates ctxLogProviders and appends their args, so `m.logger.FromContext(ctx).Info(\"Plugin Request Completed\", logParams...)` at logger_middleware.go:58 automatically includes traceID when present in the context. instrumentContext not adding traceID explicitly does not drop it.",
+       "reason": "FromContext injects traceID automatically via the globally registered tracing contextual log provider, so the egress log lines do not lose their traceID and the reported bug does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's core factual claim is that the \"Plugin Request Completed\" log lines at logger_middleware.go:58 lose traceID because instrumentContext never adds it. The evidence quotes this repository's own code: pkg/infra/tracing/tracing.go:91-97 registers a contextual log provider that returns []any{\"traceID\", traceID} whenever TraceIDFromContext(ctx, false) is non-empty, and pkg/infra/log/log.go:203-210 shows ConcreteLogger.FromContext iterates ctxLogProviders and appends their args. So logger_middleware.go:58 (m.logger.FromContext(ctx).Info(...)) automatically carries traceID from the context without instrumentContext adding it explicitly. This is a statement about what the named files/functions in this repo do (registration + FromContext behavior on the exact path the comment describes), which directly falsifies the comment's claim that traceID is silently dropped."
+     }
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "erro": "Cannot create a string longer than 0x1fffffe8 characters"
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/apiserver/rest/dualwriter_mode3_test.go:237 `assert.Equal(t, obj, exampleObj)` — the assertion requires the value returned by `dw.Delete` to equal the fixture `exampleObj`. If the storage call were removed and `nil, 0, nil` returned, `obj` would be nil and this assertion would fail, so it does not \"still pass.\" (Cf. line 202 `m.On(\"Delete\", ...).Return(exampleObj, false, nil)` and dualwriter_mode3.go:100,116 where `Delete` returns the storage result `res`.)",
+       "reason": "The comment's rationale that both assertions would pass even with a `nil` return is false for the `assert.Equal(t, obj, exampleObj)` assertion, which would fail on a nil result."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment asserts both assertions would \"still pass if the storage call were removed and `nil, 0, nil` returned.\" The checker quotes the repository code showing that `dw.Delete` returns the storage result (`dualwriter_mode3.go:100,116`) into `obj`, so with a nil return `obj` would be nil and `assert.Equal(t, obj, exampleObj)` would fail (nil ≠ exampleObj). This is a factual statement about what the named file/function returns and how the line behaves, directly falsifying the comment's claim that the Equal assertion passes for every possible return."
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6",
+      "S7",
+      "S11",
+      "S12",
+      "S13",
+      "S18",
+      "S19",
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S4",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S11",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S3",
+      "S7",
+      "S8",
+      "S9",
+      "S10",
+      "S12",
+      "S13",
+      "S14",
+      "S16",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:77 `if (Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ)) {` — the gate is precisely the non-V2 (V1) feature, defined in common/src/main/java/org/keycloak/common/Profile.java:56 as `ADMIN_FINE_GRAINED_AUTHZ(\"Fine-Grained Admin Permissions\", Type.PREVIEW, 1)`, and MgmtPermissions.java:85 only builds the V1 authorization provider when that same feature (or V2) is enabled.",
+       "reason": "The guard named is the V1 feature itself, so a realm on the non-V2 model has ADMIN_FINE_GRAINED_AUTHZ enabled and the cleanup does run; the gated-off case has no V1 permission resources to orphan."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual premise is that the gate (Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ) being off corresponds to realms using the non-V2 (V1) permission model, so those realms supposedly lose the roles/clients/groups cleanup. The quoted repository code shows the opposite: AdminPermissions.java:77 gates on ADMIN_FINE_GRAINED_AUTHZ, which Profile.java:56 defines as the V1 \"Fine-Grained Admin Permissions\" feature (Type.PREVIEW, 1), and MgmtPermissions.java:85 only constructs the V1 authorization provider when that same feature (or V2) is enabled. So the named gate IS the V1 feature: a non-V2 realm has ADMIN_FINE_GRAINED_AUTHZ enabled and the cleanup does run, while the gated-off case creates no V1 permission resources to orphan. This is a direct factual refutation (from this repository's feature definition and provider-construction condition) of the comment's claim that non-V2 realms keep orphaned authorization resources."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "common/src/main/java/org/keycloak/common/Profile.java:162-169 computes unversionedKey by stripping the \"_Vn\" suffix, so ADMIN_FINE_GRAINED_AUTHZ (PREVIEW, v1) and ADMIN_FINE_GRAINED_AUTHZ_V2 (EXPERIMENTAL, v2) both map to \"admin-fine-grained-authz\"; Profile.java:349-365 groups features by that unversioned key into one TreeSet, and Profile.java:305-307 sets `features.put(f, f == enabledFeature)` so only one version can ever be enabled. Consequently, when ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled, Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ is false, the guard at services/.../AdminPermissions.java:77 (`if (Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ))`) fails, the ClientRemovedEvent branch at lines 89-91 is never reached, and no UnsupportedOperationException is thrown.",
+       "reason": "ADMIN_FINE_GRAINED_AUTHZ and ADMIN_FINE_GRAINED_AUTHZ_V2 are versions of the same unversioned feature and cannot both be enabled, so the guard the comment says passes is actually false whenever the V2 evaluator that throws is in use."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes repository code (Profile.java) showing that ADMIN_FINE_GRAINED_AUTHZ and ADMIN_FINE_GRAINED_AUTHZ_V2 share the same unversioned key \"admin-fine-grained-authz\" and are grouped into a single TreeSet with `features.put(f, f == enabledFeature)`, so only one version can ever be enabled at a time. This directly falsifies the comment's factual premise that \"when both FGAP features are enabled the guard at AdminPermissions.java:77 passes\": since the V2 feature being enabled forces ADMIN_FINE_GRAINED_AUTHZ to false, the guard is false, the ClientRemovedEvent branch at lines 89-91 is unreachable, and the claimed UnsupportedOperationException cannot occur. This is a statement about what the repository's configuration code contains and does, not an argument about intent or external behavior."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "model/jpa/src/main/java/org/keycloak/organization/jpa/JpaOrganizationProvider.java:341-342 (addIdentityProvider): `identityProvider.setOrganizationId(organizationEntity.getId()); session.identityProviders().update(identityProvider);` and :368-371 (removeIdentityProvider): `identityProvider.setOrganizationId(null); ... session.identityProviders().update(identityProvider);`. session.identityProviders() returns IdentityProviderStorageProvider (server-spi/src/main/java/org/keycloak/models/KeycloakSession.java:212), i.e. the cached InfinispanIdentityProviderStorageProvider whose update() (InfinispanIdentityProviderStorageProvider.java:89-94) calls registerIDPLoginInvalidationOnUpdate, which at idp/InfinispanIdentityProviderStorageProvider.java:403-417 registers `cacheKeyForLogin(getRealm(), mode)` for all FetchMode values whenever the organization link changes.",
+       "reason": "Org link/unlink does route through IdentityProviderStorageProvider.update (via session.identityProviders().update()), so cacheKeyForLogin invalidation is registered by registerIDPLoginInvalidationOnUpdate, contradicting the claim that no such invalidation occurs."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's central factual claim is that org link/unlink (addIdentityProvider/removeIdentityProvider) \"only calls registerOrganizationInvalidation(organization) and never registers cacheKeyForLogin invalidation.\" The evidence quotes repository code showing this path does go through the cached IDP storage provider: JpaOrganizationProvider.addIdentityProvider (model/jpa/.../JpaOrganizationProvider.java:341-342) sets the organization id and then calls `session.identityProviders().update(identityProvider)` (and removeIdentityProvider at :368-371 does the same with a null org id). Per KeycloakSession.java:212, session.identityProviders() returns the IdentityProviderStorageProvider — the cached InfinispanIdentityProviderStorageProvider — whose update() (lines 89-94) invokes registerIDPLoginInvalidationOnUpdate, which at lines 403-417 registers `cacheKeyForLogin(getRealm(), mode)` for all FetchMode values whenever the organization link changes. This is direct code evidence that cacheKeyForLogin invalidation IS registered on the org link/unlink path, so the comment's stated problem (stale ORG_ONLY/ALL login caches after an org-link mutation) rests on a false statement about what the code does."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:135 `if (isInvalid(internalId)) return createOrganizationAwareIdentityProviderModel(model);`; :139 `return createOrganizationAwareIdentityProviderModel(idpDelegate.getById(internalId));`; :141 `return createOrganizationAwareIdentityProviderModel(cached.getIdentityProvider());` — the class's own getById (lines 123-142), which is what session.identityProviders().getById(id) resolves to, always returns an already organization-aware wrapped model.",
+       "reason": "session.identityProviders() is this Infinispan caching provider (registered as the IdentityProviderStorageProvider factory, order 10) and its getById wraps every return value with createOrganizationAwareIdentityProviderModel, so the loop at lines 246-251 already adds a wrapped model identical to the non-cached paths, not a raw one."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual claim is that the cache-hit loop adds the raw model returned by session.identityProviders().getById(id). The quoted code shows this class's own getById (lines 123-142) always returns createOrganizationAwareIdentityProviderModel(...) on every branch (lines 135, 139, 141), and this Infinispan provider is the registered IdentityProviderStorageProvider. So the loop already adds an organization-aware wrapped model identical to the non-cached paths; the comment's statement that it adds a \"raw model\" is false."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S4",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:173-181: `if (mode == FetchMode.ORG_ONLY || mode == FetchMode.ALL) { ... searchOptions.put(OrganizationModel.BROKER_PUBLIC, \"true\"); result = Stream.concat(result, getAllStream(searchOptions, null, null)); }`. The default `getForLogin` filters org-linked IDPs by BROKER_PUBLIC=true for ORG_ONLY/ALL too, and the JPA delegate does not override `getForLogin` (grep in model/jpa found none), so the SPI default is the effective delegate.",
+       "reason": "Contrary to the comment, ORG_ONLY/ALL for a specific organization also require BROKER_PUBLIC=true, so a non-public org-linked IDP is excluded from those login views and the predicate's condition does not cause stale caches."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment asserts as fact that FetchMode.ALL/ORG_ONLY for a specific organization \"include the organization's linked IDPs regardless of BROKER_PUBLIC.\" The quoted code in IdentityProviderStorageProvider.java (lines 173-181) shows that in the getForLogin path, when mode is ORG_ONLY or ALL the code explicitly sets OrganizationModel.BROKER_PUBLIC to \"true\" in searchOptions before running the stream, i.e. it filters org-linked IDPs by BROKER_PUBLIC=true for exactly those modes. This is a direct factual statement about what the named branch contains/does, and it is the opposite of the comment's premise, so the asserted staleness (a non-public org-linked IDP being included yet treated as non-login) does not follow. This is not a judgment about intent or external library behavior; it is the repository's own code contradicting the comment's description of that code path."
+     }
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "A repo-wide grep for `def should_sync` returns only two definitions, both already accepting the new argument: src/sentry/integrations/mixins/issues.py:66 `def should_sync(self, attribute, sync_source: AssignmentSource | None = None):` and src/sentry/integrations/mixins/issues.py:382 `def should_sync(self, attribute: str, sync_source: AssignmentSource | None = None) -> bool:`. getCallers(\"should_sync\") confirms all 4 call sites resolve to `IssueBasicIntegration.should_sync`; no concrete integration defines a `(self, attribute)` override.",
+       "reason": "No concrete integration overrides `should_sync` with the old pre-PR signature—the only two definitions in the repo already accept the new `sync_source` parameter—so the claimed runtime `TypeError` cannot occur."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's claim that concrete integrations override `should_sync` with the pre-PR `(self, attribute)` signature—which would raise a `TypeError` at the new 2-arg call site—is factually refuted by a repository-wide search. A grep for `def should_sync` returns only two definitions (src/sentry/integrations/mixins/issues.py:66 and :382), both already accepting the new `sync_source` parameter, and `getCallers(\"should_sync\")` shows all 4 call sites resolve to `IssueBasicIntegration.should_sync`, with no concrete integration defining an old-signature override. Since the override the comment's problem requires does not exist in the repository, the described runtime crash cannot occur."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/conf/server.py:739-741: `CELERY_TASK_SERIALIZER = \"pickle\"`, `CELERY_RESULT_SERIALIZER = \"pickle\"`, `CELERY_ACCEPT_CONTENT = {\"pickle\"}` — the Celery serializer is pickle, not JSON, so a `datetime` is serialized natively and round-trips as a `datetime`. Consistently, src/sentry/celery.py:55 only rejects objects whose module starts with \"sentry.\"/\"getsentry.\"; a `datetime` (module \"datetime\") is explicitly допустим and requires no custom encoding. Thus `AssignmentSource.from_dict` receives a real datetime, not a string, and no serialization failure occurs.",
+       "reason": "The reported serialization bug rests on the payload being JSON-serialized, but Sentry's Celery config uses the pickle serializer (server.py:739-741), so the datetime serializes and deserializes faithfully and the claimed failure/string-coercion does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's core factual claim is that the AssignmentSource dict is serialized as JSON on the way through apply_async, so a datetime \"either fails to serialize at enqueue or comes back as a plain string.\" The checkers quote this repository's own configuration for exactly that code path: src/sentry/conf/server.py:739-741 sets CELERY_TASK_SERIALIZER = \"pickle\", CELERY_RESULT_SERIALIZER = \"pickle\", CELERY_ACCEPT_CONTENT = {\"pickle\"}. That is a statement about how this repository configures the Celery path the comment describes, and it contradicts the comment's premise that JSON serialization is in play. Consistently, src/sentry/celery.py:55 only rejects objects whose module starts with \"sentry.\"/\"getsentry.\", so a datetime is permitted on this path and round-trips natively rather than failing or being coerced to a string. The comment's asserted serialization failure / string-coercion therefore does not occur."
+     }
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:75 — `.replaceAll(\"_[a-zA-Z-_]*\\\\.properties\", \"_en.properties\")`: the class is parsed by Java as `a-z`, `A-Z`, a literal `-` (a hyphen immediately following the range `A-Z` is literal, it is not a range to `_`), and `_`. It therefore matches neither `/` nor digits, so the match can never span a path separator and no underscore in an earlier path segment is ever substituted; the substitution is already confined to the trailing `_<locale>.properties` segment.",
+       "reason": "The comment's reported bug (an underscore before the final path segment being rewritten) depends on the claim that `[a-zA-Z-_]` matches `/` and digits, but in Java it is only letters, a literal hyphen, and underscore, so the regex cannot cross directory separators."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker's rebuttal turns on how the Java regex engine parses the character class `[a-zA-Z-_]` (that a hyphen after a range is literal, yielding letters/hyphen/underscore, so `/` and digits are not matched). That is a claim about language/library syntax and matching semantics rather than about what this repository's code contains or calls. No repository-specific configuration or definition is quoted to show the comment's factual reading of the code is false; the evidence rests on the behavior of the regex engine, so it argues rather than contradicts."
+     }
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S6",
+      "S12"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:95-97 — `sanitized = org.apache.commons.text.StringEscapeUtils.unescapeHtml4(sanitized); ... sanitized = sanitized.replace(\"<!-- -->\", \"\");` (the sanitizer's entity-escapes and its inserted \"<!-- -->\" comments are explicitly undone, so the sanitizer's output is never longer than the value, and the sanitizer only removes disallowed tags — the comment's \"output longer\"/\"a<p></p>\" premise cannot be produced). Same file:103-105 — `while (start < sanitized.length() && start < value.length() && value.charAt(start) == sanitized.charAt(start)) { start++; }` (start is bounded by value.length(), so for \"a<p>\" start would be 4, not 3; and with the comment's own end=1 the slice at line 111 is value.substring(3, 3), which is legal, so the cited `value.substring(3, 2)` does not occur).",
+       "reason": "The reported StringIndexOutOfBounds scenario rests on the sanitizer producing an output longer than the value (\"a<p>\" → \"a<p></p>\"), but lines 95-97 explicitly reverse the sanitizer's escapes/comment insertions and the sanitizer only strips disallowed tags, so that trigger — and the comment's own start=3/end=1/substring(3,2) arithmetic (line 103-105 bound start to value.length()) — do not correspond to real code behavior."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes specific lines of the reviewed file to falsify the comment's factual claims: lines 103-105 (`while (start < sanitized.length() && start < value.length() && value.charAt(start) == sanitized.charAt(start))`) show `start` is bounded by `value.length()`, so for the comment's own example \"a<p>\" the loop would yield start=4 (not 3), and with end=1 the slice at line 111 is `value.substring(3, 3)`, which is legal — the cited `value.substring(3, 2)` throwing scenario does not occur. Lines 95-97 are also quoted to show the sanitizer's escapes (`unescapeHtml4`) and inserted `<!-- -->` comments are explicitly undone, so the comment's premise that the sanitizer output can be longer than the value (\"a<p>\" → \"a<p></p>\") cannot be produced. These are statements about what this file's named lines actually do/compute, directly contradicting the comment's arithmetic and its described trigger."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S8",
+      "S9",
+      "S10",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/pipeline/base.py:132-133 — `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" for v in self.pipeline_views]` then `self.signature = md5_text(*pipe_ids).hexdigest()`. The comment's own lines: src/sentry/integrations/github/integration.py:402 `state = pipeline.signature` and :412 `if request.GET.get(\"state\") != pipeline.signature:`. So `pipeline.signature` is a deterministic MD5 of the pipeline view class names (a constant per pipeline definition), not a secret, per-flow, randomly generated nonce.",
+       "reason": "The reported timing-leak hangs on `pipeline.signature` being a secret per-flow nonce, but it is a deterministic public hash of the pipeline view class names, so the premise is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's premise is that `pipeline.signature` is a secret, per-flow, randomly generated nonce, and the reported CSRF/timing leak depends on that premise. The quoted repository code (src/sentry/pipeline/base.py:132-133) shows `self.signature = md5_text(*pipe_ids).hexdigest()`, where `pipe_ids` are just the module/class names of the pipeline views, and src/sentry/integrations/github/integration.py:402/:412 confirm `state = pipeline.signature` is compared against that same deterministic value. So `pipeline.signature` is a constant public MD5 hash, not a secret per-flow nonce — a factual statement about what this code stores/computes that is false as stated."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/integrations/github_enterprise/integration.py:294 and 328-336: the only subclass `GitHubEnterpriseIntegrationProvider(GitHubIntegrationProvider)` does NOT reuse `GitHubInstallation`; it defines its own pipeline: `return [InstallationConfigView(), GitHubEnterpriseInstallationRedirect(), lambda: self._make_identity_pipeline_view()]`. A grep for `GitHubInstallation` in src/ shows only its definition (integration.py:442) and the single use at integration.py:344 `return [OAuthLoginView(), GitHubInstallation()]`, so no consumer drives the second step without OAuthLoginView.",
+       "reason": "The comment's premise that a subclass/related provider reuses `GitHubInstallation` (or keeps a GitHubInstallation-only `get_pipeline_views`) is false: the only subclass overrides `get_pipeline_views` with entirely different views and never uses `GitHubInstallation`, and `GitHubInstallation` is used only in the one pipeline that already prepends `OAuthLoginView`."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual premise is that some consumer reuses `GitHubInstallation` (or keeps a GitHubInstallation-only `get_pipeline_views`) without the prepended OAuthLoginView. The checkers quote repository code showing this is false: the sole subclass `GitHubEnterpriseIntegrationProvider` defines its own `get_pipeline_views` returning `[InstallationConfigView(), GitHubEnterpriseInstallationRedirect(), lambda: self._make_identity_pipeline_view()]` and never uses `GitHubInstallation`, and a repo-wide grep finds `GitHubInstallation` only at its definition and at the single `return [OAuthLoginView(), GitHubInstallation()]` pipeline. Thus no caller drives the second step without the OAuth view, directly refuting the comment's asserted consumer."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  }
+ },
+ "sobre": "h2t10",
+ "prompt": "c3"
+}
