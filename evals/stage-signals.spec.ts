@@ -2,13 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { STAGES, PHASES, PLUMBING } = require('./stages');
+const { STAGES, GROUPS, PLUMBING } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { wiringRows, nightlyRows } = require('./stage-signals');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { tier0 } = require('./shared/tier0-models');
 
-type Stage = { id: string; name: string; phase: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: boolean; friday?: string; byHand?: string[] };
+type Stage = { id: string; name: string; group: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: boolean; friday?: string; byHand?: string[] };
 type Row = { name: string; status: string; value: number | null; meta: Record<string, unknown> };
 
 // Steps of evals/wiring-smoke.js that check the harness, not a review stage.
@@ -36,15 +36,15 @@ describe('evals/stages.js', () => {
         for (const id of ids) expect(`evals.stage.${id}`).toMatch(/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/);
     });
 
-    // The panel lists stages by phase, one line each.
-    it('gives every stage a short name and a phase, with each phase in one run', () => {
+    // The panel lists stages by group, one line each.
+    it('gives every stage a short name and a group, with each group in one run', () => {
         for (const stage of STAGES as Stage[]) {
             expect(stage.name.length).toBeGreaterThan(0);
             expect(stage.name.length).toBeLessThanOrEqual(20);
-            expect(PHASES).toContain(stage.phase);
+            expect(GROUPS).toContain(stage.group);
         }
-        const runs = (STAGES as Stage[]).map((s) => s.phase).filter((p, i, all) => p !== all[i - 1]);
-        expect(runs).toEqual(PHASES);
+        const runs = (STAGES as Stage[]).map((s) => s.group).filter((g, i, all) => g !== all[i - 1]);
+        expect(runs).toEqual(GROUPS);
     });
 
     // A new eval added to the wiring smoke without a stage would never reach the panel.
@@ -100,7 +100,7 @@ describe('stage-signals', () => {
         expect(posting?.status).toBe('skipped');
         expect(posting?.meta.note).toBe('no eval for this stage');
         expect(posting?.meta.order).toBe(STAGES.findIndex((s: Stage) => s.id === 'posting') + 1);
-        expect(posting?.meta).toMatchObject({ name: 'Posting', phase: 'On the PR' });
+        expect(posting?.meta).toMatchObject({ name: 'Posting', group: 'On the PR' });
     });
 
     it('turns a failed step red and a step that did not run into infra', () => {

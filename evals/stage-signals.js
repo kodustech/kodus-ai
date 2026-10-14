@@ -42,7 +42,7 @@ function baseMeta(stage) {
     return {
         stage: stage.label,
         name: stage.name,
-        phase: stage.phase,
+        group: stage.group,
         order: index >= 0 ? index + 1 : null,
         eval: stage.eval,
         measured: stage.model,
