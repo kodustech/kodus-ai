@@ -1,0 +1,670 @@
+{
+ "model": "muse-spark-1.3",
+ "verificador": "muse-spark-1.3",
+ "versao": "v3d",
+ "versaoDedup": "m13h-v9",
+ "prs": {
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete wrong result where a valid slot in a split schedule is rejected as outside working hours.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete wrong-result failure where overrides shifting across midnight are filtered/applied on the wrong day, causing slots to show open when the organizer is off.",
+     "passos": 2
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "Comment describes a concrete user-visible failure where cacheUpdatedAt stays stale and UI keeps showing old timestamp after deletion, not an optional style or speculative issue.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete failure where BSD sed syntax fails on GNU/Linux so env var is never updated.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete user-facing wrong result where non-US locale users see a US-formatted date/time instead of their own locale format.",
+     "passos": 3
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure where one SendGrid error aborts the loop and skips the deferred Prisma deletes, causing cancelled emails to still be sent.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure where unawaited cancellations are lost and reminder emails/SMS are still sent.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete user-visible failure where old edited-workflow email reminders still send because far-future SendGrid sends stay active until the 1-hour cron.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete scalability failure where sequential SendGrid cancels block the time-sensitive hourly cron and delay cancellations as backlog grows, not an optional style or micro-optimization.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "Hard-coded placeholder still displays and functions correctly, so ignoring it only leaves an untranslated string with no crash, wrong data, or broken behavior.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "Ignoring the comment leaves a functional English button that still verifies numbers, with only a missing translation and no crash, wrong data, or broken caller.",
+     "passos": 1
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": []
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete failure where arbitrary strings pass validation and create accounts with invalid emails.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security failure where victim@gmail.com.evil.com bypasses a gmail.com whitelist due to the unanchored regex.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "It describes concrete data corruption where validation side-effects inflate stats and concurrent read-modify-write saves lose increments.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete functional failure where a normalized server email won't match the raw input so the retry validation misses.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "Ignoring it leaves blocked-email enforcement bypassable by case variation, returning not-blocked for an address that should be blocked.",
+     "passos": 2
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "It reports a concrete latency cost from sequentially awaiting N dynamic imports on hot paths, not a stylistic or hypothetical issue.",
+     "passos": 2
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": []
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete security failure where GET request mutates and saves notification_level, enabling CSRF to silently change victim state.",
+     "passos": 3
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "Comment describes a concrete security failure where unescaped fancyTitle HTML is injected via triple-brace rendering.",
+     "passos": 2
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It gives a concrete input (instance example.com with website sub.example.com/page) where the else branch returns only the host instead of host+path.",
+     "passos": 1
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "The comment only requests renaming a local variable for consistency with no functional failure if ignored.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "Comment describes a concrete guaranteed failure where QueryFramesInto always returns \"not implemented\" so Execute always sets rsp.Error instead of returning frames.",
+     "passos": 2
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "Comment describes a concrete key collision causing a false denial (wrong authorization result), not an optional style issue.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result failure where a stale denial entry short-circuits to deny and is never cleared on a later grant.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result where List omits newly granted scopes for the full TTL due to serving stale cached permissions.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete scaling failure where each denied resource creates a distinct cache entry, causing memory growth and eviction pressure if ignored.",
+     "passos": 3
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": []
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "Describes concrete security failure: view-only permission passes global canManage check enabling management actions.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "Ignoring the suggestion leaves correct results with only higher per-request cost, causing no crash, wrong result, data loss, security hole, broken caller, or false statement.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The Javadoc makes a false statement about which check guards requireManageMembers, misleading readers about the method's contract.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The Javadoc typo says Stream instead of Set but the signature already shows Set<String>, so ignoring it breaks nothing and misleads no caller.",
+     "passos": 2
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "reason": "Ignoring it leaves cleanup functionally correct and only causes noisy Error-level logs, which is a logging/style issue.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "The comment only reports inefficient quadratic string building that still produces correct SQL, so ignoring it causes no crash, wrong result, or data loss.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete 10x increase in DB load from running all 8 cleanup jobs every minute instead of every 10 minutes.",
+     "passos": 2
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure where a null credential ID prevents removeStoredCredentialById from deleting the exhausted federated credential.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete security failure where same recovery code validates repeatedly instead of being single-use.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete crash (NoSuchElementException/500) from unguarded Optional.get() when the credential is missing or codes are exhausted.",
+     "passos": 2
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "Comment describes a concrete functional failure where returning SUN as the BouncyCastle provider poisons BouncyIntegration lookups and breaks BC-specific algorithms.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "Comment describes a concrete correctness/security failure where equal-order providers (e.g. Default/FIPS at order 200) are silently resolved by ServiceLoader order instead of failing fast.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete failure where trailing garbage and length mismatches are accepted as valid enabling ECDSA signature malleability, not optional style.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "Ignoring leaves correct behavior unchanged; the two discarded encoders are pure dead code whose removal is only cleanup.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete test failure where round-trip assertion passes even if both conversions are wrong, allowing incorrect signatures to go undetected.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The test names promise ES384/ES512 curve verification but reuse a P-256 key, misleading readers that full-width handling was exercised when it was not.",
+     "passos": 2
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete wrong results (under-counted timeseries for count aliases and count-equivalent aggs) if ignored, not optional style.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "Comment names concrete inputs like '0.1' and 5.0 where the helper stores sample_rate while production drops it, causing test/prod divergence - a concrete wrong result, not speculative.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failing input (!event.type:error) that matches the substring check and causes wrong upsampled results, which is a correctness failure not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure where the test passes identically with or without the bug because the transaction has no sample_weight so upsampled_count() equals count().",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete wrong-result failure where a legitimate 0/0.0 rate is dropped instead of being converted.",
+     "passos": 1
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete crash and incorrect filtering when OptimizedCursorPaginator paginates datetime-ordered audit logs.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a false safety claim that misleads readers because the code forwards potentially negative offsets to queryset slicing with no boundary handling.",
+     "passos": 2
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete failure and false documentation — negative cursor.offset is passed directly to queryset slicing which Django does not support, so ignoring leaves a crash/wrong result and a misleading safety claim.",
+     "passos": 3
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure where the docstring falsely claims optimizations and compatibility while the code breaks prior cursor semantics with negative-offset slicing.",
+     "passos": 1
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete crash/wrong-result where datetime values break OptimizedCursorPaginator's integer math.floor/ceil key logic.",
+     "passos": 2
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete failure where old SET keys cause WRONGTYPE errors on ZSET ops, failing inserts and flushes.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete KeyError/TypeError crash and whole-batch loss when end_timestamp_precise is missing/null, not optional style.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete data loss/wrong result where zpopmin can evict the root span while the hrs flag remains set.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete wrong-result/data-loss failure where depths 1001-10000 stop joining early and leave segments split.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "Ignoring the comment leaves production behavior unchanged and only leaves score/eviction logic untested, which is a request for more test coverage with no concrete crash or wrong result.",
+     "passos": 2
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete failure where closing a strategy shuts down the factory-shared pool so a rebalance reuses dead workers and stalls processing.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete data-loss failure where shutdown drops queued items and leaves offsets outstanding, contradicting the graceful-shutdown guarantee.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure where daemon commit threads keep leaking and committing via a stale commit function after factory shutdown.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete test failure where the assertion checks the opposite of the docstring and passes both when commits happen and when they never happen due to the 1.0s commit loop versus 0.2s wait.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete test failure where a serial implementation would still pass, leaving a false concurrency claim that misleads readers.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment only points out weak test coverage that would also pass under serial processing, with no crash, wrong result, or production failure if ignored.",
+     "passos": 2
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure where a put raising after add_offset leaves an outstanding offset that blocks later contiguous commits.",
+     "passos": 2
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "Comment describes concrete wrong result where qsize drops at get() so wait_until_empty/get_stats report empty while items are still in-flight.",
+     "passos": 3
+    }
+   ]
+  }
+ }
+}

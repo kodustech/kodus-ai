@@ -1,0 +1,246 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "modelo": "deepseek-v4.1-flash",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "bookings.tsx:553 virou forEach(async ...) com await getCalendar; promessas descartadas e erros fora do try. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "vital/lib/reschedule.ts:125-128 forEach(async) dentro de try/catch que nao captura mais a rejeicao. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "wipemycalother/lib/reschedule.ts:125 mesmo forEach(async). Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "alucinacao",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "index.ts:2 e so comentario; afirma que o app vive em packages/app-store/_example, mas nao ha diretorio _example nem example no head; o caminho 'correto' sugerido tambem nao existe.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "CalendarManager.ts:28 guarda Promise em calendar, mas os unicos consumidores (calendar.ts:83, viewer.tsx:340/415) so repassam para getConnectedCalendars, que faz await item.calendar; nenhum caminho quebra hoje.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "bookings.tsx:552-559 forEach(async) nao aguardado. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo ponto de getCalendarCredentials; todos os consumidores passam por getConnectedCalendars, que aguarda (CalendarManager.ts:48); risco so para consumidor futuro.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Idem: retorno com Promise em calendar so e lido por getConnectedCalendars, que ja faz await; sem caller quebrado.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S9",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "bookings.tsx:552-556 forEach(async). Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S10",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "vital/lib/reschedule.ts:124-129 forEach(async). Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S11",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "wipemycalother/lib/reschedule.ts:124-129 forEach(async). Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S12",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "bookings.tsx:552-559 forEach(async). Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S13",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "vital/lib/reschedule.ts:124-129 forEach(async). Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S14",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "wipemycalother/lib/reschedule.ts:124-129 forEach(async). Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S15",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "handleCancelBooking.ts:458-461 forEach(async) com await getCalendar e updateEvent nao aguardados; golden 1 cobre forEach com callbacks async.",
+   "confianca": "media",
+   "precisaAstra": false
+  }
+ ]
+}

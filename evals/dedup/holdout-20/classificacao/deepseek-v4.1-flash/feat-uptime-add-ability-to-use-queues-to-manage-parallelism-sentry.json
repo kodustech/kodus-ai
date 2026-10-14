@@ -1,0 +1,188 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "modelo": "deepseek-v4.1-flash",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "result_consumer.py:254-258 passa sempre o mesmo self.queue_pool (criado uma vez no __init__) e queue_consumer.py:335-338 close() chama queue_pool.shutdown(); apos rebalance a nova estrategia usa fila shut down (Py 3.13.1), put levanta ShutDown e o except em 317-325 completa o offset sem processar.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:185 cria queue.Queue() sem maxsize e submit (293-315) nunca rejeita/bloqueia; com worker lento a memoria cresce sem limite, contrariando a backpressure prometida em 253. Introduzido pelo PR.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Verdade que a docstring em queue_consumer.py:253 promete backpressure e a fila de 185 e ilimitada, mas o pedido e corrigir docstring (ou limitar fila); mudanca de documentacao.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "WorkItem.message (queue_consumer.py:31) e preenchido em 312 mas nunca lido; docstring/campo morto, estilo.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "doc_defect",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "test_results_consumer.py:1874-1922: docstring diz que erro nao bloqueia commits, mas a assercao 1922 exige que nada seja commitado - mesmo problema do golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "doc_defect",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": false,
+   "evidencia": "test_queue_consumer.py:137-173 e outro teste (concorrencia em test_queue_consumer), golden 1 e sobre test_thread_queue_parallel_error_handling; e lacuna de teste (nao mede sobreposicao).",
+   "confianca": "alta",
+   "precisaAstra": true,
+   "tipoFPOriginal": "nit",
+   "astra": {
+    "golden_juiz": true,
+    "golden_classificacao": null,
+    "vale": "juiz"
+   }
+  },
+  {
+   "id": "S7",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "test_results_consumer.py:1780-1822 so assere call_count==2; lacuna de teste, nao bug.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:148-149 completa o offset no finally mesmo com erro, mas ResultProcessor.__call__ (result_consumer.py:44-53) ja engole toda excecao, como no modo serial: pular falha e o desenho existente; so a docstring 254 esta errada.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S9",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "WorkItem.message (queue_consumer.py:31) e preenchido em 312 mas nunca lido; docstring/campo morto, estilo.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S10",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:148-149 completa o offset no finally mesmo com erro, mas ResultProcessor.__call__ (result_consumer.py:44-53) ja engole toda excecao, como no modo serial: pular falha e o desenho existente; so a docstring 254 esta errada.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S11",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:148-149 completa o offset no finally mesmo com erro, mas ResultProcessor.__call__ (result_consumer.py:44-53) ja engole toda excecao, como no modo serial: pular falha e o desenho existente; so a docstring 254 esta errada.",
+   "confianca": "media",
+   "precisaAstra": false
+  }
+ ]
+}

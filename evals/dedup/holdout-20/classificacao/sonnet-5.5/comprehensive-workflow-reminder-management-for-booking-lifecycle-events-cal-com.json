@@ -1,0 +1,86 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "modelo": "sonnet-5.5",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "scheduleEmailReminders.ts:53-77: um try/catch envolve o loop inteiro e os prisma.delete (lazy) so rodam no Promise.all final. Um cancel que falha aborta os demais, e nenhum delete executa; os lembretes restantes nao sao cancelados na SendGrid. Codigo novo do PR.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "smsReminderManager.ts:177-186: twilio.cancelSMS e prisma.workflowReminder.delete estao no mesmo try; se o cancel lancar, a linha fica. Antes os callers apagavam a linha a parte, e o PR tirou isso. Impacto baixo: linha orfa.",
+   "confianca": "baixa",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Pede so renomear ou documentar deleteScheduledEmailReminder/immediateDelete (emailReminderManager.ts:197-232); nao pede corrigir o comportamento.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "data",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete faz POST cancel na SendGrid e return, sem apagar a linha nem marcar cancelled; callers como handleNewBooking.ts:968 e workflows.tsx:214/521 tiraram o proprio delete.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "scheduleEmailReminders.ts:53-77: um try/catch envolve o loop inteiro e os prisma.delete (lazy) so rodam no Promise.all final. Um cancel que falha aborta os demais, e nenhum delete executa; os lembretes restantes nao sao cancelados na SendGrid. Codigo novo do PR.",
+   "confianca": "media",
+   "precisaAstra": false
+  }
+ ]
+}

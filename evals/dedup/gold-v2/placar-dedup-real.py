@@ -4,12 +4,11 @@ dedup de producao rodado (dedup-real/<versao>/<model>.json). Fica o comentario
 que o dedup manteve (keep) de cada grupo, depois do guarda de producao, mais as
 soltas; usa as matrizes do juiz ja rodadas no finder, sem chamar LLM.
 
-  python3 evals/dedup/gold-v2/placar-dedup-real.py <model> <versao> [<versao> ...]
+  python3 evals/dedup/gold-v2/placar-dedup-real.py <model> <versao> [<versao> ...] [--matriz=<arquivo>]
 """
 import json, os, sys
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 CORE = {'bug', 'security', 'concurrency', 'data', 'api', 'perf', 'test_gap', 'doc_defect'}
-TOTAL = 111
 MATRIZ = {'deepseek-v4.1-flash': 'finder-definitivo_deepseek', 'gpt-6.1-sol': 'finder-definitivo_gpt',
           'muse-spark-1.2': 'finder-muse-v1', 'sonnet-5.5': 'finder-definitivo_sonnet'}
 tec = lambda pb: pb == 'generalist-base' or str(pb).startswith('micro-exp-p3-')
@@ -33,8 +32,12 @@ def placar(casos):
         fp += len(cols) - len(venc)
     return n, gold, gold / TOTAL, gold / (gold + fp)
 
-model, versoes = sys.argv[1], sys.argv[2:]
-m = json.load(open(f'investigation/results/matriz-pre-09.10.26_{MATRIZ[model]}.json'))
+args = [a for a in sys.argv[1:] if not a.startswith('--matriz=')]
+model, versoes = args[0], args[1:]
+# --matriz=<arquivo>: outra matriz do juiz (ex.: holdout) no lugar da do light.
+arq = next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--matriz=')), f'investigation/results/matriz-pre-09.10.26_{MATRIZ.get(model)}.json')
+m = json.load(open(arq))
+TOTAL = sum(1 for x in m.values() for g in x['goldens'] if g.get('category') in CORE)
 casos = {}
 for c, x in m.items():
     idx = [j for j, cand in enumerate(x['candidatos']) if tec(cand.get('producedBy'))]

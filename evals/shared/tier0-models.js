@@ -88,6 +88,8 @@ const TIER0 = {
     // Standard tier: $1,25 in / $4,25 out. O tier `-contributor` (12x mais
     // barato) nao esta provisionado nesta conta.
     'muse-spark-1.2': { provider: 'openai_compatible', keyEnvs: ['META_MUSE_API_KEY'], baseURL: 'https://api.meta.ai/v1' },
+    // A versao que a producao roda (#1821).
+    'muse-spark-1.3': { provider: 'openai_compatible', keyEnvs: ['META_MUSE_API_KEY'], baseURL: 'https://api.meta.ai/v1' },
 
     // xAI — OpenAI-compatible. ATENCAO no custo: o preco DOBRA acima de 200k
     // tokens de prompt, e os casos do light 30 passam disso com folga (media

@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "id": "S3",
+ "golden": 0,
+ "promptSha": "4adbcaed4ff9048d2b430d4c0e8e5b1952abe3e5",
+ "sameProblem": false,
+ "reason": "The review reports a FIPS provider priority collision, while the golden comment reports returning the default keystore provider instead of BouncyCastle; fixing the priority would not fix that incorrect return."
+}

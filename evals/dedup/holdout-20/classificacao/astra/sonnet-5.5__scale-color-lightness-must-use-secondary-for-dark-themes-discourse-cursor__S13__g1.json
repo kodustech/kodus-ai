@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "id": "S13",
+ "golden": 1,
+ "promptSha": "a6b3d8efbfd6e08341b796715ec3ee5a41a93fac",
+ "sameProblem": true,
+ "reason": "Both comments flag the same desktop .name light-theme regression from $primary lightness 30% to 50%, and the proposed fix restores the original value."
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "id": "S3",
+ "golden": 2,
+ "promptSha": "e12e11f5b112b65dde3c5e45ce783c4ecbaae5bd",
+ "sameProblem": false,
+ "reason": "The review comment concerns reversed percentages in mobile/modal.scss, while the golden issue is an incorrect light-theme percentage in topic-post.css, so fixing the reported location would not fix the golden issue."
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "id": "S2",
+ "golden": 0,
+ "promptSha": "5c0d7dc6e05f2638fa0f716f83fd4c0a9ea92fef",
+ "sameProblem": false,
+ "reason": "The review concerns ambiguous selection among equal-priority providers, whereas the golden issue concerns returning the default keystore provider instead of BouncyCastle; fixing tie handling would not necessarily fix that incorrect return."
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "gpt-6.1-sol",
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "id": "S2",
+ "golden": 0,
+ "promptSha": "a61d066186a49387fd7029fc3d2fe26e25599cbf",
+ "sameProblem": false,
+ "reason": "The review targets redundant permission reloads on cached denials; fixing those reloads would not prevent stale cached grants from authorizing access to revoked resources."
+}

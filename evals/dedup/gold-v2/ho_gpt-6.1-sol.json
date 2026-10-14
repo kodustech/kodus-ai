@@ -1,0 +1,1572 @@
+{
+ "model": "gpt-6.1-sol",
+ "sourcePool": "14.10.26_holdout_gpt",
+ "labelVersion": "v2",
+ "prs": {
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 133,
+     "relevantLinesEnd": 134,
+     "suggestionContent": "A matching date override returns true before checking busy periods. Both fixed-host and loose-host callers pass calendar and booking conflicts in busy, so a host with an override is offered even when an existing booking overlaps the slot. Continue to the busy checks after validating the override instead of returning true."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 117,
+     "relevantLinesEnd": 124,
+     "suggestionContent": "The override bounds reject only non-overlapping slots rather than requiring the entire event to fit inside an override. A fixed host with a 10:00–11:00 override accepts a 10:30–11:30 event generated from another host's availability, despite being unavailable for its final half hour. Accept only when at least one override contains both slotStartTime and slotEndTime; this also avoids rejecting a slot merely because another interval on the same date does not overlap it."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 138,
+     "relevantLinesEnd": 147,
+     "suggestionContent": "The working-hours predicate rejects a slot if any interval on its weekday does not contain it. A split schedule of 09:00–12:00 and 13:00–17:00 therefore loses every slot, since each valid slot lies outside the other interval. Require at least one matching interval to contain the full event instead of finding an interval that excludes it."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 140,
+     "relevantLinesEnd": 146,
+     "suggestionContent": "A weekday with no matching working-hours entry falls through to the busy checks and is treated as available when there are no conflicts. In round-robin events, slots generated for a loose host can consequently include a fixed host whose schedule excludes that day. Reject slots unless a working-hours interval on the slot's weekday contains the event, when no date override applies."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/lib/slots.ts",
+     "relevantLinesStart": 218,
+     "relevantLinesEnd": 223,
+     "suggestionContent": "Timezone conversion takes only hour and minute, discarding day rollover and turning intervals crossing attendee midnight into reversed ranges. A UTC organizer's 22:00–23:00 override viewed in UTC+01:30 becomes startTime 1410 and endTime 30, which buildSlots skips because start is greater than end, removing valid availability. Preserve the converted dates and split the interval across attendee-day boundaries before building slots."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 133,
+     "relevantLinesEnd": 135,
+     "suggestionContent": "Do not return true before checking busy intervals when a date override matches. For example, with a 09:00–17:00 override and an existing 10:00–11:00 booking, a candidate at 10:00 sets dateOverrideExist and returns true here, bypassing busy.every entirely. The fixed-host filtering and loose-host assignment both call this predicate with date overrides, so an already-booked host can be advertised as available. Let a valid override bypass only the normal working-hours check, then continue through the busy checks."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 133,
+     "relevantLinesEnd": 135,
+     "suggestionContent": "Do not return true before checking busy periods when a date override exists. Previously, checkIfIsAvailable rejected overlapping calendar events/bookings (apart from the explicit currentSeats exception), and the fixed-host and loose-host consumers still rely on that behavior when passing their schedules. With this early return, any slot accepted by the override branch is considered available even if the host has a conflicting booking. Let the override bypass only the normal working-hours check, then continue through busy.every."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 133,
+     "relevantLinesEnd": 135,
+     "suggestionContent": "A matching date override returns true before the busy.every check below. Consequently a host with an override is considered available even when an existing booking or calendar busy interval overlaps the slot. An override should replace normal working hours, not bypass busy-time checks; continue to the busy check after validating the override."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 142,
+     "relevantLinesEnd": 143,
+     "suggestionContent": "The variable named end is calculated from slotStartTime, exactly like start, instead of slotEndTime. A slot starting at 16:45 with a 30-minute duration passes a working-hours window ending at 17:00 despite ending at 17:15. Calculate the end boundary from the slot end."
+    },
+    {
+     "id": "S10",
+     "finderIndex": 9,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 138,
+     "relevantLinesEnd": 150,
+     "suggestionContent": "This search rejects a slot if it falls outside any working-hours window on that weekday. With split hours of 09:00–12:00 and 13:00–17:00, a valid 10:00 slot is rejected because it is outside the afternoon window. Check for containment in at least one applicable window rather than finding any window that excludes the slot."
+    },
+    {
+     "id": "S11",
+     "finderIndex": 10,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 114,
+     "relevantLinesEnd": 115,
+     "suggestionContent": "The equality check compares two separately created Dayjs objects with ===, which is always false, even when the override start and end represent the same instant. The intended zero-length/closed-day rejection is unreachable, and a slot beginning exactly at that instant can reach the dateOverrideExist success return. Compare timestamps or use isSame instead."
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/vital/lib/reschedule.ts",
+     "relevantLinesStart": 125,
+     "relevantLinesEnd": 128,
+     "suggestionContent": "The async forEach callback moves calendar factory exceptions outside the surrounding try/catch because forEach discards its returned promise. An invalid encrypted Exchange credential throws during CalendarService construction, now producing an unhandled rejection while Reschedule continues and returns success instead of logging the error; the identical regression occurs in wipemycalother/lib/reschedule.ts. Await Promise.all over bookingRefsFiltered.map(async ...) inside the try block, or use an awaited for...of loop, so factory and deletion failures reach the catch."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/vital/lib/reschedule.ts",
+     "relevantLinesStart": 125,
+     "relevantLinesEnd": 128,
+     "suggestionContent": "The new async forEach callback is not awaited. If getCalendar rejects (for example, the dynamically imported calendar module fails to load or its service constructor throws), the callback produces a rejected promise that forEach discards; the surrounding try/catch cannot catch it. Previously a synchronous getCalendar failure reached that catch. Await Promise.all(bookingRefsFiltered.map(async ...)) or use an awaited for...of loop so these failures remain handled and calendar cleanup completes before rescheduling continues. Apply the same fix to the equivalent changed loop in wipemycalother/lib/reschedule.ts."
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 48,
+     "suggestionContent": "Deferred cancellation includes reminders less than ten minutes from their scheduled send time, when SendGrid no longer permits cancellation. A booking cancelled in that interval is only marked cancelled locally by deleteScheduledEmailReminder, and the cron's POST is rejected, so its email is still delivered. Process cancellation before SendGrid's ten-minute cutoff and explicitly handle cancellations that arrive after that deadline rather than relying on this cron query to stop delivery."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+     "relevantLinesStart": 66,
+     "relevantLinesEnd": 74,
+     "suggestionContent": "Successful cancellation records are only deleted after every SendGrid request in the loop succeeds. If a later request fails, the catch skips all queued Prisma deletions; the next run retries an already-cancelled batch, which SendGrid rejects with 400, and aborts before processing the remaining reminders. Await each reminder's database deletion immediately after its successful cancellation and isolate errors per reminder so one failed batch does not block the others."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+     "relevantLinesStart": 485,
+     "relevantLinesEnd": 495,
+     "suggestionContent": "Cancellation now delegates the database update/deletion to asynchronous reminder helpers without awaiting them, while removing reminder deletes from the awaited promise list. The handler can finish before cancelled flags or unscheduled-reminder deletions are persisted, allowing a subsequent scheduler run to schedule a cancelled booking's reminder and leaving cancellation work unfinished when a serverless invocation terminates. Collect and await the helper promises; apply the same correction to the modified rescheduling and workflow-update callers that discard these promises."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+     "relevantLinesStart": 485,
+     "relevantLinesEnd": 495,
+     "suggestionContent": "Await the reminder cancellation promises before completing the cancellation request. These helpers now own persistence of cancellation: email awaits a workflowReminder update and SMS awaits Twilio before deleting the row. The forEach discards their promises, and removing remindersToDelete from the awaited promise list removes the previous guarantee that reminder state is cleared before the handler returns. In a serverless request the outstanding operations can be interrupted after the response, leaving reminders active for a cancelled booking. Collect these helper promises and include them in the awaited Promise.all."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+     "relevantLinesStart": 485,
+     "relevantLinesEnd": 495,
+     "suggestionContent": "Await the reminder cancellation helpers as part of the handler's Promise.all. Previously this handler awaited deletion of every workflowReminder through remindersToDelete; now the only database deletion/marking occurs inside these async helpers, but their promises are discarded by forEach. The request can complete before email reminders are marked cancelled (or SMS/unscheduled reminders are deleted), and a serverless invocation can stop before that cleanup completes, leaving reminders active for a cancelled booking. Collect the helper promises and include them in the awaited work instead of removing the awaited cleanup altogether."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+     "relevantLinesStart": 53,
+     "relevantLinesEnd": 76,
+     "suggestionContent": "Handle cancellation failures per reminder rather than around the entire batch. If one SendGrid request rejects (for example, for an expired or invalid batch ID), the loop exits before cancelling the remaining reminders, and Promise.all is never reached, so even earlier successfully cancelled reminders remain in the database. The failed record stays eligible for the next run and can repeatedly block other cancellations until their emails are sent. Execute each successful deletion and isolate failures so the worker continues processing the remaining reminders."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+     "relevantLinesStart": 485,
+     "relevantLinesEnd": 495,
+     "suggestionContent": "Await the reminder-manager calls as part of the cancellation work (for example, collect their promises and include them in Promise.all). Both changed helpers now perform the database cleanup themselves: email reminders are marked cancelled and SMS/unscheduled reminders are deleted asynchronously. This loop discards those promises, and the previously awaited reminder deletion promises have been removed. The handler can therefore finish before cancellation is persisted; in a serverless deployment that suspends execution after the response, cancelled bookings can retain active reminders. Apply the same awaited-call contract to the other callers that removed their awaited database cleanup."
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+     "relevantLinesStart": 43,
+     "relevantLinesEnd": 46,
+     "suggestionContent": "Successful cache deletion does not invalidate the connectedCalendars query that supplies cacheUpdatedAt. The wrapper forwards only an optional parent onChanged callback and disables window-focus refetch, so the deleted cache continues to appear present with its old timestamp and delete action. Invalidate utils.viewer.calendars.connectedCalendars on successful deletion."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 1023,
+     "relevantLinesEnd": 1024,
+     "suggestionContent": "The new timestamp update passes an empty data object to Prisma updateMany, which does not advance @updatedAt. SelectedCalendar.updatedAt therefore remains unchanged after cache repopulation instead of recording the refresh as this new side effect intends. Pass { updatedAt: new Date() } explicitly."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "scripts/test-gcal-webhooks.sh",
+     "relevantLinesStart": 67,
+     "relevantLinesEnd": 68,
+     "suggestionContent": "The environment update uses BSD sed's `-i ''` syntax, which fails with GNU sed on Linux. When GOOGLE_WEBHOOK_URL already exists, the script leaves the previous URL unchanged but still prints that it was updated, preventing webhooks from reaching the new tunnel. Use a portable replacement strategy or select the in-place syntax based on the available sed implementation and check its exit status."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 1023,
+     "relevantLinesEnd": 1024,
+     "suggestionContent": "The empty update object does not update Prisma's @updatedAt field (empty updates leave it unchanged), so this call does not perform the timestamp refresh described by the comment. Pass an explicit updatedAt value if successful cache refreshes are intended to advance SelectedCalendar.updatedAt."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "scripts/test-gcal-webhooks.sh",
+     "relevantLinesStart": 67,
+     "relevantLinesEnd": 73,
+     "suggestionContent": "When GOOGLE_WEBHOOK_URL already exists, `sed -i ''` uses BSD/macOS syntax and fails under GNU sed on Linux. The script nevertheless prints that the URL was updated and keeps the tunnel running, leaving webhooks configured with the old URL. Use a portable replacement approach (or select the appropriate sed syntax) and only announce success after the edit succeeds."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 1023,
+     "relevantLinesEnd": 1024,
+     "suggestionContent": "The new call does not actually refresh SelectedCalendar.updatedAt. updateManyByCredentialId in the other changed file forwards `data` unchanged to Prisma, and Prisma does not advance an @updatedAt field when the update data is empty. Consequently successful availability refreshes leave the selected-calendar timestamps unchanged despite this call's stated purpose. Pass an explicit timestamp, e.g. `{ updatedAt: new Date() }`, or make the repository method explicitly perform the timestamp update."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+     "relevantLinesStart": 89,
+     "relevantLinesEnd": 92,
+     "suggestionContent": "The cache timestamp is always formatted with \"en-US\", even though the surrounding label uses the user's selected translation locale. Users in other locales therefore see US month/day ordering and time conventions inside an otherwise localized message, potentially misreading the last-update date. Use the active application locale for Intl.DateTimeFormat instead of hard-coding en-US."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql",
+     "relevantLinesStart": 4,
+     "relevantLinesEnd": 4,
+     "suggestionContent": "This warning says updatedAt is added without a default and cannot be added to a nonempty table, but the migration actually supplies DEFAULT NOW(), explicitly handling existing rows. Remove or correct the warning so operators reviewing the migration are not incorrectly told that existing data makes it unsafe to run."
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/models/blocked_email.rb",
+     "relevantLinesStart": 14,
+     "relevantLinesEnd": 16,
+     "suggestionContent": "Updating match statistics inside email validation counts a single blocked signup twice. UsersController#create calls user.valid? and then user.save, which validates again even when the first validation failed, so both invocations increment match_count. Record the attempt once at the signup boundary rather than as a side effect of each validation."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/models/blocked_email.rb",
+     "relevantLinesStart": 14,
+     "relevantLinesEnd": 16,
+     "suggestionContent": "The match_count update is a read-modify-write operation without synchronization. Concurrent signup attempts for the same blocked email can both read the same count and save the same incremented value, losing matches and potentially overwriting last_match_at with an older timestamp. Use an atomic database increment with the timestamp update, or lock the row before reading and updating its statistics."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "app/models/blocked_email.rb",
+     "relevantLinesStart": 12,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "Blocked-email lookup compares the raw email without normalizing its domain. A signup for block@SPAMFROMHOME.ORG does not match a blocked record for block@spamfromhome.org despite identifying the same mailbox, allowing the signup restriction to be bypassed by changing domain capitalization. Normalize domains using Email.downcase both when storing blocked emails and when looking them up."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-secret-and-identity",
+     "technique": "M3",
+     "label": "security",
+     "relevantFile": "app/models/blocked_email.rb",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "Canonicalize blocked emails consistently with the application's Email.downcase identity handling, both when storing entries and when looking them up. This exact equality query is case-sensitive, and BlockedEmail's validation callback only defaults action_type. A block-list entry such as `Block@SpamFromHome.org` therefore does not block the same identity submitted/stored as `block@spamfromhome.org`. This is particularly relevant to the explicitly supported manually populated block list. Normalize existing/imported entries as well as new ones, and add a test with differing casing between the stored entry and the lookup."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/models/blocked_email.rb",
+     "relevantLinesStart": 14,
+     "relevantLinesEnd": 16,
+     "suggestionContent": "The match counter update loses increments under concurrent validations. If two requests load a blocked email with match_count N before either saves, both assign N+1 and save, leaving N+1 despite two matches (and a later save can also overwrite a newer last_match_at). Use an atomic database increment with the timestamp update, or lock and reload the row before modifying the statistics."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/models/blocked_email.rb",
+     "relevantLinesStart": 14,
+     "relevantLinesEnd": 16,
+     "suggestionContent": "The match counter loses increments under concurrent validations. Two calls can both load match_count = N, increment their separate records to N + 1, and save that same value, recording only one of two matches. Use an atomic database increment (or serialize the read/update with a row lock) so match_count measures every matching validation rather than only non-overlapping ones."
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/controllers/topics_controller.rb",
+     "relevantLinesStart": 105,
+     "relevantLinesEnd": 107,
+     "suggestionContent": "The unsubscribe action dereferences the result of TopicUser.find_by without handling a missing record. A logged-in user visiting the unsubscribe URL for a visible topic they have not previously visited gets a NoMethodError instead of being unsubscribed, because TopicView does not create that row. Handle the absent row with the regular default notification level and persist the selection through TopicUser.change, which supports creating missing records."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/controllers/topics_controller.rb",
+     "relevantLinesStart": 113,
+     "relevantLinesEnd": 113,
+     "suggestionContent": "Saving the notification level directly leaves notifications_reason_id unchanged instead of recording an explicit user choice. For automatically tracked topics with a null reason, TopicUser.update_last_read promotes the row back to tracking when the reading threshold is exceeded, undoing the unsubscribe on the next read. Persist the change through TopicUser.change so notifications_reason_id and notifications_changed_at are set consistently with set_notifications."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+     "relevantLinesStart": 5,
+     "relevantLinesEnd": 8,
+     "suggestionContent": "The client unsubscribe route only loads the ordinary topic view and never performs the unsubscribe operation. When entered through an in-app transition rather than a full server navigation, PostStream.loadTopicView requests /t/:id.json (or consumes preload data), so the page claims notifications will stop while the persisted notification level remains unchanged. Ensure this entry path executes the unsubscribe operation before showing confirmation."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "config/routes.rb",
+     "relevantLinesStart": 440,
+     "relevantLinesEnd": 441,
+     "suggestionContent": "The new GET routes mutate the authenticated user's notification preferences without CSRF verification. An attacker can navigate a logged-in user's browser to a known topic unsubscribe URL and reduce or mute its notifications, because Rails excludes GET from forgery-token checks and unsubscribe explicitly skips check_xhr. Make GET render a confirmation page and perform the preference change through a CSRF-protected POST or PUT."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "config/locales/client.en.yml",
+     "relevantLinesStart": 985,
+     "relevantLinesEnd": 985,
+     "suggestionContent": "The confirmation promises that the user will stop receiving notifications for this topic, but TopicsController#unsubscribe sets watching/tracking users to regular, not muted. Regular still allows mention/reply notifications, so this confirmation (and the corresponding promise in the new email link text) overstates what clicking the link accomplished. Describe stopping notifications for every new post, or make the confirmation conditional on the resulting notification level so only muted users are told that all topic notifications have stopped."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/mailers/user_notifications.rb",
+     "relevantLinesStart": 295,
+     "relevantLinesEnd": 295,
+     "suggestionContent": "Make the unsubscribe URL absolute before passing it to the email builder (for example, prepend Discourse.base_url). Topic#unsubscribe_url appends `/unsubscribe` to the topic's site-relative URL, but the new server translation interpolates unsubscribe_url directly into an email Markdown link and MessageBuilder cooks it without adding the site origin. Unlike the post link in notification.html.erb, which explicitly prepends Discourse.base_url, this produces a `/t/.../unsubscribe` href that email clients cannot resolve to the forum, so the new per-topic unsubscribe link does not work reliably."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/controllers/topics_controller.rb",
+     "relevantLinesStart": 105,
+     "relevantLinesEnd": 107,
+     "suggestionContent": "Handle a missing TopicUser record before dereferencing it. A logged-in user can visit this URL for a topic they have not tracked or visited (for example, an unsubscribe link forwarded by another user); find_by then returns nil and tu.notification_level raises NoMethodError, returning a 500 instead of unsubscribing. Find or initialize the user's topic record, applying the default notification level before updating it."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+     "relevantLinesStart": 4,
+     "relevantLinesEnd": 9,
+     "suggestionContent": "The client route loads the topic but never invokes the unsubscribe action. Notification levels are changed only by TopicsController#unsubscribe, so navigating to this route inside the Ember application can display “You will stop receiving notifications” without changing the subscription. Explicitly perform the unsubscribe operation on client-side entry rather than relying on the initial HTML request to have done it."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/controllers/topics_controller.rb",
+     "relevantLinesStart": 113,
+     "relevantLinesEnd": 113,
+     "suggestionContent": "Saving the notification level directly bypasses the explicit-user-change metadata set by TopicUser.change. In particular, a topic_user with notifications_reason_id == nil remains eligible for TopicUser.auto_track, which checks that field and can promote the topic back to tracking after the user unsubscribes. Use the notification-change helper (or set its user-change reason and timestamp consistently) so the unsubscribe is retained as an explicit user preference."
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/common/components/badges.css.scss",
+     "relevantLinesStart": 239,
+     "relevantLinesEnd": 239,
+     "suggestionContent": "The dark-theme notification badge background now uses a lightened $secondary while its text still uses the unmodified $secondary. This puts dark text on a dark background for plain badges such as category unread counts in site-map.hbs:73; with $secondary black, the foreground is #000 and the background is approximately #4d4d4d (about 2.5:1 contrast), making the small count text difficult to read. Set the default badge foreground, including its &[href] rule, to a contrasting dark-theme color such as $primary when selecting this dark background."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/desktop/topic-post.scss",
+     "relevantLinesStart": 291,
+     "relevantLinesEnd": 291,
+     "suggestionContent": "Preserve the original 30% primary lightness in the light-theme argument (and use 70% secondary lightness for its dark equivalent). This replacement changes 30% to 70%, so the bold reply author link becomes substantially paler even in the existing light theme, rather than merely adding dark-theme support."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/mobile/modal.scss",
+     "relevantLinesStart": 102,
+     "relevantLinesEnd": 102,
+     "suggestionContent": "The custom-message-length light/dark percentages are reversed relative to both the original rule and the desktop rule at desktop/modal.scss:94. Use primary 70% and secondary 30% here. As written, mobile displays a much stronger message-length hint than desktop in both themes, and changes the existing light-theme output."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/mobile/topic-post.scss",
+     "relevantLinesStart": 182,
+     "relevantLinesEnd": 182,
+     "suggestionContent": "Keep primary lightness at 20% for the light-theme branch and use secondary 80% for the dark branch, matching desktop/topic-post.scss:321. The new 50%/50% pair unnecessarily fades the mobile h3 text in light themes and makes the same heading less prominent on mobile than desktop in dark themes."
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/serializers/user_serializer.rb",
+     "relevantLinesStart": 138,
+     "relevantLinesEnd": 141,
+     "suggestionContent": "Hostname comparisons are case-sensitive even though DNS hostnames are case-insensitive. With an instance hostname of example.com and a valid website of http://EXAMPLE.COM/user, neither the exact-host nor suffix comparison matches, so the profile displays only EXAMPLE.COM instead of the requested path. Normalize both hostnames to lowercase for comparison while preserving the desired display spelling."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/serializers/user_serializer.rb",
+     "relevantLinesStart": 144,
+     "relevantLinesEnd": 146,
+     "suggestionContent": "Comparing all labels except the first incorrectly treats unrelated domains under multi-label public suffixes as the same domain. For example, with instance host `forum.co.uk` and website `https://unrelated.co.uk/user`, this returns `unrelated.co.uk/user` rather than the unrelated-site host-only label. Both hosts have three labels and their suffixes are `co.uk`, so this branch mistakes the public suffix for a shared site domain. Use registrable-domain-aware comparison (or a narrower explicit host relationship) before including the path."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "micro-exp-p3-data-exposure",
+     "technique": "M3",
+     "label": "security",
+     "relevantFile": "app/serializers/user_serializer.rb",
+     "relevantLinesStart": 153,
+     "relevantLinesEnd": 155,
+     "suggestionContent": "Apply the same untrusted-attribute visibility policy to website_name as to website. website is listed in untrusted_attributes, which hides it for TL0 users viewed anonymously, but include_website_name checks only website.present?. Anonymous responses can therefore disclose the hidden website's hostname (and its path for matching domains) through this new field even when website itself is omitted."
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "public/app/plugins/datasource/loki/querySplitting.ts",
+     "relevantLinesStart": 299,
+     "relevantLinesEnd": 299,
+     "suggestionContent": "The newly interpolated targets are interpolated again by DataSourceWithBackend.query when runQuery executes each split request. TemplateSrv.replace scans the resulting string again, so a variable whose literal value contains another defined variable token (for example, a log-search value containing `$other`) is expanded a second time and produces a different query from the non-splitting path; shard splitting also passes through this additional interpolation. Preserve the early interpolation needed for partitioning while ensuring already-interpolated targets are not interpolated again on execution, and test through the real backend query preparation rather than mocking runQuery."
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/expr/sql/db.go",
+     "relevantLinesStart": 16,
+     "relevantLinesEnd": 21,
+     "suggestionContent": "The replacement DB does not preserve the behavior required by its consumers: RunCommands and QueryFramesInto now always return \"not implemented\". sql.TablesList still calls RunCommands to discover dependencies, and SQL command construction calls that parser, so even valid SQL can no longer construct a command; commands reaching Execute also cannot produce frames. Implement the backing operations (or retain the existing duck implementation) before switching these consumers to this DB."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/expr/reader.go",
+     "relevantLinesStart": 194,
+     "relevantLinesEnd": 199,
+     "suggestionContent": "enableSqlExpressions returns false on both paths, including when FlagSqlExpressions is enabled. Consequently ReadQuery rejects every SQL expression and the enabled feature branch can never execute. Return the actual feature-enabled state rather than unconditionally returning false."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/expr/sql/db.go",
+     "relevantLinesStart": 16,
+     "relevantLinesEnd": 21,
+     "suggestionContent": "The replacement database unconditionally returns \"not implemented\" from both RunCommands and QueryFramesInto. parser.TablesList now uses the former and SQLCommand.Execute uses the latter, so previously supported SQL parsing and execution always fail, even if the feature gate is corrected. Preserve the working database implementation or provide equivalent operations before switching these callers."
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/cache.go",
+     "relevantLinesStart": 30,
+     "relevantLinesEnd": 31,
+     "suggestionContent": "The denial cache key does not distinguish underscores inside resource and parent UIDs from its field separators. For the same namespace, user and action, (name=\"a_b\", parent=\"c\") and (name=\"a\", parent=\"b_c\") generate the same key, so denying the first request makes Check return false for the second even if its permissions explicitly allow it. Encode the components unambiguously, for example as a JSON tuple or length-prefixed fields."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "pkg/services/authz/rbac/service.go",
+     "relevantLinesStart": 123,
+     "relevantLinesEnd": 139,
+     "suggestionContent": "Every distinct resource denied by the cached permission map triggers a reload of the entire user's action permission set, because the denial cache is resource-specific and a cached false result always falls through to getIdentityPermissions. Sequential checks of N inaccessible dashboards therefore execute N full permission queries and cache rewrites even with a current action-wide cache; getUserPermissions' singleflight only merges overlapping requests. Bound refreshes per user/action with a short refresh cooldown or generation marker so different resource misses can share a recent refresh."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/cache.go",
+     "relevantLinesStart": 30,
+     "relevantLinesEnd": 31,
+     "suggestionContent": "The denial cache key is not injective: for the same namespace, user and action, `(name=\"a_b\", parent=\"c\")` and `(name=\"a\", parent=\"b_c\")` produce the same key. After the first request stores a denial, Check's new early cache return denies the second request without checking its permissions, even if it is allowed. Encode the components unambiguously (for example a JSON tuple or length-prefixed components) and add a test verifying that these two requests do not share a denial entry."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/service_test.go",
+     "relevantLinesStart": 981,
+     "relevantLinesEnd": 982,
+     "suggestionContent": "The comment says this seeds an allow permission to prove that the denial cache takes precedence, but the seeded permission is false. This contradicts the documented test setup and does not establish the claimed allow-versus-deny scenario. Seed the dashboard permission with true so the fixture matches the comment and demonstrates the intended precedence."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/cache.go",
+     "relevantLinesStart": 30,
+     "relevantLinesEnd": 31,
+     "suggestionContent": "Make the denial-cache key encode component boundaries unambiguously (for example, length-prefix or serialize the components). For the same namespace, user and action, name `a_b` with parent `c` and name `a` with parent `b_c` both produce the suffix `_a_b_c`. Underscores can occur in resource UIDs, so denying the first request caches a key that causes Check to immediately deny the second request without evaluating its permissions, even if that resource is allowed."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/cache.go",
+     "relevantLinesStart": 30,
+     "relevantLinesEnd": 31,
+     "suggestionContent": "Encode the denial-key components unambiguously rather than joining them with underscores. For the same namespace, user and action, (name=\"a_b\", parent=\"c\") and (name=\"a\", parent=\"b_c\") produce the same key. Check in service.go now treats any hit on this key as an unconditional denial before checking permissions, so a denial for one dashboard/folder pair can deny a different, authorized pair until expiry. Use a structured or length-prefixed encoding (or escaping) that preserves component boundaries, and add a test covering these two distinct tuples."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/service_test.go",
+     "relevantLinesStart": 981,
+     "relevantLinesEnd": 982,
+     "suggestionContent": "The fixture described as allowing access sets `\"dashboards:uid:dash1\"` to `false`. This does not establish the competing allow that the explicit-denial-cache test is supposed to override, so a denial alone cannot prove that the denial-cache lookup worked. Set the permission to `true`, and verify that the same request is allowed without the denial entry before asserting that the entry makes it denied. This makes the test fail if denial-cache precedence is removed."
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+     "relevantLinesStart": 609,
+     "relevantLinesEnd": 612,
+     "suggestionContent": "The SQLite literal-ID path rebuilds the entire accumulated string for every ID, making SQL construction quadratic in batch size. Large batches explicitly supported by this PR, including the 32,767 setting in the integration test, generate substantial repeated copying and allocation before each delete, consuming cleanup time and memory. Build the list with strings.Builder and append each formatted ID once."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "pkg/services/cleanup/cleanup.go",
+     "relevantLinesStart": 77,
+     "relevantLinesEnd": 77,
+     "suggestionContent": "The ticker change runs the entire cleanup service every minute instead of every ten minutes, not just annotation cleanup. The clean method also processes temporary files, snapshots, dashboard versions, images, invites, short URLs and query history, increasing their database and filesystem workload tenfold; cycles lasting over a minute also leave a pending tick that starts another cycle immediately afterward. Preserve the ten-minute interval for the shared cleanup service, or schedule annotations independently if they require a shorter interval."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+     "relevantLinesStart": 605,
+     "relevantLinesEnd": 607,
+     "suggestionContent": "The comment states that SQLite has a parameter limit of 999, but SQLite >= 3.32.0 defaults to 32766 (as the added integration test also recognizes). This branch is choosing a conservative compatibility threshold, not expressing the limit of every SQLite database. Document 999 as the older-version/compatibility threshold so maintainers do not mistake this constant for the actual limit on modern SQLite."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/services/annotations/annotationsimpl/cleanup_test.go",
+     "relevantLinesStart": 98,
+     "relevantLinesEnd": 105,
+     "suggestionContent": "The new SQLite-limit regression case does not exceed the parameter limit when deleting annotations. The 40,003 fixtures are distributed across alert, dashboard and API types, and CleanAnnotations selects/deletes each type separately, so each annotation DELETE receives only about 13,333 IDs despite the configured batch size of 32,767. On SQLite >=3.32.0, switching annotation deletion back to placeholders would therefore still pass this test (the tag cleanup can independently retain its workaround). Create more than 32,767 annotations of a single type, or enough total fixtures for at least one type's deletion to exceed 32,766 parameters, and assert that cleanup succeeds."
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+     "relevantLinesStart": 57,
+     "relevantLinesEnd": 60,
+     "suggestionContent": "readSequence accepts a child whose encoded size exceeds the remaining declared sequence length. For example, `30 04 02 01 01 02 01 01` is accepted as a two-integer sequence even though its children occupy six bytes rather than the declared four, so asn1derToConcatenatedRS silently converts malformed DER instead of rejecting it. Restrict child decoding to the sequence's declared content boundary and throw IOException when a child exceeds the remaining length."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+     "relevantLinesStart": 167,
+     "relevantLinesEnd": 179,
+     "suggestionContent": "The newly registered client CryptoProvider does not satisfy the existing EC JWK parsing consumer: core's AbstractJWKParser calls createECParams(name) and getKeyFactory(\"ECDSA\") to construct an EC public key, and both operations now throw UnsupportedOperationException when this provider is selected. Consequently, a standalone authz client using this provider cannot parse EC keys for ECDSA verification, even though signature conversion is implemented. Implement the JDK-backed curve-parameter and key-factory operations (mapping ECDSA to EC as needed), rather than leaving this existing consumer with an unsupported contract."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "micro-exp-p3-value-boundary-and-position",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+     "relevantLinesStart": 57,
+     "relevantLinesEnd": 60,
+     "suggestionContent": "Bound each child TLV to the remaining sequence length before accepting it. Currently readNext() reads from the whole input and length may become negative, which silently ends the loop successfully. For example, `30 05 02 01 01 02 01 01` is accepted as a two-integer sequence although the second INTEGER crosses the declared sequence boundary. Decode through a stream limited to the sequence content, or reject a child whose encoded size exceeds the remaining length, so malformed DER cannot be converted as a valid signature."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-secret-and-identity",
+     "technique": "M3",
+     "label": "security",
+     "relevantFile": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+     "relevantLinesStart": 56,
+     "relevantLinesEnd": 62,
+     "suggestionContent": "Reject ambiguous highest-priority providers rather than silently taking the first. Both DefaultCryptoProvider and FIPS1402Provider return order 200 in this PR, so when both are present the stable sort leaves the decision to ServiceLoader discovery order. A deployment expecting FIPS can therefore initialize the ordinary Bouncy Castle provider without an error; previously this mixed classpath failed closed. Preserve the error for tied highest-priority providers (or require an explicit security-mode/provider choice), while still allowing the lower-priority authz-client fallback."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+     "relevantLinesStart": 53,
+     "relevantLinesEnd": 56,
+     "suggestionContent": "The assertion only establishes agreement between the two new conversion routines, not correctness of the converted signature. For example, swapping r and s in both routines makes this entire round trip pass, although the DER result no longer verifies the signed data. Verify `asn1Des` with the public key and original data (or compare against an independently specified encoding) so mutually compensating conversion defects fail the test."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+     "relevantLinesStart": 41,
+     "relevantLinesEnd": 42,
+     "suggestionContent": "Every case generates a default EC key rather than a key on the curve associated with the named algorithm. On the standard JDK this is P-256, so testES384 and testES512 just pad P-256 signature components to larger lengths. A converter that discards nonzero high bytes beyond 32 bytes would still pass all three cases. Initialize the key generator with the appropriate curve per case (P-256, P-384, and P-521) so the larger-component conversions are actually tested."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+     "relevantLinesStart": 57,
+     "relevantLinesEnd": 61,
+     "suggestionContent": "Reject a child whose encoded length exceeds the remaining sequence length. Currently bytes `30 01 02 01 01` declare a one-byte sequence body but readSequence returns the entire three-byte INTEGER and exits with length -2. Consequently malformed sequence boundaries are treated as successfully decoded results. Bound child reads to the sequence body and require the remainder to reach exactly zero."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+     "relevantLinesStart": 41,
+     "relevantLinesEnd": 42,
+     "suggestionContent": "Generate a key on the curve corresponding to each tested algorithm rather than using the provider's default EC curve for all three tests. On the standard JDK this generates a P-256 key even for testES384 and testES512, so those tests merely pad P-256 integers to larger output lengths and never exercise actual P-384/P-521 signature encoding (including P-521's long-form sequence length)."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "performance",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+     "relevantLinesStart": 114,
+     "relevantLinesEnd": 115,
+     "suggestionContent": "Remove these two discarded encoder writes. Each allocates an encoder and encodes a BigInteger, but neither result participates in the returned signature; lines 119–120 repeat both writes on fresh encoders. This performs redundant encoding and allocations on every concatenated-signature conversion."
+    },
+    {
+     "id": "S10",
+     "finderIndex": 9,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+     "relevantLinesStart": 57,
+     "relevantLinesEnd": 60,
+     "suggestionContent": "Enforce the declared SEQUENCE boundary before reading each child and reject children whose full encoding exceeds the remaining length. For example, `30 04 02 01 01 02 01 02` declares only four content bytes, but this loop reads both three-byte INTEGER encodings, lets length become -2, and returns a two-element sequence. Consequently asn1derToConcatenatedRS accepts a malformed DER signature by consuming bytes outside its enclosing sequence. Parse through a bounded content stream and require exact consumption."
+    },
+    {
+     "id": "S11",
+     "finderIndex": 10,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+     "relevantLinesStart": 153,
+     "relevantLinesEnd": 156,
+     "suggestionContent": "Reject INTEGER values that do not fit the requested component width instead of silently dropping their high bytes. Removing a single leading sign-padding zero is valid, but this branch also truncates actual magnitude bytes: a positive value 2^256 + 1 becomes 1 when qLength is 32. Thus DER-to-concatenated conversion can return a different signature from the one supplied. Validate nonnegative values and their bit length before padding or removing sign padding."
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 70,
+     "relevantLinesEnd": 70,
+     "suggestionContent": "canManage() grants management access for an all-groups VIEW permission. Inherited requireManage() uses this result in GroupsResource.addTopLevelGroup, allowing a view-only administrator to create groups or reparent an existing group to the top level. Evaluate only AdminPermissionsSchema.MANAGE here."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 121,
+     "relevantLinesEnd": 121,
+     "suggestionContent": "findByType(GROUPS_RESOURCE_TYPE) does not enumerate the specific group resources created by AdminPermissionsSchema.getOrCreateResource, because that method creates them without setting their type. Consequently, specific VIEW_MEMBERS or MANAGE_MEMBERS grants are omitted from the group IDs used for user counts and database filtering. Assign the Groups type to specific group resources and ensure the all-Groups resource is not treated as a model group."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 122,
+     "relevantLinesEnd": 123,
+     "suggestionContent": "The callback passes and returns the authorization resource ID instead of the model group ID stored in the resource name. hasPermission interprets its argument as a resource name, and UsersResource passes the returned IDs to membership queries, so permission evaluation targets the fallback resource and membership filtering uses unrelated IDs. Use the specific group resource's name for both the permission lookup and the returned group ID."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+     "relevantLinesStart": 448,
+     "relevantLinesEnd": 450,
+     "suggestionContent": "The new V2 group permission IDs are passed into a JPA filter that still requires a legacy group.resource.<groupId> authorization resource. JpaUserProvider.groupsWithPermissionsSubquery checks for that prefixed name, whereas AdminPermissionsSchema creates V2 group resources named only with the group ID, so authorized group members are excluded from user searches even with valid group IDs. Update the database filtering path to support V2 resource naming rather than requiring a legacy V1 resource."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+     "relevantLinesStart": 133,
+     "relevantLinesEnd": 135,
+     "suggestionContent": "The new documentation for requireManageMembers points to canManageMembership rather than canManageMembers. These are distinct permissions: V2 checks manage-members for managing members, but manage/manage-membership for membership changes. Link to canManageMembers(GroupModel) so callers do not infer that membership permission authorizes this guard."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+     "relevantLinesStart": 145,
+     "relevantLinesEnd": 147,
+     "suggestionContent": "The new @return documentation promises a Stream of IDs, but the method declares Set<String> and both implementations return sets. Describe a set of IDs instead, so the documented return contract matches what callers actually receive."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 121,
+     "relevantLinesEnd": 124,
+     "suggestionContent": "Use the group resource's name (the group-model ID), not its authorization Resource.getId(), both when calling hasPermission and when adding to granted. AdminPermissionsSchema.resolveGroup now names resources with GroupModel.getId(), and hasPermission looks them up with findByName. Passing the authorization-resource ID fails that lookup and falls back to all-groups permissions rather than evaluating the group's permission. Moreover, UsersResource consumes this returned set as UserModel.GROUPS, so authorization-resource IDs cannot select the actual group members. Consequently a specific VIEW_MEMBERS or MANAGE_MEMBERS grant does not make its members appear in user searches (including the newly added tests)."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 121,
+     "relevantLinesEnd": 124,
+     "suggestionContent": "Preserve the model-group-ID contract here: use groupResource.getName() for both hasPermission and granted.add, rather than getId(). AdminPermissionsSchema.resolveGroup names the authorization resource with GroupModel.getId(), whereas Resource.getId() is the authorization resource's own ID. hasPermission resolves its argument with resourceStore.findByName, so the current argument misses the specific group permission and falls back to all-groups. Even if that fallback grants access, UsersResource passes the returned IDs into group membership filtering/counting, which expects model group IDs, so authorized members disappear from searches and counts."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 121,
+     "relevantLinesEnd": 124,
+     "suggestionContent": "Use the resource name (the model group ID), not groupResource.getId(), both for hasPermission and for the returned set. resolveGroup names the authorization resource with group.getId(), and hasPermission resolves that name with findByName. The authorization resource's own ID is a different identifier: passing it here falls back to all-groups permissions instead of evaluating the specific group, and returning it as UserModel.GROUPS cannot match actual group memberships. Consequently specific VIEW_MEMBERS/MANAGE_MEMBERS grants do not correctly populate user searches/counts."
+    },
+    {
+     "id": "S10",
+     "finderIndex": 9,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 70,
+     "relevantLinesEnd": 70,
+     "suggestionContent": "The global canManage check should require MANAGE only, as canManage(GroupModel) does. Including VIEW makes an all-groups read-only grant satisfy requireManage() and authorize group creation (the creation path exercised in testManageAllGroups). This returns manage authorization for a scope intended only to permit viewing."
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 50,
+     "suggestionContent": "The new disabled-feature test only verifies the error text, not the failure exit status. If the metadata command still prints this diagnostic but exits with 0 (or another incorrect code) instead of FEATURE_DISABLED (4), this test would still pass. Assert that cliResult.exitCode() equals CompatibilityResult.FEATURE_DISABLED so the test actually protects the new disabled-feature failure contract."
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+     "relevantLinesStart": 125,
+     "relevantLinesEnd": 129,
+     "suggestionContent": "Successful recovery-code creation in external storage leaves any existing locally stored recovery-code credential active. For a federated user who previously stored codes locally and now has an external provider supporting this type, regeneration no longer calls RecoveryAuthnCodesCredentialProvider.createCredential's replacement cleanup; UserCredentialManager.isValid falls back to the local validator when external validation rejects an old code, so the supposedly replaced codes still authenticate. Remove the previous local recovery-code credential after successful external creation."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+     "relevantLinesStart": 340,
+     "relevantLinesEnd": 340,
+     "suggestionContent": "The new recovery-code validator accepts any code in the original list without consuming the accepted code. Repeating a successful login with the same code succeeds indefinitely, while getCredentials reconstructs all original codes so the login form never advances or detects exhaustion. Validate the next unused code and persist its consumption before returning success."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+     "relevantLinesStart": 237,
+     "relevantLinesEnd": 242,
+     "suggestionContent": "getCredentials rebuilds the recovery-code model without copying the ID assigned during updateCredential. createFromValues does not assign an ID, so the exposed federated credential has a null ID and CredentialDeleteHelper cannot resolve it by the stored credential ID for account deletion. Copy myUser.recoveryCodes.getId() to the reconstructed model before returning it."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+     "relevantLinesStart": 340,
+     "relevantLinesEnd": 340,
+     "suggestionContent": "The new federated recovery-code validator accepts any code in the original list but never removes a successfully used code from myUser.recoveryCodes. Consequently the same recovery code remains valid on subsequent logins, and getCredentials reconstructs the full original set every time. Consume and persist the successfully validated code (and test a second login/replay), so federated recovery codes retain their one-time semantics."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+     "relevantLinesStart": 340,
+     "relevantLinesEnd": 340,
+     "suggestionContent": "The new recovery-code validator returns success without consuming the accepted code. The external storage retains the entire generated list, and getCredentials reconstructs a fresh model from that same list each time, so logging out and logging in again with the same recovery code succeeds indefinitely. This breaks the single-use recovery-code invariant (and concurrent validations can both accept the same code). Consume the accepted code in external storage atomically with validation, and add a second-login/replay test that requires the used code to be rejected."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-secret-and-identity",
+     "technique": "M3",
+     "label": "security",
+     "relevantFile": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+     "relevantLinesStart": 340,
+     "relevantLinesEnd": 340,
+     "suggestionContent": "The new recovery-code validator uses String.equals to compare a stored secret with attacker-supplied input. This comparison is not constant-time, and anyMatch additionally stops at the first matching code, making validation timing dependent on secret data. Even though this is a testsuite provider, it implements an actual authentication validator and exercises the newly added federation path. Compare fixed-length byte representations with a constant-time primitive and evaluate all candidate codes without short-circuiting."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+     "relevantLinesStart": 340,
+     "relevantLinesEnd": 340,
+     "suggestionContent": "The newly supported federated recovery-code validation returns true on a match without consuming the code. Registration now stores these codes in this provider instead of the local recovery credential provider, so the local provider's consume-on-validation behavior no longer protects them. Because getCredentials reconstructs the model from the unchanged stored list, subsequent logins can reuse the same recovery code indefinitely. Persist removal/advancement of the accepted code in the user-storage validation path and extend the test to reject reuse."
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/endpoints/organization_auditlogs.py",
+     "relevantLinesStart": 79,
+     "relevantLinesEnd": 80,
+     "suggestionContent": "The optimized branch selects a numeric-key paginator while ordering by the datetime field. On any nonempty first page, build_cursor invokes OptimizedCursorPaginator.get_item_key, which calls math.ceil on a datetime and raises TypeError; nonzero cursors also lack the datetime conversion provided by DateTimePaginator. Make the optimized paginator inherit DateTimePaginator or preserve its timestamp encoding and decoding."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/endpoints/organization_auditlogs.py",
+     "relevantLinesStart": 71,
+     "relevantLinesEnd": 71,
+     "suggestionContent": "The unconditional advanced-access check dereferences organization_context.member although RpcUserOrganizationContext permits member=None. Authorized non-member organization-token requests therefore raise AttributeError even when optimized_pagination is absent, instead of returning audit logs through the existing paginator. Guard the optional member and evaluate eligibility only when optimized pagination is requested."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 877,
+     "relevantLinesEnd": 882,
+     "suggestionContent": "The advanced negative-offset branch passes a negative slice start directly to a Django QuerySet, which does not support negative indexing. A cursor such as 0:-1:0 is accepted by Cursor.from_string but crashes the optimized audit-log request instead of providing reverse pagination. Reject negative offsets with BadPaginationError or implement reverse traversal using nonnegative slices and reversed ordering."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 838,
+     "relevantLinesEnd": 840,
+     "suggestionContent": "The new endpoint uses this paginator with order_by=\"-datetime\", but get_item_key passes the resulting datetime object to math.floor/math.ceil, which require a number. Authorized requests with optimized_pagination=true and nonempty audit-log results will therefore raise TypeError during cursor construction instead of returning a page. Implement datetime-to-cursor conversion (and the corresponding cursor-to-datetime conversion for subsequent queries), as required by the endpoint's datetime ordering, or use a datetime-compatible paginator there."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 874,
+     "relevantLinesEnd": 880,
+     "suggestionContent": "The comment claiming that Django ORM 'properly handles negative slicing automatically' is false: Django QuerySet slicing rejects negative indices. This branch passes cursor.offset straight into queryset[start_offset:stop], so it raises rather than supplying the documented negative-offset pagination. Correct the negative-offset support claims here, in the class docstring, and in the new BasePaginator boundary-handling comment (or implement actual supported boundary handling) so callers are not promised a pagination mode that the underlying queryset cannot provide."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 838,
+     "relevantLinesEnd": 840,
+     "suggestionContent": "The audit-log consumer passes order_by=\"-datetime\", but this replacement paginator applies math.floor/math.ceil directly to the item's datetime attribute. A datetime is not a numeric value, so building cursors for a nonempty optimized audit-log page raises TypeError instead of returning the page. Preserve DateTimePaginator's datetime-to-cursor conversion (and inverse conversion for subsequent requests), rather than using this numeric key implementation for that consumer."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 838,
+     "relevantLinesEnd": 843,
+     "suggestionContent": "The new paginator is selected for audit logs ordered by `datetime`, but `get_item_key` applies `math.floor`/`math.ceil` directly to that datetime object, which raises TypeError when building cursors for nonempty results. It also returns the numeric cursor value unchanged for filtering the datetime column. Use DateTimePaginator's datetime-to-timestamp and timestamp-to-datetime conversions (for example by inheriting from it) so optimized pagination uses the same key representation as the endpoint's ordering."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 877,
+     "relevantLinesEnd": 882,
+     "suggestionContent": "Django QuerySets do not support negative slice bounds. Passing a negative cursor offset directly into `queryset[start_offset:stop]` raises an exception instead of enabling advanced pagination. Validate or normalize negative offsets before slicing, or implement reverse traversal through ordering/filtering rather than negative slices."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-value-boundary-and-position",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 877,
+     "relevantLinesEnd": 882,
+     "suggestionContent": "The advanced negative-offset path slices a Django QuerySet with a negative start, which Django rejects with `ValueError: Negative indexing is not supported.` For example, an offset of -1 and limit of 100 produces queryset[-1:100], so enabling this feature causes a server error rather than reverse pagination. Reject negative offsets or translate them into supported nonnegative bounds before slicing; Django does not automatically handle them as the comment claims."
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/helpers/error_upsampling.py",
+     "relevantLinesStart": 100,
+     "relevantLinesEnd": 103,
+     "suggestionContent": "The substring check treats `!event.type:error` and `event.type:error OR event.type:transaction` as error-only queries. For allowlisted projects this rewrites count() to an aggregation over sample_weight even when the Discover query includes transactions, violating the error-only restriction and potentially failing against a transaction-backed query. Determine the event-type restriction from the parsed query rather than the presence of a substring."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/endpoints/organization_events_stats.py",
+     "relevantLinesStart": 242,
+     "relevantLinesEnd": 248,
+     "suggestionContent": "Only timeseries_columns are upsampled while selected_columns and orderby used to select the Top N remain based on raw count(). discover.top_events_timeseries first queries those unchanged selected columns to choose groups, so a group with fewer retained events but a higher weighted count is omitted in favor of a lower-volume group. Apply the weighted-count transformation consistently to Top N selection and its ordering as well as the displayed timeseries."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/helpers/error_upsampling.py",
+     "relevantLinesStart": 58,
+     "relevantLinesEnd": 60,
+     "suggestionContent": "Replacing count() with `upsampled_count() as count` breaks requests using transformAliasToInputFormat=1. QueryBuilder.process_results translates the count alias to the replacement field string, but the endpoint serializer still resolves the original axis as `count()`, so it cannot read the weighted count from the returned rows. Preserve the original public field name in the result mapping when rewriting the internal aggregation."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/helpers/error_upsampling.py",
+     "relevantLinesStart": 100,
+     "relevantLinesEnd": 103,
+     "suggestionContent": "Substring matching does not establish that the Discover query selects only errors. For example, `!event.type:error` and `event.type:error OR event.type:transaction` both return True here, causing count() to be replaced with the sample-weight aggregation for non-error or mixed results in allowlisted projects. This contradicts the error-only guard and can produce incorrect counts. Parse the query and establish an error-only restriction (including negation and Boolean structure), or conservatively skip transformation when that restriction cannot be proven."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/testutils/factories.py",
+     "relevantLinesStart": 345,
+     "relevantLinesEnd": 345,
+     "suggestionContent": "The new docstring says the client sample rate must be 'present and valid', but the implementation only checks truthiness and float conversion. Negative rates, rates greater than 1, and float-convertible non-finite values are all accepted and written to sample_rate. This falsely tells test authors that this helper enforces sample-rate validity. Either document that it merely copies truthy float-convertible values, or validate the supported sample-rate range and finiteness before setting the field."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/helpers/error_upsampling.py",
+     "relevantLinesStart": 100,
+     "relevantLinesEnd": 103,
+     "suggestionContent": "The substring check does not enforce the stated error-only invariant. For example, `!event.type:error` and `event.type:error OR event.type:transaction` both return True, so an allowlisted Discover request is rewritten to the sample-weight aggregate even though it excludes errors or includes transactions. Parse the query and establish that its effective filters restrict all matching events to errors (or conservatively decline the transformation), rather than checking whether the text contains a positive-looking substring. Add negation and OR cases to the tests."
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+     "relevantLinesStart": 254,
+     "relevantLinesEnd": 255,
+     "suggestionContent": "Every recreated strategy receives the same factory-owned queue pool, although SimpleQueueProcessingStrategy.close() permanently shuts down that pool and its workers. On an assignment change, the next strategy submits to shut-down queues; submit catches the resulting exception and marks those unprocessed offsets complete, allowing results to be skipped and committed. Create a fresh pool and offset tracker per strategy assignment, rather than reusing the closed pool."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 335,
+     "relevantLinesEnd": 345,
+     "suggestionContent": "close() stops the commit thread and shuts down workers before draining accepted work, and join() only repeats close() instead of waiting for processing and making a final commit. Pool shutdown sets worker.shutdown before workers can drain their queues, so assignment revocation abandons queued results and completed in-flight work is not finally committed, causing replay and allowing unfinished old work to overlap a new owner. Make close() stop acceptance without blocking, then have join() drain accepted work within its timeout and commit completed offsets before releasing workers."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 184,
+     "relevantLinesEnd": 185,
+     "suggestionContent": "The pool creates unbounded queues, while strategy submit always accepts messages and poll never applies backpressure. When a queue's worker is slow or ingestion exceeds processing capacity, queued WorkItems retain both decoded results and original Kafka messages without any limit, causing growing memory consumption and eventual consumer OOM. Bound queued/in-flight work and raise Arroyo MessageRejected when capacity is reached, ensuring that rejection is not swallowed by the generic submit exception handler."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 144,
+     "relevantLinesEnd": 149,
+     "suggestionContent": "Only mark an offset complete after successful processing. If result_processor raises (for example on a transient database failure), this handler logs the exception and the finally block removes the offset from outstanding anyway. The commit thread can then commit past that failed result, permanently skipping it on restart, contrary to the strategy's successful-processing-only commit guarantee. Propagate or retain/retry failed work rather than treating it as completed."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+     "relevantLinesStart": 254,
+     "relevantLinesEnd": 258,
+     "suggestionContent": "Give each strategy a live pool rather than reusing the factory-owned pool after strategy closure. SimpleQueueProcessingStrategy.close() shuts down this pool, but subsequent create_with_partitions calls reuse the same self.queue_pool. On a partition reassignment/rebalance the replacement strategy therefore has stopped workers (and shut-down queues); submissions fail and its exception handler marks those unprocessed messages complete, allowing them to be committed. Recreate the pool and offset tracker for each strategy generation."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 233,
+     "relevantLinesEnd": 238,
+     "suggestionContent": "Do not set worker.shutdown before draining the queues during graceful shutdown. If a worker is processing A while B is queued, shutdown sets the flag; after A finishes, the worker exits at `while not self.shutdown` without ever retrieving B. Calling queue.shutdown(immediate=False) does not override that loop condition. Drain accepted work before stopping workers, and keep committing available until that drain completes; currently close stops the commit thread before the workers as well, so even work finished during shutdown is not finally committed."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+     "relevantLinesStart": 254,
+     "relevantLinesEnd": 258,
+     "suggestionContent": "Create a fresh queue pool for each processing strategy, or change the ownership contract so strategy.close()/join() does not shut down a factory-owned pool. This factory passes the same self.queue_pool to every strategy, but SimpleQueueProcessingStrategy.close() shuts that pool down and join() calls close(). On a partition reassignment, closing the old strategy therefore stops the workers and shuts the queues that the replacement strategy receives. Subsequent submissions cannot be processed (and the submit exception handler marks their offsets complete), potentially skipping results. Pool/offset-tracker state should be isolated to the strategy's assignment lifetime."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 254,
+     "relevantLinesEnd": 254,
+     "suggestionContent": "The guarantee 'Only commits offsets after successful processing' is false: OrderedQueueWorker catches processor exceptions and unconditionally calls complete_offset in finally (lines 144–149), after which the commit loop can commit that failed item's offset. The submit exception handler likewise marks failed submissions complete. Correct this documented contract to describe the actual failure policy, or implement the promised success-only completion; callers currently receive a misleading assurance about replay of failed work."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 253,
+     "relevantLinesEnd": 253,
+     "suggestionContent": "The claimed 'Natural backpressure when queues fill up' does not exist: FixedQueuePool constructs queue.Queue() without a capacity (line 185), and submit always puts into that unbounded queue. Document that submissions are unbounded, or implement bounded capacity/backpressure before advertising this guarantee. As written, callers may rely on a memory-safety/flow-control property this strategy does not provide."
+    },
+    {
+     "id": "S10",
+     "finderIndex": 9,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 335,
+     "relevantLinesEnd": 338,
+     "suggestionContent": "Closing a strategy now shuts down the factory-owned queue pool, although ResultsStrategyFactory.create_with_partitions reuses that same pool for subsequent strategies. During a partition reassignment, closing/joining the old strategy therefore leaves the replacement strategy with stopped workers and shut-down queues. Its submissions fail, and the submit exception handler marks those messages complete, allowing offsets to advance without processing the results. Keep pool lifetime scoped to the factory (with appropriate draining between assignments), or create a fresh pool for each strategy rather than shutting down a resource that the factory will reuse."
+    },
+    {
+     "id": "S11",
+     "finderIndex": 10,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 144,
+     "relevantLinesEnd": 149,
+     "suggestionContent": "Processing exceptions are logged but the finally block still marks the offset complete. The commit loop can consequently commit past a result that was never successfully handled (for example after a transient database failure), permanently skipping it on restart. Only mark successful processing complete and propagate or retry failures. The error-handling test's short wait does not prove safety: the commit loop runs after one second."
+    },
+    {
+     "id": "S12",
+     "finderIndex": 11,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 233,
+     "relevantLinesEnd": 238,
+     "suggestionContent": "Setting worker.shutdown before shutting down the queues prevents graceful draining: run() checks this flag before every get(), so a worker exits after its current item even when queued items remain. shutdown(immediate=False) cannot override that loop condition. Allow workers to consume until the queue signals shutdown after draining, rather than setting the exit flag first."
+    },
+    {
+     "id": "S13",
+     "finderIndex": 12,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+     "relevantLinesStart": 247,
+     "relevantLinesEnd": 255,
+     "suggestionContent": "Each new strategy reuses the factory's single queue_pool, but SimpleQueueProcessingStrategy.close()/join() shuts that pool down. After a partition rebalance closes the old strategy, create_with_partitions returns a new strategy backed by stopped workers and shut-down queues; submissions then fail and are treated as completed by the submission exception handler. Create a fresh pool for each strategy lifecycle rather than reusing the closed pool."
+    },
+    {
+     "id": "S14",
+     "finderIndex": 13,
+     "producedBy": "micro-exp-p3-value-boundary-and-position",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 86,
+     "relevantLinesEnd": 93,
+     "suggestionContent": "Determine the commit boundary from received offsets rather than requiring every integer in this range to exist. Kafka offsets need not be consecutive: if 100, 102 and 103 are delivered and completed, this scan stops at the nonexistent 101 even though there is no unfinished record. Conversely, after committing 100 and removing it, the next scan starts at 102 and commits past the gap, contradicting the added gap tests. Iterate received offsets in sorted order and stop at the first outstanding record; add a test covering legitimate skipped Kafka offsets across multiple commit cycles."
+    },
+    {
+     "id": "S15",
+     "finderIndex": 14,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "tests/sentry/uptime/consumers/test_results_consumer.py",
+     "relevantLinesStart": 1915,
+     "relevantLinesEnd": 1922,
+     "suggestionContent": "The error-handling test can pass even when failed messages are committed. It waits for two processor calls, sleeps only 0.2 seconds, and asserts that no commit has happened, whereas _commit_loop waits 1 second. OrderedQueueWorker currently completes the failed offset in finally, so the unsafe commit can occur after this assertion. Synchronize with an actual commit-loop iteration before asserting that it cannot advance past the failed offset."
+    },
+    {
+     "id": "S16",
+     "finderIndex": 15,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "tests/sentry/uptime/consumers/test_results_consumer.py",
+     "relevantLinesStart": 2004,
+     "relevantLinesEnd": 2005,
+     "suggestionContent": "This does not verify graceful shutdown: factory.shutdown unconditionally clears queue_pool after calling pool.shutdown, so the assertion passes even if pending messages are abandoned or worker threads remain alive. Retain the pool reference and assert that all submitted work completed and its workers stopped; the current worker shutdown flag can stop workers without draining their queues."
+    },
+    {
+     "id": "S17",
+     "finderIndex": 16,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+     "relevantLinesStart": 302,
+     "relevantLinesEnd": 312,
+     "suggestionContent": "The strategy ordering test submits five identical decoded results for sub1 and only asserts their count. Processing them in reverse order would still pass. Give each message a distinguishable sequence value and assert the exact processed sequence, so this tests ordering through SimpleQueueProcessingStrategy rather than only delivery."
+    },
+    {
+     "id": "S18",
+     "finderIndex": 17,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+     "relevantLinesStart": 161,
+     "relevantLinesEnd": 173,
+     "suggestionContent": "The concurrency test only verifies eventual completion and that all group names appear. Routing every group to a single worker would satisfy every assertion, so it does not protect concurrent processing. Use distinct queue assignments and a barrier/event arrangement proving a second group starts while the first is blocked. The uptime concurrent-subscriptions test similarly only asserts two eventual calls and should verify overlapping execution as well."
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/buffer.py",
+     "relevantLinesStart": 197,
+     "relevantLinesEnd": 199,
+     "suggestionContent": "The new ZADD writes sorted sets into the same span-buf:s namespace previously populated by SADD, without migrating existing set keys. During deployment, inserting into an existing buffered segment fails with WRONGTYPE, and the new ZSCAN reader likewise fails on pending old-format segments instead of flushing them. Introduce a coordinated migration/drain or a versioned namespace with compatible handling of pending old-format buffers."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+     "relevantLinesStart": 53,
+     "relevantLinesEnd": 53,
+     "suggestionContent": "ZUNIONSTORE uses its default SUM aggregation, so replayed payloads present in both the temporary parent_key and the resolved set_key receive the sum of their end timestamps. Replaying a child whose parent already redirects to an ancestor therefore makes that old span score roughly twice its actual timestamp, protecting it from eviction over genuinely newer spans. Use AGGREGATE MAX (or MIN for identical timestamp scores) on both union operations to preserve timestamp scores when members overlap."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/buffer.py",
+     "relevantLinesStart": 449,
+     "relevantLinesEnd": 449,
+     "suggestionContent": "Removing the span-count check makes the existing `max_segment_spans` constructor parameter misleading: callers can still supply and inspect it, but it no longer sets the maximum segment span count. The replacement Lua trimming hard-codes 1000 instead. Preserve enforcement of the configured maximum (or explicitly remove/deprecate the parameter and update its contract) so callers requesting a smaller limit are not silently given segments exceeding that advertised maximum."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/buffer.py",
+     "relevantLinesStart": 197,
+     "relevantLinesEnd": 199,
+     "suggestionContent": "Version or migrate the Redis segment-key namespace when changing its type from set to sorted set. Existing `span-buf:s:{...}:...` keys created by the previous `SADD` implementation remain ordinary sets, so this `ZADD` (and the new Lua `ZCARD`/flush `ZSCAN`) raises Redis WRONGTYPE for buffered segments across deployment. During a rolling deployment, old workers also cannot consume keys written by new workers. Use a separate versioned namespace with a compatible drain strategy, or explicitly handle conversion before issuing sorted-set commands."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 48,
+     "suggestionContent": "Handle `span_key == set_key` before merging/unlinking. Python now ZADDs the whole subsegment into the effective parent key before invoking this script. For a non-root span whose ID already resolves to that same set (for example a repeated span after its redirect was established), this branch unions the key with itself and then unlinks it, deleting the buffered segment. The sorted-set change additionally doubles its timestamp scores through the default SUM aggregation. Skip this merge/unlink when the keys are identical so the Python-produced buffer remains intact."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/buffer.py",
+     "relevantLinesStart": 196,
+     "relevantLinesEnd": 199,
+     "suggestionContent": "Changing SADD to ZADD while retaining `span-buf:s:{...}:...` makes existing buffered Redis sets incompatible with this writer (and with the new ZSCAN/ZCARD readers). Deploying while spans are buffered will produce WRONGTYPE errors rather than insert or flush those segments; rolling deployment also lets old and new workers create incompatible types for one another. Use a versioned namespace consistently across the Python and Lua paths, or provide a coordinated drain/migration before switching the key type."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/buffer.py",
+     "relevantLinesStart": 197,
+     "relevantLinesEnd": 199,
+     "suggestionContent": "The storage type changes from set to sorted set without changing the Redis key namespace. Any unexpired buffer created by the previous version makes this ZADD fail with WRONGTYPE; the new ZSCAN and Lua ZCARD paths likewise cannot process existing sets. During a rolling deployment the two versions also write incompatible types to the same keys. Use a versioned namespace with an appropriate draining strategy, or provide a coordinated migration before switching commands."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+     "relevantLinesStart": 47,
+     "relevantLinesEnd": 47,
+     "suggestionContent": "ZUNIONSTORE defaults to AGGREGATE SUM, so a payload present in both the destination and source has its timestamp doubled rather than preserved. This can happen when a previously merged span is replayed into its original subtree key. The duplicated span then sorts after genuinely newer spans and survives ZPOPMIN eviction incorrectly. Specify AGGREGATE MAX (or MIN, since identical payloads should have identical timestamps) on both union calls so merging remains idempotent and scores remain end timestamps."
+    }
+   ]
+  }
+ }
+}

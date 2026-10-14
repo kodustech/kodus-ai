@@ -1,0 +1,376 @@
+{
+ "model": "sonnet-5.5",
+ "verificador": "claude-sonnet-5.5@sdk",
+ "versao": "v3d",
+ "versaoDedup": "ho-v9",
+ "prs": {
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The upper-bound check compares only slotStartTime to the override end, so a slot that starts inside the override but ends after it is wrongly treated as available, which returns an incorrect result.",
+     "passos": 0
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment says the dynamic imports start immediately when the module loads, so the lazy loading fails to work, and that a failed import produces an unhandled rejection when nobody awaits it. Both are concrete behavioral problems.",
+     "passos": 0
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "If twilio.cancelSMS throws, the DB delete is skipped and callers no longer delete rows, so stale reminder rows remain, which is a concrete data-integrity failure.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "It asks to rename functions and a flag whose names no longer match their behavior; this is a naming/readability concern, and the cancelled rows are deleted later by the cron job.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The immediateDelete branch cancels at SendGrid but never deletes the WorkflowReminder row or sets cancelled, so the row is orphaned and the cron cleanup never picks it up.",
+     "passos": 0
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "Validation now increments match_count and writes to the DB on every valid? call, which inflates the statistics and adds side effects inside the validating transaction.",
+     "passos": 0
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete failure: an empty update payload may leave SelectedCalendar.updatedAt unchanged, so the cache-refresh marker is never recorded.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "On GNU sed, `sed -i ''` fails, so the script never updates GOOGLE_WEBHOOK_URL on Linux. That is a concrete functional failure.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "A hard-coded en-US date format is a minor localization polish issue; the timestamp still displays correctly and nothing breaks.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The failure paths call cleanup, which always exits 0, so the script reports success when the tunnel failed and GOOGLE_WEBHOOK_URL was never updated.",
+     "passos": 0
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "It asks for an extra test assertion covering the unsubscribe_url, which is a test-coverage request and not a defect in the code.",
+     "passos": 0
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It names concrete inputs (a.github.io vs b.github.io) where the heuristic wrongly treats unrelated hosts as the same domain and returns the full path, which is a wrong result.",
+     "passos": 0
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete unintended change: the light-theme `.name` color moved from 30% to 50% lightness, so the PR's conversion changes the light theme's rendered color.",
+     "passos": 0
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "SQLCommand.Execute now calls a stub that always returns an error, so every SQL expression reaching it fails, which is a concrete functional break.",
+     "passos": 0
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: TablesList calls the stub RunCommands, which always returns an error, so table extraction always fails for its callers.",
+     "passos": 0
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It claims a concrete correctness bug: double interpolation could inject ad hoc filters twice and produce wrong or invalid LogQL queries.",
+     "passos": 0
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "A cached denial short-circuits Check before permissions are re-read, so a user granted access within the TTL window is still wrongly denied, which is a concrete incorrect result.",
+     "passos": 0
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete failure: a batch size above the bind-parameter limit on Postgres or MySQL makes every cleanup batch error out, so the cleanup job never completes.",
+     "passos": 0
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "It is a minor Javadoc wording fix ('Stream' vs 'Set') with no effect on behavior or callers.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "It is a minor Javadoc copy-paste inaccuracy that has no effect on runtime behavior, so ignoring it breaks nothing.",
+     "passos": 0
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "reason": "The two discarded encoder calls are redundant dead code with no side effects, so removing them is a cleanup and the output is the same either way.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "It asks for better test coverage (matching curves per algorithm) and does not show a concrete failure in the production converters.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "It asks for stronger test assertions (test coverage improvement) without identifying a concrete failure in the production code.",
+     "passos": 0
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "reason": "It asks for additional test coverage (a check-subcommand case and an exit-code assertion); the production code behaves correctly without it.",
+     "passos": 0
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete failure: the returned recovery-codes credential has a null id, so the authenticator's later removeStoredCredentialById(model.getId()) call gets null once all codes are used.",
+     "passos": 0
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "A user-supplied flag enables a paginator that takes negative cursor offsets, which makes Django querysets raise errors on negative slicing and exposes data beyond normal bounds, and the code comment claiming queryset-level permission checks is false.",
+     "passos": 0
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "reason": "The comments falsely describe an opt-in negative-offset slicing path, which can expose data beyond normal pagination bounds, as a safe performance optimization, so they mislead readers about a risky behavior.",
+     "passos": 0
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "It asks for a stronger test assertion to cover a regression path; the production code behaves correctly either way, so nothing breaks if it's ignored.",
+     "passos": 0
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "Built-in str hash is randomized per process, so the same subscription maps to different queues across processes and restarts, which breaks the per-group ordering guarantee the code claims.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "Committing Kafka offsets from a background thread, while the consumer is not thread-safe, can race with polling and rebalances and cause commit errors or wrong offsets.",
+     "passos": 0
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "The metric counts partitions rather than offsets, which only affects telemetry naming and semantics; it causes no functional failure, data loss, or incorrect behavior.",
+     "passos": 0
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "Lowering the redirect loop limit from 10000 to 1000 makes span trees deeper than 1000 resolve to the wrong set and split segments, which is a concrete behavior regression.",
+     "passos": 0
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,54 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "modelo": "sonnet-5.5",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "perf",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "AuthzClientCryptoProvider.java:114-115 encoders descartados; golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "ECDSAAlgorithmTest.java:42 curva default para todos os algoritmos; lacuna de teste.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "ECDSAAlgorithmTest.java:53-56 so compara saidas do proprio codigo; lacuna de teste.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

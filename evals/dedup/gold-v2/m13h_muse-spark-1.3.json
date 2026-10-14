@@ -1,0 +1,1638 @@
+{
+ "model": "muse-spark-1.3",
+ "sourcePool": "14.10.26_holdout_muse13",
+ "labelVersion": "v2",
+ "prs": {
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 113,
+     "relevantLinesEnd": 115,
+     "suggestionContent": "WHAT: Line 114 compares two Dayjs objects with === (reference equality), which is always false. WHY: The all-day/unavailable override branch (start==end) can never trigger, so a full-day-off override falls through to partial-overlap checks and can be treated as available. HOW: Compare instants with .isSame()/.valueOf(), e.g. dayjs(date.start).add(utcOffset,'minutes').isSame(dayjs(date.end).add(utcOffset,'minutes'))."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 138,
+     "relevantLinesEnd": 144,
+     "suggestionContent": "WHAT: Working-hours check computes both start and end from slotStartTime (line 141-142), ignoring eventLength/slotEndTime. WHY: Slots that start inside working hours but end after closing are wrongly accepted as available, allowing over-long bookings past closing. HOW: Compute end from slotEndTime, e.g. slotEndTime.hour()*60+slotEndTime.minute()."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 138,
+     "relevantLinesEnd": 151,
+     "suggestionContent": "WHAT: Outside-working-hours test uses workingHours.find() returning true if ANY entry rejects the slot. WHY: With split schedules (two entries same weekday, e.g. morning+afternoon) a valid morning slot is outside the afternoon entry, find() matches and the slot is wrongly rejected as outside hours. HOW: Invert logic to accept if ANY entry contains the slot (e.g. !workingHours.some(entry contains slot) => outside)."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/lib/slots.ts",
+     "relevantLinesStart": 206,
+     "relevantLinesEnd": 224,
+     "suggestionContent": "WHAT: activeOverrides are filtered by UTC day (line 206-207) before the invitee/organizer offset is applied (lines 212-224), and shifted hours are not re-bucketed across midnight. WHY: An override that shifts to the previous/next calendar day in the invitee timezone is dropped from the wrong day or applied to the wrong day, so slots show open when the organizer is off (and vice versa). HOW: Filter/bucket overrides in the invitee-local date after applying the offset, or emit split entries spanning two invitee days."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-value-boundary-and-position",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 139,
+     "relevantLinesEnd": 144,
+     "suggestionContent": "end duplicates start: both use slotStartTime.hour()/minute(). Compute end from slotEndTime so slots overhanging workingHour.endTime are rejected."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 139,
+     "relevantLinesEnd": 143,
+     "suggestionContent": "Working-hours check computes both start and end from slotStartTime (lines 141-142 identical). end should derive from slotEndTime so eventLength is enforced; as written a slot starting inside hours but ending outside is reported available."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 114,
+     "relevantLinesEnd": 115,
+     "suggestionContent": "Compares dayjs objects with === which is always false (reference equality), so the start==end branch can never execute. Use .isSame() for value comparison."
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings.tsx",
+     "relevantLinesStart": 553,
+     "relevantLinesEnd": 567,
+     "suggestionContent": "WHAT: bookingRefsFiltered.forEach(async ...) never awaits the async callbacks so calendar/video deletions are fire-and-forget. WHY: forEach discards returned promises, the outer flow sends reschedule email and continues before deleteEvent runs, and the surrounding try/catch cannot catch async rejections causing unhandled rejections and missed cancellations. HOW: replace forEach with for...of with await or await Promise.all(bookingRefsFiltered.map(async ...))."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/vital/lib/reschedule.ts",
+     "relevantLinesStart": 125,
+     "relevantLinesEnd": 134,
+     "suggestionContent": "WHAT: bookingRefsFiltered.forEach(async ...) with await getCalendar inside is never awaited. WHY: the deleteEvent promise returned inside the callback goes nowhere, reschedule email is sent before old events are deleted and errors escape the try/catch as unhandled rejections. HOW: use await Promise.all(...map...) or sequential for...of."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/wipemycalother/lib/reschedule.ts",
+     "relevantLinesStart": 125,
+     "relevantLinesEnd": 134,
+     "suggestionContent": "WHAT: bookingRefsFiltered.forEach(async ...) with await getCalendar inside is never awaited. WHY: same fire-and-forget as vital copy — deletions run in background, try/catch cannot catch them, leaving stale calendar events on reschedule. HOW: await Promise.all with map or for...of."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+     "relevantLinesStart": 458,
+     "relevantLinesEnd": 470,
+     "suggestionContent": "WHAT: credentials.filter(...).forEach(async (credential) => { await getCalendar; apiDeletes.push(...) }) pushes to apiDeletes asynchronously after outer code consumes it. WHY: outer apiDeletes is awaited elsewhere while async callbacks have not yet pushed, so recurring-event deletions are lost/partial and errors are unobserved. HOW: replace with for...of with await or collect promises via map + await Promise.all."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/_utils/getCalendar.ts",
+     "relevantLinesStart": 9,
+     "relevantLinesEnd": 15,
+     "suggestionContent": "WHAT: getCalendar changed to async Promise<Calendar|null> but packages/core/CalendarManager.ts getCalendarCredentials still does const calendar = getCalendar(credential) synchronously without await. WHY: every entry now stores a Promise instead of Calendar, so any consumer not patched to await item.calendar (e.g. callers in viewer.tsx/calendar.ts paths) sees a truthy Promise, breaks null checks and calls listCalendars/createEvent on wrong type. HOW: make getCalendarCredentials async and await getCalendar, updating its callers."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "packages/core/videoClient.ts",
+     "relevantLinesStart": 21,
+     "relevantLinesEnd": 33,
+     "suggestionContent": "WHAT: getVideoAdapters awaits each dynamic appStore import sequentially in for...of. WHY: availability/meeting paths now pay N sequential module-load round-trips per request instead of one parallel fan-out, adding latency on hot getAvailability/createMeeting calls with multiple credentials. HOW: collect promises then await Promise.all, e.g. Promise.all(withCredentials.map(...))."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings.tsx",
+     "relevantLinesStart": 553,
+     "relevantLinesEnd": 559,
+     "suggestionContent": "forEach(async ...) creates floating promises: await getCalendar defers calendar?.deleteEvent and rejections are unhandled while outer flow returns early. Use for...of with await or await Promise.all(map)."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/vital/lib/reschedule.ts",
+     "relevantLinesStart": 125,
+     "relevantLinesEnd": 131,
+     "suggestionContent": "forEach(async ...) is fire-and-forget: await getCalendar defers deleteEvent and failures become unhandled rejections. Await via Promise.all or for...of."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/wipemycalother/lib/reschedule.ts",
+     "relevantLinesStart": 125,
+     "relevantLinesEnd": 131,
+     "suggestionContent": "forEach(async ...) is fire-and-forget: await getCalendar defers deleteEvent and errors escape try/catch as unhandled rejections. Use await Promise.all or for...of."
+    },
+    {
+     "id": "S10",
+     "finderIndex": 9,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+     "relevantLinesStart": 458,
+     "relevantLinesEnd": 464,
+     "suggestionContent": "forEach(async ...) around await getCalendar leaves recurring-calendar deletes unawaited; failures unhandled and flow can finish before deletes run. Use for...of with await or collect and await Promise.all."
+    },
+    {
+     "id": "S11",
+     "finderIndex": 10,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/core/CalendarManager.ts",
+     "relevantLinesStart": 28,
+     "relevantLinesEnd": 32,
+     "suggestionContent": "getCalendar is now async but getCalendarCredentials still does `const calendar = getCalendar(credential)` without await in a sync function, so `calendar` is a Promise. Make getCalendarCredentials async and await getCalendar (update callers) so its contract again returns Calendar|null."
+    },
+    {
+     "id": "S12",
+     "finderIndex": 11,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings.tsx",
+     "relevantLinesStart": 550,
+     "relevantLinesEnd": 559,
+     "suggestionContent": "Callback was changed to `forEach(async ... await getCalendar ... return calendar?.deleteEvent ...)` but forEach does not await async callbacks, so deleteEvent promises are never awaited. Use `await Promise.all(bookingRefsFiltered.map(...))` or for-of to preserve deletion guarantees."
+    },
+    {
+     "id": "S13",
+     "finderIndex": 12,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/vital/lib/reschedule.ts",
+     "relevantLinesStart": 124,
+     "relevantLinesEnd": 132,
+     "suggestionContent": "Same forEach-async gap: `forEach(async (bookingRef) => { await getCalendar ... return calendar?.deleteEvent })` never awaits deletions. Collect with Promise.all(map) or for-of with await."
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+     "relevantLinesStart": 43,
+     "relevantLinesEnd": 77,
+     "suggestionContent": "WHAT: remindersToCancel loop awaits SendGrid cancel per-reminder inside one try and only runs Prisma deletes after the loop, with no method filter. WHY: a single throw (e.g. null SMS referenceId sent as batch_id, or one SendGrid error) aborts the loop and skips Promise.all deletes, leaving all other cancelled emails still scheduled so they are still sent."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+     "relevantLinesStart": 79,
+     "relevantLinesEnd": 87,
+     "suggestionContent": "WHAT: unscheduledReminders query does not exclude cancelled:true reminders. WHY: email reminders marked cancelled:true by deleteScheduledEmailReminder (scheduled=false, future date) still match and get scheduled to SendGrid, so cancelled/rescheduled bookings still receive emails."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+     "relevantLinesStart": 213,
+     "relevantLinesEnd": 223,
+     "suggestionContent": "WHAT: immediateDelete branch cancels SendGrid then returns without deleting the prisma workflowReminder row. WHY: reschedule/workflow-delete callers leave stale scheduled rows that are never cleaned except by past-date sweep, causing DB bloat and risk of re-processing."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+     "relevantLinesStart": 484,
+     "relevantLinesEnd": 493,
+     "suggestionContent": "WHAT: async deleteScheduledEmailReminder/deleteScheduledSMSReminder called inside forEach without collecting/awaiting promises. WHY: handler returns before cancels complete and rejections are unobserved, so cancellations are lost and reminder emails/SMS are still sent (same fire-and-forget pattern repeated in handleNewBooking:966, bookings.tsx:488, workflows.tsx:212/376/519/574)."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/workflows.tsx",
+     "relevantLinesStart": 375,
+     "relevantLinesEnd": 382,
+     "suggestionContent": "WHAT: edited/disabled event-type path replaced immediate prisma deleteMany with mark-cancelled-only for EMAIL (deleteScheduledEmailReminder without immediateDelete). WHY: far-future scheduled SendGrid sends stay active until the 1-hour cron window, so edited workflows still send old reminders; combined with missing cancelled filter they can be re-scheduled."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+     "relevantLinesStart": 56,
+     "relevantLinesEnd": 64,
+     "suggestionContent": "WHAT: SendGrid cancel issued with sequential await inside for loop over remindersToCancel. WHY: cron blocks O(N) sequential network round-trips instead of parallel batch, materially slowing the hourly schedule job as cancelled backlog grows."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx",
+     "relevantLinesStart": 436,
+     "relevantLinesEnd": 445,
+     "suggestionContent": "Hard-coded placeholder \"Verification code\" bypasses i18n while surrounding strings use t(). Use translation key e.g. t(\"verification_code\")."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx",
+     "relevantLinesStart": 446,
+     "relevantLinesEnd": 458,
+     "suggestionContent": "Hard-coded button label \"Verify\" bypasses i18n while surrounding strings use t(). Use translation key e.g. t(\"verify\")."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+     "relevantLinesStart": 213,
+     "relevantLinesEnd": 232,
+     "suggestionContent": "immediateDelete branch cancels the SendGrid scheduled send but returns without deleting the workflowReminder row or setting cancelled:true, disagreeing with deleteScheduledSMSReminder (which deletes) and with the cancelled:true sweeper in scheduleEmailReminders. A reminder cancelled via immediateDelete=true (e.g. handleNewBooking reschedule) leaks a live DB row. Delete the row (or set cancelled) in the immediate path."
+    },
+    {
+     "id": "S10",
+     "finderIndex": 9,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+     "relevantLinesStart": 213,
+     "relevantLinesEnd": 223,
+     "suggestionContent": "immediateDelete branch cancels SendGrid then returns without deleting or marking the WorkflowReminder row, orphaning the old rescheduled booking's reminder while the SMS path deletes. Delete or mark cancelled before returning."
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 1023,
+     "relevantLinesEnd": 1024,
+     "suggestionContent": "WHAT: updateManyByCredentialId is called with empty data {} to bump SelectedCalendar.updatedAt. WHY: Prisma updateMany rejects empty data (validation error) or no-ops without touching @updatedAt, so the refresh path throws or silently leaves updatedAt stale. HOW: pass an explicit touch field e.g. { updatedAt: new Date() }."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+     "relevantLinesStart": 42,
+     "relevantLinesEnd": 50,
+     "suggestionContent": "WHAT: deleteCacheMutation onSuccess only calls onSuccess?.() and never invalidates viewer.calendars.connectedCalendars, unlike disconnectMutation onSettled. WHY: cacheUpdatedAt stays stale after deletion so UI keeps showing old Last updated and delete action until manual refetch. HOW: add onSettled invalidate of connectedCalendars like disconnect does."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "scripts/test-gcal-webhooks.sh",
+     "relevantLinesStart": 67,
+     "relevantLinesEnd": 69,
+     "suggestionContent": "WHAT: sed -i '' -E uses BSD/macOS in-place syntax. WHY: on GNU/Linux sed -i '' treats '' as a file argument and fails, so GOOGLE_WEBHOOK_URL is never updated on Linux/CI. HOW: branch on OS or use portable sed -i.bak / sed -i without arg."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+     "relevantLinesStart": 88,
+     "relevantLinesEnd": 94,
+     "suggestionContent": "Date format hard-coded to \"en-US\" via Intl.DateTimeFormat while surrounding strings use t()/useLocale. Users in other locales see US short date/time. Use the active locale from useLocale/i18n instead of hard-coding \"en-US\"."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 1023,
+     "relevantLinesEnd": 1024,
+     "suggestionContent": "Comment claims \"Update SelectedCalendar.updatedAt\" but call passes empty object {} as data, so nothing is updated (Prisma updateMany with empty data is a no-op/error). Fix comment or pass { updatedAt: new Date() } to match the stated intent."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 1023,
+     "relevantLinesEnd": 1024,
+     "suggestionContent": "updateManyByCredentialId is called with empty data {}. Prisma updateMany throws when data is empty, so this line throws on every resync after the cache write. Pass an explicit touch e.g. { updatedAt: new Date() } instead of {}."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 1019,
+     "relevantLinesEnd": 1027,
+     "suggestionContent": "Call passes {} as data to updateManyByCredentialId: await SelectedCalendarRepository.updateManyByCredentialId(this.credential.id, {}). Prisma updateMany rejects empty data at runtime, so this always throws (or no-ops and never bumps updatedAt). The previously best-effort availability refresh now fails/blocks. Pass an explicit bump e.g. { updatedAt: new Date() }."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 1023,
+     "relevantLinesEnd": 1024,
+     "suggestionContent": "Pass an explicit touch field instead of {} — e.g. updateManyByCredentialId(this.credential.id, { updatedAt: new Date() }) — empty `data` fails Prisma validation (data must not be empty) and does not bump updatedAt, so the stated update never occurs and can throw after caching."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 1023,
+     "relevantLinesEnd": 1024,
+     "suggestionContent": "Call passes `{}` as `data` to updateManyByCredentialId expecting it to bump SelectedCalendar.updatedAt. Prisma updateMany requires non-empty data and will reject/no-op on `{}`. Pass explicit timestamp e.g. `{ updatedAt: new Date() }` so the update succeeds and cache status advances."
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "lib/validators/email_validator.rb",
+     "relevantLinesStart": 3,
+     "relevantLinesEnd": 16,
+     "suggestionContent": "WHAT: EmailValidator.validate_each performs no email syntax/format check, only whitelist/blacklist and blocked lookup. WHY: Any arbitrary string passes validation when no restriction is configured, regressing the moved User#email_validator contract and allowing invalid emails to create accounts. HOW: Restore format validation (e.g. regex / presence of @/domain) before restriction checks."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "lib/validators/email_validator.rb",
+     "relevantLinesStart": 18,
+     "relevantLinesEnd": 22,
+     "suggestionContent": "WHAT: email_in_restriction_setting? builds unanchored Regexp \"@(domains)\" with only '.' escaped. WHY: Whitelist 'gmail.com' substring-matches 'victim@gmail.com.evil.com', so an attacker registers with an unapproved domain and bypasses the allow-list; blacklist similarly over/under-matches and other regex metachars are unescaped. HOW: Anchor and escape domains (e.g. Regexp.escape per domain split on '|' plus /\\A[^@\\s]+@(?:domain)\\z/i)."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/models/blocked_email.rb",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 18,
+     "suggestionContent": "WHAT: should_block? mutates match_count/last_match_at via read-modify-write save inside a validator. WHY: Every validation call (including re-validations of the same attempt or attempts failing on unrelated fields like username) inflates stats, and concurrent signups lose increments with no atomic update. HOW: Move stats update out of validation or use atomic increment (update_counters/increment_counter) only on actual blocked rejections."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+     "relevantLinesStart": 93,
+     "relevantLinesEnd": 96,
+     "suggestionContent": "WHAT: emailValidation depends on 'rejectedEmails.@each' while rejections are added via pushObject of plain strings. WHY: @each observes properties of array items, not membership, so pushing a string does not invalidate the computed property and the remembered rejection error does not display until accountEmail itself changes. HOW: Depend on 'rejectedEmails.[]' (or 'rejectedEmails.length')."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+     "relevantLinesStart": 274,
+     "relevantLinesEnd": 276,
+     "suggestionContent": "WHAT: Rejection memory pushes result.values.email (server-side user.attributes value) but checks contains(raw accountEmail). WHY: If server normalizes (strip/case) the email, normalized != raw input so contains() misses and the client-side invalid marker fails to trigger on retry. HOW: Push the attempted raw email (or normalize both sides before compare/push)."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-secret-and-identity",
+     "technique": "M3",
+     "label": "security",
+     "relevantFile": "app/models/blocked_email.rb",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "Case-sensitivity bypass: BlockedEmail.where(email: email) is exact case-sensitive with no normalization, while sibling checks are case-insensitive. Normalize (downcase/strip) on write and lookup."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+     "relevantLinesStart": 93,
+     "relevantLinesEnd": 96,
+     "suggestionContent": "Dependent key 'rejectedEmails.@each' will not invalidate when pushObject(result.values.email) adds a string; use 'rejectedEmails.[]' (or '.length'). As written the cached emailValidation won't recompute after a server email rejection, so the rejected email won't show inline invalid."
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/controllers/topics_controller.rb",
+     "relevantLinesStart": 105,
+     "relevantLinesEnd": 111,
+     "suggestionContent": "WHAT: TopicUser.find_by can return nil for a user with no TopicUser row, then tu.notification_level raises NoMethodError. WHY: Visiting the emailed unsubscribe link for a merely-watching/mailed topic with no row crashes with 500 instead of unsubscribing. HOW: Use TopicUser.change / get-or-initialize with a default level instead of dereferencing find_by directly."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "app/controllers/topics_controller.rb",
+     "relevantLinesStart": 98,
+     "relevantLinesEnd": 113,
+     "suggestionContent": "WHAT: The unsubscribe state change (lowering/muting notification_level + save!) runs on a GET route (config/routes.rb GET t/:slug/:topic_id/unsubscribe). WHY: An attacker can forge the URL as an image/prefetch/link to silently change a victim's notification state with no CSRF token since GETs are not CSRF-protected. HOW: Make the mutation a PUT/POST with CSRF protection or require an explicit confirmation parameter/token instead of mutating on page view."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/models/topic.rb",
+     "relevantLinesStart": 719,
+     "relevantLinesEnd": 721,
+     "suggestionContent": "WHAT: unsubscribe_url returns only a relative path (\"#{url}/unsubscribe\") but the email template interpolates %{unsubscribe_url} directly as [click here](%{unsubscribe_url}). WHY: Email clients have no base host so the per-topic unsubscribe link is broken, unlike user_preferences_url which is built absolute with Discourse.base_url. HOW: Build an absolute URL, e.g. \"#{Discourse.base_url}#{url}/unsubscribe\" (or base_uri-aware absolute)."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/controllers/topics_controller.rb",
+     "relevantLinesStart": 105,
+     "relevantLinesEnd": 113,
+     "suggestionContent": "TopicUser.find_by can return nil, then tu.notification_level raises NoMethodError. Guard nil and anonymous current_user."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "config/locales/server.en.yml",
+     "relevantLinesStart": 1852,
+     "relevantLinesEnd": 1856,
+     "suggestionContent": "unsubscribe_link now requires %{unsubscribe_url} but not all MessageBuilder callers with add_unsubscribe_link:true supply it; missing arg raises I18n::MissingInterpolationArgument. Supply unsubscribe_url at all such call sites or provide a fallback/default in MessageBuilder."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/models/topic.rb",
+     "relevantLinesStart": 719,
+     "relevantLinesEnd": 721,
+     "suggestionContent": "unsubscribe_url returns relative path but is consumed as absolute email link; prefix with Discourse.base_url like user_preferences_url does."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/models/topic.rb",
+     "relevantLinesStart": 719,
+     "relevantLinesEnd": 721,
+     "suggestionContent": "unsubscribe_url returns relative path `\"#{url}/unsubscribe\"` but name `*_url` promises absolute URL and it is interpolated into emailed `unsubscribe_link` markdown where relative links break; prefix with Discourse.base_url like user_preferences_url."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+     "relevantLinesStart": 1,
+     "relevantLinesEnd": 4,
+     "suggestionContent": "Triple-brace `{{{stopNotificiationsText}}}` renders translation containing `<strong>{{title}}</strong>` with fancyTitle unescaped, so topic title HTML is injected into page; escape title interpolation or avoid triple-brace."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/models/topic.rb",
+     "relevantLinesStart": 719,
+     "relevantLinesEnd": 721,
+     "suggestionContent": "Topic#unsubscribe_url returns a relative path but is used as %{unsubscribe_url} in emails (via user_notifications.rb). Unlike user_preferences_url which is absolute (Discourse.base_url + path), this yields a broken relative [click here] link in email clients. Prefix with Discourse.base_url."
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/desktop/topic-post.scss",
+     "relevantLinesStart": 289,
+     "relevantLinesEnd": 292,
+     "suggestionContent": "WHAT: Light-theme branch changed from scale-color($primary, $lightness: 30%) to scale-color($primary, $lightness: 70%) in .topic-meta-data h5 a. WHY: Light theme now renders a far lighter link color than before, breaking contrast and changing intended design. HOW: Restore first arg to scale-color($primary, $lightness: 30%) and use scale-color($secondary, $lightness: 70%) as dark branch."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/mobile/modal.scss",
+     "relevantLinesStart": 100,
+     "relevantLinesEnd": 103,
+     "suggestionContent": "WHAT: Light-theme branch changed from scale-color($primary, $lightness: 70%) to scale-color($primary, $lightness: 30%) in .custom-message-length. WHY: Light theme text becomes much darker than before, diverging from desktop/modal.scss which correctly keeps 70%/30%. HOW: Change to dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/desktop/user.scss",
+     "relevantLinesStart": 519,
+     "relevantLinesEnd": 523,
+     "suggestionContent": "WHAT: Light-theme branch for .name changed from scale-color($primary, $lightness: 30%) to 50% in dark-light-choose. WHY: Light theme username color lightens vs before, inconsistent with common/base/user.scss which preserves 30%/70%. HOW: Restore to dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/mobile/topic-post.scss",
+     "relevantLinesStart": 179,
+     "relevantLinesEnd": 183,
+     "suggestionContent": "WHAT: Light-theme branch for .topic-map h3 changed from scale-color($primary, $lightness: 20%) to 50% in dark-light-choose. WHY: Light theme heading becomes much lighter than before and inconsistent with desktop/topic-post.scss which preserves 20%/80%. HOW: Restore to dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/desktop/topic-post.scss",
+     "relevantLinesStart": 288,
+     "relevantLinesEnd": 292,
+     "suggestionContent": "Light branch changed from 30% to 70%: dark-light-choose(scale-color($primary, 70%), secondary 30%) replaces scale-color($primary, 30%). Light-mode color shifts from dark grey to near-white. Should be (primary 30%, secondary 70%) to preserve light mode."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/mobile/topic-post.scss",
+     "relevantLinesStart": 179,
+     "relevantLinesEnd": 183,
+     "suggestionContent": "h3 light value changed 20%->50%: dark-light-choose(primary 50%, secondary 50%) replaces scale-color($primary, 20%). Desktop twin keeps (primary 20%, secondary 80%). Twins must agree and light mode must be preserved; use (20%, 80%)."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/mobile/modal.scss",
+     "relevantLinesStart": 100,
+     "relevantLinesEnd": 104,
+     "suggestionContent": "custom-message-length light value inverted 70%->30%: dark-light-choose(primary 30%, secondary 70%) replaces scale-color($primary, 70%). Desktop twin is (primary 70%, secondary 30%). Twins must agree; fix mobile to (70%, 30%)."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/desktop/user.scss",
+     "relevantLinesStart": 519,
+     "relevantLinesEnd": 523,
+     "suggestionContent": ".name light value changed 30%->50%: dark-light-choose(primary 50%, secondary 50%) replaces scale-color($primary, 30%), while common/base/user.scss keeps (30%, 70%) for .name. Light-mode name becomes lighter; should be (primary 30%, secondary 70%)."
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "app/serializers/user_serializer.rb",
+     "relevantLinesStart": 153,
+     "relevantLinesEnd": 155,
+     "suggestionContent": "WHAT: include filter is named `include_website_name` without `?`, while AMS requires `include_<attr>?` (cf. include_email?, include_card_image_badge_id?). WHY: The predicate is never called so `website_name` is always serialized and bypasses the TL0-anonymous `restrict_user_fields?` hiding applied to `website` via `untrusted_attributes`, leaking a restricted user's website host+path to anonymous viewers. HOW: Rename to `include_website_name?` and add `:website_name` to `untrusted_attributes` (or check `scope.restrict_user_fields?(object)` inside)."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/serializers/user_serializer.rb",
+     "relevantLinesStart": 147,
+     "relevantLinesEnd": 150,
+     "suggestionContent": "WHAT: Else branch only tests `discourse_host.ends_with?('.'+website_host)` (discourse child of website) and misses the reverse (website subdomain of instance). WHY: With instance `example.com` and website `http://sub.example.com/page`, it returns `sub.example.com` instead of `sub.example.com/page`, contradicting the PR intent to show the full path for same-base-domain URLs. HOW: Also return host+path when `website_host` ends with `.`+discourse_host or shares the same registrable domain."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "app/serializers/user_serializer.rb",
+     "relevantLinesStart": 153,
+     "relevantLinesEnd": 155,
+     "suggestionContent": "Predicate is named include_website_name but AMS calls include_website_name? (with ?), as shown by include_card_image_badge_id? in the same file. Rename to include_website_name? so the website.present? guard is actually consulted."
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "public/app/plugins/datasource/loki/querySplitting.ts",
+     "relevantLinesStart": 296,
+     "relevantLinesEnd": 299,
+     "suggestionContent": "WHAT: Queries are interpolated with applyTemplateVariables upfront but sub-requests via datasource.runQuery re-apply template variables/ad-hoc filters in DataSourceWithBackend.query. WHY: Causes duplicate ad-hoc filter injection (addAdHocFilters applied twice) and wrong output on split queries. HOW: Skip re-interpolation downstream (e.g. strip filters after first pass or route split requests to avoid second applyTemplateVariables)."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+     "relevantLinesStart": 48,
+     "relevantLinesEnd": 52,
+     "suggestionContent": "WHAT: Queries are interpolated with applyTemplateVariables upfront but each sharded sub-request via datasource.runQuery re-applies applyTemplateVariables downstream (test expects 5 calls for 1 target proves it). WHY: Duplicates ad-hoc filters and repeats interpolation per shard group producing wrong/duplicated selectors. HOW: Interpolate once — either keep upfront call and bypass second application in runQuery path or revert to single interpolation point."
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/expr/reader.go",
+     "relevantLinesStart": 194,
+     "relevantLinesEnd": 200,
+     "suggestionContent": "Variable `enabled` is assigned the negation `!IsEnabledGlobally(FlagSqlExpressions)` so it is true when the feature is disabled — the name states the opposite of what it holds — and the function then returns false on both branches so `enableSqlExpressions` never enables. Rename/fix to `enabled := h.features.IsEnabledGlobally(...)` and `return enabled`."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/expr/sql/parser.go",
+     "relevantLinesStart": 22,
+     "relevantLinesEnd": 26,
+     "suggestionContent": "After replacing `duck.NewInMemoryDB()` with local `NewInMemoryDB()` and removing the duck import, the local `duckDB` still carries the old implementation name though it is no longer a duck DB. Rename to `db`/`sqlDB` (as done in sql_command.go) so identifier matches code."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "micro-exp-p3-contract-not-followed",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/expr/sql_command.go",
+     "relevantLinesStart": 96,
+     "relevantLinesEnd": 100,
+     "suggestionContent": "Behaviour contract break: db := sql.NewInMemoryDB() + db.QueryFramesInto(...) replaces duck.NewInMemoryDB which executed SQL. New stub in pkg/expr/sql/db.go always returns errors.New(\"not implemented\"), so Execute always fails and sets rsp.Error. Caller could previously count on frames being queried successfully. Consumer was switched syntactically but not updated for guaranteed-failure behaviour — restore functional implementation or add fallback/gating."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/expr/reader.go",
+     "relevantLinesStart": 194,
+     "relevantLinesEnd": 200,
+     "suggestionContent": "enableSqlExpressions always returns false: negates IsEnabledGlobally then returns false on both paths, so caller `if !enabled` always rejects SQL. Fix to return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)."
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/cache.go",
+     "relevantLinesStart": 30,
+     "relevantLinesEnd": 32,
+     "suggestionContent": "WHAT: userPermDenialCacheKey builds keys by naive underscore concatenation without escaping (namespace+\".perm_\"+uid+\"_\"+action+\"_\"+name+\"_\"+parent). WHY: distinct tuples collide (e.g. name=\"a_b\",parent=\"c\" vs name=\"a\",parent=\"b_c\" produce identical suffix), so a denial for one resource falsely denies an unrelated resource."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/service.go",
+     "relevantLinesStart": 116,
+     "relevantLinesEnd": 121,
+     "suggestionContent": "WHAT: denial-cache hit returns deny immediately before consulting cached or fresh permissions, and the fresh-allow path never deletes the denial key. WHY: a permission granted after a denial (the newly-created dashboard case this PR targets) stays denied until TTL expiry because every retry short-circuits on the stale denial instead of requerying."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/service.go",
+     "relevantLinesStart": 180,
+     "relevantLinesEnd": 192,
+     "suggestionContent": "WHAT: List serves listPermission directly from getCachedIdentityPermissions on any cache hit with no outdated-cache requery, unlike Check which falls through to the DB when cached perms deny. WHY: newly granted dashboard/folder scopes missing from the cached map stay missing from List results for the full TTL, while pre-PR List always hit the DB via getIdentityPermissions."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "pkg/services/authz/rbac/service.go",
+     "relevantLinesStart": 153,
+     "relevantLinesEnd": 155,
+     "suggestionContent": "WHAT: every denied Check inserts a per-resource denial entry keyed by (namespace,user,action,name,parent). WHY: cache cardinality explodes from O(users x actions) to O(users x actions x resources), causing unbounded memory growth and eviction pressure on the shared local cache as dashboard/folder counts grow."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/service_test.go",
+     "relevantLinesStart": 973,
+     "relevantLinesEnd": 995,
+     "suggestionContent": "Deny-precedence test seeds permCache with false instead of true, so both cached-allow path and DB fallback deny and the test passes even with permDenialCache check removed. Set the permCache entry to true (\"dashboards:uid:dash1\": true) so only the denial cache can explain Allowed:false."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/service_test.go",
+     "relevantLinesStart": 981,
+     "relevantLinesEnd": 982,
+     "suggestionContent": "Comment declares permCache allows dash1 to prove denial short-circuits it, but code stores map value false (deny). Set it to true so only the denial path can produce deny; as written the test passes even if the denial check is removed."
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+     "relevantLinesStart": 528,
+     "relevantLinesEnd": 538,
+     "suggestionContent": "WHAT: Leftover debug logging calls r.log.Error on every cleanup batch (also duplicated at lines 554-557 and 576-579) dumping full ids slice, cond, and nil err at Error level. WHY: Fires Error-level log per batch and serializes up to AnnotationCleanupJobBatchSize IDs (32767 in new test), spamming error logs/monitoring on every normal cleanup run. HOW: Downgrade to Debug or remove; do not log full ids at Error."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+     "relevantLinesStart": 608,
+     "relevantLinesEnd": 613,
+     "suggestionContent": "WHAT: SQLite large-batch IN-list built with repeated fmt.Sprintf(\"%s, %d\", values, v) in a loop over ids. WHY: Quadratic string copying on large batches (e.g. 32767 IDs in added test) during cleanup, a background job path. HOW: Build with strings.Builder or strings.Join."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "pkg/services/cleanup/cleanup.go",
+     "relevantLinesStart": 74,
+     "relevantLinesEnd": 78,
+     "suggestionContent": "WHAT: Cleanup ticker changed from 10 minutes to 1 minute with no justification. WHY: Runs all 8 cleanup jobs including the new multi-query (SELECT+DELETE per batch) annotation cleanup 10x more often, multiplying DB load. HOW: Revert to 10 minutes or justify the frequency change separately."
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+     "relevantLinesStart": 60,
+     "relevantLinesEnd": 67,
+     "suggestionContent": "WHAT: getBouncyCastleProvider returns KeyStore.getInstance(defaultType).getProvider() (e.g. SUN) as the BouncyCastle provider. WHY: BouncyIntegration.loadProvider caches this name for all Signature/Cipher/KeyFactory lookups, so standalone authz-client gets PROVIDER=SUN instead of BC/null and BC-specific algorithms/FIPS expectations break. HOW: return null like WildFlyElytronProvider does when no BC provider is available."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+     "relevantLinesStart": 54,
+     "relevantLinesEnd": 72,
+     "suggestionContent": "WHAT: detectProvider sorts by order() reversed and silently picks index 0, removing the previous multiple-providers error. WHY: Default/FIPS/Elytron all return order 200, so ambiguous classpath (e.g. default+FIPS) now nondeterministically picks one by ServiceLoader order instead of failing fast, risking wrong FIPS vs non-FIPS crypto. HOW: only auto-ignore lower-order providers; throw when the top two have equal order()."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+     "relevantLinesStart": 127,
+     "relevantLinesEnd": 135,
+     "suggestionContent": "WHAT: readLength returns -1 for indefinite-length encoding 0x80 and callers pass it to new byte[length]. WHY: causes NegativeArraySizeException (unchecked) in readInteger/readNext instead of IOException, crashing signature-verification callers that expect checked failure on malformed DER. HOW: throw IOException for 0x80 since DER forbids indefinite lengths."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+     "relevantLinesStart": 103,
+     "relevantLinesEnd": 122,
+     "suggestionContent": "WHAT: concatenatedRSToASN1DER splits signature without validating signature.length==signLength. WHY: short JOSE input throws ArrayIndexOutOfBoundsException and long input is silently truncated to signLength, breaking the ECDSACryptoProvider contract (IOException on malformed) used by verifier contexts. HOW: check length upfront and throw IOException."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+     "relevantLinesStart": 49,
+     "relevantLinesEnd": 63,
+     "suggestionContent": "WHAT: readSequence loops while(length>0) subtracting child TLV lengths but never verifies sum equals declared length nor rejects trailing bytes. WHY: lets overlong sequences and trailing garbage after the two integers be accepted as valid, diverging from strict BC ASN1InputStream and enabling signature malleability in the ECDSA verify path. HOW: enforce length==0 after loop and no remaining bytes in the outer buffer."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+     "relevantLinesStart": 114,
+     "relevantLinesEnd": 115,
+     "suggestionContent": "Dead computation: two ASN1Encoder instances are created and written but immediately discarded; the method then re-creates identical encoders for the returned sequence. Remove lines 114-115."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 57,
+     "suggestionContent": "Tautological round-trip assertion: rsConcat2 is derived from rsConcat via encode+decode that are inverses if self-consistent, so assertArrayEquals(rsConcat,rsConcat2) passes even if both directions are wrong. Verify against external oracle: Signature.initVerify + verify(asn1Des) and/or compare rsConcat to expected split, not just to itself."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+     "relevantLinesStart": 39,
+     "relevantLinesEnd": 43,
+     "suggestionContent": "Single default EC keypair reused for ES256/ES384/ES512: testES384/testES512 names claim larger curves but body signs with the same P-256 key and only pads to larger signLength, so full-width 384/521-bit handling is never exercised. Generate a per-algorithm keypair with the correct curve (e.g. secp256r1/secp384r1/secp521r1) before signing."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+     "relevantLinesStart": 103,
+     "relevantLinesEnd": 112,
+     "suggestionContent": "concatenatedRSToASN1DER never validates signature.length == signLength before System.arraycopy(signature,0,r,1,len) / (signature,len,s,1,len). A short JWS signature throws unchecked ArrayIndexOutOfBoundsException instead of the declared IOException, breaking verification on attacker-controlled input. Validate length and throw IOException."
+    },
+    {
+     "id": "S10",
+     "finderIndex": 9,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+     "relevantLinesStart": 65,
+     "relevantLinesEnd": 73,
+     "suggestionContent": "readInteger passes readLength() result directly to read(length)->new byte[length]. readLength returns -1 for indefinite-length 0x80, so a crafted INTEGER with length 0x80 throws unchecked NegativeArraySizeException at allocation instead of IOException. Reject length<0 here (indefinite length not valid for DER INTEGER)."
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 64,
+     "relevantLinesEnd": 71,
+     "suggestionContent": "WHAT: GroupPermissionsV2.canManage() grants global manage on VIEW scope (hasPermission(null, VIEW, MANAGE)). WHY: A caller with only view-all-groups permission passes the manage check, allowing group creation/management reserved for manage. HOW: Check only MANAGE, e.g. hasPermission(null, AdminPermissionsSchema.MANAGE)."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 119,
+     "relevantLinesEnd": 125,
+     "suggestionContent": "WHAT: getGroupIdsWithViewPermission() uses authz resource IDs (groupResource.getId()) as group IDs and looks them up via findByName. WHY: Resource names equal group IDs (AdminPermissionsSchema.resolveGroup returns group.getId()), so findByName(resourceId) misses and the returned set contains unusable IDs, breaking user search/count filtering by group. HOW: Use groupResource.getName() like V1 does (resource.getName().substring prefix / name) for both the hasPermission lookup and the granted set."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 106,
+     "relevantLinesEnd": 128,
+     "suggestionContent": "WHAT: getGroupIdsWithViewPermission() runs a full findByType scan with a per-resource evaluatePermission call for every user list/count. WHY: User searches and counts call this on each request, so cost grows O(N) with group count (N policy evaluations per request). HOW: Cache the result per request or evaluate via a single bulk permission query instead of per-resource evaluation."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+     "relevantLinesStart": 132,
+     "relevantLinesEnd": 135,
+     "suggestionContent": "Javadoc for requireManageMembers references canManageMembership instead of canManageMembers (copy-paste). Fix link to {@link #canManageMembers(GroupModel)} so the contract describes the method it guards."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+     "relevantLinesStart": 142,
+     "relevantLinesEnd": 147,
+     "suggestionContent": "@return says 'Stream of IDs' but method returns Set<String> getGroupIdsWithViewPermission. Fix doc to 'Set of IDs' to match the signature."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 119,
+     "relevantLinesEnd": 125,
+     "suggestionContent": "findByType callback passes groupResource.getId() to hasPermission() and granted set, but AdminPermissionsSchema.resolveGroup defines resource name (not UUID) as groupId and hasPermission looks up via findByName(server, groupId). Use groupResource.getName() for both check and granted set, otherwise lookups miss to all-groups fallback and callers receive authz UUIDs instead of group IDs."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 119,
+     "relevantLinesEnd": 125,
+     "suggestionContent": "getGroupIdsWithViewPermission uses groupResource.getId() for lookup and result collection, but V2 group resources are named with the group ID (resolveGroup returns group.getId()) and hasPermission does findByName. Use groupResource.getName() in both places to evaluate the correct per-group resource and to return actual group IDs."
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 50,
+     "suggestionContent": "WHAT: testFeatureNotEnabled only exercises the metadata subcommand disabled path and never the check subcommand. WHY: the feature gate in UpdateCompatibilityCheck.run can be removed or broken without failing any test since no assertion covers its disabled message/exit code. HOW: also launch/assert the check command without --features (e.g. parameterize over metadata and check subcommands or add a second Launch)."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 50,
+     "suggestionContent": "testFeatureNotEnabled only exercises the metadata subcommand, leaving the identical ROLLING_UPDATES gate in UpdateCompatibilityCheck unverified. If the Check gate were removed, the suite still passes. Parameterize/add a second @Launch for {UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME} (with required --file or not) asserting the disabled message and FEATURE_DISABLED exit code."
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+     "relevantLinesStart": 231,
+     "relevantLinesEnd": 242,
+     "suggestionContent": "WHAT: getCredentials rebuilds the federated recovery-codes model via createFromValues without propagating the stored credential ID. WHY: the returned CredentialModel has null ID so RecoveryAuthnCodesFormAuthenticator.removeStoredCredentialById(getId()) after allCodesUsed cannot remove the federated credential and leaves a stale exhausted credential. HOW: copy the stored ID onto the rebuilt model (model.setId(myUser.recoveryCodes.getId())) before adding it to the list."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+     "relevantLinesStart": 326,
+     "relevantLinesEnd": 340,
+     "suggestionContent": "WHAT: federated recovery-code validation only checks anyMatch(key equals input) and never consumes/burns the used code. WHY: a single recovery code can be replayed indefinitely for that user, defeating single-use recovery semantics that the local provider enforces by removing the used code. HOW: remove the matched code from the stored list (and persist/return updated credential) on successful validation, mirroring single-use consumption."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/forms/login/freemarker/model/RecoveryAuthnCodeInputLoginBean.java",
+     "relevantLinesStart": 16,
+     "relevantLinesEnd": 21,
+     "suggestionContent": "WHAT: constructor unwraps two Optionals without checks: credentialModelOpt.get() and getNextRecoveryAuthnCode().get(). WHY: throws NoSuchElementException (500) when the user has no recovery credential or when all federated/local codes are exhausted, both now reachable since getCredential can return empty or an all-used model. HOW: guard both Optionals and fall back to a safe codeNumber or throw a handled authentication/flow error instead of unguarded get()."
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 838,
+     "relevantLinesEnd": 843,
+     "suggestionContent": "WHAT: OptimizedCursorPaginator.get_item_key/value_from_cursor mishandles datetime ordering by calling math.floor/ceil directly on a datetime and returning raw int cursor value. WHY: Used with order_by=\"-datetime\" it crashes with TypeError on floor(datetime) when building cursors and filters the datetime column against an int in build_queryset, breaking pagination. HOW: Copy DateTimePaginator logic — timestamp via strftime/multiplier with floor/ceil and convert cursor value back with datetime.fromtimestamp."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 877,
+     "relevantLinesEnd": 882,
+     "suggestionContent": "WHAT: OptimizedCursorPaginator explicitly allows user-controlled negative cursor.offset into queryset[start_offset:stop] claiming Django handles negative slicing. WHY: Django QuerySet forbids negative indexing (AssertionError) and Endpoint.paginate only converts BadPaginationError to 400, so a crafted ?cursor=0:-5:0 triggers unhandled 500 — authenticated DoS reachable via optimized_pagination=true. HOW: Reject negative offsets with BadPaginationError like OffsetPaginator does instead of slicing with them."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 182,
+     "relevantLinesEnd": 184,
+     "suggestionContent": "WHAT: BasePaginator clamps with start_offset=max(0,offset) for non-prev but leaves later prev-trim check as len(results)==offset+limit+extra using the raw offset. WHY: With clamped or negative offsets the length comparison misfires, skipping/applying the extra-row trim incorrectly and returning wrong page boundaries. HOW: Use start_offset consistently in the length check or reject negative offsets upfront."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 877,
+     "relevantLinesEnd": 882,
+     "suggestionContent": "Negative-offset slice queryset[start_offset:stop] with start_offset<0 throws (Django: Negative indexing is not supported), causing unhandled 500. Clamp to max(0,offset) and reject negative offsets instead of allowing them when enable_advanced_features is set."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 179,
+     "relevantLinesEnd": 184,
+     "suggestionContent": "start_offset = max(0,offset) if not cursor.is_prev else offset still passes negative offset to queryset[start_offset:stop] when is_prev, which throws Negative indexing is not supported. Clamp/validate offset >=0 for both directions."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-value-boundary-and-position",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 874,
+     "relevantLinesEnd": 886,
+     "suggestionContent": "Negative-offset slice assumes Django handles negative slicing like Python lists. queryset[start_offset:stop] with start_offset=-10 raises AssertionError (negative indexing not supported) causing 500, or if coerced returns tail of filtered queryset outside cursor bounds. Clamp to max(0,offset) and reject negative offsets instead of passing them through."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-value-boundary-and-position",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 179,
+     "relevantLinesEnd": 184,
+     "suggestionContent": "BasePaginator change passes raw negative offset through when cursor.is_prev (max(0,offset) only applied when not is_prev). queryset[offset:stop] with negative offset violates Django non-negative slice contract, causing AssertionError/DoS or off-from-end pagination. Apply max(0,offset) unconditionally / validate offset >=0."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 179,
+     "relevantLinesEnd": 184,
+     "suggestionContent": "Comment at 179-181 claims allowing negative offsets is 'safe because the underlying queryset will handle boundary conditions', but the code at 182-184 just forwards `offset` (negative when is_prev) to `queryset[start_offset:stop]` with no boundary handling. The prose promises safety the code does not implement — correct or remove the claim and add explicit clamping/validation."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 874,
+     "relevantLinesEnd": 882,
+     "suggestionContent": "Comment claims 'The underlying Django ORM properly handles negative slicing automatically' and 'safe because permissions are checked at the queryset level', but code at 880-882 forwards negative `cursor.offset` directly to slicing with no handling, and queryset-level permissions do not make out-of-bounds slicing safe. The comment states the opposite of the code's contract — remove the false guarantee and handle negative offsets explicitly."
+    },
+    {
+     "id": "S10",
+     "finderIndex": 9,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 821,
+     "relevantLinesEnd": 832,
+     "suggestionContent": "Docstring lists 'Streamlined boundary condition handling', 'Optimized query path for large datasets', and 'maintaining backward compatibility', but get_result (845-886) is a copy of BasePaginator with only a negative-offset branch added — no streamlined handling or optimized path exists, and negative-offset slicing breaks prior cursor semantics. Doc describes behavior the function does not produce — align doc to code or implement the claimed handling."
+    },
+    {
+     "id": "S11",
+     "finderIndex": 10,
+     "producedBy": "micro-exp-p3-changed-files-disagree",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/endpoints/organization_auditlogs.py",
+     "relevantLinesStart": 73,
+     "relevantLinesEnd": 83,
+     "suggestionContent": "OptimizedCursorPaginator requires numeric integer keys (get_item_key uses math.floor/ceil + int, cursor_value defaults to 0) but is instantiated here with order_by=\"-datetime\". This mismatched producer/consumer contract breaks pagination for datetime-ordered audit logs. Fix: do not use OptimizedCursorPaginator for datetime ordering; keep DateTimePaginator or make OptimizedCursorPaginator datetime-aware."
+    },
+    {
+     "id": "S12",
+     "finderIndex": 11,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 884,
+     "relevantLinesEnd": 891,
+     "suggestionContent": "Dead computation / cross-reference mismatch: start_offset is computed and used for slicing (stop=start_offset+limit+extra) but the prev-page trim check uses the original offset (len(results)==offset+limit+extra). Use start_offset in the length check to match the slice that produced results."
+    },
+    {
+     "id": "S13",
+     "finderIndex": 12,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 877,
+     "relevantLinesEnd": 882,
+     "suggestionContent": "Wrong results / logic error: allowing negative start_offset and slicing queryset[start_offset:stop] does not perform offset pagination — queryset[-5:96] means from-end semantics (Django QuerySets reject negative indexing entirely). Clamp to 0 or reject negative cursors instead of passing them to the ORM."
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/helpers/error_upsampling.py",
+     "relevantLinesStart": 54,
+     "relevantLinesEnd": 64,
+     "suggestionContent": "WHAT: transform_query_columns_for_error_upsampling only rewrites exact bare `count()` and passes everything else through unchanged. WHY: yAxes like `count() as foo`, `eps()`, `epm()`, `count_unique()`, `count_if()` keep raw counts while should_upsample is true, returning under-counted timeseries. HOW: parse/normalize the function (strip alias, match function name with args) and rewrite all count-equivalent aggs or explicitly fall back to no-upsampling."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/testutils/factories.py",
+     "relevantLinesStart": 344,
+     "relevantLinesEnd": 357,
+     "suggestionContent": "WHAT: _set_sample_rate_from_error_sampling uses `if client_sample_rate: float(...)` with no type/range check, unlike production _derive_client_error_sampling_rate which requires isinstance(int,float) and 0<rate<=1. WHY: string '0.1', bool True, or out-of-range 5.0 get stored as sample_rate in fixtures while production drops them, making upsampling tests diverge from prod. HOW: mirror production validation before assigning sample_rate."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/helpers/error_upsampling.py",
+     "relevantLinesStart": 95,
+     "relevantLinesEnd": 105,
+     "suggestionContent": "WHAT: _is_error_focused_query uses substring `event.type:error in query.lower()` so negated queries like `!event.type:error` match. WHY: a non-error/mixed discover query is misclassified as error-focused and gets the sample_weight transform, producing wrong upsampled numbers. HOW: parse the query condition (respect negation/OR) instead of substring matching."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+     "relevantLinesStart": 3654,
+     "relevantLinesEnd": 3697,
+     "suggestionContent": "test_error_upsampling_with_transaction_events cannot falsify over-application of upsampling: the stored transaction has no sample_weight so upsampled_count() (sum(ifNull(sample_weight,1))) returns 1, same as count(). Give the transaction a sample_weight/client_sample_rate that would diverge (e.g. count 10 if upsampled vs 1 if not), or assert via mock that transform_query_columns_for_error_upsampling was not called / yAxes were not rewritten."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-value-boundary-and-position",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/testutils/factories.py",
+     "relevantLinesStart": 344,
+     "relevantLinesEnd": 357,
+     "suggestionContent": "Presence gate `if client_sample_rate:` uses truthiness so legitimate falsy rate 0/0.0 is dropped as missing. Use explicit `is not None` check before float() conversion."
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 335,
+     "relevantLinesEnd": 342,
+     "suggestionContent": "WHAT: SimpleQueueProcessingStrategy.close/terminate shuts down the factory-owned shared FixedQueuePool. WHY: ResultsStrategyFactory creates one queue_pool and hands it to every strategy from create_with_partitions, so Arroyo rebalance (close old strategy, create new one reusing factory.queue_pool) reuses a dead pool with joined workers and shut-down queues, stalling all further processing. HOW: Make pool lifecycle owned only by the factory: strategy close should only stop its commit thread, not call queue_pool.shutdown()."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 231,
+     "relevantLinesEnd": 243,
+     "suggestionContent": "WHAT: FixedQueuePool.shutdown sets worker.shutdown=True while OrderedQueueWorker.run loops on while not self.shutdown, so workers exit without draining queued WorkItems even though queues are shut down with immediate=False. WHY: Graceful shutdown silently drops queued items and leaves their offsets in outstanding forever, causing reprocessing/duplicates and failing the claimed graceful-shutdown guarantee. HOW: Remove the shutdown-flag short-circuit and let workers drain until queue.ShutDown, e.g. loop unconditionally and break only on ShutDown."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+     "relevantLinesStart": 180,
+     "relevantLinesEnd": 185,
+     "suggestionContent": "WHAT: ResultsStrategyFactory.shutdown shuts down queue_pool but never stops SimpleQueueProcessingStrategy commit threads created in the strategy constructor. WHY: The daemon commit loop keeps running after factory shutdown and keeps calling the stale commit_function/mark_committed, leaking threads and committing after shutdown/revoke. HOW: Track created strategies and call their close/terminate (or at least set shutdown_event and join commit_thread) from factory shutdown."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 184,
+     "relevantLinesEnd": 212,
+     "suggestionContent": "WHAT: FixedQueuePool uses unbounded queue.Queue() with non-blocking submit and poll() only emits a gauge, providing no backpressure. WHY: If workers are slower than submit (the slow-item case this PR targets), the Arroyo poll loop keeps enqueueing and total_items grows without bound, risking unbounded memory/OOM on the consumer. HOW: Create queues with maxsize and use blocking put with timeout, or gate submit/poll on get_stats depths."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "tests/sentry/uptime/consumers/test_results_consumer.py",
+     "relevantLinesStart": 1874,
+     "relevantLinesEnd": 1924,
+     "suggestionContent": "test_thread_queue_parallel_error_handling claims errors don't block commits but asserts len(committed)==0 / not in, and waits only for total==0+sleep(0.2) while commit loop is 1.0s. It passes if commits are correctly made (checked before loop fires) and if commits are never made. Wait for commit condition and assert contiguous commit includes both offsets despite the exception."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+     "relevantLinesStart": 137,
+     "relevantLinesEnd": 173,
+     "suggestionContent": "test_concurrent_processing_across_groups claims concurrent processing but only asserts 6 items processed and 3 groups seen. A serial/single-queue implementation would still pass. Verify overlap (blocking processor + timing/thread IDs) or remove concurrency claim."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "tests/sentry/uptime/consumers/test_results_consumer.py",
+     "relevantLinesStart": 1780,
+     "relevantLinesEnd": 1822,
+     "suggestionContent": "test_thread_queue_parallel_concurrent_subscriptions claims different subscriptions processed concurrently but only asserts call_count==2. Serial processing passes identically. Add concurrency proof (e.g., blocking first group, assert second completes) or rename to processing-correctness."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 144,
+     "relevantLinesEnd": 149,
+     "suggestionContent": "OrderedQueueWorker.run marks offset complete in finally even when result_processor raised. Failed items become committable and are committed as if successful, violating the only-commit-after-success invariant."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 204,
+     "relevantLinesEnd": 212,
+     "suggestionContent": "FixedQueuePool.submit calls offset_tracker.add_offset before work_queue.put with no cleanup if put raises (e.g. after queue shutdown). The leaked outstanding offset can never complete and blocks later contiguous commits for that partition."
+    },
+    {
+     "id": "S10",
+     "finderIndex": 9,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 280,
+     "relevantLinesEnd": 286,
+     "suggestionContent": "metrics.incr passes len(committable) as second positional arg (instance), not amount, so commit count is always 1 and instance is polluted with an int. Pass amount explicitly, e.g. amount=len(committable)."
+    },
+    {
+     "id": "S11",
+     "finderIndex": 10,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 214,
+     "relevantLinesEnd": 229,
+     "suggestionContent": "get_stats/wait_until_empty measures only sum(q.qsize()); qsize drops at get() before processing completes, so it reports empty/0 while items are in-flight. Include in-flight work (e.g. OffsetTracker outstanding) or unfinished_tasks before declaring empty."
+    },
+    {
+     "id": "S12",
+     "finderIndex": 11,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 246,
+     "relevantLinesEnd": 255,
+     "suggestionContent": "Docstring promises 'Only commits offsets after successful processing' but OrderedQueueWorker.run completes the offset in `finally` even when result_processor raises (caught as generic Exception and logged), so failed items become committable and offsets advance past failures. Fix doc or don't mark failed offsets complete / route to DLQ/retry."
+    },
+    {
+     "id": "S13",
+     "finderIndex": 12,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 250,
+     "relevantLinesEnd": 254,
+     "suggestionContent": "Docstring promises 'Natural backpressure when queues fill up' but FixedQueuePool creates unbounded `queue.Queue()` (maxsize 0) and `submit` uses non-blocking `put`, so queues never fill/block the producer. Fix doc or use bounded queues with blocking put / poll-based backpressure."
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 54,
+     "suggestionContent": "WHAT: Changed SET ops (scard/sunionstore) to ZSET ops (zcard/zunionstore/zpopmin) with no migration breaks in-flight segments. WHY: Old keys of type SET still live up to TTL; ZCARD/ZUNIONSTORE/ZSCAN/ZADD on the opposite type raises WRONGTYPE and fails inserts/flushes during rollout."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+     "relevantLinesStart": 47,
+     "relevantLinesEnd": 48,
+     "suggestionContent": "WHAT: zunionstore uses default AGGREGATE SUM for timestamp scores so duplicate members get summed timestamps. WHY: Re-ingested/merged payload present in both dest and source gets score ~2x timestamp, corrupting eviction order and future reads; use AGGREGATE MAX/MIN."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/consumers/process/factory.py",
+     "relevantLinesStart": 141,
+     "relevantLinesEnd": 142,
+     "suggestionContent": "WHAT: Direct val[\"end_timestamp_precise\"] indexing with no fallback crashes the batch on missing/null field. WHY: KeyError/TypeError aborts process_batch for the whole Kafka batch (poison-pill), dropping all spans in it; use .get with fallback/validation."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+     "relevantLinesStart": 62,
+     "relevantLinesEnd": 64,
+     "suggestionContent": "WHAT: zpopmin eviction by lowest end_timestamp has no protection for the segment/root span. WHY: Root with smallest or tied timestamp (tests use identical timestamps, ties break lexicographically) is evicted while hrs flag stays 1, flushing a root-marked segment missing its root."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+     "relevantLinesStart": 30,
+     "relevantLinesEnd": 31,
+     "suggestionContent": "WHAT: Redirect-chase limit silently cut from 10000 to 1000. WHY: Segment trees with depth 1001-10000 previously joined correctly and now stop early, leaving split segments/redirects unresolved."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 54,
+     "suggestionContent": "ZUNIONSTORE defaults to AGGREGATE SUM, so duplicate payload in both inputs gets summed score instead of timestamp. Add AGGREGATE MAX to both ZUNIONSTORE calls to preserve ordering invariant for zpopmin trim."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "tests/sentry/spans/test_buffer.py",
+     "relevantLinesStart": 120,
+     "relevantLinesEnd": 152,
+     "suggestionContent": "All spans in the fixture use identical end_timestamp_precise=1700000000.0, so the ZSET score-dependent behavior (ordering by end time, zunionstore score merge, and Lua zpopmin keeping newest 1000) is neutralised — tests pass even if scores are wrong or eviction keeps the wrong end. Use distinct timestamps and add a >1000-span trimming test asserting oldest evicted."
+    }
+   ]
+  }
+ }
+}

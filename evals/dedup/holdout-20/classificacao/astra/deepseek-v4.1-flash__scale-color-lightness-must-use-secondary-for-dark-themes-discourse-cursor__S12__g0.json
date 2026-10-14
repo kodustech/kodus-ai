@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "id": "S12",
+ "golden": 0,
+ "promptSha": "9ca3726d5db7b6dfedac960c66aa5849e64b6f05",
+ "sameProblem": false,
+ "reason": "The review identifies the same lightness inversion in a different selector (`.reply`/`nav.post-controls`), so fixing it would not fix the golden issue in `.topic-meta-data h5 a`."
+}

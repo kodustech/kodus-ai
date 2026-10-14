@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "id": "S5",
+ "golden": 0,
+ "promptSha": "7a41f58b332e26099670297688384555d6f17659",
+ "sameProblem": true,
+ "reason": "Both comments identify negative cursor offsets reaching Django queryset slices, and clamping those offsets to zero would fix the reported failure."
+}

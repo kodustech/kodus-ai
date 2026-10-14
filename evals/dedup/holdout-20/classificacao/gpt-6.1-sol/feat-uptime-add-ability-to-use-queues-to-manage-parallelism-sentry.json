@@ -1,0 +1,294 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "result_consumer.py:254-258 passa sempre o mesmo self.queue_pool (criado uma vez no __init__) e queue_consumer.py:335-338 close() chama queue_pool.shutdown(); apos rebalance a nova estrategia usa fila shut down (Py 3.13.1), put levanta ShutDown e o except em 317-325 completa o offset sem processar.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:233-234 seta worker.shutdown antes de q.shutdown, entao worker sai sem drenar a fila; os offsets nao drenados ficam outstanding e nao sao commitados (replay, sem perda). Melhoria de shutdown sem falha concreta.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:185 cria queue.Queue() sem maxsize e submit (293-315) nunca rejeita/bloqueia; com worker lento a memoria cresce sem limite, contrariando a backpressure prometida em 253. Introduzido pelo PR.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:148-149 completa o offset no finally mesmo com erro, mas ResultProcessor.__call__ (result_consumer.py:44-53) ja engole toda excecao, como no modo serial: pular falha e o desenho existente; so a docstring 254 esta errada.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "result_consumer.py:254-258 passa sempre o mesmo self.queue_pool (criado uma vez no __init__) e queue_consumer.py:335-338 close() chama queue_pool.shutdown(); apos rebalance a nova estrategia usa fila shut down (Py 3.13.1), put levanta ShutDown e o except em 317-325 completa o offset sem processar.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:233-234 seta worker.shutdown antes de q.shutdown, entao worker sai sem drenar a fila; os offsets nao drenados ficam outstanding e nao sao commitados (replay, sem perda). Melhoria de shutdown sem falha concreta.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "result_consumer.py:254-258 passa sempre o mesmo self.queue_pool (criado uma vez no __init__) e queue_consumer.py:335-338 close() chama queue_pool.shutdown(); apos rebalance a nova estrategia usa fila shut down (Py 3.13.1), put levanta ShutDown e o except em 317-325 completa o offset sem processar.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Docstring queue_consumer.py:254 de fato e falsa (finally em 148-149), mas ResultProcessor ja engole erros; pedido e corrigir documentacao.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S9",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Verdade que a docstring em queue_consumer.py:253 promete backpressure e a fila de 185 e ilimitada, mas o pedido e corrigir docstring (ou limitar fila); mudanca de documentacao.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S10",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "result_consumer.py:254-258 passa sempre o mesmo self.queue_pool (criado uma vez no __init__) e queue_consumer.py:335-338 close() chama queue_pool.shutdown(); apos rebalance a nova estrategia usa fila shut down (Py 3.13.1), put levanta ShutDown e o except em 317-325 completa o offset sem processar.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S11",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:148-149 completa o offset no finally mesmo com erro, mas ResultProcessor.__call__ (result_consumer.py:44-53) ja engole toda excecao, como no modo serial: pular falha e o desenho existente; so a docstring 254 esta errada.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S12",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:233-234 seta worker.shutdown antes de q.shutdown, entao worker sai sem drenar a fila; os offsets nao drenados ficam outstanding e nao sao commitados (replay, sem perda). Melhoria de shutdown sem falha concreta.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S13",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "result_consumer.py:254-258 passa sempre o mesmo self.queue_pool (criado uma vez no __init__) e queue_consumer.py:335-338 close() chama queue_pool.shutdown(); apos rebalance a nova estrategia usa fila shut down (Py 3.13.1), put levanta ShutDown e o except em 317-325 completa o offset sem processar.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S14",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "queue_consumer.py:86-93: com gap 100,102 o scan para em 101, mas apos commitar 100 o proximo ciclo comeca em max(101,102)=102 e avanca; so atrasa um ciclo de 1s, sem falha concreta (topico de uptime nao e compactado).",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S15",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "test_results_consumer.py:1916-1922 espera 0.2s e o commit loop espera 1s (queue_consumer.py:276), entao a assercao e vacua; fraqueza do teste, causa diferente do golden 1 (docstring).",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S16",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "test_results_consumer.py:2004-2005 so assere queue_pool is None; lacuna de teste.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S17",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "test_queue_consumer.py:302-312 so conta itens identicos; lacuna de teste.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S18",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "test_queue_consumer.py:161-173 nao prova concorrencia; lacuna de teste.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "id": "S15",
+ "golden": 1,
+ "promptSha": "cce695253f8cef2bb359fe92721edb6de17768df",
+ "sameProblem": false,
+ "reason": "The review flags a 20%→50% change in mobile `a.star h3`, while the golden comment flags a 30%→50% change in desktop/user.css and a related mobile `.name` change, so fixing the review’s location would not fix the golden issue."
+}

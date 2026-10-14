@@ -1,0 +1,182 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:133-134 return true com dateOverrideExist antes de busy.every; ignora conflitos, introduzido pelo PR.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:117-124 so rejeita slot que termina antes do inicio ou comeca depois do fim do override; slot parcialmente fora passa, e com varios overrides no dia o find rejeita por qualquer um. Codigo novo do PR.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:138-147 workingHours.find rejeita se qualquer intervalo do dia nao contem o slot; jornada dividida (9-12, 13-17) perde todos os slots. Introduzido pelo PR.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "alucinacao",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Com hosts fixos, getAggregateWorkingHours (packages/core/getAggregateWorkingHours.ts:9-30) gera slots so da intersecao dos horarios dos fixos, entao nao surge slot de loose host em dia que o fixo nao trabalha.",
+   "confianca": "baixa",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/lib/slots.ts:218-223 (novo) converte override com offset e pega so hour/minute; intervalo que cruza meia-noite do invitee vira start>end e e descartado. Antes usava getUTCHours sem offset.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:133-135 return true precoce pula busy.every; booking existente ignorado.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:133-135 mesmo early return que bypassa busy, introduzido pelo PR.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:133-135 override retorna true antes da checagem de busy.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S9",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.99
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:142-143 end calculado de slotStartTime; golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S10",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:138-150 find rejeita slot fora de qualquer janela do dia; jornada dividida perde slots validos. Introduzido pelo PR.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S11",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:114-115 === entre dois Dayjs, sempre false; golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

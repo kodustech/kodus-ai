@@ -1,0 +1,156 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "modelo": "sonnet-5.5",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:141-143 end de slotStartTime (achado principal); golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:114-116 === em objetos dayjs; golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:141-143 end = start; golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:141-143 end de slotStartTime; golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:114-116 === sempre false; golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:141-143 end de slotStartTime; golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": false,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:123-125 limite superior do override compara slotStartTime.isAfter(date.end); slot que comeca antes e termina depois do override passa. E outra condicao, nao a de workingHours do golden 0.",
+   "confianca": "media",
+   "precisaAstra": true,
+   "tipoFPOriginal": "bug_real",
+   "astra": {
+    "golden_juiz": true,
+    "golden_classificacao": null,
+    "vale": "juiz"
+   }
+  },
+  {
+   "id": "S8",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:114-116 === em dayjs; golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S9",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "packages/trpc/server/routers/viewer/slots.ts:138-151 cita jornada dividida e tambem end calculado de slotStartTime (golden 0); a correcao pedida inclui a do golden.",
+   "confianca": "media",
+   "precisaAstra": false
+  }
+ ]
+}

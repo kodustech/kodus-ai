@@ -1,0 +1,118 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "CredentialHelper.java:125-129 quando o user storage aceita, nao chama createCredential local (que substituia o antigo); UserCredentialManager.isValid (linhas 66-79) cai nos validadores locais, entao codigos locais antigos de um usuario federado continuam validos; cenario de migracao estreito.",
+   "confianca": "baixa",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "BackwardsCompatibilityUserStorage.java:340 provider de testsuite nao consome o codigo validado; fixture de teste, sem impacto em produto.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "BackwardsCompatibilityUserStorage.java:237-242 modelo reconstruido sem o id armazenado; golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S2 (BackwardsCompatibilityUserStorage.java:340, provider de teste nao consome codigo).",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S2 (BackwardsCompatibilityUserStorage.java:340).",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "BackwardsCompatibilityUserStorage.java:340 String.equals nao constante no provider de testsuite; hardening opcional.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S2 (BackwardsCompatibilityUserStorage.java:340).",
+   "confianca": "media",
+   "precisaAstra": false
+  }
+ ]
+}

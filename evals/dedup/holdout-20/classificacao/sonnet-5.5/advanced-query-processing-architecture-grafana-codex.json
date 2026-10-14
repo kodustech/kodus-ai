@@ -1,0 +1,38 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "modelo": "sonnet-5.5",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "public/app/plugins/datasource/loki/querySplitting.ts:299 + DataSourceWithBackend.ts:185 interpolam duas vezes; filtros ad hoc duplicados (addAdHocFilters) sao idempotentes em LogQL e 'LogQL invalido' nao tem caminho mostrado.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "querySplitting.test.ts: toHaveBeenCalledTimes(5) seria fragil; sugestao de estilo de teste.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

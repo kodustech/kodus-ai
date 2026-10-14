@@ -1,0 +1,1298 @@
+{
+ "model": "muse-spark-1.3",
+ "verificador": "muse-spark-1.3",
+ "versao": "m13h-r1",
+ "versaoDedup": "m13h-v9",
+ "prs": {
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "availability/meeting paths now pay N sequential module-load round-trips per request instead of one parallel fan-out, adding latency on hot getAvailability/createMeeting calls with multiple credentials.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/index.ts:1-6 `const appStore = { applecalendar: import(\"./applecalendar\"), caldavcalendar: import(\"./caldavcalendar\"), ... }` and packages/core/videoClient.ts:26 `const app = await appStore[appName as keyof typeof appStore];`",
+     "reason": "All dynamic imports are started eagerly when the appStore module is evaluated, so the loop only awaits already-in-flight promises and cannot pay N sequential per-request module-load round-trips.",
+     "passos": 4
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S7",
+      "S8",
+      "S9",
+      "S12",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "bookingRefsFiltered.forEach(async ...) never awaits the async callbacks so calendar/video deletions are fire-and-forget.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/bookings.tsx:553-572: `bookingRefsFiltered.forEach(async (bookingRef) => {` ... `await sendRequestRescheduleEmail(builder.calendarEvent,` with no await/Promise.all between forEach and email send",
+     "reason": "forEach discards the async callbacks' promises so deleteEvent/deleteMeeting race the reschedule email and rejections escape the handler, reachable via requestReschedule with matching credentials.",
+     "passos": 8
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "credentials.filter(...).forEach(async (credential) => { await getCalendar; apiDeletes.push(...) }) pushes to apiDeletes asynchronously after outer code consumes it.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:458-470 `.filter((credential) => credential.type.endsWith(\"_calendar\")).forEach(async (credential) => { const calendar = await getCalendar(credential);` + packages/features/bookings/lib/handleCancelBooking.ts:652 `await Promise.all(prismaPromises.concat(apiDeletes));` + packages/app-store/_utils/getCalendar.ts:9 `export const getCalendar = async (credential`",
+     "reason": "When recurring cancel with credentialId is requested the forEach callbacks await getCalendar before pushing, so Promise.all consumes a concat snapshot of still-empty apiDeletes and later pushes are lost.",
+     "passos": 7
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "deleteCacheMutation onSuccess only calls onSuccess?.() and never invalidates viewer.calendars.connectedCalendars, unlike disconnectMutation onSettled.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:42-50 `const deleteCacheMutation = trpc.viewer.calendars.deleteCache.useMutation({ onSuccess: () => { showToast(t(\"cache_deleted_successfully\"), \"success\"); onSuccess?.(); },` vs 61-64 `async onSettled() { await utils.viewer.calendars.connectedCalendars.invalidate();`; packages/features/eventtypes/components/tabs/advanced/EventAdvancedTab.tsx:372 `SelectedCalendarsSettingsWebWrapper` rendered with no `onChanged` prop so `onSuccess` is undefined; packages/platform/atoms/selected-calendars/wrappers/SelectedCalendarsSettingsWebWrapper.tsx:152-160 `useQuery(..., {suspense: true, refetchOnWindowFocus: false})`",
+     "reason": "When onSuccess is undefined (EventAdvancedTab caller) nothing refetches connectedCalendars so cacheUpdatedAt prop stays stale and UI keeps showing old timestamp/delete action.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "on GNU/Linux sed -i '' treats '' as a file argument and fails, so GOOGLE_WEBHOOK_URL is never updated on Linux/CI.",
+     "claimNoTexto": null,
+     "evidence": "scripts/test-gcal-webhooks.sh:68 `sed -i '' -E \"s|^GOOGLE_WEBHOOK_URL=.*|GOOGLE_WEBHOOK_URL=$TUNNEL_URL|\" \"$ENV_FILE\"`",
+     "reason": "Line 68 uses BSD-only sed -i '' syntax with no OS guard in the script, so any run on GNU/Linux triggers the failure and the portable GNU form is already used in deploy/install.sh:6.",
+     "passos": 5
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Date format hard-coded to \"en-US\" via Intl.DateTimeFormat while surrounding strings use t()/useLocale.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:37 `const { t } = useLocale();` discards i18n, and :89 `timestamp: new Intl.DateTimeFormat(\"en-US\", {` hard-codes US locale for cache_last_updated display",
+     "reason": "Any non-en-US user reaching the hasCache branch gets US short date/time because the formatter ignores the active i18n locale available from useLocale.",
+     "passos": 5
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S7",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Call passes {} as data to updateManyByCredentialId: await SelectedCalendarRepository.updateManyByCredentialId(this.credential.id, {}).",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:1024 `await SelectedCalendarRepository.updateManyByCredentialId(this.credential.id, {});` forwards to packages/lib/server/repository/selectedCalendar.ts:400-405 `static async updateManyByCredentialId(credentialId: number, data: Prisma.SelectedCalendarUpdateInput) { return await prisma.selectedCalendar.updateMany({ where: { credentialId }, data, }); }`",
+     "reason": "The {} is passed unconditionally on every fetchAvailabilityAndSetCache path with no guard or data-fill, and the repository forwards it directly to prisma updateMany, so the empty-data runtime failure can happen.",
+     "passos": 9
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "remindersToCancel loop awaits SendGrid cancel per-reminder inside one try and only runs Prisma deletes after the loop, with no method filter.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:43-77 — `findMany({ where: { cancelled: true, scheduledDate: ...}})` with no `method` filter, then `try { ... for (const reminder of remindersToCancel) { await client.request({...batch_id: reminder.referenceId...}); ...push(...) } await Promise.all(workflowRemindersToDelete); } catch` so any throw skips deletes",
+     "reason": "A single SendGrid throw aborts the loop before Promise.all, so already-cancelled and remaining deletes are never run.",
+     "passos": 10
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "async deleteScheduledEmailReminder/deleteScheduledSMSReminder called inside forEach without collecting/awaiting promises.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:484-493 `updatedBookings.forEach((booking) => { booking.workflowReminders.forEach((reminder) => { if (reminder.method === WorkflowMethods.EMAIL) { deleteScheduledEmailReminder(reminder.id, reminder.referenceId);` + packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:197 `export const deleteScheduledEmailReminder = async (`",
+     "reason": "The cited loop calls async DB/external cancel functions without await/Promise.all and the handler returns after other awaits, so cancels can still be in-flight when the response is sent.",
+     "passos": 5
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "far-future scheduled SendGrid sends stay active until the 1-hour cron window, so edited workflows still send old reminders",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/workflows.tsx:378 - `deleteScheduledEmailReminder(reminder.id, reminder.referenceId);` without immediateDelete; packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:197-232 - without immediateDelete only does `prisma.workflowReminder.update({ where: {id: reminderId}, data: {cancelled: true}})` and does not call SendGrid cancel; packages/features/ee/workflows/api/scheduleEmailReminders.ts:44-51 - `cancelled: true, scheduledDate: { lte: dayjs().add(1, \"hour\")}` so far-future cancelled sends not cancelled; packages/features/ee/workflows/api/scheduleEmailReminders.ts:80-87 - unscheduled query has no cancelled filter",
+     "reason": "Edited/disabled event-type path marks EMAIL reminders cancelled-only without immediate SendGrid cancel, and cron only cancels cancelled reminders within 1 hour, so far-future scheduled sends remain active.",
+     "passos": 7
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "SendGrid cancel issued with sequential await inside for loop over remindersToCancel.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:56-57 and quoted code `for (const reminder of remindersToCancel) { await client.request({` with unbounded `findMany where cancelled:true` at lines 44-51 and no limit/parallel batch for the cancel requests",
+     "reason": "The loop awaits each SendGrid cancel network call sequentially, so N cancellations cost O(N) round-trips, which can grow with cancelled backlog.",
+     "passos": 3
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Hard-coded placeholder \"Verification code\" bypasses i18n while surrounding strings use t(). Use translation key e.g. t(\"verification_code\").",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:439 `placeholder=\"Verification code\"` vs 420 `{t(\"send_code\")}` and 432 `<Badge variant=\"green\">{t(\"number_verified\")}</Badge>` with 57 `const { t, i18n } = useLocale();`",
+     "reason": "The placeholder is literally hard-coded English while i18n is available and surrounding strings use t(), so non-English locales see untranslated text.",
+     "passos": 4
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Hard-coded button label \"Verify\" bypasses i18n while surrounding strings use t(). Use translation key e.g. t(\"verify\").",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:456 shows hard-coded `Verify` inside <Button>, while lines 420 ` {t(\"send_code\")}` and 432 `{t(\"number_verified\")}` use t(), with `const { t, i18n } = useLocale()` at line 57.",
+     "reason": "Line 456 contains literal \"Verify\" instead of t(), so non-English locales will see untranslated English while adjacent strings translate.",
+     "passos": 4
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S3",
+      "S9",
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "immediateDelete branch cancels the SendGrid scheduled send but returns without deleting the workflowReminder row or setting cancelled:true, disagreeing with deleteScheduledSMSReminder (which deletes) and with the cancelled:true sweeper in scheduleEmailReminders. A reminder cancelled via immediateDelete=true (e.g. handleNewBooking reschedule) leaks a live DB row. Delete the row (or set cancelled) in the immediate path.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:213-222 `if (immediateDelete) { await client.request(... status: \"cancel\" ...); return; }` with no prisma delete/update; caller packages/features/bookings/lib/handleNewBooking.ts:968 `deleteScheduledEmailReminder(reminder.id, reminder.referenceId, true)`; contrast packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:177-186 `deleteScheduledSMSReminder` always `prisma.workflowReminder.delete`; sweeper packages/features/ee/workflows/api/scheduleEmailReminders.ts:44-51 only handles `cancelled: true`",
+     "reason": "The immediateDelete path is reachable from real callers and returns after the SendGrid cancel without deleting or marking the row, while SMS deletes and the cron only reaps cancelled:true rows.",
+     "passos": 9
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The unsubscribe state change (lowering/muting notification_level + save!) runs on a GET route (config/routes.rb GET t/:slug/:topic_id/unsubscribe).",
+     "claimNoTexto": null,
+     "evidence": "config/routes.rb:440 `get \"t/:slug/:topic_id/unsubscribe\" => \"topics#unsubscribe\"` + app/controllers/topics_controller.rb:105-113 `tu.notification_level = ...; tu.save!` + app/controllers/topics_controller.rb:32 `skip_before_filter :check_xhr, only: [:show, :unsubscribe, :feed]`",
+     "reason": "GET route directly maps to action that mutates notification_level and saves, with XHR check skipped and no CSRF token or confirmation required on GET.",
+     "passos": 8
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "Triple-brace `{{{stopNotificiationsText}}}` renders translation containing `<strong>{{title}}</strong>` with fancyTitle unescaped, so topic title HTML is injected into page; escape title interpolation or avoid triple-brace.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs:3 `{{{stopNotificiationsText}}}` + app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6:6 `I18n.t(\"topic.unsubscribe.stop_notifications\", { title: this.get(\"model.fancyTitle\") })` + config/locales/client.en.yml:985 `stop_notifications: \"You will stop receiving notifications for <strong>{{title}}</strong>.\"`",
+     "reason": "The triple-brace plus I18n interpolation chain exists, but whether raw title HTML survives via fancy_title/Emoji.unescape (which is rendered with triple-brace elsewhere as safe HTML) was not verified, so injection cannot be confirmed or refuted on current evidence.",
+     "passos": 10
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "TopicUser.find_by can return nil for a user with no TopicUser row, then tu.notification_level raises NoMethodError.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/topics_controller.rb:105-107 `tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])` followed by `if tu.notification_level > TopicUser.notification_levels[:regular]` with no nil guard; TopicView does not create a row (lib/topic_view.rb:238-243 `return nil if @user.blank?` / `find_by`) and `unsubscribe` never calls `track_visit_to_topic`/`TopicUser.change`.",
+     "reason": "Any logged-in user who can see the topic can hit unsubscribe with no TopicUser row, so find_by returns nil and the direct dereference raises NoMethodError.",
+     "passos": 10
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Light theme now renders a far lighter link color than before, breaking contrast and changing intended design.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/desktop/topic-post.scss:291: color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)); + app/assets/stylesheets/common/foundation/variables.scss:46-47: @function dark-light-choose($light-theme-result, $dark-theme-result)",
+     "reason": "First arg of dark-light-choose is the light-theme result and it currently lightens $primary by 70%, which is far lighter than 30% and reduces contrast on a light background.",
+     "passos": 8
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Light-theme branch changed from scale-color($primary, $lightness: 70%) to scale-color($primary, $lightness: 30%) in .custom-message-length.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/mobile/modal.scss:102 `color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));` vs app/assets/stylesheets/desktop/modal.scss:94 `color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));` consumed by app/assets/javascripts/discourse/templates/modal/flag.hbs:14 `custom-message-length`",
+     "reason": "Mobile .custom-message-length uses 30%/70% while desktop keeps 70%/30%, so mobile renders darker/divergent and the flag modal template actually uses that class.",
+     "passos": 10
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Light-theme branch for .name changed from scale-color($primary, $lightness: 30%) to 50% in dark-light-choose.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/desktop/user.scss:522 `color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));` vs app/assets/stylesheets/common/base/user.scss:124 `color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));` with app/assets/stylesheets/common/foundation/variables.scss:46 `@function dark-light-choose($light-theme-result, $dark-theme-result)` returning light-theme-result",
+     "reason": "Desktop .name uses 50%/50% while common .name preserves 30%/70%, so the light-theme first argument is lighter and inconsistent.",
+     "passos": 10
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Light-theme branch for .topic-map h3 changed from scale-color($primary, $lightness: 20%) to 50% in dark-light-choose.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/mobile/topic-post.scss:182 `color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));` vs app/assets/stylesheets/desktop/topic-post.scss:321 `color: dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%));` with app/assets/stylesheets/common/foundation/variables.scss:46-47 `@function dark-light-choose($light-theme-result, $dark-theme-result)`",
+     "reason": "Light theme selects the first arg so mobile h3 renders 50%-lightened primary versus 20% on desktop, making it lighter and inconsistent as reported.",
+     "passos": 7
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "EmailValidator.validate_each performs no email syntax/format check, only whitelist/blacklist and blocked lookup.",
+     "claimNoTexto": null,
+     "evidence": "lib/validators/email_validator.rb:3-16 — `def validate_each(record, attribute, value)` only checks `SiteSetting.email_domains_whitelist`, `SiteSetting.email_domains_blacklist` via `email_in_restriction_setting?` and `BlockedEmail.should_block?(value)`, with no regex/@/domain format check; app/models/user.rb:46-47 — `validates :email, presence: true, uniqueness: true` + `validates :email, email: true, if: :email_changed?` delegates all format work to that validator.",
+     "reason": "With no whitelist/blacklist configured and no BlockedEmail match, no error is added for an arbitrary string, so User with e.g. invalid format passes validations and can be created.",
+     "passos": 8
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Whitelist 'gmail.com' substring-matches 'victim@gmail.com.evil.com', so an attacker registers with an unapproved domain and bypasses the allow-list",
+     "claimNoTexto": null,
+     "evidence": "lib/validators/email_validator.rb:18-22 — `domains = setting.gsub('.', '\\.')` + `regexp = Regexp.new(\"@(#{domains})\", true)` + `value =~ regexp` is an unanchored substring match with no \\A/\\z anchor or Regexp.escape",
+     "reason": "With whitelist 'gmail.com' the regexp /@(gmail\\.com)/i matches the substring '@gmail.com' in 'victim@gmail.com.evil.com', so email_in_restriction_setting? returns truthy and validate_each adds no error, allowing an unapproved domain.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "should_block? mutates match_count/last_match_at via read-modify-write save inside a validator",
+     "claimNoTexto": null,
+     "evidence": "app/models/blocked_email.rb:14-16 `record.match_count += 1; record.last_match_at = Time.zone.now; record.save` called from lib/validators/email_validator.rb:13 `if record.errors[attribute].blank? and BlockedEmail.should_block?(value)`; User validates email with `email: true, if: :email_changed?` at app/models/user.rb:47 while username/password validators are separate, so username failures still trigger increment; no atomic update exists in repo",
+     "reason": "The validator calls the mutating read-modify-write on every email validation even when other attributes fail and concurrent calls can lose increments since no atomic counter is used.",
+     "passos": 8
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "If server normalizes (strip/case) the email, normalized != raw input so contains() misses and the client-side invalid marker fails to trigger on retry.",
+     "claimNoTexto": null,
+     "evidence": "app/models/user.rb:84-91 `user.email = params[:email]` with no strip/downcase; app/controllers/users_controller.rb:199-200 `values: user.attributes.slice(\"name\", \"username\", \"email\")`",
+     "reason": "Server never normalizes email on create — new_from_params assigns params[:email] directly so values.email equals the raw accountEmail and contains() matches.",
+     "passos": 10
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "BlockedEmail.where(email: email) is exact case-sensitive with no normalization, while sibling checks are case-insensitive.",
+     "claimNoTexto": null,
+     "evidence": "app/models/blocked_email.rb:12 `record = BlockedEmail.where(email: email).first` with only `validates :email, presence: true, uniqueness: true` and `set_defaults` setting action_type; caller lib/validators/email_validator.rb:13 `BlockedEmail.should_block?(value)` passes raw value; sibling lib/validators/email_validator.rb:20 `regexp = Regexp.new(\"@(#{domains})\", true)` is case-insensitive",
+     "reason": "Blocked lookup uses exact `=` with no downcase/strip on write or lookup while sibling domain check uses case-insensitive regexp, so a different-case email bypasses the block.",
+     "passos": 10
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S7"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "@each observes properties of array items, not membership, so pushing a string does not invalidate the computed property and the remembered rejection error does not display until accountEmail itself changes.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/external_development/ember.js:13231 and 13213: EachProxy.arrayDidChange calls `Ember.propertyDidChange(this._content, '@each')` (and arrayWillChange calls `Ember.propertyWillChange(this._content, '@each')`) after `init: content.addArrayObserver(this)` at line 13170, so pushObject notifies '@each'.",
+     "reason": "The bundled Ember EachProxy subscribes as an array observer and explicitly fires @each change on every membership change, so pushObject does invalidate 'rejectedEmails.@each'.",
+     "passos": 10
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "With instance `example.com` and website `http://sub.example.com/page`, it returns `sub.example.com` instead of `sub.example.com/page`, contradicting the PR intent to show the full path for same-base-domain URLs.",
+     "claimNoTexto": null,
+     "evidence": "app/serializers/user_serializer.rb:147-150 — `discourse_host.ends_with?(\".\" << website_host) ? website_host + URI(website.to_s).path : website_host` only checks discourse-child-of-website direction with no reverse check.",
+     "reason": "Tracing website_host=sub.example.com vs discourse_host=example.com skips both prior branches and fails the ends_with? check, so it returns host-only, and website is arbitrary user input so this state is reachable.",
+     "passos": 6
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The predicate is never called so `website_name` is always serialized and bypasses the TL0-anonymous `restrict_user_fields?` hiding applied to `website` via `untrusted_attributes`, leaking a restricted user's website host+path to anonymous viewers.",
+     "claimNoTexto": null,
+     "evidence": "app/serializers/user_serializer.rb:153 `def include_website_name` (missing `?`) vs app/serializers/user_serializer.rb:161 `def include_card_image_badge_id?`, app/serializers/user_serializer.rb:105-111 `untrusted_attributes :bio_raw, :bio_cooked, :bio_excerpt, :location, :website, :profile_background, :card_background` (no `:website_name`) with definition at :25-32 `define_method \"include_#{attr}?\" ... return false if scope.restrict_user_fields?(object)`, and lib/guardian/user_guardian.rb:58-59 `def restrict_user_fields?(user) user.trust_level == TrustLevel[0] && anonymous?`",
+     "reason": "The `?`-less filter can never match AMS `include_<attr>?` convention used everywhere else in the file, and `website_name` derives from `website` yet is omitted from `untrusted_attributes`, so for TL0+anonymous `website` is suppressed while `website_name` is still rendered.",
+     "passos": 6
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Outside-working-hours test uses workingHours.find() returning true if ANY entry rejects the slot.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/slots.ts:138-145 `workingHours.find((workingHour) => { ... if (start < workingHour.startTime || end > workingHour.endTime) { return true;` combined with packages/lib/availability.ts:25-52 `schedule.reduce((availability: Availability[], times: TimeRange[], day: number)` with `filteredTimes.forEach((time) => { availability.push(addNewTime(time)); })` allowing two Availability/WorkingHours entries for the same weekday, preserved by packages/core/getAggregateWorkingHours.ts:18-19 `return usersWorkingHoursAndBusySlots.flatMap((s) => s.workingHours)`",
+     "reason": "A split schedule produces two same-day WorkingHours entries, so a slot inside one entry is outside the other and find() matches, wrongly returning false.",
+     "passos": 7
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "activeOverrides are filtered by UTC day (line 206-207) before the invitee/organizer offset is applied (lines 212-224), and shifted hours are not re-bucketed across midnight.",
+     "claimNoTexto": null,
+     "evidence": "packages/lib/slots.ts:206-224 activeOverrides filter uses dayjs.utc(override.start).isBetween(startOfInviteeDay...) then computes offset and hour/minute only with no day re-bucket",
+     "reason": "Offset up to ±19h plus normal morning/evening override times puts the true invitee wall time on the adjacent day while the pre-offset filter assigns it to the current invitee day, so wrong-day blocking/open slots can happen.",
+     "passos": 10
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Line 114 compares two Dayjs objects with === (reference equality), which is always false.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/slots.ts:114: if (dayjs(date.start).add(utcOffset, \"minutes\") === dayjs(date.end).add(utcOffset, \"minutes\")) {",
+     "reason": "Two distinct dayjs() objects never satisfy ===, so the start==end branch is dead, yet the UI creates start==end overrides for full-day-unavailable (DateOverrideInputDialog maps unavailable to midnight-midnight and DateOverrideList treats valueOf diff 0 as unavailable).",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Working-hours check computes both start and end from slotStartTime (line 141-142), ignoring eventLength/slotEndTime.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/slots.ts:141-142 — `const start = slotStartTime.hour() * 60 + slotStartTime.minute();` and `const end = slotStartTime.hour() * 60 + slotStartTime.minute();` with `slotEndTime = time.add(eventLength, \"minutes\")` defined at line 99 but unused in this check",
+     "reason": "Both lines use slotStartTime so end never includes eventLength; a slot starting inside hours but ending after close passes, e.g. with input.duration differing from eventType.length (slots.ts:450 vs 419) a short-duration slot can reach the check where the longer length overruns closing.",
+     "passos": 7
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Leftover debug logging calls r.log.Error on every cleanup batch (also duplicated at lines 554-557 and 576-579) dumping full ids slice, cond, and nil err at Error level.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:534 `r.log.Error(\"Annotations to clean by time\", \"count\", len(ids), \"ids\", ids, \"cond\", cond, \"err\", err)` and 537 `r.log.Error(\"cleaned annotations by time\", \"count\", len(ids), \"affected\", x, \"err\", y)`, 554/557 same for count, 576/579 for tags; loop pkg/services/annotations/annotationsimpl/xorm_store.go:643-650 `func untilDoneOrCancelled... for { ... affected, err := batchWork()` calls batch unconditionally, and cleanup.go:37-55 calls CleanAnnotations/CleanOrphanedAnnotationTags on normal cleanup.",
+     "reason": "The Error-level logs execute unconditionally on every batch callback invoked in a loop by untilDoneOrCancelled during normal cleanup, logging full ids and nil err.",
+     "passos": 6
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "SQLite large-batch IN-list built with repeated fmt.Sprintf(\"%s, %d\", values, v) in a loop over ids.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:608-612 `if r.db.GetDBType() == migrator.SQLite && r.cfg.AnnotationCleanupJobBatchSize > sqliteParameterLimit` + `values := fmt.Sprint(ids[0])` + `for _, v := range ids[1:] { values = fmt.Sprintf(\"%s, %d\", values, v) }`; reachable via CleanAnnotations fetchIDs with Limit(AnnotationCleanupJobBatchSize) at xorm_store.go:529-536 and test with 32767 at cleanup_test.go:101 `annotationCleanupJobBatchSize: 32767`",
+     "reason": "The quadratic loop exists verbatim and is reachable on SQLite with batch size 32767 > 999 via cleanup callers that fetch up to batch-size IDs.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Cleanup ticker changed from 10 minutes to 1 minute with no justification.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/cleanup/cleanup.go:77 `ticker := time.NewTicker(time.Minute * 1)` with pkg/services/cleanup/cleanup.go:96-105 8-job `cleanupJobs` list and pkg/services/annotations/annotationsimpl/xorm_store.go:530-536 `fetchIDs` SELECT then `deleteByIDs` DELETE per batch",
+     "reason": "The 1-minute ticker unconditionally runs clean() with all 8 jobs including batched SELECT+DELETE annotation cleanup, so 10x frequency multiplies DB load as reported.",
+     "passos": 6
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Queries are interpolated with applyTemplateVariables upfront but each sharded sub-request via datasource.runQuery re-applies applyTemplateVariables downstream",
+     "claimNoTexto": null,
+     "evidence": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:52 `.map((query) => datasource.applyTemplateVariables(query, request.scopedVars, request.filters))` then public/app/plugins/datasource/loki/querySplitting.ts:299 `.map((query) => datasource.applyTemplateVariables(query, request.scopedVars, request.filters))` in runSplitQuery called at shardQuerySplitting.ts:163, then public/app/plugins/datasource/loki/datasource.ts:350 `runQuery(fixedRequest) { return super.query(fixedRequest)` which hits packages/grafana-runtime/src/utils/DataSourceWithBackend.ts:185 `...(shouldApplyTemplateVariables ? this.applyTemplateVariables(q, request.scopedVars, request.filters) : q)` with preserved request.filters/scopedVars",
+     "reason": "The upfront interpolation result is passed with unchanged scopedVars/filters into runSplitQuery and then runQuery->super.query, each of which unconditionally re-applies applyTemplateVariables/addAdHocFilters with no dedup guard, so ad-hoc labels are added repeatedly.",
+     "passos": 10
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "the local `duckDB` still carries the old implementation name though it is no longer a duck DB.",
+     "claimNoTexto": null,
+     "evidence": "pkg/expr/sql/parser.go:23 `duckDB := NewInMemoryDB()` with imports at 3-11 containing no duck import; pkg/expr/sql/db.go:24 `func NewInMemoryDB() *DB` (generic DB, not duck); pkg/expr/sql_command.go:96 `db := sql.NewInMemoryDB()` shows renamed usage elsewhere.",
+     "reason": "The stale `duckDB` identifier exists and refers to generic local DB, so the mismatch the comment reports can happen.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "New stub in pkg/expr/sql/db.go always returns errors.New(\"not implemented\"), so Execute always fails and sets rsp.Error.",
+     "claimNoTexto": null,
+     "evidence": "pkg/expr/sql/db.go:20-22 `func (db *DB) QueryFramesInto(name string, query string, frames []*data.Frame, f *data.Frame) error { return errors.New(\"not implemented\") }` called by pkg/expr/sql_command.go:96-104 `db := sql.NewInMemoryDB()` + `err := db.QueryFramesInto(...)` + `rsp.Error = err`",
+     "reason": "The stub unconditionally returns an error and Execute propagates it to rsp.Error, so any SQLCommand execution fails as reported.",
+     "passos": 10
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "the function then returns false on both branches so `enableSqlExpressions` never enables.",
+     "claimNoTexto": null,
+     "evidence": "pkg/expr/reader.go:194-200 — `func enableSqlExpressions(h *ExpressionQueryReader) bool { enabled := !h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions); if enabled { return false }; return false }` plus caller at pkg/expr/reader.go:129-132 `enabled := enableSqlExpressions(h); if !enabled { return eq, fmt.Errorf(\"sqlExpressions is not implemented\") }`",
+     "reason": "Both return paths return false so QueryTypeSQL is always rejected regardless of the flag value.",
+     "passos": 3
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "userPermDenialCacheKey builds keys by naive underscore concatenation without escaping (namespace+\".perm_\"+uid+\"_\"+action+\"_\"+name+\"_\"+parent).",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/authz/rbac/cache.go:30-32: `func userPermDenialCacheKey(namespace, userUID, action, name, parent string) string { return namespace + \".perm_\" + userUID + \"_\" + action + \"_\" + name + \"_\" + parent }` called at pkg/services/authz/rbac/service.go:116 with `checkReq.Name, checkReq.ParentFolder` which are copied unchecked from external request at service.go:226-227 `Name: req.GetName(), ParentFolder: req.GetFolder()`",
+     "reason": "Name and ParentFolder come directly from the external CheckRequest with no validation or escaping, so tuples like (a_b,c) vs (a,b_c) produce the identical key suffix and share a denial entry.",
+     "passos": 7
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "denial-cache hit returns deny immediately before consulting cached or fresh permissions, and the fresh-allow path never deletes the denial key.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/authz/rbac/service.go:116-121 `if _, ok := s.permDenialCache.Get(ctx, permDenialKey); ok { ... return &authzv1.CheckResponse{Allowed: false}, nil }` before any getCachedIdentityPermissions/getIdentityPermissions, and pkg/services/authz/rbac/service.go:153-155 `if !allowed { s.permDenialCache.Set(ctx, permDenialKey, true) }` with no delete/invalidate on the allowed path (cacheWrap has only Get/Set).",
+     "reason": "Denial hit short-circuits Check before permission lookup and only the deny path writes the denial key, so a later grant reuses the same key and stays denied until shortCacheTTL expiry.",
+     "passos": 8
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "List serves listPermission directly from getCachedIdentityPermissions on any cache hit with no outdated-cache requery, unlike Check which falls through to the DB when cached perms deny.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/authz/rbac/service.go:180-194 `permissions, err := s.getCachedIdentityPermissions(...); if err == nil { ... } else { permissions, err = s.getIdentityPermissions(...) }; resp, err := s.listPermission(ctx, permissions, listReq)` vs pkg/services/authz/rbac/service.go:123-139 `cachedPerms, err := s.getCachedIdentityPermissions(...); if err == nil { allowed, err := s.checkPermission(...); if allowed { return ... } }; permissions, err := s.getIdentityPermissions(...)`",
+     "reason": "List returns on any cache hit with no deny-triggered DB fallback while Check requeries DB when cached perms deny, so stale cached maps omit newly granted scopes from List for the TTL.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "every denied Check inserts a per-resource denial entry keyed by (namespace,user,action,name,parent).",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/authz/rbac/service.go:153-154: `if !allowed { s.permDenialCache.Set(ctx, permDenialKey, true)` with key from pkg/services/authz/rbac/cache.go:30-32: `func userPermDenialCacheKey(namespace, userUID, action, name, parent string) string { return namespace + \".perm_\" + userUID + \"_\" + action + \"_\" + name + \"_\" + parent` and shared cache pkg/services/authz/rbac/service.go:83-85 wrapping same `cache` for permCache/permDenialCache",
+     "reason": "Denied resource Checks reachable via public Check RPC insert a distinct cache key containing name and parent, so cardinality scales with resource count on the shared local cache.",
+     "passos": 6
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Deny-precedence test seeds permCache with false instead of true, so both cached-allow path and DB fallback deny and the test passes even with permDenialCache check removed.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/authz/rbac/service_test.go:982 `s.permCache.Set(ctx, userPermCacheKey(\"org-12\", \"test-uid\", \"dashboards:read\"), map[string]bool{\"dashboards:uid:dash1\": false})` with empty fakeStore DB; pkg/services/authz/rbac/service.go:131-135 `if allowed { return Allowed:true }` falls through on cached deny to DB fallback at 139-157 which also denies on empty permissions",
+     "reason": "With false the cached checkPermission returns false and falls through to DB fallback that also denies on empty store, so removing the permDenialCache check at service.go:117 still yields Allowed:false; only true would require the denial cache to explain deny.",
+     "passos": 10
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "testFeatureNotEnabled only exercises the metadata subcommand disabled path and never the check subcommand.",
+     "claimNoTexto": null,
+     "evidence": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:47 — `@Launch({UpdateCompatibility.NAME, UpdateCompatibilityMetadata.NAME})`; quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java:46-48 — `if (!Profile.isFeatureEnabled(Profile.Feature.ROLLING_UPDATES)) { printFeatureDisabled(); picocli.exit(CompatibilityResult.FEATURE_DISABLED);`",
+     "reason": "The disabled-path test launches only the metadata subcommand while the check subcommand has its own separate feature gate that no test invokes without --features.",
+     "passos": 5
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "GroupPermissionsV2.canManage() grants global manage on VIEW scope (hasPermission(null, VIEW, MANAGE)).",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:70 `return hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE);` guarded only by `hasPermission` loop at lines 154-160 `if (expectedScopes.contains(scope)) return true;` so VIEW satisfies MANAGE check; caller services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java:181 `auth.groups().requireManage();` gates group creation on this check.",
+     "reason": "A user granted only all-groups VIEW passes the global canManage() check because VIEW is in the expected-scopes list, so requireManage() for creating top-level groups succeeds.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "getGroupIdsWithViewPermission() runs a full findByType scan with a per-resource evaluatePermission call for every user list/count.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:121-124 `resourceStore.findByType(server, AdminPermissionsSchema.GROUPS_RESOURCE_TYPE, groupResource -> { if (hasPermission(...))` + :152 `root.evaluatePermission(new ResourcePermission(resource, resource.getScopes(), server), server)` called from services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:398,425,430,448 `auth.groups().getGroupIdsWithViewPermission()` in getUsersCount/searchForUser with no per-request cache",
+     "reason": "Non-privileged fine-grained admins reach the scan path and every user list/count invokes it with one policy evaluation per group resource.",
+     "passos": 7
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Javadoc for requireManageMembers references canManageMembership instead of canManageMembers (copy-paste).",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:133 and 135: `Throws ForbiddenException if {@link #canManageMembership(GroupModel)} returns {@code false}.` directly above `void requireManageMembers(GroupModel group);` while `boolean canManageMembers(GroupModel group);` is defined at line 109",
+     "reason": "The Javadoc above requireManageMembers links to canManageMembership instead of the matching canManageMembers method, confirming the copy-paste error.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "@return says 'Stream of IDs' but method returns Set<String> getGroupIdsWithViewPermission. Fix doc to 'Set of IDs' to match the signature.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:145-147: '@return Stream of IDs of groups with view permission.' with 'Set<String> getGroupIdsWithViewPermission();'",
+     "reason": "The Javadoc literally says Stream while the method signature returns Set, so the doc/signature mismatch reported by the comment exists.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "getGroupIdsWithViewPermission() uses authz resource IDs (groupResource.getId()) as group IDs and looks them up via findByName.",
+     "claimNoTexto": null,
+     "evidence": "GroupPermissionsV2.java:122-123 `hasPermission(groupResource.getId(), ...)` + `granted.add(groupResource.getId())` vs AdminPermissionsSchema.java:185 `return group == null ? null : group.getId();` with AdminPermissionsSchema.java:118 `resource = resourceStore.findByName(resourceServer, name);` and JPAResourceStore.java:65-66 `if (id == null) { entity.setId(KeycloakModelUtils.generateId()); }` plus GroupPermissionsV2.java:141 `Resource resource = groupId == null ? null : resourceStore.findByName(server, groupId);`",
+     "reason": "Resource names equal group IDs but IDs are randomly generated, so findByName(resourceId) misses and the granted set holds resource UUIDs instead of group IDs.",
+     "passos": 9
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "getCredentials rebuilds the federated recovery-codes model via createFromValues without propagating the stored credential ID.",
+     "claimNoTexto": null,
+     "evidence": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:237-242 `model = RecoveryAuthnCodesCredentialModel.createFromValues(...)` with no `model.setId(...)`; server-spi/src/main/java/org/keycloak/models/credential/RecoveryAuthnCodesCredentialModel.java:58-85 `createFromValues` never calls `setId` (vs `createFromCredentialModel` at :99 `newModel.setId(credentialModel.getId())`); services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java:85-87 `if (recoveryCodeCredentialModel.allCodesUsed()) { authenticatedUser.credentialManager().removeStoredCredentialById(recoveryCodeCredentialModel.getId()); }` fed by server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java:56-61 `getFederatedCredentialsStream().filter(...).findFirst()`",
+     "reason": "The federated stream returns the rebuilt model with null ID, so the authenticator's removeStoredCredentialById(null) cannot remove the exhausted federated credential.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "federated recovery-code validation only checks anyMatch(key equals input) and never consumes/burns the used code.",
+     "claimNoTexto": null,
+     "evidence": "File: services/src/main/java/org/keycloak/credential/RecoveryAuthnCodesCredentialProvider.java:110-111 and quoted code that contradicts the comment.",
+     "reason": "One sentence.",
+     "passos": 10
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "constructor unwraps two Optionals without checks: credentialModelOpt.get() and getNextRecoveryAuthnCode().get().",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/forms/login/freemarker/model/RecoveryAuthnCodeInputLoginBean.java:19 `RecoveryAuthnCodesCredentialModel.createFromCredentialModel(credentialModelOpt.get())` and :21 `recoveryCodeCredentialModel.getNextRecoveryAuthnCode().get().getNumber()` with no isPresent check; server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java:56-61 `getCredential` returns `findFirst().or(...findFirst())` which can be empty; server-spi/src/main/java/org/keycloak/models/credential/RecoveryAuthnCodesCredentialModel.java:36-39 `if (allCodesUsed()) { return Optional.empty(); }`; services/src/main/java/org/keycloak/forms/login/freemarker/FreeMarkerLoginFormsProvider.java:272 `new RecoveryAuthnCodeInputLoginBean(session, realm, user)` unconditionally for LOGIN_RECOVERY_AUTHN_CODES_INPUT",
+     "reason": "Both Optionals can be empty (no credential, or allCodesUsed) and the sole caller constructs the bean unconditionally, so unguarded get() can throw NoSuchElementException.",
+     "passos": 10
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "OptimizedCursorPaginator.get_item_key/value_from_cursor mishandles datetime ordering by calling math.floor/ceil directly on a datetime and returning raw int cursor value.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/endpoints/organization_auditlogs.py:79-80 `paginator_cls=OptimizedCursorPaginator, order_by=\"-datetime\"`; src/sentry/models/auditlogentry.py:69 `datetime = models.DateTimeField(default=timezone.now)`; src/sentry/api/paginator.py:838-843 `def get_item_key... return int(math.floor(value)...` + `def value_from_cursor... return cursor.value` vs DateTimePaginator timestamp conversion",
+     "reason": "OrganizationAuditLogsEndpoint actually invokes OptimizedCursorPaginator with order_by=\"-datetime\" on a DateTimeField, so floor/ceil on datetime will raise TypeError and int cursor filtering mismatches.",
+     "passos": 6
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "the code at 182-184 just forwards `offset` (negative when is_prev) to `queryset[start_offset:stop]` with no boundary handling.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/paginator.py:182: start_offset = max(0, offset) if not cursor.is_prev else offset; src/sentry/utils/cursors.py:28: self.offset = int(offset); src/sentry/utils/cursors.py:59: return Cursor(value, int(bits[1]), int(bits[2]))",
+     "reason": "External cursor strings via Cursor.from_string allow negative offset with is_prev=True, BasePaginator.get_result has no negative check, and the is_prev branch skips max(0,offset) clamping so negative start_offset reaches queryset slicing.",
+     "passos": 7
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "code at 880-882 forwards negative `cursor.offset` directly to slicing with no handling",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/paginator.py:877-882: `if self.enable_advanced_features and cursor.offset < 0:` + `start_offset = cursor.offset  # Allow negative offsets for advanced pagination` + `results = list(queryset[start_offset:stop])`; src/sentry/utils/cursors.py:53-60: `Cursor.from_string` does `return Cursor(value, int(bits[1]), int(bits[2]))` with no non-negative check, and `Cursor.__init__` at 28 does `self.offset = int(offset)` allowing negatives; src/sentry/api/endpoints/organization_auditlogs.py:70-82 enables it via user-controlled `optimized_pagination==true` with `paginator_cls=OptimizedCursorPaginator, enable_advanced_features=True`",
+     "reason": "Negative cursor offsets from user-supplied cursor strings reach the negative-slicing branch which is wired to a live endpoint, so the reported unhandled negative slice can occur.",
+     "passos": 8
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Docstring lists 'Streamlined boundary condition handling', 'Optimized query path for large datasets', and 'maintaining backward compatibility', but get_result (845-886) is a copy of BasePaginator with only a negative-offset branch added — no streamlined handling or optimized path exists, and negative-offset slicing breaks prior cursor semantics.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/paginator.py:827-831 docstring claims streamlined handling/optimized path/backward compatibility vs src/sentry/api/paginator.py:877-886 only new branch is 'if self.enable_advanced_features and cursor.offset < 0:' with 'start_offset = cursor.offset', else 'start_offset = max(0, offset) if not cursor.is_prev else offset' identical to BasePaginator src/sentry/api/paginator.py:182-184",
+     "reason": "Code comparison shows docstring promises optimizations that get_result does not implement and negative-offset path bypasses the max(0,offset) clamp, so doc-code mismatch can occur.",
+     "passos": 6
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "OptimizedCursorPaginator requires numeric integer keys (get_item_key uses math.floor/ceil + int, cursor_value defaults to 0) but is instantiated here with order_by=\"-datetime\".",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/paginator.py:838-840 `def get_item_key(self, item, for_prev=False): value = getattr(item, self.key); return int(math.floor(value) if self._is_asc(for_prev) else math.ceil(value))` with order_by=\"-datetime\" from src/sentry/api/endpoints/organization_auditlogs.py:79-80 `paginator_cls=OptimizedCursorPaginator, order_by=\"-datetime\",` where src/sentry/models/auditlogentry.py:69 `datetime = models.DateTimeField(default=timezone.now)`",
+     "reason": "The optimized path is reachable via ?optimized_pagination=true and passes a datetime object into int(math.floor(datetime)), which raises TypeError unlike DateTimePaginator's timestamp conversion.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4",
+      "S6",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "OptimizedCursorPaginator explicitly allows user-controlled negative cursor.offset into queryset[start_offset:stop] claiming Django handles negative slicing.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/paginator.py:877-882 `if self.enable_advanced_features and cursor.offset < 0: start_offset = cursor.offset; stop = start_offset + limit + extra; results = list(queryset[start_offset:stop])`; src/sentry/utils/cursors.py:58-59 `return Cursor(value, int(bits[1]), int(bits[2]))` with no negative-offset reject; src/sentry/api/endpoints/organization_auditlogs.py:70-82 `use_optimized = request.GET.get(\"optimized_pagination\") == \"true\"` then `paginator_cls=OptimizedCursorPaginator ... enable_advanced_features=True`; src/sentry/api/base.py:540-541 `except BadPaginationError as e: raise ParseError` so AssertionError from negative slicing is unhandled",
+     "reason": "User-controlled negative offset reaches Django queryset slicing without BadPaginationError guard and paginate only converts BadPaginationError, so 500 is reachable.",
+     "passos": 9
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "queryset[offset:stop] with negative offset violates Django non-negative slice contract, causing AssertionError/DoS or off-from-end pagination.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/paginator.py:182 `start_offset = max(0, offset) if not cursor.is_prev else offset` + :184 `results = list(queryset[start_offset:stop])`; src/sentry/utils/cursors.py:28 `self.offset = int(offset)` with no clamp + :59 `return Cursor(value, int(bits[1]), int(bits[2]))`; src/sentry/api/base.py:507 `return get_cursor(request.GET.get(self.cursor_name), cursor_cls)`",
+     "reason": "User-controlled cursor string `value:offset:is_prev` parses negative offset without validation and BasePaginator forwards it raw when is_prev, reaching a Django queryset slice.",
+     "passos": 7
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "transform_query_columns_for_error_upsampling only rewrites exact bare `count()` and passes everything else through unchanged.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/helpers/error_upsampling.py:58 `if column_lower == \"count()\":` else `transformed_columns.append(column)`; caller src/sentry/api/endpoints/organization_events_stats.py:218-223 `should_upsample = is_errors_query_for_error_upsampled_projects(...)` / `if should_upsample: final_columns = transform_query_columns_for_error_upsampling(query_columns)`",
+     "reason": "User-controlled query_columns with aliases or other count-equivalent aggs fail the exact `count()` match and are passed through unchanged while should_upsample is true, yielding under-counted results.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "_set_sample_rate_from_error_sampling uses `if client_sample_rate: float(...)` with no type/range check, unlike production _derive_client_error_sampling_rate which requires isinstance(int,float) and 0<rate<=1.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/testutils/factories.py:353-355 `if client_sample_rate:` + `normalized_data[\"sample_rate\"] = float(client_sample_rate)` vs src/sentry/event_manager.py:785-787 `if client_sample_rate is not None and isinstance(client_sample_rate, (int, float)):` + `if 0 < client_sample_rate <= 1:`",
+     "reason": "Factory float() accepts string '0.1' and out-of-range 5.0 that production isinstance/range checks drop, and Factories.store_event calls it unconditionally before save without clearing, so divergence can happen.",
+     "passos": 8
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "_is_error_focused_query uses substring `event.type:error in query.lower()` so negated queries like `!event.type:error` match.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/helpers/error_upsampling.py:100-102 `query = request.GET.get(\"query\", \"\").lower()` + `if \"event.type:error\" in query: return True`; caller src/sentry/api/endpoints/organization_events_stats.py:218-223 passes user `request` to `is_errors_query_for_error_upsampled_projects(...)` then applies `transform_query_columns_for_error_upsampling`",
+     "reason": "User-controlled `query` flows unparsed to the substring check, so `!event.type:error` contains `event.type:error` and returns True, misclassifying a negated query as error-focused.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "test_error_upsampling_with_transaction_events cannot falsify over-application of upsampling: the stored transaction has no sample_weight so upsampled_count() (sum(ifNull(sample_weight,1))) returns 1, same as count().",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/search/events/datasets/discover.py:1046: [Function(\"sum\", [Function(\"ifNull\", [Column(\"sample_weight\"), 1])])]; tests/snuba/api/endpoints/test_organization_events_stats.py:3660-3676 stores transaction with no sample_weight/error_sampling context; src/sentry/api/helpers/error_upsampling.py:60: transformed_columns.append(\"upsampled_count() as count\")",
+     "reason": "With one null-sample_weight row, upsampled_count sums ifNull to 1, identical to count(), so the test's count==1 assertion passes even if the rewrite were wrongly applied.",
+     "passos": 10
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "Presence gate `if client_sample_rate:` uses truthiness so legitimate falsy rate 0/0.0 is dropped as missing.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/event_manager.py:786: `if 0 < client_sample_rate <= 1:` with else branch logging \"Client sent invalid error sample_rate outside valid range (0-1)\" and not setting sample_rate, so 0/0.0 is explicitly invalid, not legitimate.",
+     "reason": "Production `_derive_client_error_sampling_rate` requires 0 < rate <= 1 and rejects 0 as invalid, so dropping falsy 0 in the test-factory mirror is correct behavior, not a bug.",
+     "passos": 6
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "getBouncyCastleProvider returns KeyStore.getInstance(defaultType).getProvider() (e.g. SUN) as the BouncyCastle provider.",
+     "claimNoTexto": null,
+     "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:61-63 `public Provider getBouncyCastleProvider() { try { return KeyStore.getInstance(KeyStore.getDefaultType()).getProvider();` + common/src/main/java/org/keycloak/common/util/BouncyIntegration.java:31-39 `public static final String PROVIDER = loadProvider(); ... Provider provider = CryptoIntegration.getProvider().getBouncyCastleProvider(); ... return provider.getName();` + crypto/elytron/src/main/java/org/keycloak/crypto/elytron/WildFlyElytronProvider.java:71-73 `public Provider getBouncyCastleProvider() { return null; }` + authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java:95 `CryptoIntegration.init(AuthzClient.class.getClassLoader());` with authz/client/src/main/resources/META-INF/services/org.keycloak.common.crypto.CryptoProvider:20 `org.keycloak.authorization.client.util.crypto.AuthzClientCryptoProvider`",
+     "reason": "Standalone AuthzClient.init loads only AuthzClientCryptoProvider, so BouncyIntegration.PROVIDER caches its KeyStore provider name (e.g. SUN) as the BC provider instead of BC/null.",
+     "passos": 7
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Default/FIPS/Elytron all return order 200, so ambiguous classpath (e.g. default+FIPS) now nondeterministically picks one by ServiceLoader order instead of failing fast",
+     "claimNoTexto": null,
+     "evidence": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-57 sorted(Comparator.comparingInt(CryptoProvider::order).reversed()) + :63 return foundProviders.get(0); crypto/default/src/main/java/org/keycloak/crypto/def/DefaultCryptoProvider.java:83-85 return 200; crypto/fips1402/src/main/java/org/keycloak/crypto/fips/FIPS1402Provider.java:114-116 return 200; crypto/elytron/src/main/java/org/keycloak/crypto/elytron/WildFlyElytronProvider.java:76-78 return 200",
+     "reason": "All three main providers return 200 and detectProvider sorts reversed then returns index 0 with only a debug log, so a classpath containing two of them silently picks one in ServiceLoader order.",
+     "passos": 8
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "readSequence loops while(length>0) subtracting child TLV lengths but never verifies sum equals declared length nor rejects trailing bytes.",
+     "claimNoTexto": null,
+     "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:49-63: \"int length = readLength(); List<byte[]> result = new ArrayList<>(); while (length > 0) { byte[] bytes = readNext(); result.add(bytes); length = length - bytes.length; } return result;\" with no length==0 check and no available()/remaining-bytes check; caller authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:128-129 only checks \"if (seq.size() != 2)\"",
+     "reason": "The loop can exit with negative length and never checks outer trailing bytes, so DER plus trailing garbage is accepted as valid via the public asn1derToConcatenatedRS entry point.",
+     "passos": 10
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Dead computation: two ASN1Encoder instances are created and written but immediately discarded; the method then re-creates identical encoders for the returned sequence. Remove lines 114-115.",
+     "claimNoTexto": null,
+     "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:114-115 `ASN1Encoder.create().write(rBigInteger); ASN1Encoder.create().write(sBigInteger);` discarded while lines 117-121 re-create identical encoders for return; ASN1Encoder.java:36-44 `private final ByteArrayOutputStream os` per-instance with `create()` returning `new ASN1Encoder()` so writes have no external effect.",
+     "reason": "Lines 114-115 create fresh encoders whose results are never used and whose writes affect only their own private buffers, so they are dead as reported.",
+     "passos": 4
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "so assertArrayEquals(rsConcat,rsConcat2) passes even if both directions are wrong.",
+     "claimNoTexto": null,
+     "evidence": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:53-56: byte[] rsConcat = prov.getEcdsaCryptoProvider().asn1derToConcatenatedRS(sign, ...); byte[] asn1Des = prov.getEcdsaCryptoProvider().concatenatedRSToASN1DER(rsConcat, ...); byte[] rsConcat2 = prov.getEcdsaCryptoProvider().asn1derToConcatenatedRS(asn1Des, ...); Assert.assertArrayEquals(rsConcat, rsConcat2); with no initVerify/verify in file",
+     "reason": "The only assertion compares rsConcat to its own encode-then-decode round-trip with no JCA verify or expected-value check, so mutually-inverse-but-wrong implementations pass.",
+     "passos": 5
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Single default EC keypair reused for ES256/ES384/ES512: testES384/testES512 names claim larger curves but body signs with the same P-256 key and only pads to larger signLength, so full-width 384/521-bit handling is never exercised.",
+     "claimNoTexto": null,
+     "evidence": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:39 `private final KeyPair keyPair;` ; :42 `keyPair = KeyPairGenerator.getInstance(\"EC\").genKeyPair();` ; :46-53 `private void test(ECDSAAlgorithm algorithm) ... signature.initSign(keyPair.getPrivate()); ... asn1derToConcatenatedRS(sign, algorithm.getSignatureLength())` with core/src/main/java/org/keycloak/crypto/ECDSAAlgorithm.java:26-29 `ES256(64), ES384(96), ES512(132)`",
+     "reason": "The same default-curve EC key signs for all three algorithms while only the expected signLength changes, so ES384/ES512 tests only zero-pad P-256-sized r/s values and never produce full-width 384/521-bit values.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "readLength returns -1 for indefinite-length encoding 0x80 and callers pass it to new byte[length]",
+     "claimNoTexto": null,
+     "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:133-134 `if (length == 0x80) { return -1;` plus :71-72 `int length = readLength(); byte[] bytes = read(length);` plus :169-170 `byte[] read(int length) throws IOException { byte[] bytes = new byte[length];`",
+     "reason": "readInteger has no guard for -1 and passes it directly to read() which does new byte[-1], throwing unchecked NegativeArraySizeException instead of IOException on 0x80 input.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "concatenatedRSToASN1DER splits signature without validating signature.length==signLength",
+     "claimNoTexto": null,
+     "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:103-110: \"public byte[] concatenatedRSToASN1DER(byte[] signature, int signLength) throws IOException { int len = signLength / 2; ... System.arraycopy(signature, 0, r, 1, len); System.arraycopy(signature, len, s, 1, len);\" with no length check; caller core/src/main/java/org/keycloak/crypto/ECDSASignatureVerifierContext.java:29-30 passes attacker-controlled \"byte[] derSignature = ECDSAAlgorithm.concatenatedRSToASN1DER(signature, expectedSize)\" where signature comes from JWSInput.java:53 \"signature = Base64Url.decode(encodedSignature)\" with no length guard.",
+     "reason": "Short JOSE-decoded signatures reach the arraycopy and throw a runtime IndexOutOfBounds instead of IOException, and long signatures are silently truncated to signLength, so the reported failure can happen via verifier contexts.",
+     "passos": 8
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "SimpleQueueProcessingStrategy.close/terminate shuts down the factory-owned shared FixedQueuePool.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/result_consumer.py:255 `queue_pool=self.queue_pool` reused from factory singleton created at :133, and src/sentry/remote_subscriptions/consumers/queue_consumer.py:338 `self.queue_pool.shutdown()` in close (and :342 in terminate) which joins workers and shuts down queues per :231-243.",
+     "reason": "Factory creates one pool once and hands the same instance to every strategy, so closing any strategy kills the shared pool that the next strategy from create_with_partitions will reuse.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "FixedQueuePool.shutdown sets worker.shutdown=True while OrderedQueueWorker.run loops on while not self.shutdown, so workers exit without draining queued WorkItems even though queues are shut down with immediate=False.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:129 `while not self.shutdown:` + src/sentry/remote_subscriptions/consumers/queue_consumer.py:231-238 `for worker in self.workers: worker.shutdown = True` then `q.shutdown(immediate=False)` with no wait_until_empty/drain before shutdown; callers `close:338`, `terminate:342`, `result_consumer shutdown:184` call `queue_pool.shutdown()` directly",
+     "reason": "If shutdown is called while a worker is processing and items remain queued, the worker exits at the loop-condition check after the current item instead of draining via get() until ShutDown, leaving offsets outstanding.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "ResultsStrategyFactory.shutdown shuts down queue_pool but never stops SimpleQueueProcessingStrategy commit threads created in the strategy constructor.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/result_consumer.py:180-185 `def shutdown... if self.queue_pool: self.queue_pool.shutdown()` with no reference to strategies; src/sentry/remote_subscriptions/consumers/queue_consumer.py:270-271 `self.commit_thread = threading.Thread(target=self._commit_loop, daemon=True); self.commit_thread.start()`; src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-337 `def close... self.shutdown_event.set(); self.commit_thread.join(timeout=5.0)`; src/sentry/remote_subscriptions/consumers/queue_consumer.py:231-243 `def shutdown... for worker... worker.join` never touches commit_thread; src/sentry/remote_subscriptions/consumers/result_consumer.py:244-259 `create_thread_queue_parallel_worker... return SimpleQueueProcessingStrategy(... commit_function=commit_offsets)`",
+     "reason": "Factory shutdown clears the shared queue_pool but never sets the per-strategy shutdown_event/joins commit_thread, so the daemon _commit_loop keeps running and calling the captured commit closure.",
+     "passos": 8
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "test_thread_queue_parallel_error_handling waits only total==0+sleep(0.2) while commit loop is 1.0s and asserts no commits",
+     "claimNoTexto": null,
+     "evidence": "tests/sentry/uptime/consumers/test_results_consumer.py:1922 `assert len(committed_offsets) == 0 or test_partition not in committed_offsets` with wait at 1916-1918 `if stats[\"total_items\"] == 0 and mock_processor_call.call_count >= 2: time.sleep(0.2)` vs src/sentry/remote_subscriptions/consumers/queue_consumer.py:276 `self.shutdown_event.wait(1.0)` and 144-149 `except Exception: logger.exception(...) finally: self.offset_tracker.complete_offset(...)`",
+     "reason": "Worker marks offsets complete even on exception so commit will occur, but 0.2s wait is shorter than 1.0s commit interval, so zero-commit assertion passes vacuously before the loop fires and also if commits never happen.",
+     "passos": 10
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "A serial/single-queue implementation would still pass.",
+     "claimNoTexto": null,
+     "evidence": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py:161-173: `assert len(self.processed_items) == 6` then `assert len(groups_seen) == 3` with no timing/thread-ID/overlap check; result_processor at 73-78 only does `self.processed_items.append((identifier, item))` under lock.",
+     "reason": "The test only counts items and distinct groups, which a serial executor would also satisfy, so concurrency is not verified.",
+     "passos": 4
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "test_thread_queue_parallel_concurrent_subscriptions claims different subscriptions processed concurrently but only asserts call_count==2. Serial processing passes identically.",
+     "claimNoTexto": null,
+     "evidence": "tests/sentry/uptime/consumers/test_results_consumer.py:1780-1820: `def test_thread_queue_parallel_concurrent_subscriptions` docstring `Test that different subscriptions are processed concurrently` with only `assert mock_processor_call.call_count == 2` and wait-loop on `stats[\"total_items\"] == 0 and mock_processor_call.call_count == 2` — no blocking, timing, thread-id or overlap assertion.",
+     "reason": "The test's only final assertion is count==2, which a serial executor also satisfies, so it does not prove concurrent execution as its docstring claims.",
+     "passos": 4
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "FixedQueuePool.submit calls offset_tracker.add_offset before work_queue.put with no cleanup if put raises (e.g. after queue shutdown). The leaked outstanding offset can never complete and blocks later contiguous commits for that partition.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:211-212 `self.offset_tracker.add_offset(work_item.partition, work_item.offset)` then `work_queue.put(work_item)` with no try/except; src/sentry/remote_subscriptions/consumers/queue_consumer.py:236-238 `q.shutdown(immediate=False)` makes later `put` raise `queue.ShutDown` (handled for `get` at :132); src/sentry/remote_subscriptions/consumers/queue_consumer.py:88-93 contiguous-commit loop `break`s on first outstanding offset, and only `complete_offset` at :149/:65 removes it, unreachable if `put` failed.",
+     "reason": "After queue shutdown put can raise ShutDown leaving the added outstanding offset with no completing worker, which blocks contiguous commits per the tracker logic.",
+     "passos": 5
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "get_stats/wait_until_empty measures only sum(q.qsize()); qsize drops at get() before processing completes, so it reports empty/0 while items are in-flight.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:214-229 — get_stats returns {\"total_items\": sum(q.qsize())} and wait_until_empty returns True when total_items==0; src/sentry/remote_subscriptions/consumers/queue_consumer.py:131-149 — worker does `work_item = self.work_queue.get()` then `self.result_processor(...)` then `self.offset_tracker.complete_offset(...)`, so qsize drops at get() while outstanding/processing continues.",
+     "reason": "After get() qsize is 0 but result_processor has not yet run and complete_offset has not yet cleared OffsetTracker outstanding, so wait_until_empty can return True while work is in-flight.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "FixedQueuePool uses unbounded queue.Queue() with non-blocking submit and poll() only emits a gauge, providing no backpressure.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:185 `work_queue: queue.Queue[WorkItem[T]] = queue.Queue()`; src/sentry/remote_subscriptions/consumers/queue_consumer.py:212 `work_queue.put(work_item)`; src/sentry/remote_subscriptions/consumers/queue_consumer.py:327-333 `def poll(self) -> None: stats = self.queue_pool.get_stats(); metrics.gauge(...stats[\"total_items\"]...)`",
+     "reason": "Queues are created without maxsize so put never blocks, submit has no depth check, and poll only emits a gauge, so slow workers allow total_items to grow without bound.",
+     "passos": 5
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S8",
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Docstring promises 'Only commits offsets after successful processing' but OrderedQueueWorker.run completes the offset in `finally` even when result_processor raises (caught as generic Exception and logged), so failed items become committable and offsets advance past failures.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:144-149 `except Exception: logger.exception(...) finally: self.offset_tracker.complete_offset(work_item.partition, work_item.offset)` contradicts src/sentry/remote_subscriptions/consumers/queue_consumer.py:254 `Only commits offsets after successful processing`",
+     "reason": "The finally block unconditionally marks the offset complete even after the generic Exception handler, making it committable via get_committable_offsets.",
+     "passos": 6
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Changed SET ops (scard/sunionstore) to ZSET ops (zcard/zunionstore/zpopmin) with no migration breaks in-flight segments.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/scripts/spans/add-buffer.lua:46 `if not is_root_span and redis.call(\"zcard\", span_key) > 0 then` and :47 `span_count = redis.call(\"zunionstore\", set_key, 2, set_key, span_key)`; src/sentry/spans/buffer.py:197 `p.zadd(set_key, ...)` + :434 `p.zscan(key, ...)` on same `span-buf:s:{...}:...` keys with `redis_ttl: int = 3600` at :151 and `expire set_key set_timeout` at add-buffer.lua:56 and no TYPE/migration handling",
+     "reason": "Same key namespace is now accessed only with ZSET commands with TTL-persisted keys and no type guard or migration, so pre-deploy SET keys trigger WRONGTYPE on ZADD/ZCARD/ZUNIONSTORE/ZSCAN/ZPOPMIN during rollout.",
+     "passos": 8
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Direct val[\"end_timestamp_precise\"] indexing with no fallback crashes the batch on missing/null field.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/consumers/process/factory.py:134 and :141 — `val = cast(SpanEvent, rapidjson.loads(payload.value))` (typing-only cast, no validation) followed by `end_timestamp_precise=val[\"end_timestamp_precise\"],` with no .get/try/except/validation in `process_batch` loop lines 129-144 fed by Kafka `ingest-spans` topic via BatchStep->RunTask.",
+     "reason": "Input is external Kafka JSON parsed with no schema validation and accessed with direct indexing, so a missing key raises KeyError mid-loop before buffer.process_spans, aborting the whole batch.",
+     "passos": 7
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "zpopmin eviction by lowest end_timestamp has no protection for the segment/root span.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/scripts/spans/add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", set_key, span_count - 1000) end` with no root check, combined with src/sentry/scripts/spans/add-buffer.lua:66-70 `local has_root_span = redis.call(\"get\", has_root_span_key) == \"1\" or is_root_span` staying 1, and scores from src/sentry/spans/buffer.py:197-199 `p.zadd(set_key, {span.payload: span.end_timestamp_precise ...})`",
+     "reason": "Scores are end_timestamps so a root with smallest/tied timestamp is popped by zpopmin while hrs stays 1, which is reachable since tests use identical timestamps and >1000 spans can fill a segment.",
+     "passos": 5
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Redirect-chase limit silently cut from 10000 to 1000.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/scripts/spans/add-buffer.lua:30 `for i = 0, 1000 do` and src/sentry/spans/buffer.py:475-476 `redirect_map_key = b\"span-buf:sr:{%s:%s}\"` deleted only in done_flush_segments with redis_ttl 3600",
+     "reason": "Redirect entries persist across batches until flush with no trace-span cap, and out-of-order external spans can build chains deeper than 1000, so the reduced chase limit can stop early.",
+     "passos": 10
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "All spans in the fixture use identical end_timestamp_precise=1700000000.0, so the ZSET score-dependent behavior (ordering by end time, zunionstore score merge, and Lua zpopmin keeping newest 1000) is neutralised — tests pass even if scores are wrong or eviction keeps the wrong end.",
+     "claimNoTexto": null,
+     "evidence": "tests/sentry/spans/test_buffer.py:126 end_timestamp_precise=1700000000.0 repeated at 134,142,151 etc; src/sentry/spans/buffer.py:197-198 p.zadd(set_key, {span.payload: span.end_timestamp_precise for span in subsegment})",
+     "reason": "Fixtures use identical scores while buffer stores timestamp as ZSET score and tests sort output by span_id, so score errors are masked.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "zunionstore uses default AGGREGATE SUM for timestamp scores so duplicate members get summed timestamps.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/scripts/spans/add-buffer.lua:47 `span_count = redis.call(\"zunionstore\", set_key, 2, set_key, span_key)` (no AGGREGATE arg, same at :53); src/sentry/spans/buffer.py:197-199 `p.zadd(set_key, {span.payload: span.end_timestamp_precise for span in subsegment})` (scores are timestamps); src/sentry/scripts/spans/add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", set_key, span_count - 1000)` (eviction by score)",
+     "reason": "Re-ingested child after its parent merged (redirect B->A, payload already in key_A, fresh ZADD to key_B then ZUNIONSTORE key_A=key_A U key_B) puts the same payload member in both inputs so default SUM doubles its timestamp and corrupts zpopmin order.",
+     "passos": 7
+    }
+   ]
+  }
+ }
+}

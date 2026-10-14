@@ -1,0 +1,230 @@
+{
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "modelo": "sonnet-5.5",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 3,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 3,
+    "conf": 0.85
+   },
+   "concordaComJuiz": true,
+   "evidencia": "desktop/topic-post.scss:291 30% -> 70% no light; golden 3 (= golden 0).",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "speculative",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "desktop/user.scss:522 30% -> 50/50, golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "mobile/modal.scss:102 70% -> 30%, golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.72
+   },
+   "concordaComJuiz": false,
+   "evidencia": "mobile/topic-post.scss:182 h3 20% -> 50/50; regressao real, nenhum golden cobre essa regra.",
+   "confianca": "alta",
+   "precisaAstra": true,
+   "astra": {
+    "golden_juiz": false,
+    "golden_classificacao": null,
+    "vale": "classificacao"
+   }
+  },
+  {
+   "id": "S5",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "speculative",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "mobile/user.scss:497 .name 30% -> 50/50, golden 1 (variante mobile) / golden 4.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "style",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "desktop/topic-post.scss:291 30% -> 70%, golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "mobile/modal.scss:102 invertido, golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.75
+   },
+   "concordaComJuiz": false,
+   "evidencia": "mobile/topic-post.scss:182 h3 20% -> 50/50; fora do gabarito.",
+   "confianca": "alta",
+   "precisaAstra": true,
+   "astra": {
+    "golden_juiz": false,
+    "golden_classificacao": null,
+    "vale": "classificacao"
+   }
+  },
+  {
+   "id": "S9",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "speculative",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "desktop/user.scss:522 30% -> 50/50, golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S10",
+   "classe": "TP",
+   "golden": 3,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 3,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "desktop/topic-post.scss:291 invertido 70/30, golden 3 (= golden 0).",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S11",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "mobile/modal.scss:102 70% -> 30%, golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S12",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "mobile/topic-post.scss:182 h3 20% -> 50/50; regressao real fora do gabarito.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S13",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "speculative",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 4,
+    "conf": 0.78
+   },
+   "concordaComJuiz": false,
+   "evidencia": "desktop/user.scss:522 .name 30% -> 50/50: golden 1 (desktop); golden 4 e o mobile/user.scss:497.",
+   "confianca": "media",
+   "tipoFPSeNaoForTP": "bug_real",
+   "precisaAstra": true,
+   "astra": {
+    "golden_juiz": false,
+    "golden_classificacao": true,
+    "vale": "classificacao"
+   }
+  }
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "id": "S10",
+ "golden": 0,
+ "promptSha": "1595c00b153daeff03bdbef493d1d00a4e943835",
+ "sameProblem": false,
+ "reason": "The review identifies a provider-priority tie that can select non-FIPS crypto, while the golden issue concerns returning the default keystore provider instead of BouncyCastle; fixing the ordering would not fix that return value."
+}

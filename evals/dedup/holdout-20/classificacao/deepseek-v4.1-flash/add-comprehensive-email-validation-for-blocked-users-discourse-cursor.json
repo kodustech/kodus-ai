@@ -1,0 +1,155 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "modelo": "deepseek-v4.1-flash",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "app/models/blocked_email.rb:11-19 should_block? incrementa match_count e salva dentro de um predicado chamado na validacao (email_validator.rb:13); users_controller.rb chama user.valid? e depois user.save, contando duas vezes. E o efeito colateral em leitura do golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "security",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:12 BlockedEmail.where(email: email).first e comparacao exata/case-sensitive, enquanto o regexp de dominio usa flag case-insensitive; e o bypass por caixa do golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:13-17 match_count += 1 + save sem lock: read-modify-write em leitura, a condicao de corrida que o golden 0 cita.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "security",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:12 lookup exato sem normalizar caixa; golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.85
+   },
+   "concordaComJuiz": false,
+   "evidencia": "create_account_controller.js:69 rejectedEmails.contains(email) e so um cache de UI das rejeicoes; mudar a caixa apenas reenvia ao servidor, que e quem bloqueia. A correcao sugerida (toLowerCase no cliente) nao resolve o golden 2 do servidor.",
+   "confianca": "media",
+   "precisaAstra": true,
+   "astra": {
+    "golden_juiz": false,
+    "golden_classificacao": null,
+    "vale": "classificacao"
+   }
+  },
+  {
+   "id": "S6",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:11-19 read-modify-write nao atomico de match_count; corrida do golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "create_account_controller.js:69-74 (adicionado no PR) mostra I18n user.email.invalid para email rejeitado pelo servidor; so a mensagem de UX, o bloqueio funciona.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "spec/models/blocked_email_spec.rb:22-24 be_false aceita nil; lacuna de precisao de teste, sem defeito em producao.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S9",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:18 record && ... retorna nil sem registro; o unico uso e em contexto booleano (email_validator.rb:13), entao nada falha.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

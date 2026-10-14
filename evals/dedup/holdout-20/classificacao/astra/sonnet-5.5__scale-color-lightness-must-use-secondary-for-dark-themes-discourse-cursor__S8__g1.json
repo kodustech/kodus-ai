@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "id": "S8",
+ "golden": 1,
+ "promptSha": "69fb887fb73879547289a79027b46b95f3f963f4",
+ "sameProblem": false,
+ "reason": "The review flags a 20%-to-50% change for h3 in mobile/topic-post.scss, while the golden issue concerns a 30%-to-50% change in desktop/user.css and a corresponding mobile .name rule."
+}

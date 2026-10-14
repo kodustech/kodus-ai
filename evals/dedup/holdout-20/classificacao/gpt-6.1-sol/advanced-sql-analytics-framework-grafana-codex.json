@@ -1,0 +1,54 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "api",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "db.go:12-22 TablesList/RunCommands/QueryFramesInto retornam 'not implemented' e parser.go:23 / sql_command.go:96-100 passaram a usar esse stub. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "api",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "db.go:12-22 TablesList/RunCommands/QueryFramesInto retornam 'not implemented' e parser.go:23 / sql_command.go:96-100 passaram a usar esse stub. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

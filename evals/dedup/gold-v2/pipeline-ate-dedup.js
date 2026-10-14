@@ -17,7 +17,7 @@ require('tsconfig-paths/register');
  *                      sanitizador (evals/suggestion-sanitizer/dataset), como o
  *                      stage faz antes do anchoring; so com --fonte=gold
  *
- *   RECALL_MODEL=<id> node evals/dedup/gold-v2/pipeline-ate-dedup.js --model=<gold model> --fonte=... --versao=<rotulo> [--par=4] [--ate=anchoring]
+ *   RECALL_MODEL=<id> node evals/dedup/gold-v2/pipeline-ate-dedup.js --model=<gold model> --fonte=... --versao=<rotulo> [--par=4] [--ate=anchoring] [--prs=<lista.json>] [--prefixo=09.10.26]
  */
 const fs = require('fs');
 const path = require('path');
@@ -77,8 +77,9 @@ const conta = (lista) => lista.reduce((m, s) => { for (const k of Object.keys(s)
 (async () => {
     const assinatura = !SO_ANCHORING && ['codex_subscription', 'claude_agent_sdk'].includes(TIER0[MODELO]?.provider);
     const prebuilt = assinatura ? buildModel(MODELO) : undefined;
-    const L30 = JSON.parse(fs.readFileSync(path.join(INV, 'light-30.json'), 'utf8'));
-    const gold = FONTE === 'gold' ? JSON.parse(fs.readFileSync(path.join(__dirname, `09.10.26_${GOLD}.json`), 'utf8')).prs : null;
+    // --prs: lista de PRs (json) no lugar do light-30.
+    const L30 = JSON.parse(fs.readFileSync(arg('prs', path.join(INV, 'light-30.json')), 'utf8'));
+    const gold = FONTE === 'gold' ? JSON.parse(fs.readFileSync(path.join(__dirname, `${arg('prefixo', '09.10.26')}_${GOLD}.json`), 'utf8')).prs : null;
     const res = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')) : { model: GOLD, dedupModel: MODELO, fonte: FONTE, prs: {} };
     const fila = L30.filter((c) => !res.prs[c] || res.prs[c].erro);
     let i = 0;

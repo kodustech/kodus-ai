@@ -1,0 +1,214 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "modelo": "deepseek-v4.1-flash",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "api",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "parser.go:23 TablesList usa NewInMemoryDB() cujo RunCommands (db.go:16-18) sempre erra. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "reader.go:131 mensagem 'sqlExpressions is not implemented' atras de um gate de feature flag; texto de erro, sem impacto funcional.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "api",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "db.go:12-22 TablesList/RunCommands/QueryFramesInto retornam 'not implemented' e parser.go:23 / sql_command.go:96-100 passaram a usar esse stub. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S9",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "api",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "db.go:12-22 TablesList/RunCommands/QueryFramesInto retornam 'not implemented' e parser.go:23 / sql_command.go:96-100 passaram a usar esse stub. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S10",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S11",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "sem_problema",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Diz so que db.go deve 'usar sql.NewInMemoryDB()', funcao que o proprio db.go:24-26 define; nao relata problema concreto.",
+   "confianca": "baixa",
+   "precisaAstra": false
+  },
+  {
+   "id": "S12",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "alucinacao",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Pede atualizar sql_command.go:96/100 por mudanca de interface, mas o PR ja trocou essas linhas para sql.NewInMemoryDB()/db.QueryFramesInto e compila.",
+   "confianca": "baixa",
+   "precisaAstra": false
+  },
+  {
+   "id": "S13",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "api",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "db.go:12-22 TablesList/RunCommands/QueryFramesInto retornam 'not implemented' e parser.go:23 / sql_command.go:96-100 passaram a usar esse stub. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

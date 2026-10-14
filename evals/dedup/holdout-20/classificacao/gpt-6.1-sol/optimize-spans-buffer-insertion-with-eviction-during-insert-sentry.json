@@ -1,0 +1,134 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "buffer.py:197 zadd e o zscan do flush no mesmo namespace antes populado por sadd; chaves SET pendentes no deploy geram WRONGTYPE.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "add-buffer.lua:53 zunionstore com SUM padrao dobra o score de payload replayado presente no parent_key e no set_key, distorcendo a evicao zpopmin.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "buffer.py:150 max_segment_spans vira parametro morto; nenhum caller passa valor, Lua usa 1000; contrato/estilo.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S1: zadd/zcard/zscan sobre chaves SET legadas (buffer.py:197-199) dao WRONGTYPE durante o deploy.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "alucinacao",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "add-buffer.lua:46 span_key==set_key exige que a cadeia de redirects a partir de parent_span_id chegue no proprio span_id (ciclo); o fluxo normal (hset span_id->set_span_id) nao produz isso, e a logica de merge/unlink ja existia na base.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S1 (buffer.py:196-199 WRONGTYPE no deploy).",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S1 (buffer.py:197-199 WRONGTYPE no deploy).",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S2 (add-buffer.lua:47 SUM dobra score em replay).",
+   "confianca": "media",
+   "precisaAstra": false
+  }
+ ]
+}

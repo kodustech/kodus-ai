@@ -1,0 +1,134 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "modelo": "deepseek-v4.1-flash",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "api",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "GroupPermissionEvaluator.java:132-135: o Javadoc de requireManageMembers cita canManageMembership; erro so de documentacao.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "api",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "alucinacao",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "UsersResource.java toRepresentation (logo apos searchForUser) ainda faz userModels.filter(usersEvaluator::canView); o PR so tirou um filtro duplicado de searchForUser, entao usuarios nao visiveis continuam filtrados.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "GroupResourceTypeEvaluationTest.java:293-306: a critica e sobre o que o teste prova; e lacuna de teste.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "alucinacao",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "AdminPermissions.registerListener (AdminPermissions.java:74) so registra o listener com ADMIN_FINE_GRAINED_AUTHZ (v1), e management() devolve MgmtPermissionsV2 so com ADMIN_FINE_GRAINED_AUTHZ_V2. Sao versoes da mesma feature (Profile.java:56-58) e nao ligam juntas, entao o listener nunca chama GroupPermissionsV2.setPermissionsEnabled.",
+   "confianca": "media",
+   "precisaAstra": false
+  }
+ ]
+}

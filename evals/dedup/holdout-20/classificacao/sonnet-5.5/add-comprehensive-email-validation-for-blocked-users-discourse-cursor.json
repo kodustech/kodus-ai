@@ -1,0 +1,70 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "modelo": "sonnet-5.5",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "security",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:12 lookup case-sensitive (achado principal, golden 2); tambem cita a corrida do golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:13-17 read-modify-write nao atomico do contador; golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "security",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:12 where(email: email) exato; bypass por caixa, golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:11-19 predicado escreve no banco durante validacao (email_validator.rb:13) e infla match_count em valid?/save repetidos; golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

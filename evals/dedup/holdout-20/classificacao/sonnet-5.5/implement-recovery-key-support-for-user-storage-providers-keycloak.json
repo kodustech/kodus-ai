@@ -1,0 +1,70 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "modelo": "sonnet-5.5",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "BackwardsCompatibilityUserStorage.java:237-242 sem setId a partir de myUser.recoveryCodes; removeStoredCredentialById(model.getId()) recebe null; golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "RecoveryAuthnCodesFormAuthenticator.java:80-88 usa removeStoredCredentialById (getStoreForUser, UserCredentialManager.java:114-116) para credencial vinda do user storage; mesmo sem remocao, linhas 88-90 adicionam CONFIGURE_RECOVERY_AUTHN_CODES e a regeneracao substitui; causa distinta do id nulo do golden 1, impacto pequeno.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S2 (RecoveryAuthnCodesFormAuthenticator.java:80-88 remocao pelo caminho local); cita id nulo de passagem, mas a correcao pedida e o caminho de remocao.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S2 (RecoveryAuthnCodesFormAuthenticator.java:80-89).",
+   "confianca": "media",
+   "precisaAstra": false
+  }
+ ]
+}

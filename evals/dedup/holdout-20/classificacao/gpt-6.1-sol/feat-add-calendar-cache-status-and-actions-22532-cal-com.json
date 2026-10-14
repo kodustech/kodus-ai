@@ -1,0 +1,134 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "CredentialActionsDropdown.tsx:42-46 nao invalida connectedCalendars; depende de onChanged, que EventAdvancedTab.tsx:372 nao passa e a query tem refetchOnWindowFocus:false (SelectedCalendarsSettingsWebWrapper.tsx:159), entao o status fica obsoleto apos deletar.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "CalendarService.ts:1023-1024 chama updateManyByCredentialId(id, {}) e selectedCalendar.ts:400-405 repassa data vazio ao Prisma, sem tocar @updatedAt. Golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "test-gcal-webhooks.sh:68 usa sed -i '' (BSD), falha no GNU sed. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "CalendarService.ts:1023-1024 chama updateManyByCredentialId(id, {}) e selectedCalendar.ts:400-405 repassa data vazio ao Prisma, sem tocar @updatedAt. Golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "test-gcal-webhooks.sh:68 usa sed -i '' (BSD), falha no GNU sed. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "CalendarService.ts:1023-1024 chama updateManyByCredentialId(id, {}) e selectedCalendar.ts:400-405 repassa data vazio ao Prisma, sem tocar @updatedAt. Golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "TP",
+   "golden": 3,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 3,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "CredentialActionsDropdown.tsx:89 Intl.DateTimeFormat('en-US') fixo apesar de useLocale. Golden 3.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "migration.sql:4 comentario de warning diz 'sem default', mas a linha 9 usa DEFAULT NOW(); so comentario desatualizado.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

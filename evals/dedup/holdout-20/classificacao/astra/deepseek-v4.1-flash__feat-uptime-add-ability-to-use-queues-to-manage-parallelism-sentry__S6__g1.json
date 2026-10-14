@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "id": "S6",
+ "golden": 1,
+ "promptSha": "6b954c8d992c20f790deab7a315da39c716e0bdc",
+ "sameProblem": true,
+ "reason": "The review identifies the mismatch between the test’s concurrency docstring and its implementation, and correcting that docstring would also resolve the golden issue."
+}

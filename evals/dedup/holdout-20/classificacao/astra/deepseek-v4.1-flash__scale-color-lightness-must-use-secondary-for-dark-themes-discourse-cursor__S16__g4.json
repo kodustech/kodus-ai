@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "id": "S16",
+ "golden": 4,
+ "promptSha": "9ab36c021e6861d4d112b9240e056f31e636a9a7",
+ "sameProblem": false,
+ "reason": "The review comment concerns lightness values in mobile/modal.scss, while the golden issue concerns a different change in mobile/user.scss line 497, so fixing the former would not fix the latter."
+}

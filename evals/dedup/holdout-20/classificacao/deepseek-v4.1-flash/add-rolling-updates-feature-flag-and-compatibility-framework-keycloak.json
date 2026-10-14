@@ -1,0 +1,54 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "modelo": "deepseek-v4.1-flash",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "doc_defect",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.75
+   },
+   "concordaComJuiz": true,
+   "evidencia": "CompatibilityResult.java:34-35 muda RECREATE de 4 para 3 e reusa 4 para FEATURE_DISABLED; a sugestao pede no minimo documentar externamente a mudanca de exit code, que e o golden 1 (changelog/migracao).",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "alucinacao",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "UpgradeTest.java:103-105: estrategia null cai em UpgradeLogicFactory.java:37-38 (RecreateOnImageChangeUpgradeLogic), que nao usa o comando gated pelo rolling-updates; o early return ja existia e nao deixa caminho gated sem cobertura.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "CompatibilityResult.java:34-35: a doc da base (update-compatibility.adoc) ja documentava 3 para recreate e o operator nao consome o exit code; troca intencional numa feature preview. Pede manter 4, opcional; nao pede changelog (golden 1).",
+   "confianca": "media",
+   "precisaAstra": false
+  }
+ ]
+}

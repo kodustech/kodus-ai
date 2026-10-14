@@ -1,0 +1,951 @@
+{
+ "model": "sonnet-5.5",
+ "verificador": "claude-sonnet-5.5@sdk",
+ "versao": "ho-h1t10",
+ "versaoDedup": "ho-v9",
+ "prs": {
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "slots.ts:123 `if (slotStartTime.isAfter(dayjs(date.end).add(utcOffset, \"minutes\"))) { return true; }` uses slotStartTime, not slotEndTime, for the upper bound; no other check rejects a slot that ends after the override end.",
+     "reason": "The code does what the comment says. A slot that starts before the override end and finishes after it isn't flagged as outside the override, so it is treated as available.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "slots.ts:141-142: `const start = slotStartTime.hour()*60+slotStartTime.minute(); const end = slotStartTime.hour()*60+slotStartTime.minute();`; line 100: `const slotStartTime = time.utc();`; `organizerTimeZone` is used only in the date-override branch (line 107), not in the working-hours check.",
+     "reason": "`end` is computed from slotStartTime, so it equals `start`. The check is also made in UTC with no conversion to the host's timezone. Both claims in the comment match the code.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "slots.ts:114: `if (dayjs(date.start).add(utcOffset, \"minutes\") === dayjs(date.end).add(utcOffset, \"minutes\"))` compares two distinct dayjs objects with ===",
+     "reason": "Each call to dayjs() creates a new object, so === compares references and is always false. The zero-length override branch therefore never returns true.",
+     "passos": 2
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "smsReminderManager.ts:177-190: try { if (referenceId) await twilio.cancelSMS(referenceId); await prisma.workflowReminder.delete({where:{id:reminderId}}); } catch (error) { console.log(...) }; callers such as handleCancelBooking.ts:490 call deleteScheduledSMSReminder(reminder.id, reminder.referenceId) directly.",
+     "reason": "The cancel and the delete share one try block, so a throw from the Twilio cancel skips the DB delete and is only logged. The callers rely on this helper to delete the row.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "emailReminderManager.ts 213-232: immediateDelete only calls client.request status 'cancel'; default only updates cancelled: true; smsReminderManager.ts 179-186 cancels then prisma.workflowReminder.delete.",
+     "reason": "With a referenceId, neither email path deletes the row, while the SMS version does, so the naming mismatch is real. The only gap is the no-referenceId case, which does delete the row and which the comment doesn't mention.",
+     "passos": 5
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "emailReminderManager.ts:213-223: `if (immediateDelete) { await client.request({url: \"/v3/user/scheduled_sends\", method: \"POST\", body:{batch_id: referenceId, status:\"cancel\"}}); return; }` with no prisma.workflowReminder.delete call. The only row delete is in the earlier `!referenceId` branch (lines 203-211).",
+     "reason": "The code matches the comment's description: the immediateDelete branch cancels the batch in SendGrid and returns without deleting the WorkflowReminder row. I did not check git history for the removed DELETE call.",
+     "passos": 3
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "scheduleEmailReminders.ts lines 53-77: a single try wraps the for loop with `await client.request(...)` (57-64), deletes are only queued (66-72) and executed at `await Promise.all(workflowRemindersToDelete)` (74); the catch at 75 only logs.",
+     "reason": "A throw in any cancel request skips the remaining requests and the Promise.all that runs the lazy Prisma deletes. The rows remain cancelled: true and are picked up again by the findMany on the next run, so the comment's description of the code is accurate.",
+     "passos": 3
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/index.ts:3-30 — `applecalendar: import(\"./applecalendar\"), ...` are direct import() calls in the object literal, not thunks",
+     "reason": "The imports start when the module is evaluated, so loading is eager. A rejected import that is never awaited would be an unhandled rejection.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "apps/web/pages/api/availability/calendar.ts:83-85 and packages/trpc/server/routers/viewer.tsx:340-344,415-416 only pass getCalendarCredentials' result to getConnectedCalendars, which awaits it (CalendarManager.ts:48 `const calendar = await item.calendar;`). No other code uses `.calendar` from those items.",
+     "reason": "The comment says other consumers use `.calendar` directly and would call methods on a Promise. In fact every consumer passes the items to getConnectedCalendars, which awaits the field, so the reported breakage does not exist.",
+     "passos": 7
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S3",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/bookings.tsx:553-558 `bookingRefsFiltered.forEach(async (bookingRef) => { ... const calendar = await getCalendar(...); return calendar?.deleteEvent(...) })`; the same forEach(async) pattern is at vital/lib/reschedule.ts:125 and wipemycalother/lib/reschedule.ts:125",
+     "reason": "The code matches the description: the async callbacks passed to forEach are not awaited, and the other two files use the same pattern.",
+     "passos": 4
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/models/blocked_email.rb:11-19 should_block? does record.match_count += 1; record.last_match_at = Time.zone.now; record.save; lib/validators/email_validator.rb:13 calls BlockedEmail.should_block?(value) inside validate_each",
+     "reason": "The lookup does write to the database, and the validator calls it on every validation, so the side effect the comment describes exists.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S1",
+      "S2",
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/models/blocked_email.rb:12-16: `record = BlockedEmail.where(email: email).first; record.match_count += 1; record.last_match_at = Time.zone.now; record.save`",
+     "reason": "The code does a non-atomic read-modify-write on match_count with no locking, so the claim about lost updates under concurrency holds.",
+     "passos": 2
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "CalendarService.ts:1024 calls updateManyByCredentialId(this.credential.id, {}); selectedCalendar.ts:400-405 passes data to prisma.selectedCalendar.updateMany; schema.prisma:860 has `updatedAt DateTime? @updatedAt`.",
+     "reason": "The code facts hold, but whether Prisma sets @updatedAt on an empty-data updateMany depends on Prisma engine behavior that the repo cannot confirm or contradict.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "scripts/test-gcal-webhooks.sh:68: sed -i '' -E \"s|^GOOGLE_WEBHOOK_URL=.*|GOOGLE_WEBHOOK_URL=$TUNNEL_URL|\" \"$ENV_FILE\"",
+     "reason": "The script uses BSD-only `sed -i ''` with no OS detection, so on GNU sed the empty string becomes the script and the update fails when the variable already exists.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "CredentialActionsDropdown.tsx:89-92: `new Intl.DateTimeFormat(\"en-US\", { dateStyle: \"short\", timeStyle: \"short\" }).format(new Date(cacheUpdatedAt))` inside `t(\"cache_last_updated\", ...)`; line 37: `const { t } = useLocale();`",
+     "reason": "The timestamp is formatted with a hard-coded en-US locale inside a translated string, as the comment says.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "scripts/test-gcal-webhooks.sh:17 `exit 0` at the end of cleanup(); called at line 49 (rate limit) and line 58 (failed to extract URL)",
+     "reason": "cleanup unconditionally exits 0 and is invoked on the failure paths, so the script reports success on failure, as the comment says.",
+     "passos": 2
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "spec/components/email/message_builder_spec.rb:169-180: fixture passes unsubscribe_url: \"/t/1234/unsubscribe\"; tests only assert header_args['List-Unsubscribe'] be_present and body match user_preferences_url; no assertion on the unsubscribe_url value.",
+     "reason": "The spec contains no assertion that reads the unsubscribe_url passed in the fixture, so the comment's description of the tests is accurate.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S2",
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "topics_controller.rb:105-107: `tu = TopicUser.find_by(...)` followed directly by `tu.notification_level` with no nil guard; lib/topic_view.rb has no TopicUser reference, so it does not create the row.",
+     "reason": "find_by can return nil and the code dereferences it without a check, so the described NoMethodError is real.",
+     "passos": 4
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "config/locales/server.en.yml:1855 requires %{unsubscribe_url}; lib/email/message_builder.rb:24-28,67,90 build template_args from opts only and call I18n.t('unsubscribe_link', template_args); only app/mailers/user_notifications.rb:294-295 passes unsubscribe_url; other locales (e.g. server.de.yml:1343) lack the placeholder.",
+     "reason": "The statements the comment rests on hold. The English string needs unsubscribe_url, the builder only gets it from the caller, and only user_notifications.rb passes it. Other locales lack the placeholder. No other caller in the repo triggers the problem today, but that doesn't refute it.",
+     "passos": 9
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "user_serializer.rb:144-146: `website_host.split('.').length == discourse_host.split('.').length && discourse_host.split('.').length > 2` then `website_host.split('.')[1..-1].join('.') == discourse_host.split('.')[1..-1].join('.') ? website_host + path : website_host`",
+     "reason": "The branch compares only the suffix after the first label, with no public-suffix check. Hosts such as a.github.io and b.github.io would therefore be treated as the same domain, as the comment says.",
+     "passos": 2
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/mobile/user.scss:497 is `color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));`. The prior value is not visible in the checkout, and desktop/user.scss:522 uses the same 50%/50% values.",
+     "reason": "The current 50% light-branch value matches the comment, but I could not view the diff to confirm the original was 30%.",
+     "passos": 6
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S6",
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "desktop/topic-post.scss:291: color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)); the same 70%/30% pairing is used elsewhere, e.g. desktop/topic-post.scss:958 and common/base/topic-post.scss:71",
+     "reason": "The current line pairs primary 70% with secondary 30%, which is a common pairing in this codebase, so 'inverted' is doubtful. I could not see the diff to check whether the light value was previously 30%, so I can't refute the claim that it became lighter.",
+     "passos": 5
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/desktop/user.scss:522 is `color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));`, identical to line 527 for `.title`. The previous version of the line was not available to check.",
+     "reason": "The comment's claim that the old value was 30% for $primary cannot be checked without the diff. The current line already uses dark-light-choose, which is partly at odds with the comment's description.",
+     "passos": 3
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/mobile/modal.scss:102: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%)); the same pairing elsewhere is the reverse, e.g. embed.css.scss:89 uses primary 70% / secondary 30%",
+     "reason": "The cited line has primary 30% and secondary 70%, as the comment says. Other usages pair a high primary lightness with a low secondary lightness, which supports the inversion claim. I did not verify the original value in git history.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S8",
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "mobile/topic-post.scss:182 now has dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)); the prior value (20%) can't be checked without git history",
+     "reason": "The comment's claim that the h3 colour was previously 20% in the light branch depends on the pre-change code, which I could not inspect. The current code does not contradict it.",
+     "passos": 7
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/expr/sql/db.go:20-22 `func (db *DB) QueryFramesInto(...) error { return errors.New(\"not implemented\") }`; pkg/expr/sql_command.go:96-100 Execute calls sql.NewInMemoryDB().QueryFramesInto; pkg/expr/nodes.go:159-160 TypeSQL -> UnmarshalSQLCommand with no gate",
+     "reason": "Execute does call the stub that always returns \"not implemented\", so SQL expressions fail. The reader.go path has an enableSqlExpressions gate, but the nodes.go path has none. Nothing I found contradicts the comment's claims.",
+     "passos": 9
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/expr/sql/db.go:16-18: `func (db *DB) RunCommands(commands []string) (string, error) { return \"\", errors.New(\"not implemented\") }`; db.go:24-26 `NewInMemoryDB()` returns `&DB{}`; parser.go:23-29 `TablesList` uses it and returns an error on failure.",
+     "reason": "TablesList uses the stub DB, whose RunCommands always errors, so table extraction always fails as the comment states.",
+     "passos": 4
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/expr/reader.go:194-200: `enabled := !h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions); if enabled { return false }; return false`",
+     "reason": "The function negates the flag and returns false on both paths, so it always returns false regardless of FlagSqlExpressions, as the comment says.",
+     "passos": 2
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "querySplitting.ts:299 and shardQuerySplitting.ts:52 call datasource.applyTemplateVariables(query, request.scopedVars, request.filters). The sub-requests are built as {...request, targets} (querySplitting.ts:315), so they keep scopedVars and filters. They then reach LokiDatasource.runQuery (datasource.ts:350-358), which calls super.query. DataSourceWithBackend.ts:185 calls this.applyTemplateVariables(q, request.scopedVars, request.filters) again.",
+     "reason": "Targets are interpolated once in the splitting code and again in DataSourceWithBackend.query, so ad hoc filters and variables are applied twice. The comment cites datasource.ts:324/377 for the backend path, which is wrong, because those lines are the streaming and live paths. The double interpolation itself is real.",
+     "passos": 10
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "xorm_store.go:614-618: `placeholders := \"?\" + strings.Repeat(\",?\", len(ids)-1)` ... `args = asAny(ids)` with no chunking. Only the SQLite branch (line 608) inlines IDs. setting.go:710 reads batch size via MustInt64(100) with no upper cap.",
+     "reason": "The code matches the comment: Postgres and MySQL bind one placeholder per ID, and the batch size has no upper bound. The statements the comment relies on are true.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S3",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "xorm_store.go:534 r.log.Error(\"Annotations to clean by time\", ..., \"err\", err) after the err != nil check returns; :537 r.log.Error(\"cleaned annotations by time\", ..., \"err\", y); same for by count (554, 557) and tags (576, 579)",
+     "reason": "The code logs routine progress messages at Error level and includes an err field that is nil on success, as the comment says.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/cleanup/cleanup.go:77 `ticker := time.NewTicker(time.Minute * 1)`; ticker triggers srv.clean(ctx) (line 81), which runs all cleanup jobs (lines 96-105) with a 9-minute timeout (line 89)",
+     "reason": "The ticker is 1 minute and drives every cleanup job, so they run more often and can overlap given the 9-minute timeout. The claim that it was previously 10 minutes was not checked against git history.",
+     "passos": 3
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/authz/rbac/service.go:116-121 returns Allowed:false on a permDenialCache hit before permissions are checked; line 154 sets the denial entry; line 85 uses shortCacheTTL (30s, line 32); no invalidation code found in the package.",
+     "reason": "The code does what the comment says: a cached denial short-circuits Check for up to 30s and nothing invalidates it when permissions are granted.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "service_test.go:982 seeds permCache with {\"dashboards:uid:dash1\": false}; service.go:558 only allows when scopeMap[scope] is true; setupService (service_test.go:1328) uses an empty fakeStore{}, so removing the denial check at service.go:117 still ends in deny.",
+     "reason": "The cached value is false, contrary to the test comment, and the fallback store is empty (not read in detail), so the test would still pass without the permDenialCache check.",
+     "passos": 15
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/authz/rbac/cache.go:30-32: return namespace + \".perm_\" + userUID + \"_\" + action + \"_\" + name + \"_\" + parent; userPermCacheKey at line 27 uses the same \".perm_\" prefix.",
+     "reason": "The key is built by plain '_' concatenation, so the two (name, parent) pairs in the comment yield the same key. The comment's description of the code is accurate.",
+     "passos": 3
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "AuthzClientCryptoProvider.java:114-115 `ASN1Encoder.create().write(rBigInteger); ASN1Encoder.create().write(sBigInteger);` results discarded; lines 117-121 re-create encoders: `ASN1Encoder.create().writeDerSeq(ASN1Encoder.create().write(rBigInteger), ASN1Encoder.create().write(sBigInteger))`",
+     "reason": "The two statements operate on fresh encoder instances and their output is unused. The return expression encodes the same values again, so the lines are redundant.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "ECDSAAlgorithmTest.java:42 `keyPair = KeyPairGenerator.getInstance(\"EC\").genKeyPair();` with no initialize/ECGenParameterSpec; the same keyPair is used in test() (line 50) for ES256/384/512 with algorithm.getSignatureLength() at lines 53-55.",
+     "reason": "The test uses a single default-curve (P-256) EC key pair for all three algorithms, so the ES384/ES512 cases never exercise real P-384/P-521 signatures. The comment's factual basis holds.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "ECDSAAlgorithmTest.java:53-56: rsConcat and rsConcat2 both come from prov.getEcdsaCryptoProvider(), and Assert.assertArrayEquals(rsConcat, rsConcat2) is the only assertion. There is no comparison with `sign` and no Signature.verify call.",
+     "reason": "The facts the comment relies on match the code. The weak-assertion concern is real.",
+     "passos": 2
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "",
+     "reason": "no verdict",
+     "passos": 4
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "GroupPermissionEvaluator.java:145 `@return Stream of IDs of groups with view permission.` and line 147 `Set<String> getGroupIdsWithViewPermission();`",
+     "reason": "The Javadoc says Stream but the method returns Set<String>, so the comment's description of the code is accurate.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "GroupPermissionEvaluator.java:133 Javadoc on requireManageMembers says '{@link #canManageMembership(GroupModel)}'; GroupPermissions.java:377 implements it as 'if (!canManageMembers(group)) throw new ForbiddenException();'. canManageMembers (line 109) and canManageMembership (line 117) are distinct methods.",
+     "reason": "The Javadoc references the wrong method. The implementation uses canManageMembers, which is a different check from canManageMembership.",
+     "passos": 4
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "UsersResource.java:453 searchForUser returns toRepresentation(...), and line 460 in toRepresentation does `userModels.filter(usersEvaluator::canView)`; line 459 sets grantIfNoPermission only when GROUPS is set.",
+     "reason": "The per-user canView filter is still applied to the search results via toRepresentation, so callers without view permission do not receive unrestricted results.",
+     "passos": 4
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S4",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "GroupPermissionsV2.java:70 `return hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE);` in canManage(); hasPermission (lines 154-162) returns true if any permission scope is in the expected list. canManage(GroupModel) at line 79 checks only MANAGE.",
+     "reason": "canManage() does accept the VIEW scope, so a view-only admin passes the check. The code matches what the comment describes.",
+     "passos": 5
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "GroupPermissionsV2.java:121-123 passes/adds groupResource.getId(); line 141 uses findByName(server, groupId); AdminPermissionsSchema.java:181-186 resolveGroup returns group.getId() as the name and line 121 creates the resource with that name (id is store-generated).",
+     "reason": "Resources are named by group id but the loop uses the resource's internal id. The findByName lookup misses, hasPermission falls back to the all-groups resource, and the returned set holds resource ids.",
+     "passos": 8
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "BackwardsCompatibilityUserStorage.java:237-242 builds the model via createFromValues without setId; RecoveryAuthnCodesCredentialModel.createFromValues (lines 58-85) never sets an id; RecoveryAuthnCodesFormAuthenticator.java:85-87 calls removeStoredCredentialById(recoveryCodeCredentialModel.getId()), with the id copied from the stored model at RecoveryAuthnCodesCredentialModel.java:99.",
+     "reason": "The model returned by getCredentials has a null id, while the stored model has an id (line 195). The authenticator later removes the credential by that id, so the reported problem exists. I did not check that getCredential in RecoveryAuthnCodesUtils goes through this provider.",
+     "passos": 10
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "RecoveryAuthnCodesUtils.java:56-61 returns credentials from getFederatedCredentialsStream (provider CredentialInputUpdater.getCredentials); RecoveryAuthnCodesFormAuthenticator.java:86 calls removeStoredCredentialById, which in UserCredentialManager.java:114-117 goes to getStoreForUser(user).removeStoredCredential (local or federated-storage store), not the provider's credential store.",
+     "reason": "The credential can come from user storage but is removed via the generic stored-credential path, so the comment's central claim holds. Its 'only local DB' wording is slightly off because federated users use federated storage, but that does not remove the problem.",
+     "passos": 14
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "discover.py:1046 sums Function(\"ifNull\", [Column(\"sample_weight\"), 1]); the test (test_organization_events_stats.py:3660-3697) stores a transaction without sample_weight and asserts counts 1 and 0, which an upsampled count would also return.",
+     "reason": "The facts the comment relies on are true: the transaction has no weight and ifNull defaults it to 1, so the test cannot tell upsampled counts from plain counts.",
+     "passos": 4
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "error_upsampling.py:100-103: `query = request.GET.get(\"query\", \"\").lower(); if \"event.type:error\" in query: return True`; used for discover at lines 87-89",
+     "reason": "The function does a raw substring match, so negated, suffixed or mixed queries also return True and trigger the count() transform on discover.",
+     "passos": 2
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "organization_auditlogs.py:70-71 `use_optimized = request.GET.get(\"optimized_pagination\") == \"true\"`; `enable_advanced = request.user.is_superuser or organization_context.member.has_global_access`. paginator.py:877-882 `if self.enable_advanced_features and cursor.offset < 0: start_offset = cursor.offset ... queryset[start_offset:stop]` with the comment \"permissions are checked at the queryset level\" and no validation.",
+     "reason": "The query flag, the global-access gate, the unvalidated negative cursor offset and the unsupported permission comment all exist as the review comment describes.",
+     "passos": 5
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "organization_auditlogs.py:70-73 gates on request.GET 'optimized_pagination' and passes enable_advanced_features=True; paginator.py:877-882 `if self.enable_advanced_features and cursor.offset < 0: ... queryset[start_offset:stop]` uses negative-offset slicing.",
+     "reason": "The flag does enable negative-offset slicing and the query parameter gates it, while the comments and variable name describe it as a performance optimization for admins.",
+     "passos": 6
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S4",
+      "S6",
+      "S7",
+      "S9",
+      "S10",
+      "S11",
+      "S14"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "paginator.py:877-882 passes negative cursor.offset straight into queryset[start_offset:stop]; cursors.py:28 `self.offset = int(offset)` has no non-negative check; organization_auditlogs.py:70-82 routes optimized_pagination=true to OptimizedCursorPaginator with enable_advanced_features=True",
+     "reason": "The negative-offset path forwards the negative start to the Django ORM, which rejects negative indexing, and nothing validates the offset before that. The code contradicts none of the comment's statements.",
+     "passos": 7
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S5",
+      "S8",
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/paginator.py:182: `start_offset = max(0, offset) if not cursor.is_prev else offset`, followed by `queryset[start_offset:stop]` at line 184. The comment at lines 179-181 claims negative offsets are safe.",
+     "reason": "The clamp only applies when the cursor is not prev. For prev cursors the raw offset reaches the queryset slice. Django does not support negative slice indices, so the 'queryset will handle it' comment is inaccurate.",
+     "passos": 2
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/scripts/spans/add-buffer.lua:30 is `for i = 0, 1000 do`; the previous value is not visible without git history.",
+     "reason": "The current limit of 1000 matches the comment, but I couldn't confirm it was previously 10000, so I can't refute or confirm the claim.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/consumers/process/factory.py:141 `end_timestamp_precise=val[\"end_timestamp_precise\"],` inside the loop in process_batch (lines 129-144) with no try/except",
+     "reason": "The hard key lookup exists as described and would raise KeyError for a message missing the field, failing the whole batch. The comment's factual claims hold.",
+     "passos": 4
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "queue_consumer.py:202 `return hash(group_key) % self.num_queues` with group_key: str, inside get_queue_for_group whose docstring claims 'consistent hashing'",
+     "reason": "The code uses Python's built-in str hash, which is salted per process, so queue assignment differs across processes and restarts. The comment's factual claim holds.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "setup.cfg:24 `python_requires = >=3.13`; pyproject.toml:47 `python_version = \"3.13\"`; self-hosted/Dockerfile:1 `FROM python:3.13.1-slim-bookworm`. queue.ShutDown and Queue.shutdown() exist in Python 3.13, so the line `except queue.ShutDown` at queue_consumer.py:132 is valid.",
+     "reason": "The reported problem only occurs on Python versions older than 3.13, and the project requires 3.13 or later. The AttributeError and the threads that never exit therefore do not happen on supported Pythons.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "queue_consumer.py:270-287: commit_thread = threading.Thread(target=self._commit_loop, daemon=True); _commit_loop calls self.commit_function(committable) from that background thread.",
+     "reason": "The factual basis holds: commit_function is invoked from a separate thread rather than the main consumer thread. The thread-safety concern about arroyo's commit callback is a design claim, and nothing in the code contradicts it.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "queue_consumer.py:281-285 metrics.incr(\"...offsets_committed\", len(committable)); line 96 `committable[partition] = highest_committable` in get_committable_offsets returning dict[Partition, int] (one entry per partition)",
+     "reason": "len(committable) counts partitions with a committable offset, not the number of offsets committed, so the comment's description of the metric is accurate.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "queue_consumer.py:89-93 `for offset in range(start, max_offset + 1): if offset in all_offsets and offset not in outstanding: ... else: break`; OffsetTracker has no method to clear partition state, and `last_committed` is only set in mark_committed (line 103); SimpleQueueProcessingStrategy defines no revoke handling.",
+     "reason": "The cited code behaves as the comment describes: a missing offset breaks the contiguity loop and blocks commits, and per-partition state is never cleared on revoke.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "queue_consumer.py:185 `work_queue: queue.Queue[WorkItem[T]] = queue.Queue()` (no maxsize); line 212 `work_queue.put(work_item)` with no Full handling; line 253 class docstring: 'Natural backpressure when queues fill up'",
+     "reason": "The queues are unbounded, so put never blocks and no MessageRejected is raised. The backpressure claim appears in the strategy class docstring rather than submit's, but the code does not provide it.",
+     "passos": 3
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S6",
+      "S8",
+      "S9",
+      "S12",
+      "S14"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "queue_consumer.py:144-149 `except Exception: logger.exception(...)` then `finally: self.offset_tracker.complete_offset(work_item.partition, work_item.offset)`; line 254 docstring 'Only commits offsets after successful processing'; test_results_consumer.py:1876 docstring says errors don't block commits, line 1922 asserts `len(committed_offsets) == 0 or test_partition not in committed_offsets`",
+     "reason": "The worker completes offsets in `finally` even after a failure, so failed items become committable. That contradicts the strategy docstring and the test assertion, and the test's own docstring and assertion disagree with each other.",
+     "passos": 4
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11",
+      "S15"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "queue_consumer.py:335-343 close()/terminate() call self.queue_pool.shutdown(); result_consumer.py:133 creates the pool once in the factory __init__ and :254-255 passes the same self.queue_pool to each SimpleQueueProcessingStrategy; only factory.shutdown() (result_consumer.py:183-185) clears it; queue_consumer.py:317-325 submit() exception handler marks the offset complete.",
+     "reason": "The pool is shared across strategies. A strategy close after a rebalance shuts down the workers and queues, and the next strategy reuses the dead pool. Submit failures then get their offsets marked complete and committed, as the comment says.",
+     "passos": 7
+    }
+   ]
+  }
+ }
+}

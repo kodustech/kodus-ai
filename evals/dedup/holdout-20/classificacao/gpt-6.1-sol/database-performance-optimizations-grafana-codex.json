@@ -1,0 +1,70 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "xorm_store.go:609-612 concatena com fmt.Sprintf a cada id (quadratico), so no ramo SQLite com batch >999; custo de performance real mas restrito, otimizacao opcional.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "perf",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "cleanup.go:77 ticker 10min->1min afeta todo o servico de cleanup; golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "xorm_store.go:605-607 comentario diz limite 999 do SQLite; e o limite antigo, o proprio teste cita 32766 para >=3.32; documentacao.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "cleanup_test.go:98-105 cria 40003 anotacoes distribuidas em 3 tipos (createTestAnnotations i%3, linha 249-259), ~13334 por tipo, abaixo de 32766; lacuna de teste.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

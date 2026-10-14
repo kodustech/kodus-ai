@@ -32,7 +32,7 @@ fs.mkdirSync(path.dirname(OUT), { recursive: true });
 (async () => {
     const assinatura = ['codex_subscription', 'claude_agent_sdk'].includes(TIER0[MODELO]?.provider);
     const prebuilt = assinatura ? buildModel(MODELO) : undefined;
-    const gold = JSON.parse(fs.readFileSync(path.join(__dirname, `09.10.26_${GOLD}.json`), 'utf8'));
+    const gold = JSON.parse(fs.readFileSync(path.join(__dirname, `${arg('prefixo', '09.10.26')}_${GOLD}.json`), 'utf8'));
     const res = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')) : { model: GOLD, dedupModel: MODELO, prs: {} };
     const SO = (arg('only', '') || '').split(',').filter(Boolean);
     const fila = Object.keys(gold.prs).filter((c) => (!SO.length || SO.includes(c)) && (!res.prs[c] || res.prs[c].erro));

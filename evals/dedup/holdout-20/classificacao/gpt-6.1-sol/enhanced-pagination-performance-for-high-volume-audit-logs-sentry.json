@@ -1,0 +1,156 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "organization_auditlogs.py:79-80 usa OptimizedCursorPaginator com order_by='-datetime' e paginator.py:838-840 aplica math.floor/ceil ao datetime -> TypeError no build_cursor. Mesmo problema do golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": false,
+   "evidencia": "organization_auditlogs.py:71 avalia organization_context.member.has_global_access sem checar None (model.py:346 member: RpcOrganizationMember | None) -> AttributeError para tokens sem membro; e o golden 1 (inclusive vale mesmo sem o flag, pois a linha roda sempre).",
+   "confianca": "alta",
+   "tipoFPSeNaoForTP": "bug_real",
+   "precisaAstra": true,
+   "astra": {
+    "golden_juiz": null,
+    "golden_classificacao": true,
+    "vale": "classificacao"
+   }
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.98
+   },
+   "concordaComJuiz": true,
+   "evidencia": "organization_auditlogs.py:79-80 usa OptimizedCursorPaginator com order_by='-datetime' e paginator.py:838-840 aplica math.floor/ceil ao datetime -> TypeError no build_cursor. Mesmo problema do golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "organization_auditlogs.py:79-80 usa OptimizedCursorPaginator com order_by='-datetime' e paginator.py:838-840 aplica math.floor/ceil ao datetime -> TypeError no build_cursor. Mesmo problema do golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S7",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "organization_auditlogs.py:79-80 usa OptimizedCursorPaginator com order_by='-datetime' e paginator.py:838-840 aplica math.floor/ceil ao datetime -> TypeError no build_cursor. Mesmo problema do golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S8",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S9",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "bug",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.92
+   },
+   "concordaComJuiz": true,
+   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

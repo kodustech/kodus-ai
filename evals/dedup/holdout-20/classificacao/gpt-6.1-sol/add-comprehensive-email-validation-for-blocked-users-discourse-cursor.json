@@ -1,0 +1,108 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.72
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:14-16 atualiza estatistica dentro da validacao; users_controller.rb create chama user.valid? e user.save, que revalida, contando dobrado. Efeito colateral em leitura do golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.72
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:14-16 match_count += 1 e save sem lock; corrida citada no golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "security",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:12 where(email: email) exato, bypass por caixa do dominio; golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "TP",
+   "golden": 2,
+   "goldenCategoria": "security",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 2,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:11-12 igualdade case-sensitive sem normalizar entradas; golden 2.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "TP",
+   "golden": 0,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 0,
+    "conf": 0.85
+   },
+   "concordaComJuiz": true,
+   "evidencia": "blocked_email.rb:14-16 incremento perdido sob concorrencia; golden 0.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": false,
+   "evidencia": "blocked_email.rb:14-16 mesmo read-modify-write nao atomico; golden 0 (efeito colateral + race).",
+   "confianca": "alta",
+   "tipoFPSeNaoForTP": "bug_real",
+   "precisaAstra": true,
+   "astra": {
+    "golden_juiz": null,
+    "golden_classificacao": false,
+    "vale": "juiz"
+   }
+  }
+ ]
+}

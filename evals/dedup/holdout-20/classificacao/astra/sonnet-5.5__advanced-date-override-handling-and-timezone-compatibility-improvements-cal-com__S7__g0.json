@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "id": "S7",
+ "golden": 0,
+ "promptSha": "2390f22c1046fc5eb0d6b715cf7bce01ebb59d65",
+ "sameProblem": true,
+ "reason": "Both comments identify the use of slotStartTime instead of slotEndTime when checking the override’s end boundary, allowing slots that finish after the override ends."
+}

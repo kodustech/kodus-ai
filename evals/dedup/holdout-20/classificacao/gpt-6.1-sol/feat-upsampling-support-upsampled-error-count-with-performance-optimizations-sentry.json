@@ -1,0 +1,102 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "error_upsampling.py:100-103 substring ingenuo, mas eventos sem sample_weight contam 1 via ifNull, entao queries negadas/mistas nao mudam valor; imprecisao sem falha concreta.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "organization_events_stats.py:242-248 so troca timeseries_columns; selecao top-N segue por count() bruto; diverge apenas com taxas heterogeneas entre grupos, consistencia de feature mais que defeito concreto.",
+   "confianca": "baixa",
+   "precisaAstra": false
+  },
+  {
+   "id": "S3",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "bug_real",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Com transformAliasToInputFormat=1, builder/base.py:1566-1572 traduz o alias 'count' para o field 'upsampled_count() as count', mas organization_events.py:670-674 serializa pelo yAxis original 'count()' (resolve_axis_column devolve a coluna crua) e nao acha o valor; introduzido pela reescrita do PR.",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S4",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S1: substring em error_upsampling.py:100-103; sem sample_weight o upsampled_count iguala count().",
+   "confianca": "media",
+   "precisaAstra": false
+  },
+  {
+   "id": "S5",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "factories.py:345 docstring diz 'valid' mas so checa truthiness/float; helper de teste, texto.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S6",
+   "classe": "FP",
+   "golden": null,
+   "goldenCategoria": null,
+   "tipoFP": "nit",
+   "juizMartian": {
+    "tp": false,
+    "golden": null,
+    "conf": 0
+   },
+   "concordaComJuiz": true,
+   "evidencia": "Mesmo achado do S1 (error_upsampling.py:100-103).",
+   "confianca": "media",
+   "precisaAstra": false
+  }
+ ]
+}

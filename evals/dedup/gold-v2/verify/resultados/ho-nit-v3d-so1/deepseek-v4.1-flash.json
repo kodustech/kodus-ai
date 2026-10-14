@@ -1,0 +1,524 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "v3d",
+ "versaoDedup": "ho-v9",
+ "prs": {
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": []
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": []
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure (GNU sed rejects `-i ''`, so the env var is never updated), which is a real bug, not an optional nitpick.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names concrete failure paths (lines 46-50 and 56-59) that call cleanup(), which always exits 0, so the script signals success to automation even though its setup failed—a specific wrong result, not a speculative concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "Hard-coded \"en-US\" formatting is a localization/consistency concern; ignoring it causes no crash, wrong data, security issue, or broken caller, so it is a nit.",
+     "passos": 1
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete CSRF/security hole: the GET route leads to a persistent state change (tu.save!) authenticated only by session cookie with XHR checking skipped, allowing any third-party page to embed an image and silently alter a user's notification level.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment only asks for additional test coverage/assertions for a new fixture value; nothing crashes, returns wrong results, or misleads, and the described failure (\"would still pass if the URL were dropped or wrong\") is hypothetical about code that might be written incorrectly, which the rubric classifies as a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": []
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete data-corruption bug (double validation increments match_count twice per signup), with specific cited lines, so it is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment is about which error string is displayed to the user; the rejected email is still correctly blocked and nothing crashes or returns a wrong result, making this a minor message-wording/UX consistency nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to tighten a test assertion (false vs nil) so a future regression is caught; ignoring it breaks no user-facing behavior, crashes nothing, and corrupts no data, making it a test-quality nitpick.",
+     "passos": 2
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "reason": "Returning nil instead of false causes no actual failure: the only consumer uses it in a boolean condition (nil is falsy), and this repo's RSpec 2.13 `be_false` matches falsiness, so the spec passes too — it's a purity/contract concern, not a concrete bug.",
+     "passos": 2
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete input (example.co.uk vs forum.co.uk) where the elsif branch mis-compares registrable domains and returns a wrong website_name path, so it describes a real bug, not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "It names a concrete input (uppercase host like `http://EXAMPLE.com/user`) and the resulting wrong output (full path dropped) caused by case-sensitive host comparisons at lines 141/144/149, a real behavior bug rather than a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment merely points out missing test coverage for one conditional branch, which is a test-coverage suggestion with no described failure, wrong result, or broken behavior.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "This only asks for additional test coverage of an existing code path and names no concrete failure, crash, or wrong result, so it is a nit.",
+     "passos": 1
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": []
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "reason": "The comment is about removing an unused import (dead code/lint cleanup) with no effect on runtime behavior, data, or callers, so it is a nit; an unused import causes no crash, wrong result, data loss, or security issue.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment only suggests a performance/best-practice improvement (parallelizing requests, adding `take`); ignoring it causes no crash, wrong result, data loss, or broken caller, so it is an optional nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment targets the wording of a code comment versus the query's window; the code behaves identically whether the comment is reworded or left, and no concrete failure, wrong result, or data loss is described (the suggested gte fix would in fact change behavior, making the concern optional/cosmetic).",
+     "passos": 2
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete double-interpolation bug: runShardSplitQuery interpolates targets, then delegates to runSplitQuery which interpolates again, producing duplicated ad-hoc label filters for non-stream-selector labels and re-interpolation of '$' values.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment merely confirms that the existing `.map` call is covered by the new test and says nothing that needs changing; it requests no fix and the code works as-is, so it is a non-actionable nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment is a benign, non-actionable confirmation of test coverage (\"no_defect\"); it requests no change and describes no concrete failure, so ignoring it changes nothing.",
+     "passos": 2
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure path: for non-SQLite engines the code builds a DELETE with len(ids) bind placeholders and no cap, so a configured AnnotationCleanupJobBatchSize above Postgres/MySQL's ~65535 parameter limit makes Exec fail with a parameter-limit error instead of cleaning, which is a real failure, not a speculative concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "The comment is a vague \"delete this later\" reminder with no concrete failure described, so it is an optional nit.",
+     "passos": 1
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "This is a comment-only documentation request about enumerating a new struct field; ignoring it changes no behavior and the existing prose (\"Cache for user permissions...\") is not even false, so no code or reader is misled in a way that causes failures—making it a nit.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete, verifiable defect: the test's own comment falsely claims it allows access to prove the check is bypassed while it actually seeds a deny, so the assertion passes even if the permDenialCache short-circuit is deleted, misleading readers and providing no real coverage of the feature.",
+     "passos": 3
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment flags two discarded encoder statements that have no side effects and no effect on the returned value, so it is dead-code cleanup that changes nothing for users or callers — a nit, despite the \"bug\" label.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment asks for stronger test assertions/coverage (validating DER output or comparing against a known-good value) and describes only a hypothetical uncaught regression, not a concrete failure in the shipped code, so it is a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: readLength() returns -1 for an indefinite-length element and readInteger() passes it to read(length), which does new byte[-1] and throws NegativeArraySizeException instead of the declared IOException.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure (AbstractMethodError thrown by CryptoIntegration.detectProvider when a CryptoProvider compiled against the old interface is loaded), not a speculative concern, so it is not a nit.",
+     "passos": 1
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The Javadoc states a false contract, referencing canManageMembership instead of canManageMembers, which misleads readers about the permission that actually gates requireManageMembers.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete crash path: GroupPermissionsV2.setPermissionsEnabled throws UnsupportedOperationException, and the re-registered group-removed listener calls groups().setPermissionsEnabled(group, false), so group deletion would fail with an unhandled exception under the V2 admin-permissions client — a reachable failure, not a nit.",
+     "passos": 3
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": []
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "The comment is a test-only setup/coverage concern (feature enablement placement after an early return in a test helper), not a concrete production failure or wrong user-facing result, and the reviewer itself hedges with \"either...or\", making it a nitpick about how much the test exercises the gated path.",
+     "passos": 3
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete security failure — the federated recovery-codes branch of isValid never consumes a matched code, unlike the local provider which calls removeRecoveryAuthnCode(), so a used code can be replayed; that is a specific, actionable defect rather than a minor nitpick.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure and caller path: createFromValues indeed never sets the model id (only createdDate/type/userLabel), so the federated model returned here has a null id, and RecoveryAuthnCodesFormAuthenticator line 86-87 calls removeStoredCredentialById(recoveryCodeCredentialModel.getId()), which cannot target the real credential — a specific broken behavior, not a speculative concern.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "A speculative timing-side-channel/best-practice suggestion (constant-time comparison) on a test-only storage provider, where even production code uses plain String.equals — no concrete failure, so it's a nit.",
+     "passos": 2
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment alleges a concrete data-loss bug with a specific mechanism (shared factory-owned pool shut down on close, then reused after rebalance, causing submit() to swallow ShutDown and commit unprocessed offsets), so it is not a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment is about the strength/correctness of a test's assertion (a test-quality/coverage concern), so ignoring it changes no production behavior, result, or user-facing outcome — making it an optional nit.",
+     "passos": 3
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete mechanism and wrong result (ZUNIONSTORE's default SUM doubles a duplicate span's score, so zpopmin eviction no longer reflects end_timestamp_precise and drops the wrong spans), which is a functional-correctness bug rather than a speculative or stylistic concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment speculates that some hypothetical payload might omit a schema-required field, but end_timestamp_precise is a required field of ingest_spans_v1 (and the adjacent trace_id/span_id/project_id are all direct-indexed the same way), so no concrete input or path is named that actually makes this fail.",
+     "passos": 3
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure path: during a rolling deploy, pre-existing `span-buf:s:...` keys are still Redis SETs, so the new ZADD/ZSCAN/ZUNIONSTORE/ZCARD calls raise WRONGTYPE and abort the pipeline/Lua script, crashing the consumer batch — a specific crash scenario, not a speculative or stylistic concern.",
+     "passos": 2
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result bug: the raw substring check matches negated queries like `!event.type:error`, incorrectly applying `sum(sample_weight)` instead of `count()` and producing incorrect bucket values.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment pinpoints concrete call sites (lines 351, 365, 406, 423) where `_get_event_stats` is invoked with `discover`/`split_dataset` while the upsampling decision reads the closure `dataset`, so the transform can be applied or skipped against a dataset that is not the one queried, yielding a wrong count result — a specific correctness bug, not a speculative nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete, named failure: sample_weight is a float (1/client_sample_rate, e.g. 3.33), and wrapping sum(...) in toInt64 truncates toward zero, so the returned upsampled count is systematically floored (under-counting) rather than rounded — a wrong-result bug, not a style/optional concern.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment merely states \"no defect\" without identifying any concrete failure, so ignoring it changes nothing and it is at most a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment merely states \"no defect\" without identifying any concrete failure or required change, so ignoring it cannot break anything—it is a nit.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment is an empty/dismissed remark on the truthiness check at line 353 with no concrete failure described, so it is a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment says only \"no defect\": it names no concrete failure, requests no change, and ignoring it leaves the code behaving exactly the same, so it is a non-actionable nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "The comment correctly notes the test wouldn't detect upsampling wrongly applied to transactions, but it is a test-coverage improvement request with no concrete production failure, so it is a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "reason": "The comment is purely about test coverage: the assertion passes either way, but nothing crashes or returns a wrong result in production, so it is a nit about test quality.",
+     "passos": 2
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result bug — the factory writes sample_rate while the new upsampled_count query reads the sample_weight column with an ifNull fallback of 1, so the returned upsampled count would be 1 instead of the asserted 10; this is a specific, concrete failure, not a minor nit.",
+     "passos": 3
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": true,
+     "reason": "The comment points out an unused `organization` parameter (dead code/refactoring) and only speculates (\"either... or\") that the allowlist check \"is meant\" to be organization-scoped; it names no concrete failure, wrong result, or crash, so it is a nit.",
+     "passos": 2
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "id": "S4",
+ "golden": 1,
+ "promptSha": "9a58abb4aa2ef5e6542f646bde97b2609ce3563f",
+ "sameProblem": false,
+ "reason": "The review reports stale denials caused by caching, while the golden comment identifies a test fixture storing false despite claiming to allow access; fixing denial caching would not fix that fixture mismatch."
+}

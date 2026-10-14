@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "id": "S19",
+ "golden": 1,
+ "promptSha": "8c44ddfe777957cb3a30a3567c0ee9304f5a64c9",
+ "sameProblem": false,
+ "reason": "The review flags a 20%→50% change to an h3 in mobile/topic-post.scss, while the golden comment flags a 30%→50% change in desktop/user.css and a related mobile .name change, so fixing the review would not fix the golden issue."
+}

@@ -1,0 +1,735 @@
+{
+ "model": "sonnet-5.5",
+ "verificador": "claude-sonnet-5.5@sdk",
+ "versao": "ho-h1t10f",
+ "versaoDedup": "ho-v9",
+ "prs": {
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "apps/web/pages/api/availability/calendar.ts:83-85 and packages/trpc/server/routers/viewer.tsx:340-344,415-416 only pass getCalendarCredentials' result to getConnectedCalendars, which awaits it (CalendarManager.ts:48 `const calendar = await item.calendar;`). No other code uses `.calendar` from those items.",
+       "reason": "The comment says other consumers use `.calendar` directly and would call methods on a Promise. In fact every consumer passes the items to getConnectedCalendars, which awaits the field, so the reported breakage does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checkers quote repository code showing the comment's claim about other consumers is false. The callers at apps/web/pages/api/availability/calendar.ts:83-85 and packages/trpc/server/routers/viewer.tsx:340-344,415-416 only pass getCalendarCredentials' result to getConnectedCalendars, and CalendarManager.ts:48 awaits the field (`const calendar = await item.calendar;`). No consumer uses `.calendar` directly on a Promise, so the claimed breakage does not exist."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S3",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S1",
+      "S2",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S2",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S6",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S8",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S3",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "UsersResource.java:453 searchForUser returns toRepresentation(...), and line 460 in toRepresentation does `userModels.filter(usersEvaluator::canView)`; line 459 sets grantIfNoPermission only when GROUPS is set.",
+       "reason": "The per-user canView filter is still applied to the search results via toRepresentation, so callers without view permission do not receive unrestricted results."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes specific code in UsersResource.java: searchForUser returns toRepresentation(...), and toRepresentation applies `userModels.filter(usersEvaluator::canView)` at line 460. This directly contradicts the comment's claim that the per-user canView filter was removed and the search is unrestricted. It is a factual statement about what the code does, not an argument about intent."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S4",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S4",
+      "S6",
+      "S7",
+      "S9",
+      "S10",
+      "S11",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S5",
+      "S8",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "setup.cfg:24 `python_requires = >=3.13`; pyproject.toml:47 `python_version = \"3.13\"`; self-hosted/Dockerfile:1 `FROM python:3.13.1-slim-bookworm`. queue.ShutDown and Queue.shutdown() exist in Python 3.13, so the line `except queue.ShutDown` at queue_consumer.py:132 is valid.",
+       "reason": "The reported problem only occurs on Python versions older than 3.13, and the project requires 3.13 or later. The AttributeError and the threads that never exit therefore do not happen on supported Pythons."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checkers quote repository configuration (setup.cfg python_requires >=3.13, pyproject.toml python_version 3.13, Dockerfile FROM python:3.13.1) showing the project only runs on Python 3.13+. The comment's claim that the code runs on older Pythons where queue.ShutDown is missing is therefore false for this repository. The statement that queue.ShutDown exists in 3.13 is language knowledge, but the decisive evidence is how the repository configures its supported Python version."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S6",
+      "S8",
+      "S9",
+      "S12",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  }
+ },
+ "sobre": "ho-h1t10",
+ "prompt": "c3"
+}

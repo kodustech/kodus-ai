@@ -1,0 +1,875 @@
+{
+ "model": "gpt-6.1-sol",
+ "verificador": "gpt-6.1-sol@sub",
+ "versao": "ho-h1t10f",
+ "versaoDedup": "ho-v9",
+ "prs": {
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S4",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/models/topic.rb:703-710: `def self.url(id, slug, post_number=nil)` sets `url = \"#{Discourse.base_url}/t/#{slug}/#{id}\"`; `def url(post_number = nil)` calls `self.class.url id, slug, post_number`. app/models/topic.rb:719-720: `def unsubscribe_url` returns `\"#{url}/unsubscribe\"`. app/mailers/user_notifications.rb:295: `unsubscribe_url: post.topic.unsubscribe_url,`.",
+       "reason": "Topic#unsubscribe_url already uses the absolute Topic#url containing Discourse.base_url, not the separate relative_url method, so the email builder receives an absolute unsubscribe URL."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The quoted Topic.url implementation explicitly includes Discourse.base_url, and Topic#url delegates to it. Topic#unsubscribe_url appends /unsubscribe to that absolute URL. This directly disproves the comment's factual claim that Topic#unsubscribe_url returns a site-relative URL."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S3",
+      "S5",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S8",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S4",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S5",
+      "S7",
+      "S10",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S4",
+      "S8",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S4",
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S4",
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5",
+      "S8",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S3",
+      "S7",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  }
+ },
+ "sobre": "ho-h1t10",
+ "prompt": "c3"
+}

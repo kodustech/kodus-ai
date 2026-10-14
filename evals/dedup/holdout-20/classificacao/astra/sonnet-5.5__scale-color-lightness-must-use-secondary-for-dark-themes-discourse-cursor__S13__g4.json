@@ -1,0 +1,9 @@
+{
+ "modelo": "sonnet-5.5",
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "id": "S13",
+ "golden": 4,
+ "promptSha": "811b74e0adae3246f155d7885ee746bbb0cf7a60",
+ "sameProblem": false,
+ "reason": "The review comment targets desktop/user.scss:522, while the golden issue is in mobile/user.scss:497, so fixing the reported desktop change would not fix the mobile issue."
+}

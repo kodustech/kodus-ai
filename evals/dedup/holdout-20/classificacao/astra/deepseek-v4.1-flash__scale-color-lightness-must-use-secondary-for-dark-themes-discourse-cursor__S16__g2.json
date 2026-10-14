@@ -1,0 +1,9 @@
+{
+ "modelo": "deepseek-v4.1-flash",
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "id": "S16",
+ "golden": 2,
+ "promptSha": "27516239e9e952edee67198c883e909277adb60e",
+ "sameProblem": false,
+ "reason": "The review comment identifies a lightness error in mobile/modal.scss, while the golden issue is in topic-post.css, so fixing the reviewed location would not fix the golden issue."
+}

@@ -1,0 +1,38 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "modelo": "gpt-6.1-sol",
+ "itens": [
+  {
+   "id": "S1",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "vital/lib/reschedule.ts:125-128 forEach(async) tira erros do try/catch. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  },
+  {
+   "id": "S2",
+   "classe": "TP",
+   "golden": 1,
+   "goldenCategoria": "concurrency",
+   "tipoFP": null,
+   "juizMartian": {
+    "tp": true,
+    "golden": 1,
+    "conf": 0.95
+   },
+   "concordaComJuiz": true,
+   "evidencia": "vital/lib/reschedule.ts:125-128 forEach(async) nao aguardado. Golden 1.",
+   "confianca": "alta",
+   "precisaAstra": false
+  }
+ ]
+}

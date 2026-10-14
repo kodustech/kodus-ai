@@ -1,0 +1,1493 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "ho-h1t10f",
+ "versaoDedup": "ho-v9",
+ "prs": {
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/trpc/server/routers/viewer/slots.ts:492 `organizerTimeZone: schedule.timeZone,` (also :517 and :585) — every checkIfIsAvailable call passes that same schedule's `timeZone` as `organizerTimeZone`; and :413 `timeZone: availability.timeZone,` — the producer attaches that identical `schedule.timeZone` to the overrides of that same user. So in checkIfIsAvailable the \"function-level\" `organizerTimeZone` is exactly the override owner's timezone, and the two can never differ.",
+       "reason": "The claim depends on `organizerTimeZone` in checkIfIsAvailable being a different timezone than the override owner's, but callers set it to `schedule.timeZone`, the very same per-user timezone the producer attaches as each override's `timeZone`, so no grid mismatch occurs."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes specific call sites in packages/trpc/server/routers/viewer/slots.ts (:492, :517, :585) showing every checkIfIsAvailable call passes that same schedule's `timeZone` as `organizerTimeZone`, and the producer (:413) attaches the identical `availability.timeZone`/`schedule.timeZone` to each override of that same user. This is a repository-level factual matter about which callers exist and what values they pass, and it shows the comment's premise — that the override owner's timezone can differ from the function-level `organizerTimeZone` so a grid mismatch arises — is false: those are the very same per-user timezone, so the two cannot differ."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S5",
+      "S6",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:3 `import client from \"@sendgrid/client\";` (and it is already used at line 188 `const batchIdResponse = await client.request({`)",
+       "reason": "The file imports the SendGrid `client` at line 3 and already uses `client.request` at line 188, so the claimed ReferenceError and its downstream consequences do not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes code in the same file (packages/features/ee/workflows/api/scheduleEmailReminders.ts) showing `import client from \"@sendgrid/client\";` at line 3 and an existing use of `client.request` at line 188. This directly falsifies the comment's factual claim that the module never imports or defines `client`, so the asserted ReferenceError and its consequences do not exist."
+     }
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/core/EventManager.ts:290 `const bookingDeletes = prisma.booking.delete({ where: { id: booking.id } })` (called from handleNewBooking.ts:978 `eventManager.reschedule(...)`) deletes the old booking; packages/prisma/schema.prisma:637 `booking Booking? @relation(fields: [bookingUid], references: [uid], onDelete: Cascade)` makes WorkflowReminder rows cascade-delete with it.",
+       "reason": "The comment's stated impact rests on the old booking not being deleted during the handleNewBooking reschedule flow, but that flow calls eventManager.reschedule, which deletes the old booking and cascade-removes its workflowReminders, so no reminder row is left behind."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's stated impact — that the handleNewBooking reschedule path \"leaves the old reminder row in the DB (and the old booking is not deleted, so no cascade removes it)\" — is a factual claim about what this code path does, and the repository code shows it is false. handleNewBooking.ts:978 calls eventManager.reschedule, and EventManager.ts:290 shows that reschedule performs `prisma.booking.delete({ where: { id: booking.id } })`, deleting the old booking. schema.prisma:637 then makes WorkflowReminder rows cascade-delete with the booking. So the named path does delete the old booking and does cascade-remove its reminder rows, directly falsifying the comment's premise that no reminder row is removed."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5",
+      "S6",
+      "S10",
+      "S12",
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "handleNewBooking.ts:968 `deleteScheduledEmailReminder(reminder.id, reminder.referenceId, true)` runs inside the reschedule block that immediately calls `eventManager.reschedule(...)` (handleNewBooking.ts:978). In that path the old/original booking is not merely marked CANCELLED; EventManager.reschedule deletes it: packages/core/EventManager.ts:290 `const bookingDeletes = prisma.booking.delete({ where: { id: booking.id } });` (awaited at line 297). The WorkflowReminder relation cascades on booking delete: packages/prisma/schema.prisma:637 `booking Booking? @relation(fields: [bookingUid], references: [uid], onDelete: Cascade)`. So the reminder row is removed by the cascade, not left orphaned with `scheduled: true`.",
+       "reason": "The comment's key premise — that handleNewBooking.ts:968's old booking is \"only marked CANCELLED, not deleted\" so no cascade clears the reminder row — is false: the reschedule flow deletes the old booking (EventManager.ts:290), which cascades to WorkflowReminder (schema.prisma:637)."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's central factual premise is that at handleNewBooking.ts:968 the old booking is \"only marked CANCELLED, not deleted,\" so no DB cascade removes the WorkflowReminder row and a stale `scheduled: true` row lingers. The checker quotes repository code showing this is false: the reschedule block that calls `deleteScheduledEmailReminder(reminder.id, reminder.referenceId, true)` immediately invokes `eventManager.reschedule(...)` (handleNewBooking.ts:978), and EventManager.reschedule deletes the original booking via `prisma.booking.delete({ where: { id: booking.id } })` (packages/core/EventManager.ts:290, awaited at 297). The WorkflowReminder relation is configured with `onDelete: Cascade` (packages/prisma/schema.prisma:637), so deleting the booking removes the reminder row. This is a direct quote of this repository's own code about what the named path does, so it contradicts the comment's stated factual claim rather than merely arguing about intent or external behavior."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/app-store/index.ts:1 = `const appStore = {` (no line anywhere in the file references `./_example`), and packages/app-store has no `_example` directory — the example/template apps now live under `packages/app-store/templates/` (e.g. `templates/basic/config.json`, and `apps.server.generated.ts:46` `basic: import(\"./templates/basic/api\")`).",
+       "reason": "The comment's premise is false: the line before the cited comment is `const appStore = {`, not a `./_example` reference, and no `packages/app-store/_example` directory exists (so pointing the path back at `./_example` would also fail)."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checkers quote the actual repository content: packages/app-store/index.ts:1 is `const appStore = {`, so the comment's premise that the preceding line references `./_example` is false. They also report that no `packages/app-store/_example` directory exists (the template apps live under `packages/app-store/templates/`, e.g. `templates/basic/config.json` and `apps.server.generated.ts:46` `basic: import(\"./templates/basic/api\")`). This is direct factual evidence about what the named file contains and which files/directories exist, showing the comment's statements are false."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S6",
+      "S9",
+      "S10",
+      "S11",
+      "S12",
+      "S13",
+      "S14",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S5",
+      "S7",
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/core/CalendarManager.ts:48 `const calendar = await item.calendar;` then :51 `if (!calendar) {` and :57 `const cals = await calendar.listCalendars();` — the sole consumer getConnectedCalendars awaits the promise before the null check and before calling listCalendars, so missing calendars are correctly detected and there is no breakage.",
+       "reason": "The only consumer of getCalendarCredentials' result (getConnectedCalendars) does `await item.calendar` at line 48 before its `if (!calendar)` check at line 51, so the described failure modes (null check always passing, direct use failing) do not exist; the caller was already updated to handle the returned Promise."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual claim is that getCalendarCredentials' returned `calendar` is consumed as a Calendar and thus breaks — \"any consumer that assumes it is a Calendar\" fails, null checks always pass, and direct use like `calendar.listCalendars()` fails. The checker quotes this repository's actual code in packages/core/CalendarManager.ts: the sole consumer getConnectedCalendars does `const calendar = await item.calendar;` at line 48 before the `if (!calendar)` check at line 51 and before calling `await calendar.listCalendars();` at line 57. So the repository code demonstrably awaits the Promise before both the presence check and direct use, meaning the described failure modes cannot occur — the null check does not \"always pass\" and direct use does not fail. This is concrete evidence about what the named file/function actually contains and does, contradicting the comment's factual statement."
+     }
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "Gemfile.lock:367 `rspec (2.13.0)` (and 371 rspec-core 2.13.1, 372 rspec-expectations 2.13.0); spec/models/blocked_email_spec.rb:23 `subject.should be_false`. In RSpec 2.13 `be_false` is a falsey matcher that passes for `nil`, so returning `nil` satisfies the spec and the `if` at lib/validators/email_validator.rb:13.",
+       "reason": "The comment's claim that the spec's `be_false` enforces a strict `false` return contract is false under the repo's pinned RSpec 2.13, where `be_false` accepts `nil`, so no contract is violated."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The evidence's core claim is about how the RSpec library behaves: that in RSpec 2.13 `be_false` is a falsey matcher accepting `nil`. Although it quotes repository files (Gemfile.lock's pinned rspec version and the spec line `subject.should be_false`), the decisive point is the external library's semantics for `be_false`, not a fact about what this repository's code contains or does. Quoting the repo code that passes the value along does not convert this into a statement about the repository, so it falls under library/framework behavior — \"argues\"."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "apps/web/components/apps/CalendarListContainer.tsx:79-88 defines `onChanged` as `Promise.allSettled([ utils.viewer.apps.integrations.invalidate(...), utils.viewer.calendars.connectedCalendars.invalidate() ])`, and line 113 passes `onChanged={onChanged}` into `SelectedCalendarsSettingsWebWrapper`, which forwards it as `onSuccess={onChanged}` to CredentialActionsDropdown (SelectedCalendarsSettingsWebWrapper.tsx:75, 128). Thus `deleteCacheMutation`'s `onSuccess?.()` (CredentialActionsDropdown.tsx:45) does trigger `utils.viewer.calendars.connectedCalendars.invalidate()`, refetching the query and removing the stale cache-status row.",
+       "reason": "The mutation's `onSuccess?.()` invokes the caller's `onChanged`, which invalidates `viewer.calendars.connectedCalendars`, so the UI does refetch and the reported stale-entry problem does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual claim is that `deleteCacheMutation`'s `onSuccess` \"only calls `onSuccess?.()` and never invalidates the `viewer.calendars.connectedCalendars` query.\" The quoted repository code shows that the `onSuccess?.()` callback is wired to `onChanged` (CalendarListContainer.tsx:79-88, forwarded via SelectedCalendarsSettingsWebWrapper.tsx:75, 128 as `onSuccess={onChanged}`), and `onChanged` is defined as `Promise.allSettled([... utils.viewer.calendars.connectedCalendars.invalidate()])`. Therefore the mutation's `onSuccess?.()` does invalidate/refetch `connectedCalendars`, so the comment's stated problem (stale cache-status row) does not exist as described."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:1020,982 — the same `fetchAvailabilityAndSetCache` method that contains line 1024 also calls `await this.setAvailabilityInCache(parsedArgs, data)`; `setAvailabilityInCache` does `const calendarCache = await CalendarCache.init(null); await calendarCache.upsertCachedAvailability({ credentialId: this.credential.id, ... })`, and packages/features/calendar-cache/calendar-cache.repository.ts:150 writes `prisma.calendarCache.upsert({...})` with `expiresAt: new Date(...)`. So the cache timestamp displayed is written to CalendarCache (whose `updatedAt DateTime @updatedAt` at packages/prisma/schema.prisma:1719 is auto-bumped), matching the read site at connectedCalendars.handler.ts:31-35. The write and read sites do agree on CalendarCache.",
+       "reason": "The cache timestamp the dropdown displays is written to CalendarCache by setAvailabilityInCache in the very same method (line 1020), not by the SelectedCalendar update at line 1024, so the alleged write/read table disagreement does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual claim is that the write site and read site disagree on which table carries the cache timestamp — i.e., that the write that produces the displayed \"Last updated\" value goes to SelectedCalendar while the read comes from CalendarCache. The checker quotes lines 1020 and 982 of the very same fetchAvailabilityAndSetCache method containing line 1024: it also calls `await this.setAvailabilityInCache(parsedArgs, data)`, and that method (packages/features/calendar-cache/calendar-cache.repository.ts:150) performs `prisma.calendarCache.upsert({...})` on CalendarCache. So the timestamp read by getCacheStatusByCredentialIds (connectedCalendars.handler.ts:31-35) is in fact written to CalendarCache by setAvailabilityInCache in the same method, not only by the SelectedCalendar update at line 1024. This directly contradicts the comment's assertion that the write and read sides use different tables; they both operate on CalendarCache."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/prisma/schema.prisma:860 `updatedAt DateTime? @updatedAt` together with packages/lib/server/repository/selectedCalendar.ts:400-404 `static async updateManyByCredentialId(...) { return await prisma.selectedCalendar.updateMany({ where: { credentialId }, data, }); }`",
+       "reason": "`updatedAt` is a Prisma `@updatedAt` field, which Prisma auto-populates on every updateMany call regardless of the data contents, so `data: {}` still refreshes the timestamp and the reported \"no-op / stale timestamps\" problem does not exist."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker's evidence rests on how Prisma (the library/framework) behaves, not on what repository code contains or does. The dispute is whether Prisma auto-populates an `@updatedAt` field on an `updateMany` call when `data` is `{}` — a claim about library behavior. The quoted schema line (`updatedAt DateTime? @updatedAt`) and the repository wrapper (`updateManyByCredentialId` passing `data` straight through) merely illustrate the code path; they do not themselves show the comment's factual statement is false, since the comment's statement is about Prisma's treatment of `data: {}`. Per the rules, evidence that relies on how a library/framework behaves — even when repository code is quoted to illustrate it — is \"argues\", not \"contradicts\"."
+     }
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/assets/javascripts/discourse/ember/resolver.js.es6:148-160 (findTemplate): `decamelized = withoutType.decamelize(),` then `templates[decamelized.replace(/\\_/, '/')]`. For `topicUnsubscribe`, decamelize gives `topic_unsubscribe`, and replacing the first `_` with `/` yields `topic/unsubscribe` — exactly the PR template path `templates/topic/unsubscribe.hbs` (app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs). The view `views/topic-unsubscribe.js.es6` and route `routes/topic-unsubscribe.js.es6` likewise resolve via customResolve's dasherized suffix (resolver.js.es6:71-86).",
+       "reason": "Discourse's custom resolver maps `topicUnsubscribe` to the template key `topic/unsubscribe`, so the claimed template-resolution failure does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's central factual claim — that the top-level route name `topicUnsubscribe` will not find the template at `templates/topic/unsubscribe.hbs` — is directly refuted by the repository's own resolver code. `app/assets/javascripts/discourse/ember/resolver.js.es6` `findTemplate` performs `decamelized = withoutType.decamelize()` then looks up `templates[decamelized.replace(/\\_/, '/')]`. For `topicUnsubscribe`, decamelize yields `topic_unsubscribe`, and replacing the first `_` with `/` yields `topic/unsubscribe`, which is exactly the PR template path. The same file's `customResolve` (lines 71-86) resolves the dasherized view/route suffixes. This is a statement about what this repository's specific resolver function does, not about an external library's behavior, so the alleged template-resolution failure does not exist."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/mailers/user_notifications.rb:294-295 is the only place passing `add_unsubscribe_link: true` (grep shows no other caller), and it also passes `unsubscribe_url: post.topic.unsubscribe_url`. The digest at app/mailers/user_notifications.rb:86-91 calls build_email without `add_unsubscribe_link` (its views use `unsubscribe_link: ...t('user_notifications.digest.click_here')`, app/views/user_notifications/digest.html.erb:76, digest.text.erb:36), so it never invokes `I18n.t('unsubscribe_link', ...)`.",
+       "reason": "The digest is not an `add_unsubscribe_link: true` caller (the only such caller already supplies `unsubscribe_url`), so the reported `MissingInterpolationArgument` scenario does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's core claim is that other callers (e.g. the site-wide digest) send mail with `add_unsubscribe_link: true` and thus feed `unsubscribe_link` through `I18n.t` without `unsubscribe_url`, causing `I18n::MissingInterpolationArgument`. The checkers quote the repository showing (a) a grep finds `add_unsubscribe_link: true` only at app/mailers/user_notifications.rb:294-295, which already passes `unsubscribe_url: post.topic.unsubscribe_url`, and (b) the digest at app/mailers/user_notifications.rb:86-91 never sets that flag and instead uses its own `user_notifications.digest.click_here` key. This is a factual, repository-wide statement about which callers exist — exactly the case where the comment's problem requires a caller that the search shows doesn't exist — so the reported scenario is contradicted by the code."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/models/topic.rb:263-264: `def fancy_title` / `sanitized_title = ERB::Util.html_escape(title)` — the value the controller passes as `model.fancyTitle` is already HTML-escaped server-side (see also spec/models/topic_spec.rb:168 expecting `<script>` to be `&lt;script&gt;`), so no markup from a topic title reaches the template raw.",
+       "reason": "The comment's premise that the title is unescaped is false: model.fancyTitle is derived from Topic#fancy_title, which HTML-escapes the title with ERB::Util.html_escape before it is interpolated, so no user markup is injected as raw HTML."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual premise is that the topic title reaches the template unescaped. The checker quotes repository code (app/models/topic.rb:263-264) showing Topic#fancy_title—the source of the model.fancyTitle value the comment says the controller passes—runs ERB::Util.html_escape(title) before interpolation, with a spec (spec/models/topic_spec.rb:168) confirming `<script>` becomes `&lt;script&gt;`. That is a statement about what a named function in this repository does, and it shows the comment's claim that the title is unescaped is false."
+     }
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S4",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/assets/stylesheets/common/base/_topic-list.scss:115: `color: scale-color($primary, $lightness: 50%);`",
+       "reason": "The comment rests on the claim that a plain `$primary` 50% rule no longer exists, but a plain `scale-color($primary, $lightness: 50%)` rule still exists unconverted at _topic-list.scss:115 (and the expression remains the light-theme branch of every dark-light-choose rule), so the reported staleness does not follow."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment makes a specific factual claim about repository code: that the table-cell rule was converted to dark-light-choose and that \"a plain `$primary` 50% rule no longer exists.\" The checker quotes app/assets/stylesheets/common/base/_topic-list.scss:115, which contains exactly `color: scale-color($primary, $lightness: 50%);` — the unconverted plain `$primary` 50% rule the comment says is gone. This is a precise quote of code in this repository showing the comment's factual statement is false, not an argument about language/library behavior or intent."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/assets/stylesheets/common/base/user.scss:124: `color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));`",
+       "reason": "Line 124 already uses 30%/70%, identical to the sibling .username a rule at line 119, so the comment's claim that it became 50%/50% is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes the actual code at app/assets/stylesheets/common/base/user.scss:124 as `color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));`, directly contradicting the comment's factual claim that line 124 \"became 50%/50%\". Since the comment's central factual premise about what line 124 contains is false per the quoted repository code, this is a contradiction, not an argument."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S12",
+      "S17"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/assets/stylesheets/desktop/topic-post.scss:896 `background-color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));` and :958 `color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));` (also mobile/topic-post.scss:498) — the exact `($primary 70%, $secondary 30%)` pair is the established pattern (it is the (X, 100−X) convention, not an inversion), so the light-theme argument was already 70%; the PR only switched the dark-theme argument's variable from `$primary` to `$secondary`.",
+       "reason": "The 30% the comment calls the \"original light-theme argument\" is actually the untouched dark-theme argument's lightness (`$secondary … 30%`), and the 70/30 pair matches the existing convention at lines 896/958/498, so no light-theme value was changed and the reported regression does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment makes factual claims about what this repository's code contains: (a) that the light-theme argument was changed from 30% to 70%, and (b) that the 70/30 pair is \"inverted relative to the (X, 100−X) convention used everywhere else.\" The checkers quote concrete repository code — app/assets/stylesheets/desktop/topic-post.scss:896, :958 and mobile/topic-post.scss:498 — showing the exact `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` pair already exists as the established pattern. That means 70/30 *is* the convention (not an inversion), and the 30% the comment calls the \"original light-theme argument\" is in fact the dark-theme argument's lightness, which was not changed. This directly falsifies the comment's factual statements about which values the code contains and how it is configured elsewhere, so the reported light-theme regression does not exist. These quotes are not a foreign-language/library illustration but the same stylesheet convention the comment explicitly asserts (the \"everywhere else\" claim), so they are on-point."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S11",
+      "S16",
+      "S18"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/assets/stylesheets/common/foundation/variables.scss:46 `@function dark-light-choose($light-theme-result, $dark-theme-result) {` — the FIRST argument is the light-theme result, and the identical pair `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))` already exists all over the codebase (app/assets/stylesheets/common/base/header.scss:196, app/assets/stylesheets/common/base/user.scss:119 and :124, app/assets/stylesheets/common/base/topic-post.scss:15 and :55). So 30%/70% is the established light/dark pair; the light-theme 30% value is not \"new\" and is not \"inverted vs. the convention\" — the desktop line 94 at 70/30 is the outlier, not the convention.",
+       "reason": "The comment's premise that the light-theme (first) argument regressed from 70% to 30% and that the (30%,70%) pair is an anomalous inversion is contradicted by the function signature (first = light theme) and by the many identical 30/70 dark-light-choose calls already in the tree."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual premises are refuted by code in this repository. The signature at common/foundation/variables.scss:46 defines `dark-light-choose($light-theme-result, $dark-theme-result)`, so the first argument IS the light-theme value — meaning the new `scale-color($primary, $lightness: 30%)` first argument being \"30% not 70%\" cannot be read as the apparent inversion the comment alleges. More decisively, the comment asserts the (30%, 70%) pair is \"inverted vs. the convention\" and that desktop/modal.scss:94's 70/30 \"correctly kept\" the convention; a repository-wide check shows the identical `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))` pair already appears in header.scss:196, user.scss:119/124, and topic-post.scss:15/55, so 30/70 is the established light/dark pair and the desktop 70/30 line is the outlier, not the convention. These are direct factual statements about what this code and these lines contain."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S3",
+      "S4",
+      "S10",
+      "S13"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/assets/stylesheets/desktop/user.scss:522: `color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));` — the counterpart the comment says \"preserved 30%\" in fact uses 50%, and the same 50%/50% pattern was applied repository-wide (e.g. common/base/header.scss:153,195,301,332; desktop/user.scss:59,173,514; desktop/topic-list.scss), consistent with a change that only routed the dark-theme scale-color base from `$primary` to `$secondary`, leaving the 50% lightness untouched.",
+       "reason": "The lightness percentage was not changed from 30% to 50%; the diff merely wrapped the existing 50% value in dark-light-choose with $secondary for dark theme, so the reported unintended light-theme change rests on a false premise."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual premise is that `.group-member-info .name` was previously `scale-color($primary, $lightness: 30%)` and the change bumped it to 50%, and that the \"mobile/desktop counterpart ... preserved 30%\". The evidence quotes the very counterpart line, desktop/user.scss:522, showing it uses `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` — i.e. 50%, not 30%. It also points to the same 50%/50% pattern appearing repository-wide (common/base/header.scss, other desktop/user.scss lines, desktop/topic-list.scss), consistent with a diff that only rerouted the dark-theme base from `$primary` to `$secondary` while leaving the existing 50% lightness untouched. So the code in this repository shows the reported \"30% → 50%\" light-theme change and \"desktop counterpart preserved 30%\" claims are false."
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S5",
+      "S8",
+      "S14",
+      "S15",
+      "S19"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/assets/stylesheets/mobile/topic-post.scss:179-182 — the cited hunk is `.topic-map h3 {` with `color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))`, not an `a.star h3` rule; and app/assets/stylesheets/desktop/topic-post.scss:319-321 is likewise `.topic-map h3 {`, not `a.star h3`. grep across app/assets/stylesheets finds no `a.star h3` / `star h3` selector anywhere in the repository (the only `a.star` rules, mobile:155 and desktop:304, contain no h3 descendant).",
+       "reason": "The comment's premise names an `a.star h3` element whose colour supposedly disagrees with a desktop `a.star h3` counterpart at desktop line 321, but no such selector exists: the cited lines are `.topic-map h3` in both files, so the reported bug rests on a false identification of the code."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual premise is that the cited hunk (mobile/topic-post.scss:179-182) and its desktop counterpart (desktop/topic-post.scss:321) are an `a.star h3` rule whose colour disagrees. The checker quotes the actual repository code: both cited locations are `.topic-map h3` rules, not `a.star h3`, and a repository-wide grep finds no `a.star h3` / `star h3` selector at all (the only `a.star` rules at mobile:155 and desktop:304 have no h3 descendant). This is a statement about what the named lines and selectors in this repository actually contain, and it shows the comment rests on a false identification of the code."
+     }
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "shardQuerySplitting.ts:163 delegates each group to `runSplitQuery(datasource, subRequest, {...})`, and that delegate still re-checks emptiness on the (now interpolated) targets: querySplitting.ts:296-299 `const queries = request.targets .filter((query) => !query.hide) .filter((query) => query.expr) .map((query) => datasource.applyTemplateVariables(query, request.scopedVars, request.filters));`. A target interpolated to `''` is therefore dropped there and never reaches execution as a blank query.",
+       "reason": "The claimed lost fallback still exists: the interpolated targets are filtered on `query.expr` inside the delegated runSplitQuery before any execution, so an empty interpolated expression is dropped rather than run as a blank query."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment asserts that the fallback dropping empty interpolated targets \"no longer exists,\" so a target like `{ expr: '$myVar' }` resolving to `''` passes blank into the shard splitting/execution loop. The checkers quote actual repository code that falsifies this: shardQuerySplitting.ts:163 delegates to `runSplitQuery`, and querySplitting.ts:296-299 filters the targets on `query.expr` *after* `datasource.applyTemplateVariables(...)` is applied. That post-interpolation emptiness check still drops an empty interpolated expression before any execution, so the factual claim that the old fallback is gone is directly contradicted by the code."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "public/app/plugins/datasource/loki/datasource.ts:1113 — `const { __auto, __interval, __interval_ms, __range, __range_s, __range_ms, ...rest } = scopedVars || {};` then only __interval/__interval_ms are re-added (lines 1119-1125); __range/__range_s/__range_ms are deliberately dropped so they pass through for backend interpolation and remain in the expr, as confirmed by the test 'should not interpolate __range variables' (datasource.test.ts:2009-2040).",
+       "reason": "applyTemplateVariables explicitly strips `$__range` from scopedVars so templateSrv.replace leaves it untouched, meaning isQueryWithRangeVariable still sees `$__range` after line 299 and the guard at line 300 continues to work."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual claim is that the interpolation step (applyTemplateVariables/templateSrv.replace) substitutes `$__range`/`$__interval`/`$__auto` into the expression, so the guard sees no `$__range` by line 300. The checker quotes this repository's own `applyTemplateVariables` (datasource.ts:1113) showing that `__auto, __interval, __interval_ms, __range, __range_s, __range_ms` are destructured out of `scopedVars`, and only `__interval`/`__interval_ms` are re-added (lines 1119-1125); `__range`/`__range_s`/`__range_ms` are deliberately dropped so they pass through and remain in the expr, confirmed by the in-repo test 'should not interpolate __range variables' (datasource.test.ts:2009-2040). That is a specific statement about what the named function in this file stores/branches — it directly falsifies the comment's premise that `$__range` is consumed by interpolation and therefore invisible to `isQueryWithRangeVariable` at line 300."
+     }
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/expr/reader.go:194-200: `func enableSqlExpressions(h *ExpressionQueryReader) bool { enabled := !h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions); if enabled { return false }; return false }` — the function returns false unconditionally (both branches return false), so at reader.go:130 `if !enabled` is always true and the SQL expression path is never reachable. The feature is in fact unconditionally disabled, not gated on the flag.",
+       "reason": "`enableSqlExpressions` always returns false regardless of the flag, so it is not a gating condition and the \"sqlExpressions is not implemented\" message is in fact accurate, contradicting the comment's premise."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual premise is that the guard `enableSqlExpressions` tests whether `FlagSqlExpressions` is enabled and therefore acts as a gating condition (turning the feature off vs. it not existing). The checker quotes the actual function body at pkg/expr/reader.go:194-200, which returns `false` in both branches — i.e. it never consults the flag result to return true and unconditionally disables the path. That is a direct factual statement about what a named function in this repository returns, showing the comment's description of the guard (\"tests whether the flag is enabled,\" \"a gating condition\") is false. So the \"not implemented\" message is not the mismatch the comment claims. This is code-contradicts-fact, not a matter of intent or library behavior."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/expr/sql/db.go:24 defines `func NewInMemoryDB() *DB {` — the cited file itself declares NewInMemoryDB, so there is nothing to \"update ... to use sql.NewInMemoryDB()\"; the existing caller pkg/expr/sql_command.go:96 already does `db := sql.NewInMemoryDB()`.",
+       "reason": "The file at the cited lines already defines NewInMemoryDB (and a caller already uses it), so the comment's premise that this file must be updated to use sql.NewInMemoryDB() is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes code in the cited file itself (pkg/expr/sql/db.go:24) showing that NewInMemoryDB is defined there, and that a caller in pkg/expr/sql_command.go already uses sql.NewInMemoryDB(). This directly falsifies the comment's factual premise that the file must be updated to use sql.NewInMemoryDB()."
+     }
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/expr/sql/db.go:20 `func (db *DB) QueryFramesInto(name string, query string, frames []*data.Frame, f *data.Frame) error` and pkg/expr/sql/db.go:24 `func NewInMemoryDB() *DB` exactly match the calls at pkg/expr/sql_command.go:96 `db := sql.NewInMemoryDB()` and pkg/expr/sql_command.go:100 `err := db.QueryFramesInto(gr.refID, gr.query, allFrames, frame)`.",
+       "reason": "The cited lines already call the current DB API with the exact signatures it defines (name, query, frames, frame), so there is no changed query interface requiring lines 96/100 to be updated; the comment rests on a false premise."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment claims the query interface changed so lines 96 and 100 in pkg/expr/sql_command.go need updating. The checkers quote this repository's current definitions at pkg/expr/sql/db.go:20 (`QueryFramesInto(name string, query string, frames []*data.Frame, f *data.Frame) error`) and pkg/expr/sql/db.go:24 (`NewInMemoryDB() *DB`), and show the calls at sql_command.go:96 and :100 already match those signatures exactly. That is direct repository code showing the comment's factual premise (a changed API requiring updates) is false."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S8",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S2",
+      "S7",
+      "S9",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:453 `return toRepresentation(realm, usersEvaluator, briefRepresentation, session.users().searchForUserStream(realm, attributes, firstResult, maxResults));` and UsersResource.java:460 `return userModels.filter(usersEvaluator::canView)` — the stream returned by searchForUserStream is passed into toRepresentation, which still applies the per-user canView filter, so the predicate was not removed and still culls rows.",
+       "reason": "The comment falsely claims the per-user canView predicate was dropped, but searchForUser delegates to toRepresentation, which applies filter(usersEvaluator::canView) to the search stream, so the reported unrestricted results do not follow."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's factual claim is that searchForUser() removed the per-user canView predicate, leaving the search stream unfiltered. The checkers quote the actual code: UsersResource.java:453 returns toRepresentation(realm, usersEvaluator, briefRepresentation, session.users().searchForUserStream(...)), and UsersResource.java:460 shows toRepresentation still does `return userModels.filter(usersEvaluator::canView)`. Because the stream returned by searchForUserStream is passed into toRepresentation, which applies filter(usersEvaluator::canView), the predicate was not dropped and still culls rows. This is a direct contradiction of a statement about what the named code contains/does, so the false-statement evidence is \"contradicts\"."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/services/resources/admin/UserResource.java:1057-1063 — joinGroup calls both checks: line 1058 `auth.users().requireManageGroupMembership(user);` and line 1063 `auth.groups().requireManageMembership(group);`. The latter (GroupPermissions.java:369-373 -> canManageMembership -> hasPermission(group, \"manage-membership\")) is exactly the group-level MANAGE_MEMBERSHIP scope granted at test line 298, so the group-level grant does gate the successful join.",
+       "reason": "joinGroup requires group-level manage-membership via auth.groups().requireManageMembership(group), contradicting the comment's claim that the group-level MANAGE_MEMBERSHIP grant never gates the join."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's central factual claim is that UserResource.joinGroup authorizes only through the user-scoped manage-group-membership path, so the group-level MANAGE_MEMBERSHIP grant at test line 298 \"never gates the successful join.\" The checker quotes the actual code in services/src/main/java/org/keycloak/services/resources/admin/UserResource.java:1057-1063, where joinGroup explicitly calls auth.groups().requireManageMembership(group) on line 1063 in addition to auth.users().requireManageGroupMembership(user) on line 1058. That call resolves to the group-level manage-membership check (GroupPermissions.java:369-373 -> hasPermission(group, \"manage-membership\")), which is exactly the scope granted in the test. This is a direct statement about what the named function does/calls in this repository, showing the comment's claim that the group-level grant does not gate the join is false."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S3",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/api/paginator.py:63-77 (`BasePaginator.__init__` sets `self.key, self.desc = order_by[1:], True` / `self.key, self.desc = order_by, False` / `self.key = None; self.desc = False`, and `_is_asc` is defined as a BasePaginator method: `def _is_asc(self, is_prev): return (self.desc and is_prev) or not (self.desc or is_prev)`). OptimizedCursorPaginator is declared `class OptimizedCursorPaginator(BasePaginator):` at line 821 and calls `super().__init__(*args, **kwargs)` at line 835, so both `self.key`/`self.desc` (attributes) and `self._is_asc` (method) exist on the instance.",
+       "reason": "BasePaginator itself sets `self.key`/`self.desc` and defines the `_is_asc` method, so OptimizedCursorPaginator's `get_item_key` cannot raise AttributeError for these — the comment's stated premise is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes repository code showing that BasePaginator.__init__ itself sets self.key and self.desc, and BasePaginator defines _is_asc as a method. Since OptimizedCursorPaginator subclasses BasePaginator and calls super().__init__, the attributes/method the comment claims are missing (and only provided by DateTimePaginator) actually exist on the instance. This directly falsifies the comment's factual premise that get_item_key would raise AttributeError for self.key/self._is_asc."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S10",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7",
+      "S9",
+      "S12"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/api/paginator.py:882 `results = list(queryset[start_offset:stop])` where the object being sliced is a Django QuerySet built at src/sentry/api/paginator.py:857 `queryset = self.build_queryset(cursor_value, cursor.is_prev)` and returned unchanged at src/sentry/api/paginator.py:128 `return queryset`; the pinned library is Django 5.2.1 (requirements-frozen.txt:36 `django==5.2.1`). Django's QuerySet.__getitem__ explicitly rejects negative indexing and raises `ValueError(\"Negative indexing is not supported.\")` for any slice whose start or stop is negative, before any materialization occurs; it never falls back to Python list-slice semantics and never returns an empty list.",
+       "reason": "The comment's premise that `queryset[-5:95]` is resolved with Python list-slice semantics and returns an empty list (or a tail of rows) is false: the sliced object is a Django QuerySet, which raises ValueError(\"Negative indexing is not supported.\") for negative slice bounds rather than materializing and applying Python slicing."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checkers' refutation hinges on how the external Django library behaves: it asserts that Django's QuerySet.__getitem__ rejects negative bounds with ValueError(\"Negative indexing is not supported.\") rather than materializing and applying Python list-slice semantics. The repository code quoted (paginator.py building the queryset, returning it unchanged, and the frozen Django version) only illustrates the value being passed along; it is not itself a statement about what this repository's code contains or does. Because the dispute turns on Django/framework behavior and slice semantics for a library API, this is an \"argues\" case."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/api/paginator.py:182: `start_offset = max(0, offset) if not cursor.is_prev else offset` — the `else offset` branch assigns the raw offset unchanged, so when paging backwards (`cursor.is_prev` is true) a negative offset is passed straight through to `queryset[start_offset:stop]` (line 184) instead of being clamped; only the forward branch applies `max(0, offset)`.",
+       "reason": "The reviewer reads the ternary as unconditional clamping, but the is_prev branch deliberately passes the un-clamped offset through, so the code does allow negative offsets for the backward direction rather than doing \"the opposite\" of the comment."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The reviewer's factual claim is that line 182 `start_offset = max(0, offset) if not cursor.is_prev else offset` clamps all negative offsets to 0, i.e. does \"the opposite\" of allowing negative offsets. The checker quotes the same line from the repository and shows that the ternary has two branches: only the forward branch (`not cursor.is_prev`) applies `max(0, offset)`, while the `else` branch (when `cursor.is_prev` is true, i.e. backward pagination) assigns the raw `offset` unchanged, which then flows into `queryset[start_offset:stop]` at line 184. That is a statement about what this specific code contains/does, and it directly falsifies the comment's premise that negative offsets are clamped unconditionally. Hence the evidence contradicts the comment rather than merely arguing about intent."
+     }
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S8",
+      "S10",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/search/events/datasets/discover.py:1044-1049: `snql_aggregate=lambda args, alias: Function(\"toInt64\", [Function(\"sum\", [Function(\"ifNull\", [Column(\"sample_weight\"), 1])])], alias)`. The premise the whole comment depends on — that ClickHouse's `toInt64` truncates toward zero — is false: `toInt64` conversion of a Float in ClickHouse rounds to the nearest integer (e.g. `toInt64(1.5)` == 2, not 1), so the sum is not floored and is not \"systematically under-counted\". The codebase's own weighted-count implementation reflects this rounding pattern rather than truncation: src/sentry/search/events/datasets/spans_indexed.py:987-995 `Function(\"round\", [Function(\"sum\", [Function(\"multiply\", [Column(\"sign\"), self.sampling_weight])])], alias)`.",
+       "reason": "The reported bug rests on `toInt64` truncating toward zero, but ClickHouse's `toInt64` rounds a float sum to the nearest integer (1.5 → 2), so no systematic under-counting occurs."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker's decisive evidence is a claim about how ClickHouse's `toInt64` converts a Float (rounding to nearest integer, e.g. 1.5 → 2, rather than truncating toward zero). That is a statement about the behavior of an external tool/library, not about what this repository's code contains or does. The quoted repository lines (the `toInt64`/`sum`/`ifNull` aggregate in discover.py and the `round` pattern in spans_indexed.py) merely illustrate the same function call and the rounding pattern; they do not themselves establish that the comment's factual premise about the code is false. The comment's premise concerns a specific code construct in the repo, and the rebuttal depends on the external conversion semantics, so this is \"argues\"."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "tests/snuba/api/endpoints/test_organization_events_stats.py:1790-1792: data[\"topEvents\"] = \"0\"; response = self.client.get(self.url, data, format=\"json\"); assert response.status_code == 400. The test asserts only the status code, never the detail string. A repo-wide grep for `topEvents needs to be at least` / `If topEvents needs to be at least` finds no test or consumer asserting the wording.",
+       "reason": "No test or consumer asserts the topEvents validation detail string (the existing test checks only status 400), so the claimed failing consumer does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the existing test (tests/snuba/api/endpoints/test_organization_events_stats.py:1790-1792) showing it asserts only response.status_code == 400 and never the detail string, and a repo-wide search finds no test or consumer asserting the topEvents wording. This directly refutes the comment's factual claim that an existing consumer asserting the previous detail string exists and now fails."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/testutils/factories.py:355 `normalized_data[\"sample_rate\"] = float(client_sample_rate)` — this helper is called from store_event (src/sentry/testutils/factories.py:1049) precisely because the event's `sample_rate` field is what the ingestion pipeline turns into Snuba's `sample_weight` column; the new integration test consumes events produced by this path and asserts count == 10 at tests/snuba/api/endpoints/test_organization_events_stats.py:3626-3627 (`assert data[0][1][0][\"count\"] == 10`). There is no separate `sample_weight` key needed on the event for the query to return 10, so the premise that sample_rate and sample_weight are disconnected is false.",
+       "reason": "The comment rests on the claim that writing `sample_rate` cannot populate the `sample_weight` column the SnQL function reads, but the PR's producer (store_event → _set_sample_rate_from_error_sampling) writes `sample_rate` precisely so the stored event carries the weight, which is why the new integration test's asserted count of 10 holds."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker quotes the producer line writing `sample_rate` and then asserts that the ingestion pipeline \"turns into Snuba's `sample_weight` column.\" That is a claim about how the pipeline converts/normalizes the written value (a conversion behavior), illustrated with the repository code that merely passes the value along — not a quotation of code in this repository showing the conversion itself. It also leans on the new integration test's expectation (count == 10) as evidence of correct behavior, i.e. that the reported mismatch is intended/harmless. The comment's factual claim (sample_rate and sample_weight are disconnected) is countered by pipeline-conversion reasoning rather than by quoted code that contradicts it, so this is an argument rather than a factual contradiction."
+     }
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/spans/buffer.py:441-449: `if sizes[key] > self.max_segment_bytes:` ... `metrics.incr(\"spans.buffer.flush_segments.segment_size_exceeded\")` / `logger.error(\"Skipping too large segment, byte size %s\", sizes[key])` / `del payloads[key]` / `del cursors[key]` / `continue` ... `payloads[key].extend(span for span, _ in zscan_values)`. The extend at line 449 is reached only when the segment is under the load-time `max_segment_bytes` cap; oversized segments are still logged, deleted from `payloads`/`cursors`, and skipped, so scanned spans are not unconditionally appended and the method does not materialize an unbounded number of spans into memory.",
+       "reason": "The cited hunk still contains a load-time size guard (max_segment_bytes) that logs, deletes and skips oversized segments before the extend, so the comment's premise that spans are now unconditionally appended and memory is unbounded is contradicted by the code at the very lines it cites."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checkers quote the exact hunk the comment cites (src/sentry/spans/buffer.py:441-449) and show that the `payloads[key].extend(span for span, _ in zscan_values)` call at line 449 is guarded by a load-time size check (`if sizes[key] > self.max_segment_bytes:` → `metrics.incr(...)` / `logger.error(\"Skipping too large segment...\")` / `del payloads[key]` / `del cursors[key]` / `continue`). Because the guard deletes and skips before the extend, the comment's factual premise that \"every scanned span is unconditionally appended\" and that the method \"will now materialize an unbounded number of spans into memory\" is false as stated about the cited lines — a load-time cap that logs, deletes and skips is still present in the very hunk described."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/scripts/spans/add-buffer.lua:28-30: line 28 is `local redirect_depth = 0`, line 29 is blank, line 30 is `for i = 0, 1000 do`. There is no comment reading \"segment trees of depth 10k may not be joined together correctly\" above the loop (or anywhere in the file/repo).",
+       "reason": "The comment it says needs updating does not exist; the line above the loop is a blank line and no such text appears anywhere, so the reported contradiction is built on a false statement."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment asserts that a specific comment ('segment trees of depth 10k may not be joined together correctly') sits above the loop at line 30. The checker quotes the actual repository lines 28-30 showing line 28 is `local redirect_depth = 0`, line 29 is blank, and line 30 is the `for i = 0, 1000 do` loop — and reports no such text anywhere in the file or repo. This is a factual claim about what the code contains, and the quoted code shows the comment's factual statement is false (the comment it says needs updating does not exist)."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7",
+      "S8",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  }
+ },
+ "sobre": "ho-h1t10",
+ "prompt": "c3"
+}
