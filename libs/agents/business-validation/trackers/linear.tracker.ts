@@ -37,10 +37,14 @@ export class LinearTracker extends McpTaskTracker {
             id: reference.id,
         });
 
-        const issue = recordsIn(payload).find(
-            (record) =>
-                typeof record.identifier === 'string' &&
-                record.identifier.toUpperCase() === reference.id,
+        // The identifier (`SAA-96`) is `identifier` in older answers and
+        // `id` in current ones, where the internal id moved to `uuid`.
+        const issue = recordsIn(payload).find((record) =>
+            [record.identifier, record.id].some(
+                (key) =>
+                    typeof key === 'string' &&
+                    key.toUpperCase() === reference.id,
+            ),
         );
         if (issue) {
             return {

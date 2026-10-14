@@ -68,6 +68,31 @@ describe('Linear (get_issue)', () => {
         });
         expect(s.calls).toEqual([['get_issue', { id: 'SAA-96' }]]);
     });
+
+    it('reads the current answer, where `id` is the identifier and `uuid` the internal id', async () => {
+        const s = session({
+            call: () => ({
+                id: 'SAA-96',
+                uuid: '2f1c0b6e-0000-4000-8000-000000000001',
+                title: 'Sticky notes',
+                description: '## Acceptance criteria\n- Drag to reorder',
+                priority: { value: 0, name: 'No priority' },
+                url: 'https://linear.app/acme/issue/SAA-96/sticky-notes',
+            }),
+        });
+        const lookup = await new LinearTracker(s).read(
+            ref('feat/saa-96-sticky-notes'),
+            context,
+        );
+        expect(lookup).toMatchObject({
+            status: 'found',
+            task: {
+                id: 'SAA-96',
+                title: 'Sticky notes',
+                url: 'https://linear.app/acme/issue/SAA-96/sticky-notes',
+            },
+        });
+    });
 });
 
 describe('Jira through Rovo (getJiraIssue)', () => {
