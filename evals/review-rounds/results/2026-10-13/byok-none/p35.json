@@ -1,0 +1,909 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:39:56.682Z",
+  "updatedAt": "2026-10-13T22:00:34.880Z",
+  "complete": true,
+  "selectedCases": [
+    "P35-hardcoded-term-new-messages",
+    "P35-hardcoded-term-new-messages-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P35-hardcoded-term-new-messages · invite-messages-term-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P35-hardcoded-term-new-messages-control · invite-messages-term-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 120923,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage accept an `account: Account` parameter they never use and instead hardcode the nouns 'workspace'/'member'/'admin' into their text. WHY: accounts can rename these nouns via terminology (e.g. workspace→'class', member→'collaborator'), so such an account is shown the wrong wording ('This workspace invite has expired', 'is already a member of this workspace'), breaking the documented invariant in src/lib/terminology.ts that user-facing text always resolves nouns through term(account, ...) — and the unused parameter shows the term() lookup was dropped. HOW: build the messages with term(), as seatLimitMessage already does.",
+          "keep": true,
+          "rationale": "Verified: inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) hardcode 'workspace'/'member'/'admin' while accepting an unused account param, contradicting the documented invariant in src/lib/terminology.ts that user-facing text resolves nouns via term(). The prior decision (index 4) targeted a different function (seatLimitMessage, lines 3-5), which was fixed; this finding covers separate operations (invite-expired / already-member messages), i.e. the same kind of problem in a separate operation, which is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Accounts that renamed their terminology see hardcoded wording such as 'This workspace invite has expired' and 'is already a member of this workspace', breaking the invariant in src/lib/terminology.ts that user-facing text resolves nouns through `term(account, ...)`, and the unused `account` parameter in `inviteExpiredMessage` and `alreadyMemberMessage` shows that lookup was dropped. Build both messages with `term()` for `workspace`, `admin`, and `member`, as `seatLimitMessage` already does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 124413,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: The newly added inviteExpiredMessage and alreadyMemberMessage hardcode the literal nouns \"workspace\" and \"member\" even though they receive the account, whereas src/lib/terminology.ts:1-3 documents that user-facing text must resolve these nouns via term(account, ...). WHY: Accounts can rename these nouns, so a school that calls its workspace a \"class\" or a \"collaborator\" instead of \"member\" receives the wrong wording (\"This workspace invite has expired\", \"... is already a member of this workspace\"), the same wrong-output failure that seatLimitMessage was already fixed for. The unused `account` parameter also fails noUnusedParameters lint/builds if enabled. HOW: Build the strings with term(), e.g. `return \\`This ${term(account, 'workspace')} invite has expired. Ask a ${term(account, 'workspace')} ${term(account, 'admin')} to send you a new one.\\`;` and `return \\`${email} is already a ${term(account, 'member')} of this ${term(account, 'workspace')}.\\`;`.",
+          "keep": true,
+          "rationale": "Confirmed by direct inspection: src/invites/messages.ts:7-13 hardcodes the nouns 'workspace' and 'member' while taking an unused `account` parameter, and src/lib/terminology.ts:1-3 explicitly documents that user-facing text must resolve these nouns via term(account, ...). The root cause and wrong-output failure path are factually accurate. This is not a repeat of the earlier decision index 4, which targeted a separate function (seatLimitMessage, already fixed); the current finding concerns two different functions and different user-facing messages — the same kind of problem in a separate operation, which is a distinct issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since accounts can rename nouns, `inviteExpiredMessage` and `alreadyMemberMessage` hardcode `workspace` and `member` instead of resolving them through `term(account, ...)` as documented in `src/lib/terminology.ts:1-3`, so a school that calls its workspace a class or its members collaborators gets incorrect wording, and the unused `account` parameter also fails `noUnusedParameters` lint/builds if enabled. Build both strings with `term(account, 'workspace')`, `term(account, 'member')`, and `term(account, 'admin')`, matching the fix already applied to `seatLimitMessage`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 108187,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: The newly added inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) hardcode the nouns \"workspace\"/\"member\" instead of using term(account, ...), and inviteExpiredMessage leaves its `account` parameter entirely unused. WHY: src/lib/terminology.ts:1-3 states user-facing text must never hardcode these nouns; an account that renamed \"workspace\" to e.g. \"class\" will still see \"This workspace invite has expired\" / \"... already a member of this workspace\", which is the wrong wording for that account (the same failure the seatLimitMessage fix addressed, now present in the two new messages). HOW: build both messages through term(), e.g. `This ${term(account, 'workspace')} invite has expired. Ask a ${term(account, 'admin')} to send you a new one.` and `${email} is already a ${term(account, 'member')} of this ${term(account, 'workspace')}.`",
+          "keep": true,
+          "rationale": "Confirmed technically. src/lib/terminology.ts:1-3 explicitly mandates that user-facing text never hardcode the nouns 'workspace'/'member'/'admin' and must call term(). The new inviteExpiredMessage (line 8) hardcodes 'workspace' twice and alreadyMemberMessage (line 12) hardcodes 'member'/'workspace', while inviteExpiredMessage's `account` parameter is entirely unused. seatLimitMessage (lines 3-5) was correctly converted to term() (the prior round-a-P35 decision), demonstrating the intended pattern. The prior decision resolved only seatLimitMessage; these are two separate messages/functions, i.e. the same kind of problem in separate operations, which the rules classify as a DIFFERENT (non-repeat) finding. The claim is accurate and the failure (wrong wording for accounts that renamed nouns) is real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Accounts that renamed the 'workspace' or 'member' terminology will still see hardcoded wording in `inviteExpiredMessage` (line 8) and `alreadyMemberMessage` (line 12), which hardcode those nouns instead of using `term(account, ...)`, and `inviteExpiredMessage` leaves `account` unused, violating `src/lib/terminology.ts:1-3` and repeating the failure fixed in `seatLimitMessage`. Build both messages through `term(account, ...)`, replacing the hardcoded nouns with `term(account, 'workspace')`, `term(account, 'admin')`, and `term(account, 'member')`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 254463,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage hardcode the nouns \"workspace\"/\"member\" instead of resolving them with term(account, ...), and inviteExpiredMessage ignores its account parameter entirely. WHY: src/lib/terminology.ts:1-3 establishes that user-facing text must never hardcode these nouns because accounts can rename them (a school calls a workspace a \"class\"); an account that renamed its nouns therefore sees the wrong wording in the expiry/already-member messages. HOW: build the strings with term(account, 'workspace') and term(account, 'member') as seatLimitMessage does.",
+          "keep": true,
+          "rationale": "Claim confirmed by the code: inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) hardcode 'workspace'/'member', and inviteExpiredMessage ignores its account parameter, while seatLimitMessage correctly uses term(). src/lib/terminology.ts confirms these nouns are account-renamable, so accounts with custom nouns get wrong wording. This is not a repeat of PreviousDecision index 4, which was explicitly scoped to seatLimitMessage (lines 3-5); the current finding concerns different message-building functions, i.e. the same kind of problem in a separate operation, which the rules treat as a distinct problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "inviteExpiredMessage|alreadyMemberMessage|seatLimitMessage"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Accounts that renamed their nouns see the wrong wording in the expiry/already-member messages from `src/invites/messages.ts` because `inviteExpiredMessage` and `alreadyMemberMessage` hardcode 'workspace'/'member' instead of resolving them with `term(account, ...)`, and `inviteExpiredMessage` also hardcodes 'admin' and ignores its `account` parameter, contrary to `src/lib/terminology.ts:1-3`. Build the strings with `term(account, 'workspace')`, `term(account, 'member')`, and `term(account, 'admin')` as `seatLimitMessage` does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 107244,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: the new inviteExpiredMessage and alreadyMemberMessage hardcode the nouns 'workspace'/'member' instead of calling term(account, ...) (inviteExpiredMessage even ignores its account parameter). WHY: terminology.ts documents that user-facing text must never hardcode these nouns, so an account that renames its workspace to e.g. 'class' or its member to 'collaborator' is shown the default wording — the same wrong-terminology failure the sibling seatLimitMessage was already fixed for. HOW: build the strings with term(account, 'workspace') and term(account, 'member').",
+          "keep": true,
+          "rationale": "Confirmed: terminology.ts documents that user-facing text must never hardcode the nouns 'workspace'/'member' and must use term(account, noun). seatLimitMessage (lines 3-5) was already fixed to use term(), but inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) still hardcode them; inviteExpiredMessage even ignores its account parameter. The earlier decision (index 4) was scoped to seatLimitMessage only, a separate message/operation; per the review rules, the same kind of problem in a separate operation is a distinct finding, not a repeat. Technical claim holds.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Any account that renames its workspace or member still sees the default nouns, and `inviteExpiredMessage` even ignores its `account` parameter — the same wrong-terminology failure already fixed for `seatLimitMessage`. Build these strings with `term(account, 'workspace')` and `term(account, 'member')` instead of hardcoding the nouns."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P35-hardcoded-term-new-messages-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 80049,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage hardcode the nouns 'workspace'/'member' instead of resolving them via term(account, ...), and their `account` parameter is never used. WHY: terminology.ts documents that user-facing text never hardcodes these nouns because accounts can rename them (a school calls a workspace a 'class'), so these messages render the default noun and contradict the sibling seatLimitMessage for any such account. HOW: use the account's terminology, e.g. inviteExpiredMessage returns `This ${term(account,'workspace')} invite has expired. Ask a ${term(account,'admin')} to send you a new one.` and alreadyMemberMessage returns `${email} is already a ${term(account,'member')} of this ${term(account,'workspace')}.`",
+          "keep": true,
+          "rationale": "Confirmed. src/lib/terminology.ts explicitly documents \"User-facing text never hardcodes these nouns; it asks term() for the account's word.\" inviteExpiredMessage and alreadyMemberMessage hardcode 'workspace'/'member' and never use their `account` parameter, while the sibling seatLimitMessage on line 4 correctly resolves both nouns via term(). For any account that renamed these nouns (e.g. a school calling a workspace a \"class\"), these two messages render the wrong default noun, a real user-facing behavior bug, not style. No previous decision touches this file, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function term|function term",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Hardcoded nouns ignore account terminology, so any account that renames its workspace (a school calling it a 'class') gets default wording that contradicts the sibling `seatLimitMessage`. Resolve the nouns through `term(account, ...)` in both `inviteExpiredMessage` and `alreadyMemberMessage`, which also puts their currently unused `account` parameters to use."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P35-hardcoded-term-new-messages-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 83796,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage accept an Account but hardcode the literal nouns \"workspace\" (and \"admin\") instead of resolving them via term(), which is the module's documented rule. WHY: for any account that renamed these nouns (terminology.ts:1-3 — e.g. a school that calls a workspace a \"class\"), these user-facing messages render the wrong, un-customized wording, unlike seatLimitMessage right above. HOW: thread the parameter through term(account, ...) for every noun, as seatLimitMessage does.",
+          "keep": true,
+          "rationale": "Confirmed: src/lib/terminology.ts:1-4 documents that 'User-facing text never hardcodes these nouns; it asks term() for the account's word', and defines 'workspace' and 'admin' as renamable Nouns. inviteExpiredMessage (line 8) hardcodes 'workspace' twice and 'admin' once, and alreadyMemberMessage (line 12) hardcodes 'workspace', despite both receiving an Account. seatLimitMessage (line 4) in the same file demonstrates the correct pattern via term(account, 'workspace'/'member'). For an account that renamed these nouns (e.g. workspace→'class'), the two messages render wrong, un-customized wording. The root cause and failure path are concrete and correct; no previous review decision touches this file or issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "terminology.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "terminology*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function term"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`inviteExpiredMessage` and `alreadyMemberMessage` accept an `Account` but hardcode the literal nouns `workspace` and `admin` instead of resolving them via `term()`, so any account that renamed these nouns (e.g. a school that calls a workspace a 'class', per `terminology.ts:1-3`) sees wrong, un-customized wording unlike `seatLimitMessage`. Thread the parameter through `term(account, ...)` for every noun, as `seatLimitMessage` does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P35-hardcoded-term-new-messages-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 78537,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: Both new functions accept an `account: Account` but hardcode the nouns 'workspace'/'admin'/'member' instead of calling `term(account, ...)`, and `inviteExpiredMessage` ignores `account` entirely. WHY: terminology.ts documents that user-facing text must ask term() for the account's word; for an account that renames a noun (e.g. a school calling a workspace a \"class\"), these messages display the wrong noun, breaking the established contract that the sibling seatLimitMessage follows. HOW: Thread every noun through term(account, ...) as shown.",
+          "keep": true,
+          "rationale": "Confirmed. src/lib/terminology.ts explicitly documents that user-facing text must ask term() for the account's word ('User-facing text never hardcodes these nouns; it asks term() for the account's word'), and the sibling seatLimitMessage (lines 3-4) already does so. The two new functions (lines 7-13) hardcode 'workspace'/'admin'/'member', and inviteExpiredMessage ignores its account parameter entirely, so accounts that rename a noun (e.g. a school calling a workspace a 'class') will see the wrong term. term is imported and available. No PreviousReviewDecisions entry concerns this file or terminology, so it is not a repeat. The root cause and failure path are factually accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "terminology.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "term",
+                "path": "src/lib",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function term|export const term|terminology"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because both functions hardcode 'workspace'/'admin'/'member' instead of calling `term(account, ...)`, and `inviteExpiredMessage` ignores `account` entirely, accounts that rename nouns, such as a school calling a workspace a class, see the wrong user-facing text, breaking the contract documented in `terminology.ts` and followed by the sibling `seatLimitMessage`. Thread every noun through `term(account, ...)` as shown."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P35-hardcoded-term-new-messages-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 94866,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage accept an Account but hardcode the nouns \"workspace\" (and \"member\") as literals instead of calling term(account, ...). WHY: For any account that renamed these nouns (src/lib/terminology.ts documents that user-facing text must never hardcode them; seatLimitMessage in this same file uses term()), the two new messages render the wrong wording — e.g. a school that calls a workspace a \"class\" still sees \"This workspace invite has expired\" / \"...is already a member of this workspace\". HOW: Render the nouns through term(), e.g. `Ask a ${term(account, 'admin')} to send you a new one.` with `${term(account, 'workspace')}` for the noun, and `${email} is already a ${term(account, 'member')} of this ${term(account, 'workspace')}.`",
+          "keep": true,
+          "rationale": "Confirmed: inviteExpiredMessage and alreadyMemberMessage hardcode \"workspace\"/\"member\" as literals while both accept an unused Account param; sibling seatLimitMessage in the same file uses term(). terminology.ts explicitly states user-facing text must never hardcode these nouns, and all required nouns exist in the Noun type. Accounts with renamed nouns therefore get wrong wording — a genuine user-facing behavior bug, not style. No PreviousReviewDecision concerns this file or issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "term\\(",
+                "path": "src",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `inviteExpiredMessage` and `alreadyMemberMessage` accept an `Account` but hardcode the nouns \"workspace\" and \"member\" instead of calling `term(account, ...)`, any account that renamed those nouns—as `src/lib/terminology.ts` requires and `seatLimitMessage` follows—sees wrong wording such as \"This workspace invite has expired\" or \"...is already a member of this workspace\". Render the nouns through `term(account, 'workspace')`, `term(account, 'member')`, and `term(account, 'admin')`, e.g. `Ask a ${term(account, 'admin')} to send you a new one.` and `${email} is already a ${term(account, 'member')} of this ${term(account, 'workspace')}.`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P35-hardcoded-term-new-messages-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 184572,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage accept an `account` argument but never use it, hardcoding 'workspace' (and 'admin') instead of calling term(account, 'workspace')/term(account, 'admin') like the sibling seatLimitMessage does. WHY: terminology.ts documents that user-facing text must never hardcode these nouns, so for any account that renamed its nouns (a school's 'class', an agency's 'collaborator') these messages show the wrong word. HOW: route every noun through term(), e.g. `${term(account, 'workspace')}` and `${term(account, 'admin')}`/`${term(account, 'member')}`.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/invites/messages.ts and src/lib/terminology.ts. terminology.ts explicitly documents that user-facing text must never hardcode nouns and must ask term() for the account's word; accounts may rename 'workspace' (e.g. 'class') and 'admin'. inviteExpiredMessage and alreadyMemberMessage both accept an Account but hardcode 'workspace'/'admin'/'member' in the returned strings, while the sibling seatLimitMessage correctly routes nouns through term(account, ...). For any account that renamed its nouns these messages display the wrong word — a real wrong-output bug, not style. No PreviousReviewDecision covers this file or issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "terminology.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function term|export const term|function term",
+                "path": "src/lib"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `inviteExpiredMessage` and `alreadyMemberMessage` ignore their `account` argument and hardcode `workspace` and `admin`, any account that renamed its nouns (for example a school's `class` or an agency's `collaborator`) sees the wrong wording, which violates the `terminology.ts` rule that user-facing text must not hardcode these nouns. Route every noun through `term()`, matching `seatLimitMessage`, such as `term(account, 'workspace')`, `term(account, 'admin')`, and `term(account, 'member')`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

@@ -12,7 +12,8 @@ export type IssueCategory =
     | "code_style"
     | "documentation_and_comments"
     | "kody_rules"
-    | "breaking_changes";
+    | "breaking_changes"
+    | "deterministic";
 
 export type IssueListItem = {
     createdAt: string;

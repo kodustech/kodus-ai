@@ -1,11 +1,3 @@
-# Internal planning and research notes
-PLANO_MELHORIAS_DOCS.md
-PR_CHEATSHEET.md
+# Internal notes that must not ship to the public docs
 README.md
-diferencas-concorrentes.md
-estudo-harness.md
-gap-analysis-harness.md
-github_issue_response.md
-
-# Source diagrams used for editing, not public docs pages
-*.excalidraw
+quality-signals.md

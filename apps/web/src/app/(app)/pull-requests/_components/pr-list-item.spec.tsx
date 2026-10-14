@@ -4,7 +4,7 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import { TooltipProvider } from "@components/ui/tooltip";
 
-import { PrListItem } from "./pr-list-item";
+import { PrListItem, ReviewNotices } from "./pr-list-item";
 
 // The row only reaches outside itself for the display timezone and the review
 // prefetch; neither has anything to do with the link under test.
@@ -89,5 +89,72 @@ describe("PrListItem — suggestion count link", () => {
         renderRow(execution());
 
         expect(countLink()).toHaveAttribute("href", "/pull-requests/repo-1/42");
+    });
+});
+
+const warning = (overrides = {}) => ({
+    kind: "PROMPT_COMPACTED",
+    reason: "small_context_window",
+    contextWindowTokens: 16000,
+    modelName: "llama",
+    ...overrides,
+});
+
+/**
+ * #2066: a review that lost its checkout, its call graph or some findings is
+ * not a context-window counter-measure, and must not read as one ("has a
+ * context window of 0 tokens").
+ */
+describe("ReviewNotices — each loss under its own cause", () => {
+    it("lists a lost checkout as a review that ran with less context", () => {
+        render(
+            <ReviewNotices
+                warnings={[
+                    warning({
+                        kind: "SANDBOX_UNAVAILABLE",
+                        reason: "sandbox_unavailable",
+                        contextWindowTokens: 0,
+                        detail: "read only the diff",
+                    }),
+                ]}
+            />,
+        );
+
+        expect(
+            screen.getByText("Review ran with less context"),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText(
+                "Reviewed the diff only (repository not checked out)",
+            ),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByText("Review fidelity reduced"),
+        ).not.toBeInTheDocument();
+    });
+
+    it("keeps small-context-window counter-measures in the fidelity notice", () => {
+        render(
+            <ReviewNotices
+                warnings={[
+                    warning(),
+                    warning({
+                        kind: "RULE_CONTEXT_UNAVAILABLE",
+                        reason: "lookup_unavailable",
+                        contextWindowTokens: 0,
+                    }),
+                ]}
+            />,
+        );
+
+        expect(screen.getByText("Review fidelity reduced")).toBeInTheDocument();
+        expect(
+            screen.getByText("Review ran with less context"),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText(
+                "Kody Rules not evaluated (repository context unavailable)",
+            ),
+        ).toBeInTheDocument();
     });
 });

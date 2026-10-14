@@ -1,0 +1,960 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "claude-haiku-4-5",
+  "engine": {
+    "commit": "03b25de6ec9310180b9797eaa725f4dae7922a25",
+    "sourceDigest": "3b409a719f077fff11ab4d17d1afee27fe9943ff3b13422cbaf3795144723628"
+  },
+  "complete": true,
+  "reps": 3,
+  "runs": [
+    {
+      "sequence": "rules-fixed-three-rounds",
+      "action": "Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
+      "rep": 1,
+      "rounds": [
+        {
+          "case": "rules-fixed-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 58830,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 6,
+              "severity": "high",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In src/jobs/handler.ts, the diff swapped the order so db.results.insert now runs before db.progress.update, but Rule [1] requires job handlers to record progress before the result becomes visible; otherwise a result exists for a job whose progress was never written, and an insert failure would leave progress unset. Swap the statements back so db.progress.update is awaited first."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n+    await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 7612,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "In src/jobs/handler.ts, the diff swapped the order so db.results.insert now runs before db.progress.update, but Rule [1] requires job handlers to record progress before the result becomes visible; otherwise a result exists for a job whose progress was never written, and an insert failure would leave progress unset. Swap the statements back so db.progress.update is awaited first.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:17:49.524Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n+    await db.results.insert(run.id, run.output);\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 3889,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "In src/jobs/handler.ts, the diff swapped the order so db.results.insert now runs before db.progress.update, but Rule [1] requires job handlers to record progress before the result becomes visible; otherwise a result exists for a job whose progress was never written, and an insert failure would leave progress unset. Swap the statements back so db.progress.update is awaited first.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:17:49.524Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 6858,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "In src/jobs/handler.ts, the diff swapped the order so db.results.insert now runs before db.progress.update, but Rule [1] requires job handlers to record progress before the result becomes visible; otherwise a result exists for a job whose progress was never written, and an insert failure would leave progress unset. Swap the statements back so db.progress.update is awaited first.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:17:49.524Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 4954,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "In src/jobs/handler.ts, the diff swapped the order so db.results.insert now runs before db.progress.update, but Rule [1] requires job handlers to record progress before the result becomes visible; otherwise a result exists for a job whose progress was never written, and an insert failure would leave progress unset. Swap the statements back so db.progress.update is awaited first.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:17:49.524Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 77366,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 13,
+              "severity": "medium",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "The newly added finishBatch handler writes results before progress, inverting the required order and violating rule [1], which requires db.progress.update to be awaited before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded. Await db.progress.update(batch.id, 'done') first, then await db.results.insertMany(batch.id, batch.outputs) so a process death between the calls cannot leave batch outputs visible while the job still looks unfinished."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            },
+            {
+              "id": "finishBatch-new-site",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "In src/jobs/handler.ts, the diff swapped the order so db.results.insert now runs before db.progress.update, but Rule [1] requires job handlers to record progress before the result becomes visible; otherwise a result exists for a job whose progress was never written, and an insert failure would leave progress unset. Swap the statements back so db.progress.update is awaited first.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:17:49.524Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -1,5 +1,5 @@\n import { db } from './db';\n-import type { Run } from './types';\n+import type { Run, Batch } from './types';\n \n export async function finishRun(run: Run) {\n     // Commit 3: document completion telemetry.\n@@ -8,3 +8,8 @@\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n }\n+\n+export async function finishBatch(batch: Batch) {\n+    await db.results.insertMany(batch.id, batch.outputs);\n+    await db.progress.update(batch.id, 'done');\n+}\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rules-fixed-three-rounds",
+      "action": "Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
+      "rep": 2,
+      "rounds": [
+        {
+          "case": "rules-fixed-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 65203,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 5,
+              "severity": "high",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In src/jobs/handler.ts, this PR swaps the calls so db.results.insert runs before db.progress.update, but Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded. As written, the insert at line 5 publishes run.output before the 'done' progress is persisted, so restore the original ordering by moving the progress update back above the insert."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n+    await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 53015,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In src/jobs/handler.ts, this PR swaps the calls so db.results.insert runs before db.progress.update, but Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded. As written, the insert at line 5 publishes run.output before the 'done' progress is persisted, so restore the original ordering by moving the progress update back above the insert.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:20:35.414Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n+    await db.results.insert(run.id, run.output);\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 3954,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In src/jobs/handler.ts, this PR swaps the calls so db.results.insert runs before db.progress.update, but Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded. As written, the insert at line 5 publishes run.output before the 'done' progress is persisted, so restore the original ordering by moving the progress update back above the insert.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:20:35.414Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 2657,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In src/jobs/handler.ts, this PR swaps the calls so db.results.insert runs before db.progress.update, but Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded. As written, the insert at line 5 publishes run.output before the 'done' progress is persisted, so restore the original ordering by moving the progress update back above the insert.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:20:35.414Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 3669,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In src/jobs/handler.ts, this PR swaps the calls so db.results.insert runs before db.progress.update, but Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded. As written, the insert at line 5 publishes run.output before the 'done' progress is persisted, so restore the original ordering by moving the progress update back above the insert.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:20:35.414Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 137977,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 13,
+              "severity": "medium",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In `src/jobs/handler.ts`, the new `finishBatch` job handler writes results before recording progress: `db.results.insertMany(batch.id, batch.outputs)` runs on line 13 and only then is `db.progress.update(batch.id, 'done')` called on line 14, violating Rule [1] that the progress update must happen first so a result is never visible for a job whose progress was not recorded, so a crash between the two calls leaves visible results with no recorded completion. Swap the two statements so `db.progress.update(batch.id, 'done')` executes before `db.results.insertMany(batch.id, batch.outputs)`; this is separate from the earlier comment on `finishRun`, as this newly added handler has its own ordering problem not covered by that comment."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            },
+            {
+              "id": "finishBatch-new-site",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "In src/jobs/handler.ts, this PR swaps the calls so db.results.insert runs before db.progress.update, but Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded. As written, the insert at line 5 publishes run.output before the 'done' progress is persisted, so restore the original ordering by moving the progress update back above the insert.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:20:35.414Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -1,5 +1,5 @@\n import { db } from './db';\n-import type { Run } from './types';\n+import type { Run, Batch } from './types';\n \n export async function finishRun(run: Run) {\n     // Commit 3: document completion telemetry.\n@@ -8,3 +8,8 @@\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n }\n+\n+export async function finishBatch(batch: Batch) {\n+    await db.results.insertMany(batch.id, batch.outputs);\n+    await db.progress.update(batch.id, 'done');\n+}\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rules-fixed-three-rounds",
+      "action": "Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
+      "rep": 3,
+      "rounds": [
+        {
+          "case": "rules-fixed-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 37080,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 5,
+              "severity": "high",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "The swapped order in `finishRun` makes `db.results.insert` run before `db.progress.update`, violating Rule [1] and making a result visible before its progress is recorded; if `progress.update` fails or the process dies in between, the job's result exists without progress ever being marked 'done'. Restore the original ordering by updating progress to 'done' first, then inserting the result."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n+    await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 16247,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:3:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The swapped order in `finishRun` makes `db.results.insert` run before `db.progress.update`, violating Rule [1] and making a result visible before its progress is recorded; if `progress.update` fails or the process dies in between, the job's result exists without progress ever being marked 'done'. Restore the original ordering by updating progress to 'done' first, then inserting the result.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:24:33.774Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n+    await db.results.insert(run.id, run.output);\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 3129,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:3:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The swapped order in `finishRun` makes `db.results.insert` run before `db.progress.update`, violating Rule [1] and making a result visible before its progress is recorded; if `progress.update` fails or the process dies in between, the job's result exists without progress ever being marked 'done'. Restore the original ordering by updating progress to 'done' first, then inserting the result.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:24:33.774Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 4153,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:3:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The swapped order in `finishRun` makes `db.results.insert` run before `db.progress.update`, violating Rule [1] and making a result visible before its progress is recorded; if `progress.update` fails or the process dies in between, the job's result exists without progress ever being marked 'done'. Restore the original ordering by updating progress to 'done' first, then inserting the result.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:24:33.774Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 4243,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:3:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The swapped order in `finishRun` makes `db.results.insert` run before `db.progress.update`, violating Rule [1] and making a result visible before its progress is recorded; if `progress.update` fails or the process dies in between, the job's result exists without progress ever being marked 'done'. Restore the original ordering by updating progress to 'done' first, then inserting the result.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:24:33.774Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.progress.update(run.id, 'done');\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-fixed-three-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 66702,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 12,
+              "severity": "medium",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In the newly added `finishBatch` handler, awaiting `db.results.insertMany` before `db.progress.update` violates Rule [1], since if `progress.update` fails or the process dies between the two calls, the batch outputs exist with no 'done' progress. Swap the order so progress is marked 'done' first, then the outputs are inserted."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            },
+            {
+              "id": "finishBatch-new-site",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-fixed-three-rounds:3:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The swapped order in `finishRun` makes `db.results.insert` run before `db.progress.update`, violating Rule [1] and making a result visible before its progress is recorded; if `progress.update` fails or the process dies in between, the job's result exists without progress ever being marked 'done'. Restore the original ordering by updating progress to 'done' first, then inserting the result.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "pending",
+              "decidedAt": "2026-10-04T14:24:33.774Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -1,5 +1,5 @@\n import { db } from './db';\n-import type { Run } from './types';\n+import type { Run, Batch } from './types';\n \n export async function finishRun(run: Run) {\n     // Commit 3: document completion telemetry.\n@@ -8,3 +8,8 @@\n     await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n }\n+\n+export async function finishBatch(batch: Batch) {\n+    await db.results.insertMany(batch.id, batch.outputs);\n+    await db.progress.update(batch.id, 'done');\n+}\n"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

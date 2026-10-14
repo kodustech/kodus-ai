@@ -110,12 +110,24 @@ export class CentralizedConfigSyncUseCase implements IUseCase {
                 });
 
             if (!syncRulesResult.success) {
-                this.logger.error({
+                // Files the repository got wrong (schema, unreadable) are the
+                // org's to fix: a warning carrying each file's reason. A sync
+                // that threw is reported under the `general` entry — still an
+                // error, like a failure that names no file at all.
+                const rejectedFiles =
+                    syncRulesResult.failureDetails?.length &&
+                    !syncRulesResult.failureDetails.some(
+                        (detail) => detail.file === 'general',
+                    );
+                this.logger[rejectedFiles ? 'warn' : 'error']({
                     message: 'Failed to synchronize Kody rules',
                     context: CentralizedConfigSyncUseCase.name,
                     metadata: {
                         organizationAndTeamData,
                         message: syncRulesResult.message,
+                        ...(rejectedFiles && {
+                            failureDetails: syncRulesResult.failureDetails,
+                        }),
                     },
                 });
 

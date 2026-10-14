@@ -1,5 +1,9 @@
 import { LangfuseSpanProcessor } from '@langfuse/otel';
-import { propagateAttributes } from '@langfuse/tracing';
+import {
+    getActiveTraceId,
+    propagateAttributes,
+    startActiveObservation,
+} from '@langfuse/tracing';
 import { LangfuseVercelAiSdkIntegration } from '@langfuse/vercel-ai-sdk';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { AttributeValue } from '@opentelemetry/api';
@@ -199,6 +203,36 @@ export function withLangfuseTrace<T>(
         },
         fn,
     );
+}
+
+/**
+ * Run `fn` inside one Langfuse observation named `name`, handing it that trace's
+ * id. The AI SDK opens its own spans inside `fn`, so they land in this trace
+ * instead of each starting a root of its own — and the caller can store the id
+ * next to whatever it records about the call (the usage row keeps it as
+ * `externalTraceId`). With tracing off, `fn` runs as is and gets no id.
+ */
+export function withLangfuseObservation<T>(
+    name: string,
+    fn: (traceId: string | undefined) => Promise<T>,
+    /** Searchable in Langfuse (e.g. the correlationId a log line carries).
+     *  Absent values are dropped; Langfuse keeps string values. */
+    metadata?: Record<string, string | number | undefined>,
+): Promise<T> {
+    if (!shouldTrace()) {
+        return fn(undefined);
+    }
+    const tags = Object.fromEntries(
+        Object.entries(metadata ?? {})
+            .filter(([, v]) => v !== undefined && v !== '')
+            .map(([k, v]) => [k, String(v)]),
+    );
+    return startActiveObservation(name, (observation) => {
+        if (Object.keys(tags).length > 0) {
+            observation.update({ metadata: tags });
+        }
+        return fn(getActiveTraceId());
+    });
 }
 
 export interface LangfuseTelemetryMetadata {

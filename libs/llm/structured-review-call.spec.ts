@@ -430,6 +430,27 @@ describe('runStructuredReviewCall — json_object routes carry the contract (iss
         expect(system).toContain('sys');
     });
 
+    // Production 2026-09-28, `openai_compatible:gpt-6-sol`: the upstream is a
+    // gateway that re-issues chat completions on OpenAI's Responses API, where
+    // the system prompt becomes `instructions` and the json_object check reads
+    // only the input messages — "Response input messages must contain the word
+    // 'json' in some form to use 'text.format' of type 'json_object'". A keyword
+    // that lives only in the system prompt does not survive that translation.
+    it('FIRST attempt also puts the word json in the user turn', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: glmViaOpenRouter,
+        });
+
+        const prompt = mockGenerate.mock.calls[0][0].prompt as string;
+        expect(prompt.toLowerCase()).toContain('json');
+        // The caller's own user message is kept, not replaced.
+        expect(prompt).toContain('usr');
+    });
+
     it('leaves a json_schema route untouched — no prompt tax where nothing was broken', async () => {
         mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
 
@@ -440,6 +461,7 @@ describe('runStructuredReviewCall — json_object routes carry the contract (iss
         });
 
         expect(systemOf(0)).toBe('sys');
+        expect(mockGenerate.mock.calls[0][0].prompt).toBe('usr');
     });
 
     it('a slot already proven to reject json_schema gets the contract too', async () => {
@@ -715,6 +737,12 @@ describe('runStructuredReviewCall — structured parse/validation recovery (issu
         expect(mockGenerate.mock.calls[1][0].system).toContain(
             'Return ONLY a JSON object',
         );
+        // The re-ask goes out json_object, so the keyword rides the user turn
+        // too (a Responses-API gateway moves the system prompt out of the
+        // input messages). The caller's user message is kept.
+        const reAskPrompt = mockGenerate.mock.calls[1][0].prompt as string;
+        expect(reAskPrompt.toLowerCase()).toContain('json');
+        expect(reAskPrompt).toContain('usr');
         // ...and the recovery is stamped on the re-ask span (not silent).
         expect(spanCalls()[1][0].attrs.structuredRecovery).toBe(
             'schema-mismatch',

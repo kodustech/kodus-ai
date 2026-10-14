@@ -113,11 +113,25 @@ export interface ISuggestion {
     existingCode: string;
     improvedCode: string;
     oneSentenceSummary: string;
+    fullExplanation?: string;
     relevantLinesStart: number;
     relevantLinesEnd: number;
     label: string;
     severity: string;
     rankScore?: number;
+    /**
+     * Where the finding came from when it was not the model — the rule that
+     * fired, and the tool that ran it. Stored for our own measurement (which
+     * rules earn their keep, how often a deterministic pass beats the agent);
+     * deliberately not surfaced in the published comment, where the author
+     * cares about the problem and not its provenance.
+     */
+    evidence?: {
+        source: string;
+        ruleId?: string;
+        ruleUrl?: string;
+        analyzerSeverity?: string;
+    };
     brokenKodyRulesIds?: string[];
     clusteringInformation?: {
         type?: ClusteringType;
@@ -212,6 +226,7 @@ export interface IPullRequestUser {
 export interface ISuggestionByPR {
     id: string;
     suggestionContent: string;
+    fullExplanation?: string;
     oneSentenceSummary: string;
     label: LabelType;
     severity?: SeverityLevel;

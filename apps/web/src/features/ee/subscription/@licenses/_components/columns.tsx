@@ -3,6 +3,7 @@
 import { Badge } from "@components/ui/badge";
 import { magicModal } from "@components/ui/magic-modal";
 import { Switch } from "@components/ui/switch";
+import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
@@ -38,7 +39,7 @@ const LicenseAssignmentCell = ({ row }: { row: Row<LicenseTableRow> }) => {
         { loading: isAssigningOrDeassigningLicense },
     ] = useAsyncAction(
         async (licenseStatus: LicenseTableRow["licenseStatus"]) => {
-            await assignOrDeassignUserLicenseAction({
+            const { failures } = await assignOrDeassignUserLicenseAction({
                 teamId,
                 user: {
                     git_id: String(row.original.id),
@@ -48,15 +49,29 @@ const LicenseAssignmentCell = ({ row }: { row: Row<LicenseTableRow> }) => {
                 },
                 userName: row.original.name,
             });
+
+            // A refused seat comes back in the payload, not as a thrown error:
+            // unchecked, the switch just stayed off and nobody said why.
+            const failure = failures?.[0];
+            if (failure) {
+                toast({
+                    variant: "danger",
+                    title:
+                        licenseStatus === "active"
+                            ? `Could not assign a seat to ${row.original.name}`
+                            : `Could not release ${row.original.name}'s seat`,
+                    description:
+                        typeof failure.error === "string"
+                            ? failure.error
+                            : undefined,
+                });
+            }
         },
     );
 
-    const canToggleOn =
-        !row.original.removedFromGit &&
-        (subscription.status === "active" ||
-            subscription.status === "licensed-self-hosted") &&
-        subscription.usersWithAssignedLicense.length <
-            subscription.numberOfLicenses;
+    const isLicensed =
+        subscription.status === "active" ||
+        subscription.status === "licensed-self-hosted";
 
     return (
         <Switch
@@ -64,8 +79,7 @@ const LicenseAssignmentCell = ({ row }: { row: Row<LicenseTableRow> }) => {
             checked={row.original.licenseStatus === "active"}
             disabled={
                 !canEdit ||
-                (subscription.status !== "active" &&
-                    subscription.status !== "licensed-self-hosted") ||
+                !isLicensed ||
                 (row.original.removedFromGit &&
                     row.original.licenseStatus === "inactive")
             }
@@ -77,16 +91,19 @@ const LicenseAssignmentCell = ({ row }: { row: Row<LicenseTableRow> }) => {
                     return;
                 }
 
+                // Every seat is taken: say so instead of sending a request the
+                // server can only refuse.
                 if (
-                    (subscription.status === "active" ||
-                        subscription.status === "licensed-self-hosted") &&
-                    subscription.usersWithAssignedLicense.length >=
-                        subscription.numberOfLicenses &&
+                    isLicensed &&
                     row.original.licenseStatus === "inactive" &&
-                    canToggleOn
+                    subscription.usersWithAssignedLicense.length >=
+                        subscription.numberOfLicenses
                 ) {
                     magicModal.show(() => (
-                        <NoMoreLicensesModal teamId={teamId} />
+                        <NoMoreLicensesModal
+                            teamId={teamId}
+                            seats={subscription.numberOfLicenses}
+                        />
                     ));
                     return;
                 }

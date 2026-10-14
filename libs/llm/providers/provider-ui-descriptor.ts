@@ -20,7 +20,8 @@ export interface ProviderUiDescriptor {
     /** The provider enumerates its models through a LIVE `/models` HTTP call
      *  (needs the org's key), as opposed to a static/curated list served without
      *  one. Drives the connect form: for these, the picker fetches the real list
-     *  from the typed key instead of showing a curated placeholder. False for
+     *  from the typed key instead of showing a curated placeholder. True for a
+     *  custom endpoint too — its picker waits for the base URL. False for
      *  `static`/`manual` listings and curated-only brands. */
     listsModelsLive: boolean;
     /** Provider documentation URL (hardcoded on the module). The UI links to this
@@ -95,16 +96,15 @@ export function describeProviderId(
         // over the Anthropic protocol) is NOT auto-listable — the user types the
         // model id manually.
         autoListModels: !custom && listingIsAutoListable(listing),
-        // A LIVE `/models` call — an `http` listing whose base URL resolves
-        // without the user (a native brand like OpenAI). Custom endpoints also
-        // list over http but their URL is unknown until typed, so they stay on
-        // manual entry (not "live" for the connect picker). `static`/`manual`
-        // and curated-only brands are not live.
+        // A LIVE `/models` call — an `http` listing. A native brand (OpenAI)
+        // resolves its base URL itself; a custom endpoint lists once the user
+        // has typed it (the picker waits for the URL, and the backend only
+        // sends a key to the host it belongs to). `static`/`manual` and
+        // curated-only brands are not live.
         listsModelsLive:
-            !custom &&
             !!listing &&
             listing.kind === 'http' &&
-            (!listing.requiresBaseURL || !!listing.defaultBaseURL),
+            (custom || !listing.requiresBaseURL || !!listing.defaultBaseURL),
         doc: module.doc,
     };
 }

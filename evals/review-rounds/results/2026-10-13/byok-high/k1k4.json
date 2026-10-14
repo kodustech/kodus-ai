@@ -1,0 +1,579 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "high",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:23:22.322Z",
+  "updatedAt": "2026-10-13T21:49:27.524Z",
+  "complete": true,
+  "selectedCases": [
+    "K1-rule-already-posted",
+    "K4-rule-repeats-declined-bug"
+  ],
+  "summary": {
+    "measured": 9,
+    "infra": 1,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 9,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 9,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 9,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "K1-rule-already-posted · finishRun-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K1-rule-already-posted · finishBatch-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "K4-rule-repeats-declined-bug · finishRun-repeat [not_deliver]": {
+        "pass": 4,
+        "n": 4,
+        "delivered": 0
+      },
+      "K4-rule-repeats-declined-bug · finishBatch-new-site [deliver]": {
+        "pass": 4,
+        "n": 4,
+        "delivered": 4
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 62569,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Batch results can become visible for a job whose progress was never recorded, violating the rule that progress must be updated before writing results. Swap the two calls in the newly added `finishBatch` handler so `db.progress.update(batch.id, 'done')` runs first, then `db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29054,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Results become visible while progress still shows the previous state, violating rule [1] and letting consumers observe an inconsistent state. Swap the calls so `db.progress.update(batch.id, 'done')` runs before `db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 55349,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Writing results before recording progress makes batch outputs visible while the job's progress is unrecorded, so any failure between the two calls leaves results for a job whose progress was never updated. Swap the calls so `db.progress.update(batch.id, 'done')` runs first, followed by `db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54611,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Because `db.results.insertMany` (line 11) runs before `db.progress.update` (line 12), a result can be visible for a job whose progress was never recorded, violating the rule that progress must be updated before any results are inserted in the same handler. Swap the calls so `await db.progress.update(batch.id, 'done')` executes before `await db.results.insertMany(batch.id, batch.outputs)`, the same ordering fix already needed in `finishRun`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 71804,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "`finishBatch` makes batch outputs visible via `db.results.insertMany` while `db.progress.update` still shows the batch as running, violating the rule that progress must be updated before results are written. Swap the two awaits so `db.progress.update(batch.id, 'done')` runs first, then `db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K4-rule-repeats-declined-bug",
+      "error": "Kody Rules could not be evaluated: all 1 rule check(s) failed to run. Your Kody Rules were not applied to this PR."
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 179103,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "A crash between these awaits leaves batch outputs visible for a job whose progress was never marked done. Swap the calls so `db.progress.update(batch.id, 'done')` runs before `db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 297623,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "`db.results.insertMany` is awaited before `db.progress.update` in the new `finishBatch` handler, so a crash between the two calls persists batch outputs while the job's progress is never recorded, violating rule [1] and exposing a result for a job whose progress was not recorded. Swap the calls so progress is recorded first with `await db.progress.update(batch.id, 'done');` followed by `await db.results.insertMany(batch.id, batch.outputs);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 329556,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In the newly added `finishBatch` handler, results can become visible before the batch's progress is recorded, so a crash between the two calls leaves outputs for a batch whose progress was never written. Swap the calls so `await db.progress.update(batch.id, 'done')` runs before `await db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 182464,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "A crash between `db.results.insertMany` and `db.progress.update` in `finishBatch` leaves the batch's outputs stored while its progress is never recorded, exposing results for a job that has no recorded progress. Swap the two calls so `db.progress.update` runs first, then insert the results."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

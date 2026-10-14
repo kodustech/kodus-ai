@@ -44,6 +44,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
     // Default ECS protection time in minutes
     private readonly JOB_PROTECTION_MINUTES = 60;
     private activeJobs = 0;
+    private protectionSync: Promise<void> = Promise.resolve();
+    private protectionSyncQueued = false;
 
     constructor(
         @Inject(JOB_PROCESSOR_SERVICE_TOKEN)
@@ -285,9 +287,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
     ): Promise<void> {
         this.activeJobs++;
         try {
-            await this.taskProtectionService.protectTask(
-                this.JOB_PROTECTION_MINUTES,
-            );
+            await this.syncTaskProtection();
             return await this.processWorkflowJob(
                 consumerId,
                 queueName,
@@ -295,9 +295,56 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
                 amqpMsg,
             );
         } finally {
-            await this.taskProtectionService.unprotectTask();
             this.activeJobs--;
+            await this.syncTaskProtection();
         }
+    }
+
+    /**
+     * Task protection is per ECS task, not per job: it must stay on while
+     * ANY job runs. Unprotecting whenever one job finished left the task
+     * scale-in/deploy eligible with other jobs still in flight, and those
+     * were SIGKILLed mid-review.
+     *
+     * Calls are chained so protect/unprotect requests reach the ECS agent
+     * in order, and each one reads `activeJobs` when it runs — the last
+     * request always reflects the current state. Requests coalesce: while a
+     * call is queued but not started, later requests reuse it (it will read
+     * the newer state), so at most one call is in flight and one queued no
+     * matter how many jobs start or finish. Every job start still issues or
+     * joins a protect, which keeps refreshing the protection expiry.
+     */
+    private syncTaskProtection(): Promise<void> {
+        if (this.protectionSyncQueued) {
+            return this.protectionSync;
+        }
+        this.protectionSyncQueued = true;
+
+        this.protectionSync = this.protectionSync.then(async () => {
+            this.protectionSyncQueued = false;
+            try {
+                if (this.activeJobs > 0) {
+                    await this.taskProtectionService.protectTask(
+                        this.JOB_PROTECTION_MINUTES,
+                    );
+                } else {
+                    await this.taskProtectionService.unprotectTask();
+                }
+            } catch (error) {
+                // The service logs its own HTTP failures; this only catches
+                // the unexpected, and keeps the chain alive for the next call.
+                this.logger.error({
+                    message: 'Failed to sync ECS task protection',
+                    context: WorkflowJobConsumer.name,
+                    error,
+                    metadata: {
+                        activeJobs: this.activeJobs,
+                        instanceId: this.instanceId,
+                    },
+                });
+            }
+        });
+        return this.protectionSync;
     }
 
     private async processWorkflowJob(

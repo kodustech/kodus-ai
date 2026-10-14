@@ -123,11 +123,26 @@ export type ReviewWarningKind =
     | "DIFF_TRUNCATED"
     | "LOW_SIGNAL_FILES_DROPPED"
     | "HEAVY_PASSES_SKIPPED"
-    | "PROVIDER_FALLBACK";
+    | "PROVIDER_FALLBACK"
+    | "RULE_CONTEXT_UNAVAILABLE"
+    | "BAD_FIX_DOWNGRADED"
+    | "SANDBOX_UNAVAILABLE"
+    | "CALLGRAPH_FAILED"
+    | "SUGGESTIONS_DROPPED_PATH_MISMATCH"
+    | "KODY_RULES_PARTIAL";
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
-    reason: "small_context_window" | "provider_failover";
+    reason:
+        | "small_context_window"
+        | "provider_failover"
+        | "lookup_unavailable"
+        | "unusable_fix"
+        | "sandbox_unavailable"
+        | "callgraph_failed"
+        | "path_mismatch"
+        | "judge_shard_failed"
+        | "large_pr";
     contextWindowTokens: number;
     modelName: string;
     detail?: string;

@@ -7,6 +7,11 @@ import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.ty
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
+import {
+    CheckEvidence,
+    CheckEvidenceSupport,
+    GetCheckEvidenceParams,
+} from '../types/codeManagement/checkEvidence.type';
 import { GitCloneParams } from '../types/codeManagement/gitCloneParams.type';
 import {
     CodeManagementIssue,
@@ -63,6 +68,34 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     supportsIssues?(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<boolean>;
+
+    /**
+     * Read the CI results the customer's own pipeline produced for a commit.
+     * Optional: implemented per provider, and at two depths — every host can
+     * report check names and pass/fail, only some expose per-line findings.
+     * The facade degrades to no evidence rather than failing the review.
+     */
+    getCheckEvidence?(params: GetCheckEvidenceParams): Promise<CheckEvidence[]>;
+    /**
+     * Unified-diff hunks for specific paths, when the host's file listing
+     * omitted them. GitHub drops `patch` once a file's diff passes a size
+     * limit — which is exactly what a dependency bump does — and the raw diff
+     * media type is the only surface that still carries the hunks. Optional:
+     * a host without it simply keeps the gap, as it does today.
+     */
+    getFilePatches?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name: string; owner?: string };
+        prNumber: number;
+        paths: string[];
+    }): Promise<Array<{ path: string; patch: string }>>;
+    /**
+     * What this host can actually report. Absent means status-only, which is
+     * the conservative reading of "the reader exists but says nothing more".
+     */
+    supportsCheckEvidence?(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CheckEvidenceSupport>;
 
     findRepositoryByName(params: {
         organizationAndTeamData: OrganizationAndTeamData;

@@ -1,0 +1,1474 @@
+{
+ "model": "deepseek-v4-flash@fireworks",
+ "byokReasoning": "none",
+ "judge": "gemini-3-flash-preview",
+ "judgeReasoningEffort": null,
+ "reps": 5,
+ "engine": {
+  "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+  "sourceDigest": "8d22cf93b7b767539c70cf6d879db8b39e0dbdde1464815e132caf5145e6d525"
+ },
+ "startedAt": "2026-10-13T21:22:45.507Z",
+ "updatedAt": "2026-10-13T21:35:28.466Z",
+ "complete": true,
+ "selectedCases": [
+  "P01-rule-skip-comment-incomplete",
+  "P01-rule-skip-comment-incomplete-control",
+  "P02-rule-screenshot-mask-still-missing",
+  "P02-rule-screenshot-mask-still-missing-control",
+  "P03-rule-nested-config-unguarded-after-reformat",
+  "P03-rule-nested-config-unguarded-after-reformat-control"
+ ],
+ "summary": {
+  "measured": 30,
+  "infra": 0,
+  "problems": {
+   "unverified-shipped (#2040)": {
+    "n": 0,
+    "violations": 0,
+    "rate": null
+   },
+   "repeat-of-sent": {
+    "n": 15,
+    "violations": 12,
+    "rate": 0.8
+   },
+   "revision-unlinked (#2039/#2020)": {
+    "n": 0,
+    "violations": 0,
+    "rate": null
+   },
+   "refuted-shipped (control)": {
+    "n": 0,
+    "violations": 0,
+    "rate": null
+   },
+   "true-bug-missed (guard)": {
+    "n": 35,
+    "violations": 2,
+    "rate": 0.057
+   },
+   "index-reference (#2039)": {
+    "n": 45,
+    "violations": 0,
+    "rate": 0
+   }
+  },
+  "byCase": {
+   "P01-rule-skip-comment-incomplete · skip-comment-repeat [not_deliver]": {
+    "pass": 3,
+    "n": 5,
+    "delivered": 2
+   },
+   "P01-rule-skip-comment-incomplete-control · skip-comment-control [deliver]": {
+    "pass": 3,
+    "n": 5,
+    "delivered": 3
+   },
+   "P02-rule-screenshot-mask-still-missing · screenshot-mask-repeat [not_deliver]": {
+    "pass": 0,
+    "n": 5,
+    "delivered": 5
+   },
+   "P02-rule-screenshot-mask-still-missing · screenshot-mask-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P02-rule-screenshot-mask-still-missing-control · screenshot-mask-control [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P02-rule-screenshot-mask-still-missing-control · screenshot-mask-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P03-rule-nested-config-unguarded-after-reformat · nested-config-repeat [not_deliver]": {
+    "pass": 0,
+    "n": 5,
+    "delivered": 5
+   },
+   "P03-rule-nested-config-unguarded-after-reformat · nested-config-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P03-rule-nested-config-unguarded-after-reformat-control · nested-config-control [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P03-rule-nested-config-unguarded-after-reformat-control · nested-config-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   }
+  }
+ },
+ "rows": [
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P02-rule-screenshot-mask-still-missing",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 21889,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 19,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "Because the expanded feed renders relative timestamps and author avatars, the `feed-expanded.png` screenshot will differ between runs and flake unless `mask: dynamicMasks(page)` is passed. Add that mask to the assertion in \"shows every entry after loading more\", as the other tests do and rule 1 requires."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 31,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "Because the drawer includes the author card with an avatar, the `feed-drawer.png` screenshot will differ between runs and flake unless `mask: dynamicMasks(page)` is passed. Add that mask to the `page.getByRole('dialog')` screenshot assertion, as rule 1 requires."
+    }
+   ],
+   "claims": [
+    {
+     "id": "screenshot-mask-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": false
+    },
+    {
+     "id": "screenshot-mask-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P02-rule-screenshot-mask-still-missing",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 31517,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 19,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "The `feed-expanded.png` screenshot in \"shows every entry after loading more\" is taken without a mask, so the relative timestamps and author avatars the feed renders make it differ between runs and flake, contrary to the rule \"Mask dynamic content in screenshot assertions\". Pass `mask: dynamicMasks(page)` while keeping `fullPage: true`."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 31,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "The drawer screenshot assertion is taken without a mask, so the author card avatar and relative timestamps make the `feed-drawer.png` snapshot differ between runs and flake, contrary to the rule \"Mask dynamic content in screenshot assertions\". Pass `{ mask: dynamicMasks(page) }` to the `page.getByRole('dialog')` assertion."
+    }
+   ],
+   "claims": [
+    {
+     "id": "screenshot-mask-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": false
+    },
+    {
+     "id": "screenshot-mask-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P02-rule-screenshot-mask-still-missing",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 16940,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 19,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "Without a mask this violates the \"Mask dynamic content in screenshot assertions\" rule, and because the feed renders relative timestamps and author avatars the snapshot will differ between runs and flake. Pass `mask: dynamicMasks(page)` to `toHaveScreenshot`, as the collapsed-feed test already does."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 31,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "Without a mask this violates the \"Mask dynamic content in screenshot assertions\" rule, and because the author card contains avatars and relative timestamps the snapshot will differ between runs and flake. Pass `mask: dynamicMasks(page)` to `toHaveScreenshot`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "screenshot-mask-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": false
+    },
+    {
+     "id": "screenshot-mask-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P02-rule-screenshot-mask-still-missing",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 21786,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 19,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "Relative timestamps and author avatars in the expanded feed make this snapshot differ between runs, so the test will flake. Add `mask: dynamicMasks(page)` alongside `fullPage`, as the other tests in this file do."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 31,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "The author card avatar in the entry drawer makes this snapshot differ between runs, so the test will flake. Pass `mask: dynamicMasks(page)` to `toHaveScreenshot`, as the other tests in this file do."
+    }
+   ],
+   "claims": [
+    {
+     "id": "screenshot-mask-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": false
+    },
+    {
+     "id": "screenshot-mask-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P02-rule-screenshot-mask-still-missing",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 18826,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 19,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "The expanded feed renders the same relative timestamps and author avatars as the collapsed feed, so the unmasked `feed-expanded.png` snapshot will differ between runs and flake, violating rule [1]. Add `mask: dynamicMasks(page)` alongside `fullPage: true`."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 31,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "The entry drawer shows the author card avatar and relative timestamps, so the unmasked `feed-drawer.png` snapshot will vary between runs and flake, violating rule [1]. Pass `{ mask: dynamicMasks(page) }` to the `toHaveScreenshot` call."
+    }
+   ],
+   "claims": [
+    {
+     "id": "screenshot-mask-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": false
+    },
+    {
+     "id": "screenshot-mask-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P02-rule-screenshot-mask-still-missing-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 46895,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 19,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "The expanded feed renders the same relative timestamps and avatars as the collapsed feed, so `feed-expanded.png` will differ between runs and flake. Add `mask: dynamicMasks(page)` to the `toHaveScreenshot` assertion for that file."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 31,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "The dialog shows the author card with an avatar and relative timestamps, so `feed-drawer.png` will differ between runs and flake. Add `mask: dynamicMasks(page)` to the `getByRole('dialog')` screenshot assertion."
+    }
+   ],
+   "claims": [
+    {
+     "id": "screenshot-mask-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    },
+    {
+     "id": "screenshot-mask-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P02-rule-screenshot-mask-still-missing-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 23669,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 19,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "Relative timestamps and avatars will differ between runs and cause flakes because the screenshot assertion omits `mask: dynamicMasks(page)`. Add the `mask` option with `{ fullPage: true, mask: dynamicMasks(page) }`."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 31,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "The dialog's relative timestamps and avatars will differ between runs and cause flakes because the screenshot assertion omits `mask: dynamicMasks(page)`. Pass the `mask` option with `{ mask: dynamicMasks(page) }`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "screenshot-mask-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    },
+    {
+     "id": "screenshot-mask-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P02-rule-screenshot-mask-still-missing-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 48896,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 19,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "Because the `toHaveScreenshot` assertion for `feed-expanded.png` omits the required `mask: dynamicMasks(page)` option (rule [1]), relative timestamps and avatars render in the screenshot, so the baseline differs between runs and the test flakes. Pass `{ fullPage: true, mask: dynamicMasks(page) }` to the assertion."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 31,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "Because the `feed-drawer.png` `toHaveScreenshot` assertion omits the required `mask: dynamicMasks(page)` option (rule [1]), the author card’s dynamic avatar and likely relative timestamp vary between runs and flake the screenshot. Pass `{ mask: dynamicMasks(page) }` to the assertion."
+    }
+   ],
+   "claims": [
+    {
+     "id": "screenshot-mask-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    },
+    {
+     "id": "screenshot-mask-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P02-rule-screenshot-mask-still-missing-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 19808,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 19,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "The expanded feed's relative timestamps and avatars are captured raw, so they change between runs and make the snapshot flaky. Add `mask: dynamicMasks(page)` to the `toHaveScreenshot` assertion, consistent with the other assertions in this file."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 31,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "The dialog's relative timestamps and avatars in the author card are captured unmasked, so the snapshot will differ between runs and flake. Pass `mask: dynamicMasks(page)` to the `page.getByRole('dialog')` `toHaveScreenshot` assertion."
+    }
+   ],
+   "claims": [
+    {
+     "id": "screenshot-mask-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    },
+    {
+     "id": "screenshot-mask-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P02-rule-screenshot-mask-still-missing-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 33327,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 19,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "Relative timestamps and avatars in the expanded feed get captured, so the snapshot will flake between runs. Add `mask: dynamicMasks(page)` to this `toHaveScreenshot` assertion, consistent with the other assertions in this file."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "e2e/visual/activity-feed.spec.ts",
+     "line": 31,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-visual-mask-dynamic"
+     ],
+     "marked": false,
+     "text": "Dynamic content in the drawer, such as the author card avatar and relative timestamps, gets captured, so the snapshot will flake between runs. Add `mask: dynamicMasks(page)` to this `toHaveScreenshot` assertion, consistent with the other assertions in this file."
+    }
+   ],
+   "claims": [
+    {
+     "id": "screenshot-mask-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    },
+    {
+     "id": "screenshot-mask-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P03-rule-nested-config-unguarded-after-reformat",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 30509,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 18,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "A workspace without integrations still raises `NoMethodError` right after the email is sent, and this unguarded chained read reintroduces a failure already raised and marked implemented in an earlier review. Use `dig` as `send_hour` does, replacing the chained `[]` on `config[:integrations][:slack]`."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 32,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "A workspace without integrations, or without PagerDuty configured, has nil at `[:integrations]` or `[:pagerduty]`, so escalating a critical digest raises `NoMethodError`. Use `dig` as `send_hour` does, replacing the chained `[]` on `config[:integrations][:pagerduty]`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "nested-config-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": false
+    },
+    {
+     "id": "nested-config-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P03-rule-nested-config-unguarded-after-reformat",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 45719,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 18,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Because `config[:integrations]` and `config[:integrations][:slack]` can be `nil` for a workspace without integrations or Slack configured, `call` raises `NoMethodError` right after the email is sent. Read the channel with `@workspace.config.dig(:integrations, :slack, :channel)`, as `send_hour` already does."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 32,
+     "severity": "critical",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Because `[:integrations]` or `[:pagerduty]` is `nil` for a workspace without integrations or PagerDuty configured, escalating a critical digest raises `NoMethodError`. Read the routing key with `@workspace.config.dig(:integrations, :pagerduty, :routing_key)`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "nested-config-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": false
+    },
+    {
+     "id": "nested-config-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "critical",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P03-rule-nested-config-unguarded-after-reformat",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 66790,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 18,
+     "severity": "high",
+     "linkedById": true,
+     "revisesSuggestionId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "**Revises an earlier Kody suggestion** on `app/services/notifications/digest_dispatcher.rb:16` (2026-10-06 12:00 UTC).\n\nA workspace with no `integrations` key, or no `slack` hash, has nil at that level in `@workspace.config`, so `call` raises `NoMethodError` right after the email goes out. Replace the chain read with `dig(:integrations, :slack, :channel)` as `send_hour` already does."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 32,
+     "severity": "critical",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Because `integrations` is optional and PagerDuty may not be configured, nil at either level in `@workspace.config` makes `escalate` raise `NoMethodError` when a critical digest is escalated. Replace the chain read with `dig(:integrations, :pagerduty, :routing_key)`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "nested-config-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": true,
+     "linkedById": true,
+     "marked": false,
+     "severity": "high",
+     "pass": false
+    },
+    {
+     "id": "nested-config-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "critical",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P03-rule-nested-config-unguarded-after-reformat",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 60893,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 18,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Because `call` chains `[]` on the optional `:integrations` config, a workspace without integrations or Slack configured has nil at `[:integrations]` or `[:slack]`, so the digest raises `NoMethodError` right after the email is sent; the previous suggestion to fix exactly this was never applied, since the `dig` form only exists in `send_hour`. Use `@workspace.config.dig(:integrations, :slack, :channel)`, as `send_hour` already does."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 32,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Because `escalate` chains `[]` on the optional `:integrations` config, a workspace without integrations or PagerDuty configured has nil at `[:integrations]` or `[:pagerduty]`, so escalating a critical digest raises `NoMethodError`. Use `@workspace.config.dig(:integrations, :pagerduty, :routing_key)`, as `send_hour` already does."
+    }
+   ],
+   "claims": [
+    {
+     "id": "nested-config-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": false
+    },
+    {
+     "id": "nested-config-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P03-rule-nested-config-unguarded-after-reformat",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 50061,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 18,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Reading the Slack channel with chained `[]` on `@workspace.config[:integrations][:slack][:channel]` raises `NoMethodError` right after the email is delivered when `[:integrations]` or `[:slack]` is `nil`, since those workspace settings are optional. Use `dig` (or guard every level) so missing keys yield `nil` instead of crashing."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 32,
+     "severity": "critical",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Reading the PagerDuty routing key with chained `[]` on `@workspace.config[:integrations][:pagerduty][:routing_key]` raises `NoMethodError` when `[:integrations]` or `[:pagerduty]` is `nil`, since those integration settings are optional and escalating a critical digest hits this path. Use `dig` (or guard each level) so a missing key yields `nil`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "nested-config-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": false
+    },
+    {
+     "id": "nested-config-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "critical",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P03-rule-nested-config-unguarded-after-reformat-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 23071,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 18,
+     "severity": "critical",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Reading the Slack channel through chained `[]` raises `NoMethodError` when `:integrations`, the `:slack` provider hash, or `:channel` is missing, crashing `call` before the `return if slack_channel.nil?` guard can skip Slack. Use `@workspace.config.dig(:integrations, :slack, :channel)` so each level is accessed safely."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 32,
+     "severity": "critical",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Escalating a critical digest on a workspace without PagerDuty configured raises `NoMethodError` because `:integrations`, the `:pagerduty` hash, and `:routing_key` are all optional. Read the routing key with `@workspace.config.dig(:integrations, :pagerduty, :routing_key)`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "nested-config-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "critical",
+     "pass": true
+    },
+    {
+     "id": "nested-config-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "critical",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P03-rule-nested-config-unguarded-after-reformat-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 17169,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 18,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "When `config` has no `:integrations` key or no `:slack` hash, the `[]` chain raises NoMethodError and the digest is never delivered. Read the optional nested value with `dig` (or guard each level) instead."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 32,
+     "severity": "critical",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "When the optional pagerduty settings are absent, this `[]` chain raises NoMethodError during escalation instead of routing the alert. Read the value with `dig` (or guard each level) so a critical digest still escalates."
+    }
+   ],
+   "claims": [
+    {
+     "id": "nested-config-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": true
+    },
+    {
+     "id": "nested-config-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "critical",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P03-rule-nested-config-unguarded-after-reformat-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 26563,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 18,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Because `:integrations` and the nested `:slack`/`:channel` values are optional, chaining `[]` raises `NoMethodError` whenever any level is missing. Use `dig` on `@workspace.config` so a missing level returns `nil` safely."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 32,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Because `config[:integrations]` and the nested `:pagerduty` hash are optional, chaining `[]` raises `NoMethodError` when any level is absent. Read `routing_key` with `dig` so missing settings yield `nil` instead of crashing."
+    }
+   ],
+   "claims": [
+    {
+     "id": "nested-config-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": true
+    },
+    {
+     "id": "nested-config-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P03-rule-nested-config-unguarded-after-reformat-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 23021,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 18,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Because `config[:integrations]` and the nested `[:slack]`/`[:channel]` keys are optional, chaining `[]` raises `NoMethodError` when any level is missing. Read the optional integration settings with `dig` instead."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 32,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "Because `config[:integrations]` and the nested `[:pagerduty]` hash may be absent, chaining `[]` raises `NoMethodError` when PagerDuty is not configured. Read the routing key with `dig` so missing integration settings are tolerated."
+    }
+   ],
+   "claims": [
+    {
+     "id": "nested-config-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": true
+    },
+    {
+     "id": "nested-config-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P03-rule-nested-config-unguarded-after-reformat-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 51285,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 18,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "When the workspace has no `:integrations` key or no `:slack` hash, the first lookup returns `nil` and the chained `[:slack]` raises `NoMethodError` before the `return if slack_channel.nil?` guard can run. Read the nested value with `dig(:integrations, :slack, :channel)` so any missing level yields `nil` instead of crashing."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "app/services/notifications/digest_dispatcher.rb",
+     "line": 32,
+     "severity": "critical",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-optional-integration-settings"
+     ],
+     "marked": false,
+     "text": "If `:integrations` or `:pagerduty` is absent, `config[:integrations]` is `nil` and the chained `[:pagerduty]` raises `NoMethodError` during escalation. Use `dig(:integrations, :pagerduty, :routing_key)` so a missing configuration yields `nil` instead of crashing."
+    }
+   ],
+   "claims": [
+    {
+     "id": "nested-config-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": true
+    },
+    {
+     "id": "nested-config-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "critical",
+     "pass": true
+    }
+   ]
+  }
+ ],
+ "note": "superseded rows for /^P01-/ dropped: re-run after the spec fix in none_fix-*.json"
+}

@@ -1,0 +1,30 @@
+---
+title: "How to import rules from Cursor, Copilot, or Claude"
+description: "Sync your existing AI coding tool rules into Kodus so the same standards apply in your IDE and in code review."
+---
+
+If you already have rules defined in Cursor, GitHub Copilot, Claude, or other AI coding tools, you can import them into Kodus so the same conventions are enforced during code review.
+
+## How it works
+
+Kodus detects rule files in your repository and syncs them as Kody Rules. Supported file formats include:
+
+- `.cursorrules` (Cursor)
+- `.github/copilot-instructions.md` (GitHub Copilot)
+- `CLAUDE.md` (Claude)
+- Other AI tool configuration files
+
+## Setting it up
+
+1. Pick the repository in the scope picker at the top of the **Code review** group in the sidebar, open **Kody Rules**, and click **Configuration**
+2. Turn on **Auto-sync rules from repo**. The first time, Kodus asks whether to scan the repository right away (**Sync now**) or **Skip initial scan**
+3. Kodus imports the rule files it finds as Kody Rules (origin **Auto-sync**) and keeps them in sync from then on
+4. Imported rules are enforced during code review right away. To review them first, turn on **Kody knowledge approval** in the same **Configuration** sheet: imported rules then wait in the **Pending review** section until you **Approve** or **Discard** them
+
+## Why this matters
+
+Without syncing, your IDE and code review tools enforce different standards. A developer following Cursor's rules might still get flagged during review for something their IDE didn't catch — or vice versa.
+
+Importing ensures **one source of truth** for coding standards across your entire workflow.
+
+For details, see [Sync IDE Rules](/en/how_to_use/code_review/configs/rules_file_detection).

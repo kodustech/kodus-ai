@@ -41,10 +41,14 @@ describe('ContextReferenceDetectionService — clean detection clears stale revi
         } as any,
     ];
 
-    it('commits an EMPTY revision when a previous revision exists', async () => {
-        const { svc, contextReferenceService } = build({ id: 'rev-old' });
+    it('commits an EMPTY revision when the previous revision carried sync errors', async () => {
+        const { svc, contextReferenceService } = build({
+            id: 'rev-old',
+            requirements: [],
+            metadata: { syncErrorsCount: 2 },
+        });
 
-        await svc.detectAndSaveReferences({
+        const result = await svc.detectAndSaveReferences({
             entityType: 'kodyRule',
             entityId: 'rule-1',
             fields,
@@ -54,6 +58,44 @@ describe('ContextReferenceDetectionService — clean detection clears stale revi
         expect(contextReferenceService.commitRevision).toHaveBeenCalledTimes(1);
         const arg = contextReferenceService.commitRevision.mock.calls[0][0];
         expect(arg.requirements).toEqual([]);
+        // The rule must point at the clean revision, or it keeps the errors.
+        expect(result).toBe('ctx-ref-1');
+    });
+
+    it('commits an EMPTY revision when the previous revision held references', async () => {
+        const { svc, contextReferenceService } = build({
+            id: 'rev-old',
+            requirements: [{ id: 'req-1' }],
+            metadata: { syncErrorsCount: 0 },
+        });
+
+        const result = await svc.detectAndSaveReferences({
+            entityType: 'kodyRule',
+            entityId: 'rule-1',
+            fields,
+            organizationAndTeamData: orgTeam,
+        } as any);
+
+        expect(contextReferenceService.commitRevision).toHaveBeenCalledTimes(1);
+        expect(result).toBe('ctx-ref-1');
+    });
+
+    it('leaves a clean empty revision alone: nothing stale to clear', async () => {
+        const { svc, contextReferenceService } = build({
+            id: 'rev-old',
+            requirements: [],
+            metadata: { syncErrorsCount: 0 },
+        });
+
+        const result = await svc.detectAndSaveReferences({
+            entityType: 'kodyRule',
+            entityId: 'rule-1',
+            fields,
+            organizationAndTeamData: orgTeam,
+        } as any);
+
+        expect(result).toBeUndefined();
+        expect(contextReferenceService.commitRevision).not.toHaveBeenCalled();
     });
 
     it('still skips entirely when the entity never had a revision', async () => {

@@ -184,7 +184,7 @@ export function ExternalReferencesDisplay({
                                     // file path joined by ", ", which on
                                     // a rule with 30+ references blew
                                     // the card height to 3-4× its
-                                    // siblings (quintoandar feedback).
+                                    // siblings (customer feedback).
                                     // Show a couple of file names as a
                                     // teaser plus the count; the full
                                     // list lives in the tooltip below.

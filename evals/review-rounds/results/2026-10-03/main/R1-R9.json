@@ -1,0 +1,488 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "engine": {
+    "commit": "14439a95335f07c92cb445ccea3069a9b2904e30",
+    "sourceDigest": "6839eb92aa6ee4b3fcbd7cc377dec4b558d6ebd7377b6d94ec098b0729e00139"
+  },
+  "startedAt": "2026-10-03T13:04:40.297Z",
+  "updatedAt": "2026-10-03T13:32:44.915Z",
+  "complete": true,
+  "selectedCases": [
+    "R1-repeat-open",
+    "R9-repeat-after-dev-rejected"
+  ],
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 6,
+        "violations": 3,
+        "rate": 0.5
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "index-reference (#2039)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R1-repeat-open · resubmit-repeat [not_deliver, proposed]": {
+        "pass": 1,
+        "n": 3,
+        "delivered": 2
+      },
+      "R9-repeat-after-dev-rejected · resubmit-repeat-after-rejection [not_deliver, proposed]": {
+        "pass": 2,
+        "n": 3,
+        "delivered": 1
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 266426,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: On NotReadyError the code calls `gw.submit(charge.payload)` (line 16), but `Gateway.submit` is documented as NOT idempotent ('every call creates a new charge', gateway.ts:3) and errors.ts defines NotReadyError as 'the gateway HAS the charge but has not settled it yet (transient)' — the opposite of the poller's own comment. WHY: every poll tick that observes NotReadyError submits a brand-new charge, so the same payload is charged repeatedly (duplicate charges); the newly added `metrics.increment('billing.resubmit')` only counts these duplicates, it does not prevent them. HOW: do not resubmit on NotReadyError — treat it as transient and wait/re-poll `fetchStatus` (or require an idempotency key before ever calling submit).",
+          "keep": true,
+          "rationale": "Confirmed. errors.ts:1 defines NotReadyError as \"the gateway HAS the charge but has not settled it yet (transient)\", directly contradicting poller.ts:8's comment. gateway.ts:3 documents submit as NOT idempotent (\"every call creates a new charge\"). So pollCharge's catch block (lines 14-17) submits a fresh charge on every tick that observes NotReadyError, producing duplicate charges for a payload the gateway already holds. The new metrics.increment only counts these duplicates; it does not prevent them. The prior review decision flagged the same defect as not_implemented, which is not a refutation. No guard upstream prevents this path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "On NotReadyError the code calls `gw.submit(charge.payload)` (line 16) even though `Gateway.submit` is documented as not idempotent ('every call creates a new charge', gateway.ts:3), and errors.ts defines NotReadyError as the gateway already having the charge — the opposite of the poller's own comment — so every poll tick that observes it submits a brand-new charge and duplicates billing, while the new `metrics.increment('billing.resubmit')` only counts those duplicates. Do not resubmit on NotReadyError; treat it as transient and wait/re-poll `fetchStatus` (or require an idempotency key before ever calling submit)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 289838,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 614621,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The NotReadyError branch (now instrumented at line 15) resubmits the charge via gw.submit, but NotReadyError is documented as 'the gateway HAS the charge but has not settled it yet (transient)' (errors.ts:1) and Gateway.submit is documented as NOT idempotent (gateway.ts:3), so each poll tick submits a second, duplicate charge. WHY: Every tick on an unsettled charge creates a real duplicate charge at the gateway (double billing), and the newly added 'billing.resubmit' metric only records the duplication. HOW: Do not resubmit on NotReadyError; treat it as transient and return a pending state (or re-check status on the next tick) instead of calling gw.submit.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:1 defines NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\", and gateway.ts:3 documents submit as \"NOT idempotent: every call creates a new charge\". The NotReadyError branch (poller.ts:14-17) calls gw.submit on every tick, so an unsettled but already-received charge is resubmitted repeatedly, producing duplicate charges (double billing). No upstream guard prevents this, and the branch is reachable via fetchStatus rethrowing NotReadyError (status.ts:8-9). The poller's own comment (line 8) claims the opposite but contradicts the canonical documentation, which does not refute the defect. Prior review decision is not_implemented, not a fix.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|submit",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 15,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 15,
+                "path": "src/billing/gateway.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/billing/status.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/poller.ts",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The NotReadyError branch (now instrumented at line 15) resubmits via gw.submit, but NotReadyError means the gateway already holds the charge (errors.ts:1) while Gateway.submit is not idempotent (gateway.ts:3), so each poll tick submits a duplicate charge — double billing that the billing.resubmit metric only records. Treat NotReadyError as transient and return { state: 'pending' as const } instead of calling gw.submit."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 84432,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 214950,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 201432,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: In the NotReadyError branch the new metric is emitted immediately before the unchanged `await gw.submit(charge.payload)`, which resubmits a charge the gateway already holds. WHY: `Gateway.submit` is documented NOT idempotent (gateway.ts:3) and `NotReadyError` means \"the gateway has the charge but has not settled it yet\" (errors.ts:1), so every poll tick issues another `submit` and creates a duplicate charge for the same payment. HOW: do not resubmit on NotReadyError; treat it as transient and wait/return without calling `gw.submit`, e.g. `metrics.increment('billing.resubmit'); return { state: 'pending' as const };` (or drop the resubmit entirely and just surface the transient state).",
+          "keep": true,
+          "rationale": "Confirmed the code path: pollCharge catches NotReadyError (thrown by fetchStatus/gw.status when the gateway holds the charge but hasn't settled it, per errors.ts:1) and then calls gw.submit(charge.payload). gateway.ts:3 explicitly documents submit as NOT idempotent ('every call creates a new charge'), so resubmitting on every tick duplicates the charge. The poller's own comment (poller.ts:8) claiming NotReadyError means 'the gateway never received it' contradicts the NotReadyError class documentation in errors.ts:1, which is the authoritative definition — and the finding rests on that plus the non-idempotent submit contract. The prior review decision (index 1) flagged this exact issue and is marked not_implemented, so no applied change refutes it. Cannot refute.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In the NotReadyError branch the new metric is emitted immediately before the unchanged `await gw.submit(charge.payload)`, which resubmits a charge the gateway already holds. Because `Gateway.submit` is documented not idempotent (gateway.ts:3) and `NotReadyError` means the gateway has the charge but has not settled it yet (errors.ts:1), every poll tick creates a duplicate charge for the same payment, so treat NotReadyError as transient and return without calling `gw.submit`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

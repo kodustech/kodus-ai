@@ -2,47 +2,33 @@
 
 import { useMemo } from "react";
 import { redirect, usePathname } from "next/navigation";
-import { Badge } from "@components/ui/badge";
-import { Button } from "@components/ui/button";
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleIndicator,
-    CollapsibleTrigger,
-} from "@components/ui/collapsible";
-import { Link } from "@components/ui/link";
-import { Page } from "@components/ui/page";
-import {
-    Sidebar,
-    SidebarContent,
-    SidebarGroup,
-    SidebarGroupContent,
-    SidebarMenu,
-    SidebarMenuItem,
-    SidebarMenuSub,
-    SidebarMenuSubItem,
-} from "@components/ui/sidebar";
-import { Skeleton } from "@components/ui/skeleton";
-import { useMCPAvailability } from "@services/mcp-manager/hooks";
+import { magicModal } from "@components/ui/magic-modal";
 import {
     useCodeReviewSettingsShell,
     useSuspenseGetDefaultCodeReviewParameter,
     useSuspenseGetParameterPlatformConfigs,
 } from "@services/parameters/hooks";
 import {
+    KodyLearningStatus,
     ParametersConfigKey,
     type PlatformConfigValue,
 } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import type { CustomMessageConfig } from "@services/pull-request-messages/types";
+import {
+    ScopeToolsPortal,
+    useLendAddRepository,
+    useLendOverrideCount,
+    useScopeTools,
+    type RenderOverrideCount,
+} from "src/core/layout/sidebar/scope-tools";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
 
 import { useCodeReviewRouteParams } from "../_hooks";
-import { countConfigOverridesForRoutes } from "../_utils/count-overrides";
+import { RouteSkeleton } from "../../_components/route-skeleton";
 import {
-    FormattedConfigLevel,
     type CodeReviewGlobalConfig,
     type FormattedGlobalCodeReviewConfig,
 } from "../code-review/_types";
@@ -57,38 +43,10 @@ import {
     ScopedCodeReviewConfigProvider,
     type CodeReviewModelData,
 } from "./context";
-import { PerRepository } from "./per-repository/repository";
-import {
-    RouteButtonWithOverrideCount,
-    useCustomMessagesOverrideCount,
-} from "./route-button-with-override-count";
-
-const routes = [
-    { label: "General", href: "general" },
-    { label: "Review Categories", href: "review-categories" },
-    { label: "Review Filters", href: "suggestion-control" },
-    { label: "Custom Prompts", href: "custom-prompts" },
-    { label: "PR Summary", href: "pr-summary" },
-    { label: "Kody Rules", href: "kody-rules" },
-    { label: "Custom Messages", href: "custom-messages" },
-    // Cross-repo context (#1576): relationships are directional and
-    // repo-scoped by design (a global default would link EVERY repo to the
-    // same siblings), so the item only renders in repository submenus.
-    {
-        label: "Linked Repositories",
-        href: "linked-repositories",
-        repoOnly: true,
-    },
-] satisfies Array<{
-    label: string;
-    href: string;
-    repoOnly?: boolean;
-}>;
-
-// Global scope never shows repo-only routes (see `repoOnly` on `routes`).
-const globalSettingsRoutes = routes.filter(
-    (r) => !("repoOnly" in r && r.repoOnly),
-);
+import { AddRepoModal } from "./copy-settings-modal";
+import { KodusConfigFileStatusBadge } from "./kodus-config-file-status";
+import { OverrideCount } from "./override-count";
+import { SidebarRepositoryOrDirectoryDropdown } from "./per-repository/options-dropdown";
 
 type InitialPlatformConfig = {
     uuid: string;
@@ -139,11 +97,6 @@ export const SettingsLayout = ({
                     : undefined,
         },
     );
-    const canReadPlugins = usePermission(
-        Action.Read,
-        ResourceType.PluginSettings,
-    );
-    const { data: isMCPAvailable = true } = useMCPAvailability(canReadPlugins);
 
     const initialShellQueryData = useMemo<
         | {
@@ -190,8 +143,9 @@ export const SettingsLayout = ({
                             liveShellQuery?.configValue ?? initialConfigValue
                         }
                         defaultConfig={defaultConfig ?? initialDefaultConfig}
-                        platformConfig={platformConfig ?? initialPlatformConfig}
-                        isMCPAvailable={isMCPAvailable}>
+                        platformConfig={
+                            platformConfig ?? initialPlatformConfig
+                        }>
                         {children}
                     </SettingsLayoutShell>
                 </InitialParametersProvider>
@@ -202,84 +156,17 @@ export const SettingsLayout = ({
 
 function SettingsLayoutShell({
     children,
-    teamId,
     configValue,
     defaultConfig,
     platformConfig,
-    isMCPAvailable,
 }: React.PropsWithChildren<{
     teamId: string;
     configValue: FormattedGlobalCodeReviewConfig | undefined;
     defaultConfig: InitialDefaultConfig;
     platformConfig: InitialPlatformConfig;
-    isMCPAvailable: boolean;
 }>) {
     const pathname = usePathname();
     const { repositoryId, pageName, directoryId } = useCodeReviewRouteParams();
-    const globalConfigOverrideCount = configValue
-        ? countConfigOverridesForRoutes(
-              configValue.configs,
-              globalSettingsRoutes.map((r) => r.href),
-              FormattedConfigLevel.GLOBAL,
-          )
-        : 0;
-    const globalCustomMessagesOverrideCount = useCustomMessagesOverrideCount({
-        scopeRepositoryId: "global",
-        level: FormattedConfigLevel.GLOBAL,
-        enabled: Boolean(configValue),
-    });
-    const globalOverrideCount =
-        globalConfigOverrideCount + globalCustomMessagesOverrideCount;
-
-    const canReadGitSettings = usePermission(
-        Action.Read,
-        ResourceType.GitSettings,
-    );
-    const canReadBilling = usePermission(Action.Read, ResourceType.Billing);
-    const canReadPlugins = usePermission(
-        Action.Read,
-        ResourceType.PluginSettings,
-    );
-
-    const mainRoutes = useMemo(() => {
-        const nextRoutes: Array<{
-            label: string;
-            href: string;
-            badge?: React.ReactNode;
-        }> = [];
-
-        if (canReadGitSettings) {
-            nextRoutes.push({
-                label: "Git Settings",
-                href: "/settings/git",
-            });
-        }
-
-        if (canReadBilling) {
-            nextRoutes.push({
-                label: "Subscription",
-                href: "/settings/subscription",
-            });
-        }
-
-        if (canReadPlugins && isMCPAvailable) {
-            nextRoutes.push({
-                label: "Plugins",
-                href: "/settings/plugins",
-                badge: (
-                    <Badge
-                        variant="secondary"
-                        className="pointer-events-none -my-1 h-6 min-h-auto px-2.5">
-                        Beta
-                    </Badge>
-                ),
-            });
-        }
-
-        return nextRoutes;
-    }, [canReadGitSettings, canReadBilling, canReadPlugins, isMCPAvailable]);
-
-    const settingsRoutes = routes;
 
     const isShellLoading = !configValue;
 
@@ -315,214 +202,115 @@ function SettingsLayoutShell({
         }
     }
 
+    const content = configValue ? (
+        <DefaultCodeReviewConfigProvider config={defaultConfig}>
+            <AutomationCodeReviewConfigProvider config={configValue}>
+                <ScopedCodeReviewConfigProvider config={scopedConfig}>
+                    <PlatformConfigProvider config={platformConfig.configValue}>
+                        {pathname.startsWith("/settings/code-review") && (
+                            <CodeReviewScopeTools
+                                configValue={configValue}
+                                platformConfigValue={platformConfig.configValue}
+                            />
+                        )}
+                        {children}
+                    </PlatformConfigProvider>
+                </ScopedCodeReviewConfigProvider>
+            </AutomationCodeReviewConfigProvider>
+        </DefaultCodeReviewConfigProvider>
+    ) : (
+        <RouteSkeleton />
+    );
+
     return (
-        <div className="flex flex-1 flex-row overflow-hidden">
-            <Sidebar className="bg-card-lv1 px-0 py-0">
-                <SidebarContent className="gap-4 px-6 py-6">
-                    <SidebarGroup>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                {mainRoutes.map((route) => (
-                                    <SidebarMenuItem key={route.href}>
-                                        <Link
-                                            href={route.href}
-                                            className="w-full">
-                                            <Button
-                                                size="md"
-                                                decorative
-                                                className="w-full justify-start"
-                                                active={pathname === route.href}
-                                                rightIcon={route.badge}
-                                                variant={
-                                                    pathname.startsWith(
-                                                        route.href,
-                                                    )
-                                                        ? "helper"
-                                                        : "cancel"
-                                                }>
-                                                {route.label}
-                                            </Button>
-                                        </Link>
-                                    </SidebarMenuItem>
-                                ))}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-
-                    <SidebarGroup>
-                        <SidebarGroupContent>
-                            <SidebarMenu className="gap-6">
-                                {!isShellLoading ? (
-                                    <Collapsible
-                                        defaultOpen={
-                                            repositoryId === "global" ||
-                                            !repositoryId
-                                        }>
-                                        <CollapsibleTrigger asChild>
-                                            <Button
-                                                size="md"
-                                                variant="helper"
-                                                className="h-fit w-full justify-start py-2"
-                                                leftIcon={
-                                                    <CollapsibleIndicator className="-ml-1 group-data-[state=closed]/collapsible:rotate-[-90deg] group-data-[state=open]/collapsible:rotate-0" />
-                                                }
-                                                rightIcon={
-                                                    globalOverrideCount > 0 && (
-                                                        <Badge
-                                                            variant="primary-dark"
-                                                            className="h-5 min-w-5 rounded-full px-1.5 text-[10px] font-medium">
-                                                            {
-                                                                globalOverrideCount
-                                                            }
-                                                        </Badge>
-                                                    )
-                                                }>
-                                                Global
-                                            </Button>
-                                        </CollapsibleTrigger>
-
-                                        <CollapsibleContent>
-                                            <SidebarMenuItem>
-                                                <SidebarMenuSub>
-                                                    {globalSettingsRoutes.map(
-                                                        ({ label, href }) => {
-                                                            const active =
-                                                                repositoryId ===
-                                                                    "global" &&
-                                                                pageName ===
-                                                                    href;
-
-                                                            return (
-                                                                <SidebarMenuSubItem
-                                                                    key={label}>
-                                                                    <RouteButtonWithOverrideCount
-                                                                        label={
-                                                                            label
-                                                                        }
-                                                                        href={
-                                                                            href
-                                                                        }
-                                                                        to={`/settings/code-review/global/${href}`}
-                                                                        active={
-                                                                            active
-                                                                        }
-                                                                        level={
-                                                                            FormattedConfigLevel.GLOBAL
-                                                                        }
-                                                                        config={
-                                                                            configValue.configs
-                                                                        }
-                                                                        customMessagesOverrideCount={
-                                                                            globalCustomMessagesOverrideCount
-                                                                        }
-                                                                    />
-                                                                </SidebarMenuSubItem>
-                                                            );
-                                                        },
-                                                    )}
-                                                </SidebarMenuSub>
-                                            </SidebarMenuItem>
-                                        </CollapsibleContent>
-                                    </Collapsible>
-                                ) : (
-                                    <SettingsGlobalSidebarSkeleton
-                                        settingsRoutes={globalSettingsRoutes}
-                                    />
-                                )}
-
-                                {configValue ? (
-                                    <PerRepository
-                                        routes={settingsRoutes}
-                                        configValue={configValue}
-                                        platformConfig={platformConfig}
-                                    />
-                                ) : (
-                                    <SettingsPerRepositorySkeleton />
-                                )}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-                </SidebarContent>
-            </Sidebar>
-
-            <Page.WithSidebar>
-                {configValue ? (
-                    <DefaultCodeReviewConfigProvider config={defaultConfig}>
-                        <AutomationCodeReviewConfigProvider
-                            config={configValue}>
-                            <ScopedCodeReviewConfigProvider
-                                config={scopedConfig}>
-                                <PlatformConfigProvider
-                                    config={platformConfig.configValue}>
-                                    {children}
-                                </PlatformConfigProvider>
-                            </ScopedCodeReviewConfigProvider>
-                        </AutomationCodeReviewConfigProvider>
-                    </DefaultCodeReviewConfigProvider>
-                ) : (
-                    <SettingsShellContentSkeleton />
-                )}
-            </Page.WithSidebar>
-        </div>
+        <div className="flex flex-1 flex-col overflow-hidden">{content}</div>
     );
 }
 
-function SettingsGlobalSidebarSkeleton({
-    settingsRoutes,
+/**
+ * The scope tools that need the full configuration this layout loads, lent
+ * to the sidebar's scope picker (see scope-tools.tsx): the scope's options
+ * menu and kodus-config.yml badge render under the picker, "Add repository
+ * configuration" joins the picker's footer, and each scope and page gets its
+ * override count.
+ */
+function CodeReviewScopeTools({
+    configValue,
+    platformConfigValue,
 }: {
-    settingsRoutes: Array<{ label: string; href: string }>;
+    configValue: FormattedGlobalCodeReviewConfig;
+    platformConfigValue: PlatformConfigValue;
 }) {
-    return (
-        <div className="flex flex-col gap-2">
-            <Button
-                size="md"
-                variant="helper"
-                disabled
-                className="h-fit w-full justify-start py-2">
-                Global
-            </Button>
+    const { repositoryId, directoryId } = useCodeReviewRouteParams();
+    const canCreate = usePermission(
+        Action.Create,
+        ResourceType.CodeReviewSettings,
+    );
 
-            <div className="space-y-2 pl-6">
-                {settingsRoutes.slice(0, 4).map((route) => (
-                    <Skeleton
-                        key={route.href}
-                        className="h-8 w-full rounded-md"
+    const repository =
+        repositoryId && repositoryId !== "global"
+            ? safeArray(configValue.repositories).find(
+                  (item) => item.id === repositoryId,
+              )
+            : undefined;
+    const directory = directoryId
+        ? repository?.directories?.find((item) => item.id === directoryId)
+        : undefined;
+
+    const canAddRepository =
+        canCreate &&
+        platformConfigValue.kodyLearningStatus !==
+            KodyLearningStatus.GENERATING_CONFIG;
+    const openAddRepository = useMemo(
+        () =>
+            canAddRepository
+                ? () =>
+                      magicModal.show(() => (
+                          <AddRepoModal
+                              repositories={configValue.repositories}
+                          />
+                      ))
+                : undefined,
+        [canAddRepository, configValue.repositories],
+    );
+    useLendAddRepository(openAddRepository);
+    const renderOverrideCount = useMemo<RenderOverrideCount>(
+        () =>
+            function renderOverrideCount({ scope, pages }) {
+                return (
+                    <OverrideCount
+                        config={configValue}
+                        scope={scope}
+                        pages={pages}
                     />
-                ))}
-            </div>
-        </div>
+                );
+            },
+        [configValue],
     );
-}
+    useLendOverrideCount(renderOverrideCount);
+    const compact = useScopeTools()?.compact ?? false;
 
-function SettingsPerRepositorySkeleton() {
     return (
-        <div className="pl-2">
-            <div className="mb-4 flex flex-col gap-2">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-5/6" />
-            </div>
-
-            <div className="space-y-2">
-                <Skeleton className="h-10 w-full rounded-md" />
-                <Skeleton className="h-10 w-full rounded-md" />
-            </div>
-        </div>
-    );
-}
-
-function SettingsShellContentSkeleton() {
-    return (
-        <Page.Root>
-            <Page.Header>
-                <Skeleton className="h-6 w-48" />
-            </Page.Header>
-
-            <Page.Content>
-                <Skeleton className="h-12 w-64" />
-                <Skeleton className="h-56 w-full rounded-xl" />
-                <Skeleton className="h-56 w-full rounded-xl" />
-            </Page.Content>
-        </Page.Root>
+        <>
+            <ScopeToolsPortal slot="status">
+                <KodusConfigFileStatusBadge compact={compact} />
+            </ScopeToolsPortal>
+            {repository && (
+                <ScopeToolsPortal slot="actions">
+                    <SidebarRepositoryOrDirectoryDropdown
+                        repository={repository}
+                        directory={
+                            directory
+                                ? {
+                                      id: directory.id,
+                                      name: directory.name,
+                                      folders: directory.folders,
+                                  }
+                                : undefined
+                        }
+                    />
+                </ScopeToolsPortal>
+            )}
+        </>
     );
 }

@@ -32,6 +32,7 @@ import type {
     ReasoningEffort,
 } from '../kernel/types';
 import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
+import { effortFromOutputConfig } from '../kernel/override-wire-spelling';
 
 
 
@@ -189,6 +190,9 @@ export const vertexModule: ProviderModule = {
     // `{ anthropic: … }` for a Claude id.
     providerOptionsNamespace: (_id: string, model?: string) =>
         isAnthropicModel(model ?? '') ? 'anthropic' : 'google',
+    // Claude on Vertex reads the same `anthropic` options as the direct module.
+    normalizeReasoningOverride: (ns, options) =>
+        ns === 'anthropic' ? effortFromOutputConfig(options) : options,
     // Same rule as the direct Gemini module — Vertex serves the same models, so
     // the example must follow the model's generation (level vs budget), not the
     // transport. The one production Vertex slot runs gemini-3.7-flash.

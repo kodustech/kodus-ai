@@ -9,6 +9,7 @@ export const FEATURE_KEYS = {
     heavyReview: 'heavy-review',
     kodusTraceReviewContext: 'kodus-trace-review-context',
     kodusProvider: 'kodus-provider',
+    deterministicEvidence: 'deterministic-evidence',
 } as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[keyof typeof FEATURE_KEYS];

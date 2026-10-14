@@ -2,24 +2,17 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import {
     LoadPrDecisionsParams,
+    MAX_PR_DECISIONS,
     PrDecisionRecord,
     PrDecisionStore,
     PR_DECISION_STORE_TOKEN,
 } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 
-/** Most-recent decisions kept per changed file — bounds prompt growth on a
- *  long-lived PR that went through many review rounds. Same spirit as
- *  `traceDecisions`' `droppedForBudget` and `ConversationStore`'s message cap. */
-const MAX_DECISIONS_PER_FILE = 5;
-
-/** Hard cap across the whole run, applied after the per-file cap. */
-const MAX_DECISIONS_TOTAL = 30;
-
 /**
- * Fetches prior-round decisions for the files under review and applies the
- * size caps. Pure orchestration over {@link PrDecisionStore} — no Mongo import
- * here, so this is testable with an in-memory store.
+ * Fetches the suggestions already posted on the PR and keeps the most recent
+ * {@link MAX_PR_DECISIONS}. Pure orchestration over {@link PrDecisionStore} —
+ * no Mongo import here, so this is testable with an in-memory store.
  */
 @Injectable()
 export class BuildPreviousReviewDecisionsUseCase implements IUseCase {
@@ -40,30 +33,14 @@ export class BuildPreviousReviewDecisionsUseCase implements IUseCase {
     }
 }
 
-/** Most recent first per file (by `decidedAt`), capped per file then overall.
- *  PR-level decisions (`relevantFile: undefined`) bucket together under the
- *  `undefined` key — they get their own per-bucket cap, same as any file. */
+/** Most recent first (by `decidedAt`), across the whole PR — file-level and
+ *  PR-level together — capped at {@link MAX_PR_DECISIONS}. There is no
+ *  per-file cap: a file's older suggestions must not drop out while other
+ *  files are quiet, and code moves between files across rounds. */
 export function capDecisions(
     decisions: readonly PrDecisionRecord[],
 ): PrDecisionRecord[] {
-    const byFile = new Map<string | undefined, PrDecisionRecord[]>();
-    for (const decision of decisions) {
-        const bucket = byFile.get(decision.relevantFile);
-        if (bucket) {
-            bucket.push(decision);
-        } else {
-            byFile.set(decision.relevantFile, [decision]);
-        }
-    }
-
-    const capped: PrDecisionRecord[] = [];
-    for (const bucket of byFile.values()) {
-        bucket.sort(byDecidedAtDesc);
-        capped.push(...bucket.slice(0, MAX_DECISIONS_PER_FILE));
-    }
-
-    capped.sort(byDecidedAtDesc);
-    return capped.slice(0, MAX_DECISIONS_TOTAL);
+    return [...decisions].sort(byDecidedAtDesc).slice(0, MAX_PR_DECISIONS);
 }
 
 /** Most-recent-first comparator. A record missing `decidedAt` (legacy data

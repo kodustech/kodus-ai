@@ -24,6 +24,7 @@ async function runFormat(findings, modelKey = SECONDARY_BASELINE, opts = {}) {
 
     const model = await buildSecondaryModel(modelKey);
     const suggestions = findings.map((f) => ({
+        title: f.oneSentenceSummary || '',
         suggestionContent: f.suggestionContent || '',
         existingCode: f.existingCode || '',
         improvedCode: f.improvedCode || '',

@@ -54,6 +54,12 @@ import {
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
+import { formatBitbucketSuggestionBody } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
+import {
+    getTranslationsForLanguageByCategory,
+    TranslationsCategory,
+} from '@libs/common/utils/translations/translations';
+import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 import {
     CodeManagementIssue,
     GetIssueParams,
@@ -1733,6 +1739,7 @@ export class BitbucketDataCenterService implements Omit<
                 repository,
                 prNumber,
                 lineComment,
+                language,
             } = params;
 
             const authDetails = await this.getAuthDetails(
@@ -1754,9 +1761,20 @@ export class BitbucketDataCenterService implements Omit<
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
-            // Formatting logic stripped for brevity, assuming raw string
-            const commentBody =
-                lineComment?.body?.suggestionContent || 'Suggested changes.';
+            const translations = getTranslationsForLanguageByCategory(
+                language as LanguageValue,
+                TranslationsCategory.ReviewComment,
+            );
+            const commentBody = formatBitbucketSuggestionBody({
+                label: lineComment?.suggestion?.label,
+                severity: lineComment?.suggestion?.severity,
+                title: lineComment?.suggestion?.oneSentenceSummary,
+                body:
+                    lineComment?.body?.suggestionContent ||
+                    'Suggested changes.',
+                actionStatement: lineComment?.body?.actionStatement,
+                feedback: translations.feedbackReply || translations.feedback,
+            });
 
             // Data Center specific payload for inline PR comments
             const payload = {

@@ -1,0 +1,105 @@
+{
+  "__doc": "Positive cases for a finding that cites ONLY a line the PR did not touch, because the change is what made it a violation (an import whose last use was removed, a doc comment the new body contradicts), each with a control where nothing is wrong. The diff is built with convertToUnifiedDiffWithLineNumbers, the form production feeds the shard. expectedPublished counts findings per case. Used to decide whether the shard may drop findings on unchanged lines: run with `node evals/kody-rules/context-fp-repro.js --cases=cases-untouched-line --reps=3`.",
+  "cases": [
+    {
+      "caseId": "untouched-import-left-unused",
+      "claimFamily": "none",
+      "why": "The change removes the last use of formatDate. Line 1, the import, is untouched context, and it is now the violation: the only correct finding cites it.",
+      "expectedPublished": 1,
+      "prTitle": "refactor: simplify",
+      "prBody": "",
+      "rule": {
+        "uuid": "rule-no-unused-imports",
+        "title": "No unused imports",
+        "rule": "Every import must be used in the file. Remove imports that nothing references.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/orders/summary.ts",
+          "patch": "@@ -1,6 +1,6 @@\n import { formatDate } from '../shared/date';\n import { Order } from './order.entity';\n \n export function summarize(order: Order): string {\n-    return formatDate(order.createdAt) + ' ' + order.total;\n+    return String(order.total);\n }",
+          "patchWithLinesStr": "## file: 'src/orders/summary.ts'\n@@ -1,6 +1,6 @@\n     1  import { formatDate } from '../shared/date';\n     2  import { Order } from './order.entity';\n     3  \n     4  export function summarize(order: Order): string {\n       -    return formatDate(order.createdAt) + ' ' + order.total;\n     5 +    return String(order.total);\n     6  }"
+        }
+      ],
+      "repoFiles": {
+        "src/orders/summary.ts": "import { formatDate } from '../shared/date';\nimport { Order } from './order.entity';\n\nexport function summarize(order: Order): string {\n    return String(order.total);\n}"
+      }
+    },
+    {
+      "caseId": "untouched-docstring-now-wrong",
+      "claimFamily": "none",
+      "why": "The change drops the tax from the return value. The doc comment on line 3 still says \"including tax\" and is untouched context: the only correct finding cites it.",
+      "expectedPublished": 1,
+      "prTitle": "refactor: simplify",
+      "prBody": "",
+      "rule": {
+        "uuid": "rule-doc-matches-code",
+        "title": "Doc comments must match the code",
+        "rule": "A doc comment must describe what the function it documents actually does. Fix or remove a comment that no longer matches the code.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/orders/total.ts",
+          "patch": "@@ -3,4 +3,4 @@\n /** Returns the order total including tax. */\n export function orderTotal(order: Order): number {\n-    return order.subtotal * 1.2;\n+    return order.subtotal;\n }",
+          "patchWithLinesStr": "## file: 'src/orders/total.ts'\n@@ -3,4 +3,4 @@\n     3  /** Returns the order total including tax. */\n     4  export function orderTotal(order: Order): number {\n       -    return order.subtotal * 1.2;\n     5 +    return order.subtotal;\n     6  }"
+        }
+      ],
+      "repoFiles": {
+        "src/orders/total.ts": "import { Order } from './order.entity';\n\n/** Returns the order total including tax. */\nexport function orderTotal(order: Order): number {\n    return order.subtotal;\n}"
+      }
+    },
+    {
+      "caseId": "untouched-import-still-used",
+      "claimFamily": "none",
+      "why": "Control for the first case: the import is still used after the change, so nothing is wrong and nothing should be published.",
+      "expectedPublished": 0,
+      "prTitle": "refactor: simplify",
+      "prBody": "",
+      "rule": {
+        "uuid": "rule-no-unused-imports",
+        "title": "No unused imports",
+        "rule": "Every import must be used in the file. Remove imports that nothing references.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/orders/summary.ts",
+          "patch": "@@ -4,3 +4,3 @@\n export function summarize(order: Order): string {\n-    return formatDate(order.createdAt);\n+    return formatDate(order.createdAt) + ' ' + order.total;\n }",
+          "patchWithLinesStr": "## file: 'src/orders/summary.ts'\n@@ -4,3 +4,3 @@\n     4  export function summarize(order: Order): string {\n       -    return formatDate(order.createdAt);\n     5 +    return formatDate(order.createdAt) + ' ' + order.total;\n     6  }"
+        }
+      ],
+      "repoFiles": {
+        "src/orders/summary.ts": "import { formatDate } from '../shared/date';\nimport { Order } from './order.entity';\n\nexport function summarize(order: Order): string {\n    return formatDate(order.createdAt) + ' ' + order.total;\n}"
+      }
+    },
+    {
+      "caseId": "untouched-docstring-still-right",
+      "claimFamily": "none",
+      "why": "Control for the second case: the comment says \"before tax\" and the code returns the subtotal, so nothing is wrong.",
+      "expectedPublished": 0,
+      "prTitle": "refactor: simplify",
+      "prBody": "",
+      "rule": {
+        "uuid": "rule-doc-matches-code",
+        "title": "Doc comments must match the code",
+        "rule": "A doc comment must describe what the function it documents actually does. Fix or remove a comment that no longer matches the code.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/orders/total.ts",
+          "patch": "@@ -3,4 +3,4 @@\n /** Returns the order total before tax. */\n export function orderTotal(order: Order): number {\n-    return order.subtotal + 0;\n+    return order.subtotal;\n }",
+          "patchWithLinesStr": "## file: 'src/orders/total.ts'\n@@ -3,4 +3,4 @@\n     3  /** Returns the order total before tax. */\n     4  export function orderTotal(order: Order): number {\n       -    return order.subtotal + 0;\n     5 +    return order.subtotal;\n     6  }"
+        }
+      ],
+      "repoFiles": {
+        "src/orders/total.ts": "import { Order } from './order.entity';\n\n/** Returns the order total before tax. */\nexport function orderTotal(order: Order): number {\n    return order.subtotal;\n}"
+      }
+    }
+  ]
+}

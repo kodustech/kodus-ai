@@ -31,8 +31,6 @@ export type PublicConfig = {
     nodeEnv: string;
 
     apiPublicUrl: string;
-
-    helpdeskUrl: string;
 };
 // Note: WEB_TERMS_AND_CONDITIONS has no client consumer yet, but it's
 // populated end-to-end (SSM → CI workflow → .env, with a real Notion URL

@@ -35,12 +35,47 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-const CLONE_TIMEOUT_MS = 120_000;
+/**
+ * Clone budget. 120s is tight for large monorepos — a shallow fetch of a PR
+ * ref on a repo the size of Keycloak or cal.com can exceed it, and the review
+ * then runs with no sandbox at all. Overridable so a deployment that reviews
+ * big repositories can raise it.
+ */
+const CLONE_TIMEOUT_MS =
+    Number(process.env.API_SANDBOX_CLONE_TIMEOUT_MS) || 120_000;
 // Submodule fetch is best-effort and must never hold a review hostage — see
 // `fetchSubmodules` below.
 const SUBMODULES_TIMEOUT_MS = 120_000;
 const CMD_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 5 * 1024 * 1024; // 5 MB — cap output to prevent memory issues
+
+/**
+ * Variables that tell git which repository to work on. They outrank `-C` and
+ * `cwd`: a process started from a git hook (the pre-push test suite) inherits
+ * GIT_DIR, and `git init <tempDir>` then re-initialized the caller's
+ * repository (core.bare=true, core.hooksPath=/dev/null) instead of creating
+ * the sandbox's own. Everything the sandbox runs must resolve its own clone.
+ */
+const GIT_REPOSITORY_ENV = [
+    'GIT_DIR',
+    'GIT_WORK_TREE',
+    'GIT_INDEX_FILE',
+    'GIT_OBJECT_DIRECTORY',
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+    'GIT_COMMON_DIR',
+    'GIT_NAMESPACE',
+];
+
+/** `process.env` plus `extra`, without the variables that relocate git. */
+export function sandboxEnv(
+    extra?: Record<string, string | undefined>,
+): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+    for (const key of GIT_REPOSITORY_ENV) {
+        delete env[key];
+    }
+    return env;
+}
 
 @Injectable()
 export class LocalSandboxService implements ISandboxProvider {
@@ -102,6 +137,7 @@ export class LocalSandboxService implements ISandboxProvider {
 
             await execFileAsync('git', ['init', tempDir], {
                 timeout: CLONE_TIMEOUT_MS,
+                env: sandboxEnv(),
             });
 
             // Disable all git hooks to prevent arbitrary code execution
@@ -109,12 +145,12 @@ export class LocalSandboxService implements ISandboxProvider {
             await execFileAsync(
                 'git',
                 ['-C', tempDir, 'config', 'core.hooksPath', '/dev/null'],
-                { timeout: 5_000 },
+                { timeout: 5_000, env: sandboxEnv() },
             );
 
             // Pass auth header via env vars instead of -c args
             // to keep the token out of ps/proc/cmdline
-            const fetchEnv: Record<string, string> = { ...process.env } as any;
+            const fetchEnv: Record<string, string> = sandboxEnv() as any;
             if (authToken) {
                 fetchEnv.GIT_CONFIG_COUNT = '1';
                 fetchEnv.GIT_CONFIG_KEY_0 = 'http.extraHeader';
@@ -139,6 +175,7 @@ export class LocalSandboxService implements ISandboxProvider {
 
             await execFileAsync('git', ['-C', tempDir, 'checkout', localRef], {
                 timeout: CLONE_TIMEOUT_MS,
+                env: sandboxEnv(),
             });
 
             // Only a submodule declared identically on the BASE branch is
@@ -260,9 +297,7 @@ export class LocalSandboxService implements ISandboxProvider {
                         cwd: capturedRepoDir,
                         timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
                         maxBuffer: MAX_BUFFER,
-                        env: opts?.envs
-                            ? { ...process.env, ...opts.envs }
-                            : process.env,
+                        env: sandboxEnv(opts?.envs),
                     });
                     return {
                         stdout: stdout || '',
@@ -329,9 +364,7 @@ export class LocalSandboxService implements ISandboxProvider {
                     // process.env first so the scoped header wins, and note the
                     // header travels as GIT_CONFIG_VALUE_0 — never as a process
                     // argument, same as the clone above.
-                    ...(opts?.env
-                        ? { env: { ...process.env, ...opts.env } }
-                        : {}),
+                    env: sandboxEnv(opts?.env),
                 } as ExecFileOptions) as Promise<{ stdout: string }>,
             removeDir: async (relative) => {
                 // Built from the submodule NAME in `.gitmodules`, written by
@@ -624,6 +657,7 @@ export class LocalSandboxService implements ISandboxProvider {
                                 cwd: repoDir,
                                 timeout: CMD_TIMEOUT_MS,
                                 maxBuffer: MAX_BUFFER,
+                                env: sandboxEnv(),
                             },
                         );
                         return {
@@ -644,6 +678,7 @@ export class LocalSandboxService implements ISandboxProvider {
                     const children = validated.map(({ program, args }, idx) =>
                         spawn(program, args, {
                             cwd: repoDir,
+                            env: sandboxEnv(),
                             stdio: [
                                 idx === 0 ? 'ignore' : 'pipe',
                                 'pipe',
@@ -804,12 +839,12 @@ export class LocalSandboxService implements ISandboxProvider {
                     'user.email',
                     'kodus-cli@kodus.local',
                 ],
-                { timeout: 5_000 },
+                { timeout: 5_000, env: sandboxEnv() },
             );
             await execFileAsync(
                 'git',
                 ['-C', repoDir, 'config', 'user.name', 'Kodus CLI'],
-                { timeout: 5_000 },
+                { timeout: 5_000, env: sandboxEnv() },
             );
         } catch {
             // ignore — `git apply` may still work without identity
@@ -826,7 +861,7 @@ export class LocalSandboxService implements ISandboxProvider {
                     '--whitespace=nowarn',
                     patchPath,
                 ],
-                { timeout: CLONE_TIMEOUT_MS },
+                { timeout: CLONE_TIMEOUT_MS, env: sandboxEnv() },
             );
             this.logger.log({
                 message: 'CLI diff applied successfully on top of merge-base',
@@ -857,7 +892,7 @@ export class LocalSandboxService implements ISandboxProvider {
                     '--reject',
                     patchPath,
                 ],
-                { timeout: CLONE_TIMEOUT_MS },
+                { timeout: CLONE_TIMEOUT_MS, env: sandboxEnv() },
             );
         } catch (error: any) {
             this.logger.warn({

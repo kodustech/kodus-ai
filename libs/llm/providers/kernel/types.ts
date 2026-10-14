@@ -322,6 +322,18 @@ export interface ProviderModule {
      *  already namespaced, so the auto-wrapper does not wrap a correct paste a
      *  second time and wrap it out of existence. */
     providerOptionsNamespaceAliases?(providerId: string): string[];
+    /** A user-pasted reasoning override, under this provider's namespace, with
+     *  the vendor's WIRE spelling of a field renamed to the option the adapter
+     *  reads. Users paste what the vendor's API docs show (`reasoning_effort`,
+     *  `output_config.effort`); the adapter's schema strips those silently and
+     *  renders the same field itself from its own option name, so without this
+     *  the value never reaches the request. Only for a field the adapter
+     *  renders to that exact wire spelling, and never over a value the user
+     *  also gave under the adapter's name. */
+    normalizeReasoningOverride?(
+        namespace: string,
+        options: Record<string, unknown>,
+    ): Record<string, unknown>;
     /** Example JSON for the connect form's "Custom" reasoning-override textarea —
      *  the exact shape THIS provider accepts under its reasoning namespace, per
      *  requested id (a module serving several ids may differ, e.g. openai's native

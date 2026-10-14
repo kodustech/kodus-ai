@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import {
@@ -36,6 +37,8 @@ export class CreateIntegrationUseCase implements IUseCase {
         private readonly authIntegrationService: IAuthIntegrationService,
 
         private readonly ignoreBotsUseCase: IgnoreBotsUseCase,
+
+        private readonly telemetry: TelemetryService,
     ) {}
 
     public async execute(params: any): Promise<any> {
@@ -56,6 +59,17 @@ export class CreateIntegrationUseCase implements IUseCase {
             },
             params.integrationType,
         );
+
+        // The step before any repository exists: the setup funnel counts
+        // providers here, and `repositoryConnected` counts repos later.
+        void this.telemetry.gitIntegrationChanged({
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            actorUserId: this.request.user?.uuid,
+            platform: params.integrationType?.toUpperCase(),
+            authMode,
+            connected: true,
+        });
 
         this.ignoreBotsUseCase
             .execute({

@@ -77,7 +77,8 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         organizationId: string,
         ruleId: string,
         references: {
-            contextReferenceId?: string;
+            /** `null` clears it; `undefined` leaves the stored value. */
+            contextReferenceId?: string | null;
             // Todos os outros campos de referência foram movidos para Context OS
         },
     ): Promise<IKodyRule | null>;

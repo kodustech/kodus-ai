@@ -31,7 +31,7 @@ export function mapFileSuggestions(files: ApiFileSuggestion[]): ReviewIssue[] {
         line: suggestion.relevantLinesStart ?? 1,
         endLine: suggestion.relevantLinesEnd,
         severity: normalizeSeverity(suggestion.severity),
-        message: suggestion.suggestionContent,
+        message: suggestion.fullExplanation || suggestion.suggestionContent,
         suggestion: suggestion.oneSentenceSummary,
         ruleId: suggestion.label,
     }));
@@ -44,7 +44,7 @@ export function mapPrLevelSuggestions(
         file: 'PR',
         line: 0,
         severity: normalizeSeverity(suggestion.severity),
-        message: suggestion.suggestionContent,
+        message: suggestion.fullExplanation || suggestion.suggestionContent,
         suggestion: suggestion.oneSentenceSummary,
         ruleId: suggestion.label,
     }));

@@ -29,9 +29,18 @@ import {
     dedupEmbeddingText,
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
+import { resolveSuggestionTitle } from '@libs/common/utils/codeManagement/suggestion-title';
+import {
+    impactAndActionFallback,
+    stripReviewScaffolding,
+} from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
+import { resolveWritingGuidelines } from '@libs/common/utils/writing-guidelines';
+import { shapeSuggestionBodyWithReport } from '@libs/common/utils/codeManagement/suggestion-body-shape';
 import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
+    buildCallGraphFailedWarning,
+    buildSandboxUnavailableWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
@@ -62,6 +71,16 @@ import {
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { AgentProgressEvent } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import {
+    analyzerFindingsToSuggestions,
+    isAnalyzerSuggestion,
+} from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
+import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
+import {
+    bothFromAnalyzers,
+    restatesAnalyzerFinding,
+} from '@libs/code-review/infrastructure/agents/engine/restates-analyzer-finding';
+import { survivesSeverityFilter } from '@libs/code-review/infrastructure/agents/engine/survives-severity-filter';
 import {
     LazyLinkedRepoAccess,
     evaluateCrossRepoBoundaryGate,
@@ -109,6 +128,7 @@ import {
 } from '@libs/llm/error-classifier';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
 import { LLM } from '@libs/llm/llm';
+import { applyRevisionLinks } from '@libs/code-review/infrastructure/agents/engine/revision-link';
 import {
     isReducerEnabled,
     REDUCER_QUOTA,
@@ -175,6 +195,36 @@ export function extractValidDiffLines(patch?: string): Array<[number, number]> {
     }
 
     return ranges;
+}
+
+/**
+ * Which out-of-hunk findings survive the snap as file-anchored PR comments.
+ *
+ * Rules that declared they need more than the diff (issue #1826). Only such a
+ * rule has earned the right to point at a line this PR did not change: "this
+ * function is too long" is true of the whole function, most of which is
+ * unchanged. Every other out-of-hunk finding is dropped — nothing else in the
+ * pipeline can tell the two apart. Exported so the kody-rules eval scores what
+ * this stage publishes, not the agent's raw output.
+ */
+export function fileAnchoredFindingPredicate(
+    rules: Array<Partial<IKodyRule>>,
+): (s: Partial<CodeSuggestion>) => boolean {
+    const contextNeedingRuleUuids = new Set(
+        rules
+            .filter(
+                (rule) =>
+                    !!rule.uuid &&
+                    !!rule.contextNeed?.need &&
+                    rule.contextNeed.need !== 'diff-only',
+            )
+            .map((rule) => rule.uuid!),
+    );
+    return (s) =>
+        s.label === 'kody_rules' &&
+        (s.brokenKodyRulesIds ?? []).some((uuid) =>
+            contextNeedingRuleUuids.has(uuid),
+        );
 }
 
 /**
@@ -549,8 +599,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // (prod incident, 2026-09-14: "invalid input syntax for type
             // uuid" writing automation_execution whenever lastExecution.uuid
             // was absent and the old `||` fallback poisoned the query).
-            const executionUuid =
-                context.pipelineMetadata?.lastExecution?.uuid;
+            const executionUuid = context.pipelineMetadata?.lastExecution?.uuid;
             const repositoryId = context.repository?.id;
 
             // Shared telemetry metadata for all Langfuse-traced calls in this pipeline run
@@ -583,6 +632,20 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 emitStageWarning('CALLGRAPH_DROPPED');
             }
 
+            // The null sandbox (no provider, or no clone params) carries
+            // remoteCommands that only throw, so the checkout is told by its
+            // type, as null-sandbox.service.ts asks callers to.
+            const hasCheckout =
+                !!context.sandboxHandle?.remoteCommands &&
+                context.sandboxHandle.type !== 'null';
+            if (!hasCheckout && !context.sandboxSuperseded) {
+                stageWarnings.push(
+                    buildSandboxUnavailableWarning({
+                        modelName: effectiveModelName || 'unknown',
+                    }),
+                );
+            }
+
             if (shouldBuildCallGraph) {
                 try {
                     if (context.sandboxHandle?.run) {
@@ -610,6 +673,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         }
                     }
                 } catch (err) {
+                    // Without a checkout the graph cannot build; that loss is
+                    // already SANDBOX_UNAVAILABLE.
+                    if (hasCheckout) {
+                        stageWarnings.push(
+                            buildCallGraphFailedWarning({
+                                modelName: effectiveModelName || 'unknown',
+                            }),
+                        );
+                    }
                     this.logger.warn({
                         message: `[AGENT] Call graph failed for PR#${prNumber}, proceeding without it`,
                         context: this.stageName,
@@ -986,29 +1058,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const changedFilesByName = new Map(
                 changedFiles.map((f) => [f.filename, f]),
             );
-            // Rules that declared they need more than the diff (issue #1826).
-            // Only such a rule has earned the right to point at a line this PR
-            // did not change: "this function is too long" is true of the whole
-            // function, most of which is unchanged. Every other out-of-hunk
-            // finding is still dropped, exactly as before — nothing else in the
-            // pipeline can tell the two apart, which is why the snap drops both
-            // today.
-            const contextNeedingRuleUuids = new Set(
-                (context.codeReviewConfig?.kodyRules ?? [])
-                    .filter(
-                        (rule) =>
-                            !!rule.uuid &&
-                            !!(rule as Partial<IKodyRule>).contextNeed?.need &&
-                            (rule as Partial<IKodyRule>).contextNeed!.need !==
-                                'diff-only',
-                    )
-                    .map((rule) => rule.uuid!),
+            const isFileAnchored = fileAnchoredFindingPredicate(
+                context.codeReviewConfig?.kodyRules ?? [],
             );
-            const isFileAnchored = (s: Partial<CodeSuggestion>): boolean =>
-                s.label === 'kody_rules' &&
-                (s.brokenKodyRulesIds ?? []).some((uuid) =>
-                    contextNeedingRuleUuids.has(uuid),
-                );
             const validatedSuggestions = anchoringInput
                 .map((s) => {
                     const file = changedFilesByName.get(s.relevantFile);
@@ -1083,9 +1135,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     };
                 });
 
-            // Severity is set at enrichment; the finder suggestions carry none.
+            const severityNormalizedNonRules: Partial<CodeSuggestion>[] =
+                nonKodyRulesSuggestions.map((suggestion) => ({
+                    ...suggestion,
+                    severity: this.normalizeSeverity(suggestion.severity),
+                }));
+
+            // Rule-pack findings join the non-rule stream so they dedupe
+            // against the model's findings instead of arriving as a parallel
+            // set of comments on the same lines. Their severity is already on
+            // the v2 scale, so they skip normalizeSeverity.
+            const analyzerSuggestions = analyzerFindingsToSuggestions(
+                context.analyzerFindings ?? [],
+            );
+
             const severityNormalized: Partial<CodeSuggestion>[] = [
-                ...nonKodyRulesSuggestions,
+                ...severityNormalizedNonRules,
+                ...analyzerSuggestions,
                 ...kodyRulesWithSeverity,
             ];
 
@@ -1277,14 +1343,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const accepted =
                     acceptedLevels[severityFilter] || acceptedLevels.low;
                 const before = deduped.length;
-                const keeps = (s: Partial<CodeSuggestion>) => {
-                    if (s.label === 'kody_rules' && !applyFiltersToKodyRules) {
-                        return true; // kody rules bypass by default
-                    }
-                    return accepted.includes(
-                        (s.severity || 'medium').toLowerCase(),
+                const keeps = (s: Partial<CodeSuggestion>) =>
+                    survivesSeverityFilter(
+                        s,
+                        accepted,
+                        applyFiltersToKodyRules,
                     );
-                };
                 const droppedBySeverity = deduped.filter((s) => !keeps(s));
                 deduped = deduped.filter(keeps);
                 for (const s of droppedBySeverity) {
@@ -1302,23 +1366,83 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
+            // The formatter shortens the body for people reading the PR; the
+            // whole explanation is kept for the agent prompt and agent surfaces.
+            for (const s of deduped) {
+                s.fullExplanation = stripReviewScaffolding(
+                    s.suggestionContent || '',
+                );
+            }
+
+            // Every finding renders under a bounded title: the model's summary,
+            // or the first sentence of the body when the model left it out.
+            // Resolved before formatting and shaping, so both see the title the
+            // reader sees and neither repeats it as the body's opening.
+            const titleCounts = {
+                fromSummary: 0,
+                fromBody: 0,
+                cut: 0,
+                empty: 0,
+            };
+            for (const s of deduped) {
+                const hadSummary = !!s.oneSentenceSummary?.trim();
+                s.oneSentenceSummary = resolveSuggestionTitle({
+                    summary: s.oneSentenceSummary,
+                    body: (
+                        s.fullExplanation ||
+                        s.suggestionContent ||
+                        ''
+                    ).replace(/```[\s\S]*?```/g, ' '),
+                });
+                if (!s.oneSentenceSummary) titleCounts.empty++;
+                else if (hadSummary) titleCounts.fromSummary++;
+                else titleCounts.fromBody++;
+                if (s.oneSentenceSummary.endsWith('…')) titleCounts.cut++;
+            }
+            this.logger.log({
+                message: `[AGENT] Titled ${deduped.length} suggestions (from summary ${titleCounts.fromSummary}, from body ${titleCounts.fromBody}, cut ${titleCounts.cut}, empty ${titleCounts.empty})`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    ...titleCounts,
+                },
+            });
+
+            const savedGenerationMain =
+                context.codeReviewConfig?.v2PromptOverrides?.generation?.main;
+            const writingGuidelines =
+                resolveWritingGuidelines(savedGenerationMain);
+
+            const formattedTargets = new Set<(typeof deduped)[number]>();
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
             try {
                 const {
                     formatSuggestionContent,
                 } = require('@libs/code-review/infrastructure/agents/engine/format-suggestion-content');
+                // Deterministic findings skip the pass. Their body is already
+                // the structured list the builder produced, and a polish pass
+                // reflowed it into one paragraph — losing the per-package
+                // lines and appending remediation advice the scanner never
+                // said. There is no WHAT/WHY/HOW scaffolding here to strip.
+                const formatTargets = deduped
+                    .map((s, i) => (isAnalyzerSuggestion(s) ? -1 : i))
+                    .filter((i) => i >= 0);
                 const formatted = await formatSuggestionContent(
-                    deduped.map((s) => ({
-                        suggestionContent: s.suggestionContent || '',
-                        existingCode: s.existingCode || '',
-                        improvedCode: s.improvedCode || '',
-                        relevantFile: s.relevantFile || '',
-                        language: s.language || '',
+                    formatTargets.map((i) => ({
+                        title: deduped[i].oneSentenceSummary || '',
+                        suggestionContent: deduped[i].suggestionContent || '',
+                        existingCode: deduped[i].existingCode || '',
+                        improvedCode: deduped[i].improvedCode || '',
+                        relevantFile: deduped[i].relevantFile || '',
+                        language: deduped[i].language || '',
                     })),
                     {
-                        customWritingGuidelines:
-                            context.codeReviewConfig?.v2PromptOverrides
-                                ?.generation?.main,
+                        // A saved copy of a shipped default is not the team's
+                        // own text; only a real edit outranks the formatter's rules.
+                        customWritingGuidelines: writingGuidelines.isCustom
+                            ? writingGuidelines.text
+                            : undefined,
                         byokConfig: context.codeReviewConfig?.byokConfig,
                         languageResultPrompt:
                             context.codeReviewConfig?.languageResultPrompt,
@@ -1327,19 +1451,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     },
                 );
                 for (const [i, fmt] of formatted) {
-                    if (deduped[i]) {
-                        deduped[i].suggestionContent = fmt.suggestionContent;
-                        // Keep llmPrompt in sync with the formatted prose.
-                        // llmPrompt is a snapshot of the RAW suggestionContent
-                        // (WHAT/WHY/HOW) taken in finding-mapper before this
-                        // pass; the per-comment "Prompt for LLM" copy block and
-                        // the consolidated @agentPrompt read it, so without this
-                        // the raw scaffolding still leaks there.
-                        deduped[i].llmPrompt = fmt.suggestionContent;
+                    const target = formatTargets[i];
+                    if (
+                        target !== undefined &&
+                        deduped[target] &&
+                        fmt.suggestionContent?.trim()
+                    ) {
+                        formattedTargets.add(deduped[target]);
+                        deduped[target].suggestionContent =
+                            fmt.suggestionContent;
                     }
                 }
                 this.logger.log({
-                    message: `[AGENT] Formatted ${formatted.size}/${deduped.length} suggestion contents`,
+                    message: `[AGENT] Formatted ${formatted.size}/${formatTargets.length} suggestion contents`,
                     context: this.stageName,
                 });
             } catch (err) {
@@ -1348,6 +1472,52 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     context: this.stageName,
                 });
             }
+
+            // The shape the comment needs does not depend on the model
+            // complying: no code blocks, no opening sentence that restates the
+            // title, and two sentences unless the team set its own length.
+            // Deterministic findings keep their structured list.
+            const shapeCounts = {
+                shaped: 0,
+                removedFences: 0,
+                droppedTitleRepeat: 0,
+                capped: 0,
+                impactActionFallback: 0,
+            };
+            for (const s of deduped) {
+                if (isAnalyzerSuggestion(s)) continue;
+                const fallback =
+                    !writingGuidelines.isCustom && !formattedTargets.has(s)
+                        ? impactAndActionFallback(s.suggestionContent || '')
+                        : undefined;
+                if (fallback) shapeCounts.impactActionFallback++;
+                const shaped = shapeSuggestionBodyWithReport({
+                    body: stripReviewScaffolding(
+                        fallback || s.suggestionContent || '',
+                    ),
+                    title: s.oneSentenceSummary,
+                    capSentences: !writingGuidelines.isCustom,
+                });
+                s.suggestionContent = shaped.body;
+                shapeCounts.shaped++;
+                if (shaped.removedFences) shapeCounts.removedFences++;
+                if (shaped.droppedTitleRepeat) shapeCounts.droppedTitleRepeat++;
+                if (shaped.capped) shapeCounts.capped++;
+            }
+            this.logger.log({
+                message: `[AGENT] Shaped ${shapeCounts.shaped} suggestion bodies (fences removed ${shapeCounts.removedFences}, title repeat dropped ${shapeCounts.droppedTitleRepeat}, capped ${shapeCounts.capped})`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    ...shapeCounts,
+                    writingGuidelines: writingGuidelines.isCustom
+                        ? 'custom'
+                        : savedGenerationMain
+                          ? 'saved-default'
+                          : 'default',
+                },
+            });
 
             // Publication gate (issue #1833): four weeks of production
             // thumbs-down showed 38% had no usable fix — empty, identical to
@@ -1388,8 +1558,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         metadata: {
                             prNumber,
                             organizationId:
-                                context.organizationAndTeamData
-                                    ?.organizationId,
+                                context.organizationAndTeamData?.organizationId,
                             ...badFixCounts,
                         },
                     });
@@ -1406,6 +1575,39 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         ]);
                     });
                 }
+            }
+
+            // Render merged locations after formatting so rewrites cannot drop them.
+            for (const s of deduped) {
+                const otherLocations = [
+                    ...new Set([
+                        ...(s.alsoFoundIn || []),
+                        ...(s.kodyRuleOtherLocations || []),
+                    ]),
+                ];
+                if (!otherLocations?.length) {
+                    continue;
+                }
+                const locationsList = otherLocations
+                    .map((loc) => `- \`${loc}\``)
+                    .join('\n');
+                const otherLocationsSection = `\n\n**Also found in:**\n${locationsList}`;
+                s.suggestionContent = `${s.suggestionContent}${otherLocationsSection}`;
+                // llmPrompt is built from fullExplanation below; without the
+                // list an agent working from the prompt fixes only the kept
+                // location.
+                s.fullExplanation = `${s.fullExplanation || ''}${otherLocationsSection}`;
+                this.logger.log({
+                    message: '[AGENT] Rendered merged finding locations',
+                    context: this.stageName,
+                    metadata: {
+                        prNumber,
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        locationCount: otherLocations.length,
+                        isKodyRule: s.label === 'kody_rules',
+                    },
+                });
             }
 
             // Enrich kody_rules suggestions with markdown links to the rule
@@ -1436,23 +1638,36 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 );
                 const markdownLink = `[${escapedTitle}](${ruleLink})`;
 
-                let content = s.suggestionContent || '';
-                // Skip if the link is already embedded (shouldn't happen
-                // now that enrichment runs once post-formatter, but stay
-                // idempotent in case this block runs twice).
-                if (content.includes(ruleLink)) {
-                    continue;
+                // The same link goes in the body and in the full explanation,
+                // which the prompt and the agent surfaces read. Each text links
+                // the rule title where it names it, or gains a link line.
+                const withRuleLink = (text: string): string => {
+                    if (text.includes(ruleLink)) return text;
+                    return text.includes(rule.title)
+                        ? text.replace(rule.title, markdownLink)
+                        : `${text}\n\nKody rule violation: ${markdownLink}`;
+                };
+                s.suggestionContent = withRuleLink(s.suggestionContent || '');
+                if (s.fullExplanation) {
+                    s.fullExplanation = withRuleLink(s.fullExplanation);
                 }
-
-                if (content.includes(rule.title)) {
-                    // Replace the first occurrence of the title with the link
-                    content = content.replace(rule.title, markdownLink);
-                } else {
-                    // Append a link line at the end
-                    content += `\n\nKody rule violation: ${markdownLink}`;
-                }
-                s.suggestionContent = content;
             }
+
+            // llmPrompt feeds the "Prompt for LLM" block, the consolidated
+            // @agentPrompt and validate-suggestions' fixer instruction, so it
+            // carries the title and the whole explanation, not the short body.
+            for (const s of deduped) {
+                if (s.fullExplanation) {
+                    s.llmPrompt = s.oneSentenceSummary
+                        ? `${s.oneSentenceSummary}\n\n${s.fullExplanation}`
+                        : s.fullExplanation;
+                }
+            }
+
+            // #2039/#2020: a finding that revises, reverses or exists because
+            // of an earlier Kody suggestion on this PR says so, in a line the
+            // formatter never sees (same reason as the rule link above).
+            applyRevisionLinks(deduped, context.previousDecisions);
 
             // Separate PR-level kody rules (no anchor) from file-level suggestions.
             // PR-level suggestions go to validSuggestionsByPR → CreatePrLevelCommentsStage.
@@ -1548,12 +1763,29 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     ...discardedByFile.keys(),
                 ]);
 
+                // Keyed once rather than scanned per file: this loop runs over
+                // every affected file and both lists can be large on a wide PR.
+                const changedByName = new Map(
+                    changedFiles.map((f) => [f.filename, f]),
+                );
+                const ignoredByName = new Map(
+                    (context.ignoredFileChanges ?? []).map((f) => [
+                        f.filename,
+                        f,
+                    ]),
+                );
+
                 draft.fileAnalysisResults = [];
                 for (const filename of allAffectedFiles) {
                     const suggestions = byFile.get(filename) ?? [];
-                    const file = changedFiles.find(
-                        (f) => f.filename === filename,
-                    );
+                    // Analyzer findings legitimately land on files the review
+                    // itself ignores — a lockfile is the common case, since
+                    // ignorePaths hides it from the reviewer while the
+                    // dependency scan still has to report what it introduces.
+                    // Resolving only against changedFiles discarded those.
+                    const file =
+                        changedByName.get(filename) ??
+                        ignoredByName.get(filename);
                     if (file) {
                         draft.fileAnalysisResults.push({
                             validSuggestionsToAnalyze: suggestions,
@@ -1602,9 +1834,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     }
                     draft.validSuggestionsByPR.push(
                         ...prLevelSuggestions.map((s) => ({
-                            id:
-                                s.brokenKodyRulesIds?.[0] ||
-                                crypto.randomUUID(),
+                            id: crypto.randomUUID(),
                             // Any finding that named a file has to say WHERE,
                             // since a PR-level comment carries no anchor of
                             // its own — true whether it's fileAnchored
@@ -1621,6 +1851,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                     : `\`${s.relevantFile}\` — ${s.suggestionContent || ''}`
                                 : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
+                            fullExplanation: s.relevantFile
+                                ? s.relevantLinesStart
+                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.fullExplanation || s.suggestionContent || ''}`
+                                    : `\`${s.relevantFile}\` — ${s.fullExplanation || s.suggestionContent || ''}`
+                                : s.fullExplanation,
                             label: (s.label as any) || 'kody_rules',
                             severity: this.normalizeSeverity(
                                 s.severity,
@@ -1783,10 +2018,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
 
             if (otherLocations.length > 0) {
-                const locationsList = otherLocations
-                    .map((loc) => `- \`${loc}\``)
-                    .join('\n');
-                keep.suggestionContent = `${keep.suggestionContent}\n\n**Also found in:**\n${locationsList}`;
+                // Carried on the suggestion instead of written into
+                // suggestionContent: the content formatter runs after this
+                // merge and rewrites suggestionContent from scratch, which
+                // folded this list into prose or dropped it, so every location
+                // but the kept one disappeared from the posted comment
+                // (#2015). executeStage renders the same list after the
+                // formatter, next to the rule-link enrichment that was moved
+                // there for the same reason.
+                keep.kodyRuleOtherLocations = otherLocations;
             }
 
             this.logger.log({
@@ -1879,6 +2119,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         opts?: { crossStream?: boolean },
     ): Promise<{ honor: boolean; reason: string; score: number }> {
         const lexical = contentSimilarity(dup, keep);
+
+        // Two scanner findings are never duplicates of each other — there is
+        // one suggestion per tool, so the only pair is secrets vs dependencies.
+        // Honoring it would not drop a duplicate; it would drop a whole
+        // category's comment, because the merge keeps only the representative.
+        if (bothFromAnalyzers(dup, keep)) {
+            return {
+                honor: false,
+                reason: 'distinct-analyzers',
+                score: lexical,
+            };
+        }
+
         if (!opts?.crossStream && lexical >= DEDUP_CONTENT_THRESHOLD) {
             return { honor: true, reason: 'lexical', score: lexical };
         }
@@ -1888,6 +2141,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             this.embedDedupSuggestion(keep, keepKey, embedCache),
         ]);
         if (!vecDup || !vecKeep) {
+            // Without embeddings this vetoes EVERY merge, which republishes
+            // the one duplicate we are most sure about: a scanner fact the
+            // model restated. Only that pair overrides the veto — where
+            // embeddings work, the full guard still decides, so a wide agent
+            // finding that merely overlaps a scanner line is not swallowed.
+            if (restatesAnalyzerFinding(dup, keep)) {
+                return {
+                    honor: true,
+                    reason: 'restates-analyzer (no-embed)',
+                    score: lexical,
+                };
+            }
             return {
                 honor: false,
                 reason: 'lexical-veto (no-embed)',
@@ -2374,6 +2639,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
+            // The model ranks `keep` by how a finding reads, which always
+            // favours its own prose over a scanner's. Re-seat the roles so a
+            // deterministic finding survives the group it was merged into.
+            groups = preferAnalyzerKeep(groups, suggestions);
+
             // Semantic tier of the content guard (PR #1527): when lexical overlap
             // is inconclusive we compare description embeddings, and only escalate
             // the ambiguous band to a focused LLM tiebreak. Embeddings are memoized
@@ -2482,6 +2752,27 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ) {
                                 classifiedIndices.add(dupIdx);
                                 const dup = suggestions[dupIdx];
+                                // This branch absorbs duplicates without ever
+                                // consulting the content guard, so the invariant
+                                // has to be repeated here: two scanner findings
+                                // are different categories, and absorbing one
+                                // drops a whole category's comment.
+                                if (
+                                    bothFromAnalyzers(dup, suggestions[keepIdx])
+                                ) {
+                                    if (!addedIndices.has(dupIdx)) {
+                                        addedIndices.add(dupIdx);
+                                        indexToResult.set(
+                                            dupIdx,
+                                            result.length,
+                                        );
+                                        result.push(dup);
+                                        uniqueSuggestions.push(
+                                            this.summarizeDedupSuggestion(dup),
+                                        );
+                                    }
+                                    continue;
+                                }
                                 const loc = `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`;
                                 const keptLoc = `${suggestions[keepIdx].relevantFile}:${suggestions[keepIdx].relevantLinesStart}-${suggestions[keepIdx].relevantLinesEnd}`;
                                 if (loc !== keptLoc) {
@@ -2491,10 +2782,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         }
                         if (locations.length > 0) {
                             const existing = result[existingIdx];
-                            const locList = locations
-                                .map((l) => `- \`${l}\``)
-                                .join('\n');
-                            existing.suggestionContent = `${existing.suggestionContent}\n\n**Also found in:**\n${locList}`;
+                            existing.alsoFoundIn = [
+                                ...new Set([
+                                    ...(existing.alsoFoundIn || []),
+                                    ...locations,
+                                ]),
+                            ];
                         }
                     } else {
                         for (const dupIdx of dupIndices) {
@@ -2575,12 +2868,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     });
                 }
 
-                // Append other locations to the suggestion content
                 if (otherLocations.length > 0) {
-                    const locationsList = otherLocations
-                        .map((loc) => `- \`${loc}\``)
-                        .join('\n');
-                    kept.suggestionContent = `${kept.suggestionContent}\n\n**Also found in:**\n${locationsList}`;
+                    kept.alsoFoundIn = [
+                        ...new Set([
+                            ...(kept.alsoFoundIn || []),
+                            ...otherLocations,
+                        ]),
+                    ];
                 }
 
                 groupSummaries.push({

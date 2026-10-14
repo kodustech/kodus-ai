@@ -68,5 +68,10 @@
         "type": "business_logic",
         "name": "Business Logic",
         "description": "Validates the implementation against business rules, requirements, and acceptance criteria linked in the PR."
+    },
+    {
+        "type": "deterministic",
+        "name": "Deterministic",
+        "description": "Findings a scanner proved rather than a model inferred \u2014 committed credentials, dependencies with known advisories."
     }
 ]

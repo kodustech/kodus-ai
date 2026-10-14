@@ -291,7 +291,7 @@ jobs:
                   # Bench has its own audience (model quality watchers, not
                   # infra). Falls back to general so missing channel doesn't
                   # silence regressions.
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "❌ Model code-review benchmark failed"
                   description: |
@@ -304,7 +304,7 @@ jobs:
               if: success()
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: success
                   title: "✅ Model code-review benchmark — scorecard"
                   description: |

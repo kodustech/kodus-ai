@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -95,7 +95,10 @@ describe('DeleteTeamMembersUseCase — org.member_removed emit', () => {
                     },
                 ],
                 payload: expect.objectContaining({
-                    removedUser: { name: 'Alex Rivera', email: 'alex@acme.com' },
+                    removedUser: {
+                        name: 'Alex Rivera',
+                        email: 'alex@acme.com',
+                    },
                     removedBy: 'admin@acme.com',
                     organizationName: 'Acme Inc',
                     removedAt: expect.any(String),
@@ -224,5 +227,106 @@ describe('DeleteTeamMembersUseCase — self-deletion guard', () => {
         await useCase.execute('member-2');
 
         expect(teamMembers.deleteMembers).toHaveBeenCalledWith([target]);
+    });
+});
+
+describe('DeleteTeamMembersUseCase — organization isolation', () => {
+    const OWN_MEMBER = {
+        uuid: 'member-own',
+        user: { uuid: 'user-own', name: 'Own', email: 'own@acme.com' },
+        team: { uuid: 'team-acme', name: 'Engineering' },
+        organization: { uuid: 'org-acme', name: 'Acme Inc' },
+    };
+    const FOREIGN_MEMBER = {
+        uuid: 'member-foreign',
+        user: { uuid: 'user-foreign', name: 'Foreign', email: 'f@globex.com' },
+        team: { uuid: 'team-globex', name: 'Platform' },
+        organization: { uuid: 'org-globex', name: 'Globex' },
+    };
+
+    // Behaves like the repository: `uuid` always narrows, and an
+    // `organization` filter narrows further. A lookup without the
+    // organization filter finds members of any organization.
+    const lookup = (filter: {
+        uuid?: string;
+        organization?: { uuid?: string };
+    }) =>
+        Promise.resolve(
+            [OWN_MEMBER, FOREIGN_MEMBER].find(
+                (m) =>
+                    m.uuid === filter.uuid &&
+                    (!filter.organization?.uuid ||
+                        m.organization.uuid === filter.organization.uuid),
+            ),
+        );
+
+    const build = async () => {
+        const teamMembers = {
+            findOne: jest.fn(lookup),
+            findManyByUser: jest.fn().mockResolvedValue([]),
+            countByUser: jest.fn().mockResolvedValue(1),
+            deleteMembers: jest.fn().mockResolvedValue(undefined),
+        };
+        const deleteUser = { execute: jest.fn().mockResolvedValue(undefined) };
+        const notify = { emit: jest.fn().mockResolvedValue(undefined) };
+
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                DeleteTeamMembersUseCase,
+                { provide: TEAM_MEMBERS_SERVICE_TOKEN, useValue: teamMembers },
+                { provide: DeleteUserUseCase, useValue: deleteUser },
+                { provide: NotificationService, useValue: notify },
+                {
+                    provide: REQUEST,
+                    useValue: {
+                        user: {
+                            uuid: 'owner-acme',
+                            email: 'owner@acme.com',
+                            organization: {
+                                uuid: 'org-acme',
+                                name: 'Acme Inc',
+                            },
+                        },
+                    },
+                },
+            ],
+        }).compile();
+
+        return {
+            useCase: module.get(DeleteTeamMembersUseCase),
+            teamMembers,
+            deleteUser,
+            notify,
+        };
+    };
+
+    it('does not remove a member of another organization, nor delete their user', async () => {
+        const { useCase, teamMembers, deleteUser, notify } = await build();
+
+        await expect(useCase.execute('member-foreign')).rejects.toBeInstanceOf(
+            NotFoundException,
+        );
+
+        expect(teamMembers.deleteMembers).not.toHaveBeenCalled();
+        expect(deleteUser.execute).not.toHaveBeenCalled();
+        expect(notify.emit).not.toHaveBeenCalled();
+    });
+
+    it('answers 404, not 500, for a member that does not exist', async () => {
+        const { useCase, teamMembers } = await build();
+
+        await expect(useCase.execute('member-missing')).rejects.toBeInstanceOf(
+            NotFoundException,
+        );
+        expect(teamMembers.deleteMembers).not.toHaveBeenCalled();
+    });
+
+    it('still removes a member of the caller organization', async () => {
+        const { useCase, teamMembers, deleteUser } = await build();
+
+        await useCase.execute('member-own');
+
+        expect(teamMembers.deleteMembers).toHaveBeenCalledWith([OWN_MEMBER]);
+        expect(deleteUser.execute).toHaveBeenCalledWith('user-own');
     });
 });

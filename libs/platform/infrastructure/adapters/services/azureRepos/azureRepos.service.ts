@@ -39,6 +39,11 @@ import {
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 
+import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
     OneSentenceSummaryItem,
@@ -55,6 +60,11 @@ import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMark
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
 import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
+import {
+    formatFixBlock,
+    formatTitleLine,
+    resolveAgentPrompt,
+} from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import {
@@ -1175,6 +1185,89 @@ export class AzureReposService implements Omit<
                 metadata: { params },
             });
             return null;
+        }
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+
+        // Azure attaches statuses to the pull request, not to a commit; with
+        // no PR to address there is nothing to read.
+        if (!prNumber) {
+            return [];
+        }
+
+        try {
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const projectId = await this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            const statuses =
+                await this.azureReposRequestHelper.getPullRequestStatuses({
+                    orgName,
+                    token,
+                    projectId,
+                    repositoryId: repository.id,
+                    prId: prNumber,
+                });
+
+            return (statuses ?? []).map((status) =>
+                this.mapAzureBuildStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read Azure pull request statuses',
+                context: AzureReposService.name,
+                error,
+                metadata: { repository: repository.name, prNumber },
+            });
+            return [];
+        }
+    }
+
+    private mapAzureBuildStatus(status: {
+        id: number;
+        state: string;
+        context?: { name?: string; genre?: string };
+        targetUrl?: string;
+        updatedDate?: string;
+    }): CheckEvidence {
+        const unfinished = status.state === 'pending' || status.state === 'notSet';
+        const name = status.context?.genre
+            ? `${status.context.genre}/${status.context?.name ?? ''}`
+            : (status.context?.name ?? '');
+
+        return {
+            id: String(status.id),
+            name,
+            status: unfinished ? 'in_progress' : 'completed',
+            conclusion: unfinished
+                ? null
+                : this.mapAzureConclusion(status.state),
+            url: status.targetUrl ?? null,
+            completedAt: unfinished ? null : (status.updatedDate ?? null),
+            platform: PlatformType.AZURE_REPOS,
+        };
+    }
+
+    private mapAzureConclusion(state: string): CheckEvidenceConclusion | null {
+        switch (state) {
+            case 'succeeded':
+                return 'success';
+            case 'failed':
+            case 'error':
+                return 'failure';
+            case 'notApplicable':
+                return 'skipped';
+            default:
+                return null;
         }
     }
 
@@ -4801,42 +4894,6 @@ export class AzureReposService implements Omit<
         return `<sub>${text}</sub>\n\n`;
     }
 
-    private formatPromptForLLM(lineComment: any) {
-        let copyPrompt = '';
-        if (lineComment?.suggestion?.llmPrompt) {
-            if (lineComment.path) {
-                copyPrompt += `File ${lineComment.path}:\n\n`;
-            }
-
-            if (lineComment.start_line && lineComment.line) {
-                copyPrompt += `Line ${lineComment.start_line} to ${lineComment.line}:\n\n`;
-            } else if (lineComment.line) {
-                copyPrompt += `Line ${lineComment.line}:\n\n`;
-            }
-
-            copyPrompt += lineComment?.suggestion?.llmPrompt;
-
-            if (lineComment?.body?.improvedCode) {
-                copyPrompt +=
-                    '\n\nSuggested Code:\n\n' + lineComment?.body?.improvedCode;
-            }
-
-            copyPrompt = `\n\n<details>
-
-<summary>Prompt for LLM</summary>
-
-\`\`\`
-
-${copyPrompt}
-
-\`\`\`
-
-</details>\n\n`;
-        }
-
-        return copyPrompt;
-    }
-
     private formatBodyForAzure(
         lineComment: any,
         repository: any,
@@ -4846,13 +4903,7 @@ ${copyPrompt}
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
-        const codeBlock = lineComment?.body?.improvedCode
-            ? this.formatCodeBlock(
-                  repository?.language?.toLowerCase(),
-                  this.dedentCode(lineComment?.body?.improvedCode),
-              )
-            : '';
-        const suggestionContent = lineComment?.body?.suggestionContent || '';
+        const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
         const actionStatement = lineComment?.body?.actionStatement
             ? `${lineComment.body.actionStatement}\n\n`
             : '';
@@ -4869,19 +4920,25 @@ ${copyPrompt}
         const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
         const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
 
-        const copyPrompt = suggestionCopyPrompt
-            ? this.formatPromptForLLM(lineComment)
-            : '';
+        const copyPrompt = formatFixBlock({
+            copyPrompt: suggestionCopyPrompt ?? true,
+            path: lineComment?.path,
+            startLine: lineComment?.start_line,
+            endLine: lineComment?.line,
+            prompt: resolveAgentPrompt(lineComment?.suggestion),
+            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            language: lineComment?.suggestion?.language || repository?.language,
+        });
 
         return [
             badges,
             suggestionContent,
             actionStatement,
-            codeBlock,
             copyPrompt,
             this.formatSub(translations.talkToKody),
-            this.formatSub(translations.feedback) +
-                '<!-- kody-codereview -->&#8203;\n&#8203;',
+            this.formatSub(
+                translations.feedbackReply || translations.feedback,
+            ) + '<!-- kody-codereview -->&#8203;\n&#8203;',
             thumbsUpBlock,
             thumbsDownBlock,
         ]
@@ -5260,6 +5317,7 @@ ${copyPrompt}
         }
 
         // BODY - Conteúdo principal
+        commentBody += formatTitleLine(suggestion?.oneSentenceSummary);
         if (suggestion?.suggestionContent) {
             commentBody += `${suggestion.suggestionContent}\n\n`;
         }
@@ -5268,9 +5326,12 @@ ${copyPrompt}
             commentBody += `${suggestion.clusteringInformation.actionStatement}\n\n`;
         }
 
-        if (suggestionCopyPrompt) {
-            commentBody += this.formatPromptForLLM(suggestion);
-        }
+        commentBody += formatFixBlock({
+            copyPrompt: suggestionCopyPrompt,
+            prompt: resolveAgentPrompt(suggestion),
+            improvedCode: suggestion?.improvedCode,
+            language: suggestion?.language || params.repository?.language,
+        });
 
         // FOOTER - Interação/Feedback
         if (includeFooter) {
@@ -5280,7 +5341,10 @@ ${copyPrompt}
             );
 
             commentBody += this.formatSub(translations.talkToKody) + '\n';
-            commentBody += this.formatSub(translations.feedback) + '\n\n';
+            commentBody +=
+                this.formatSub(
+                    translations.feedbackReply || translations.feedback,
+                ) + '\n\n';
 
             const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
             const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
@@ -5948,6 +6012,7 @@ ${copyPrompt}
             sourceRefName: pr?.sourceRefName ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: pr?.sourceRefName?.replace('refs/heads/', ''),
+                sha: pr?.lastMergeSourceCommit?.commitId ?? '',
                 repo: {
                     id: pr?.repository?.id ?? '',
                     name: pr?.repository?.name ?? '',

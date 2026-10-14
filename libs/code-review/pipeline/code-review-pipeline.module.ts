@@ -71,6 +71,13 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
 
 // V3 Agent-First
 import { CreateSandboxStage } from './stages/create-sandbox.stage';
+import { LoadCiEvidenceStage } from './stages/load-ci-evidence.stage';
+import { RunAnalyzersStage } from './stages/run-analyzers.stage';
+import { DeterministicEvidenceGate } from '@libs/code-review/infrastructure/analyzers/deterministic-evidence.gate';
+import { AnalyzerToolRouter } from '@libs/code-review/infrastructure/analyzers/analyzer-tool.router';
+import { ANALYZER_TOOLS_TOKEN } from '@libs/code-review/infrastructure/analyzers/tool.contract';
+import { SecretScanTool } from '@libs/code-review/infrastructure/analyzers/tools/secret-scan.tool';
+import { DependencyScanTool } from '@libs/code-review/infrastructure/analyzers/tools/dependency-scan.tool';
 import { AgentReviewStage } from './stages/agent-review.stage';
 import { BugAgentProvider } from '../infrastructure/agents/providers/bug-agent.provider';
 import { SecurityAgentProvider } from '../infrastructure/agents/providers/security-agent.provider';
@@ -164,6 +171,22 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
 
         // V3 Agent-First stages + providers
         CreateSandboxStage,
+        LoadCiEvidenceStage,
+        RunAnalyzersStage,
+        DeterministicEvidenceGate,
+        AnalyzerToolRouter,
+        SecretScanTool,
+        DependencyScanTool,
+        {
+            // The registry the router walks. New tools are added here; the
+            // stage itself stays unchanged.
+            provide: ANALYZER_TOOLS_TOKEN,
+            useFactory: (
+                secrets: SecretScanTool,
+                dependencies: DependencyScanTool,
+            ) => [secrets, dependencies],
+            inject: [SecretScanTool, DependencyScanTool],
+        },
         AgentReviewStage,
         BugAgentProvider,
         SecurityAgentProvider,
@@ -214,6 +237,8 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         ImplementationVerificationProcessor,
         // V3
         CreateSandboxStage,
+        LoadCiEvidenceStage,
+        RunAnalyzersStage,
         AgentReviewStage,
         ReviewOrchestratorService,
     ],

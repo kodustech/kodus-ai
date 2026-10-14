@@ -25,7 +25,9 @@ import {
     normalizePath,
     fileWasInvestigated,
     runRecallPasses,
+    submitResultTool,
 } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { LLM } from '@libs/llm/llm';
 
 const sampleFindings = {
@@ -664,6 +666,55 @@ describe('recoverFindingsFromProse — request assembly (the LLM.run boundary)',
 
     afterEach(() => jest.restoreAllMocks());
 
+    it('preserves revision ids through the recovery schema and provides the recorded history', async () => {
+        const previous = [
+            {
+                suggestionId: 'round-a',
+                suggestionContent: 'Propagate NotReadyError unchanged.',
+                label: 'bug',
+                outcome: 'pending' as const,
+                decidedAt: '2026-10-03T10:00:00Z',
+            },
+        ];
+        const finding = {
+            ...validFinding,
+            language: 'typescript',
+            label: 'bug',
+            oneSentenceSummary: 'new failure',
+            relevantLinesStart: 10,
+            relevantLinesEnd: 10,
+            severity: 'high',
+            confidence: 8,
+            revisesSuggestionId: 'round-a',
+        };
+        const spy = jest
+            .spyOn(LLM, 'run')
+            .mockImplementation(async (args: any) =>
+                args.schema.parse({ suggestions: [finding] }),
+            );
+        const recovered = await recoverFindingsFromProse(
+            prose,
+            undefined,
+            'org-9',
+            undefined,
+            previous,
+        );
+        expect(recovered[0].revisesSuggestionId).toBe('round-a');
+        expect((spy.mock.calls[0][0] as any).user).toContain('Id: round-a');
+    });
+
+    it('keeps the recovery schema unchanged when there is no earlier history', async () => {
+        const spy = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ suggestions: [] } as any);
+        await recoverFindingsFromProse(prose, undefined, 'org-9');
+        const arg = spy.mock.calls[0][0] as any;
+        expect(arg.schema.shape.suggestions.element.shape).not.toHaveProperty(
+            'revisesSuggestionId',
+        );
+        expect(arg.user).not.toContain('<PreviousReviewDecisions>');
+    });
+
     it('threads byokConfig/schema/user/organizationId and defaults runName', async () => {
         const spy = jest
             .spyOn(LLM, 'run')
@@ -887,5 +938,20 @@ describe('matrix E — N-model policy (delegated to LLM.run)', () => {
         const s2 = artifactState(D);
         expect(extractFindings(s1)).toEqual(extractFindings(s2));
         expect(s1.__findingsOutcome).toBe(s2.__findingsOutcome);
+    });
+});
+
+describe('submitResult schema — finding title', () => {
+    const items = (submitResultTool.inputSchema as any).properties.suggestions
+        .items;
+
+    it('requires oneSentenceSummary so the model always writes a title', () => {
+        expect(items.required).toContain('oneSentenceSummary');
+    });
+
+    it('describes oneSentenceSummary with the shared title spec', () => {
+        expect(items.properties.oneSentenceSummary.description).toBe(
+            TITLE_PROMPT_SPEC,
+        );
     });
 });

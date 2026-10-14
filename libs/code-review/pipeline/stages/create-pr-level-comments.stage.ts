@@ -13,6 +13,7 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -108,6 +109,7 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
                 });
 
                 let commentResults: any[] = [];
+                const promptReplyErrors: Error[] = [];
 
                 try {
                     // Criar comentários para cada sugestão de nível de PR usando o commentManagerService
@@ -124,6 +126,11 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
                             context.codeReviewConfig?.languageResultPrompt,
                             context.pullRequestMessagesConfig?.globalSettings
                                 ?.suggestionCopyPrompt,
+                            // The PR's own platform, not the org/team
+                            // integration: the marker gate depends on the
+                            // platform the comment lands on (#2055 review).
+                            context.platformType as PlatformType,
+                            (error) => promptReplyErrors.push(error),
                         );
 
                     commentResults = result?.commentResults || [];
@@ -247,6 +254,15 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
 
                 // Adicionar os resultados dos comentários ao contexto
                 const finalContext = this.updateContext(context, (draft) => {
+                    for (const error of promptReplyErrors) {
+                        draft.errors ??= [];
+                        draft.errors.push({
+                            stage: this.stageName,
+                            substage: 'bitbucket-prompt-reply',
+                            severity: 'partial',
+                            error,
+                        });
+                    }
                     // Armazenar os resultados dos comentários de nível de PR
                     if (!draft.prLevelCommentResults) {
                         draft.prLevelCommentResults = [];

@@ -158,4 +158,37 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             mockPullRequestService.aggregateAndSaveDataStructure,
         ).not.toHaveBeenCalled();
     });
+    it('records missing prompt delivery as partial while preserving frozen input', async () => {
+        const error = new Error('reply failed');
+        mockCommentManagerService.createLineComments = jest.fn(
+            async (...args: unknown[]) => {
+                (args[8] as (error: Error) => void)(error);
+                return { commentResults: [], lastAnalyzedCommit: 'abc' };
+            },
+        );
+        const ctx = baseContext({
+            errors: [],
+            codeReviewConfig: {},
+            validSuggestions: [
+                {
+                    relevantFile: 'src/foo.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Guard null.',
+                    severity: 'high',
+                    label: 'bug',
+                },
+            ] as never,
+        });
+        const out = await stage.execute(ctx);
+        expect(ctx.errors).toEqual([]);
+        expect(out.errors).toEqual([
+            expect.objectContaining({
+                severity: 'partial',
+                substage: 'bitbucket-prompt-reply',
+                error,
+            }),
+        ]);
+        expect(out.lastAnalyzedCommit).toBe('abc');
+    });
 });

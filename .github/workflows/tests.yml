@@ -240,7 +240,7 @@ jobs:
                   github.repository && env.DISCORD_WEBHOOK != ''
               uses: sarisia/actions-status-discord@v1.16.0
               env:
-                  DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
               with:
                   webhook: ${{ env.DISCORD_WEBHOOK }}
                   status: failure

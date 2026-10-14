@@ -50,6 +50,20 @@ export interface IKodyRules {
     updatedAt?: Date;
 }
 
+/**
+ * The few fields a picker needs to list a rule and link to it: no rule body,
+ * no examples, no detector. An org with thousands of rules ships kilobytes
+ * here instead of megabytes (see `findRulesIndex`).
+ */
+export interface IKodyRuleIndexEntry {
+    uuid: string;
+    title: string;
+    repositoryId: string;
+    directoryId?: string;
+    type?: KodyRulesType;
+    status: KodyRulesStatus;
+}
+
 export interface IKodyRule {
     uuid?: string;
     title: string;
@@ -77,8 +91,7 @@ export interface IKodyRule {
      * Structured validation summary for LONG rules (> 1000 chars), generated
      * once by an LLM ("WHAT TO VALIDATE / HOW TO VALIDATE" bullets) and reused
      * on every review — measured to nearly double occurrence-recall on terse
-     * models without regressing strong ones (docs/plans/
-     * kody-rules-summary-productization.md).
+     * models without regressing strong ones (#1567).
      *
      * Consumed EXCLUSIVELY by the code-review path (the shard prompt swaps
      * `rule` for `summary.content` when `sourceHash` matches the current rule

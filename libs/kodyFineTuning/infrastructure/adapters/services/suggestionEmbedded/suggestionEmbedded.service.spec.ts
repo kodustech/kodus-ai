@@ -162,6 +162,21 @@ describe('SuggestionEmbeddedService deterministic logic', () => {
             expect(mockedGetOpenAIEmbedding).toHaveBeenCalledWith('C S L');
         });
 
+        it('embeds the full explanation when present, so new findings match the corpus written before the short body', async () => {
+            mockedGetOpenAIEmbedding.mockResolvedValue({
+                data: [{ embedding: [1] }],
+            });
+
+            await embeddingText({
+                suggestionContent: 'Short',
+                fullExplanation: 'Full',
+                oneSentenceSummary: 'S',
+                label: 'L',
+            });
+
+            expect(mockedGetOpenAIEmbedding).toHaveBeenCalledWith('Full S L');
+        });
+
         it('returns null when suggestionContent is missing (does not call the embedder)', async () => {
             const out = await embeddingText({
                 oneSentenceSummary: 'summary',

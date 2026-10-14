@@ -273,6 +273,10 @@ export default {
         '/node_modules/',
         '<rootDir>/apps/mcp-manager/test/e2e/',
         '<rootDir>/.stryker-tmp/',
+        // Eval fixtures are snapshots of reviewed repositories, read as data
+        // by the eval's simulated sandbox — their *.spec.ts files are review
+        // input, not this repo's tests.
+        '<rootDir>/evals/[^/]+/fixtures/',
     ],
     // Resolve ESM-style .js imports to .ts files in packages
     resolver: '<rootDir>/jest-resolver.cjs',

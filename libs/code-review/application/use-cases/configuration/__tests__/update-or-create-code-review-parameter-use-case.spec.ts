@@ -1,3 +1,4 @@
+import { currentDefaultWritingGuidelines } from '@libs/common/utils/writing-guidelines';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '../update-or-create-code-review-parameter-use-case';
 import * as yaml from 'js-yaml';
 
@@ -57,6 +58,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -136,6 +138,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -233,6 +236,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const result = await useCase.execute({
@@ -330,6 +334,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -425,6 +430,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -536,6 +542,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await expect(
@@ -633,6 +640,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await expect(
@@ -717,6 +725,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await expect(
@@ -819,6 +828,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -924,6 +934,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -1023,6 +1034,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -1120,6 +1132,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const result = await useCase.execute({
@@ -1225,6 +1238,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const result = await useCase.execute({
@@ -1323,6 +1337,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const dtoShapedEmptyPayload = {
@@ -1438,6 +1453,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const result = await useCase.execute({
@@ -1526,6 +1542,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -1611,6 +1628,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -1629,6 +1647,107 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         expect(
             centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
         ).not.toHaveBeenCalled();
+    });
+
+    it('does not store an untouched writing-guidelines default the editor re-serialised', async () => {
+        const createOrUpdateParametersUseCase = {
+            execute: jest.fn().mockResolvedValue(true),
+        };
+
+        const centralizedConfigPrServiceMock = {
+            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue(null),
+            getScopedKodusConfigFileContent: jest.fn().mockResolvedValue(null),
+            createMutationPullRequestIfEnabled: jest
+                .fn()
+                .mockResolvedValue({ mode: 'direct' }),
+        };
+
+        const useCase = new UpdateOrCreateCodeReviewParameterUseCase(
+            {
+                findByKey: jest.fn().mockResolvedValue({
+                    configValue: {
+                        id: 'global',
+                        name: 'Global',
+                        isSelected: true,
+                        configs: { automatedReviewActive: true },
+                        repositories: [
+                            {
+                                id: 'repo-1',
+                                name: 'my-app',
+                                isSelected: false,
+                                configs: {},
+                                directories: [],
+                            },
+                        ],
+                    },
+                }),
+            } as any,
+            createOrUpdateParametersUseCase as any,
+            {
+                findIntegrationConfigFormatted: jest.fn().mockResolvedValue([
+                    { id: 'repo-1', name: 'my-app', directories: [] },
+                ]),
+            } as any,
+            { emit: jest.fn() } as any,
+            { ensure: jest.fn() } as any,
+            { detectAndSaveReferences: jest.fn() } as any,
+            { buildConfigKey: jest.fn().mockReturnValue('config-key') } as any,
+            centralizedConfigPrServiceMock as any,
+            { find: jest.fn().mockResolvedValue([]) } as any,
+            {
+                getBYOKConfig: jest.fn(),
+                getSubscriptionStatus: jest.fn(),
+            } as any,
+            { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
+        );
+
+        // The settings page writes the default into the form as editor JSON
+        // and sends it on any save; this one only changes another setting.
+        // The editor keeps list, bold and inline code as structure and marks,
+        // so the text it stores has none of their markdown characters.
+        const editorJson = JSON.stringify({
+            type: 'doc',
+            content: currentDefaultWritingGuidelines()
+                .split('\n')
+                .map((line) => ({
+                    type: 'paragraph',
+                    content: [
+                        {
+                            type: 'text',
+                            text: line
+                                .replace(/^- /, '')
+                                .replace(/\*\*/g, '')
+                                .replace(/`/g, ''),
+                        },
+                    ],
+                })),
+        });
+
+        await useCase.execute({
+            configValue: {
+                automatedReviewActive: false,
+                v2PromptOverrides: { generation: { main: editorJson } },
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            skipAuthorization: true,
+        } as any);
+
+        const saved = createOrUpdateParametersUseCase.execute.mock.calls[0][1];
+        expect(saved.configs.automatedReviewActive).toBe(false);
+        expect(saved.configs.v2PromptOverrides).toBeUndefined();
     });
 
     it('stores byokModel override in the repository delta', async () => {
@@ -1682,6 +1801,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -1760,6 +1880,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({

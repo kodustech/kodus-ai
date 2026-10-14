@@ -1,0 +1,1215 @@
+[
+  {
+    "pr": "charles-103/JobTrackIQ#10",
+    "bot": false,
+    "lockfiles": 2,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "madewithlove/semver#1111",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "aim2bpg/rubree#360",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 8,
+    "advisories": [
+      "osv/GHSA-46q3-7gv7-qmgg",
+      "osv/GHSA-75xq-5h9v-w6px",
+      "osv/GHSA-87pf-fpwv-p7m7",
+      "osv/GHSA-8p34-64r3-mwg8",
+      "osv/GHSA-c4fp-cxrr-mj66",
+      "osv/GHSA-hm49-wcqc-g2xg"
+    ],
+    "severities": [
+      "warning",
+      "warning",
+      "warning",
+      "warning",
+      "note",
+      "warning",
+      "note",
+      "error"
+    ]
+  },
+  {
+    "pr": "addff/2510-ICT602#17",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Tili-service/Web-App#21",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "google/osv-scanner#2555",
+    "bot": false,
+    "lockfiles": 2,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "rajsinghtech/kubernetes-manifests#397",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "techworkersco/twc-site#471",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 3,
+    "advisories": [
+      "osv/GHSA-6wx8-w4f5-wwcr",
+      "osv/GHSA-h8w8-99g7-qmvj",
+      "osv/GHSA-wv3x-4vxv-whpp"
+    ],
+    "severities": [
+      "note",
+      "error",
+      "note"
+    ]
+  },
+  {
+    "pr": "alkem-io/notifications#460",
+    "bot": false,
+    "lockfiles": 3,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "sadid56/nexg-lab#4",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "scratchfoundation/scratch-www#9977",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "gr4vy/configs#45",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "burgan-tech/vnext-example#10",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "ZilingXie/SupportPortal#15",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 2,
+    "advisories": [
+      "osv/PYSEC-2026-3804",
+      "osv/GHSA-4j2p-28q2-5m79"
+    ],
+    "severities": [
+      "warning",
+      "warning"
+    ]
+  },
+  {
+    "pr": "renkasiyas/the-lucky-chamber#13",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "teableio/teable#2281",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "remal-github-actions/automatic-release#1184",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "heliumflyparanoizex/heliumflyparanoizexgithub.io#12",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 4,
+    "advisories": [
+      "osv/GHSA-r4q5-vmmm-2653",
+      "osv/GHSA-4mjr-xmp4-gh2g",
+      "osv/GHSA-q8mj-m7cp-5q26",
+      "osv/GHSA-x5fp-wj9c-mxmx"
+    ],
+    "severities": [
+      "warning",
+      "warning",
+      "warning",
+      "warning"
+    ]
+  },
+  {
+    "pr": "gahojin/middy-middlewares#374",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 2,
+    "advisories": [
+      "osv/GHSA-3qcw-2rhx-2726",
+      "osv/GHSA-hcf7-66rw-9f5r"
+    ],
+    "severities": [
+      "note",
+      "warning"
+    ]
+  },
+  {
+    "pr": "AKopytenko/KAN-JSON-Visualizator#17",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Prabesh-Tamang/CampusBuzz#2",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "EEWBot/webhook-configurator#114",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "mrlmarquez/case_study#6",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "CodeForAfrica/ui#1407",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "naokiy/obsidian-auto-create-periodic-note#579",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "DiscoverDell/Android#163",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "electron-userland/electron-builder#9867",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "zsomborklara/ptracker#16",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "masak1yu/winxmerge#22",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "parth-d-7span/Food-Delivery-System#2",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 14,
+    "advisories": [
+      "osv/GHSA-g4mf-96x5-5m2c",
+      "osv/GHSA-6w3j-5fw6-r9vr",
+      "osv/GHSA-gg4h-3hg2-grpc",
+      "osv/GHSA-q7cg-457f-vx79",
+      "osv/GHSA-f23m-r3pf-42rh",
+      "osv/GHSA-r5fr-rjxr-66jc"
+    ],
+    "severities": [
+      "error",
+      "note",
+      "note",
+      "warning",
+      "warning",
+      "error",
+      "warning",
+      "error",
+      "error",
+      "error",
+      "note",
+      "error",
+      "error",
+      "error"
+    ]
+  },
+  {
+    "pr": "Ergonix5/HRSystemBotCalm#6",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "remarkablegames/party-game-template#720",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "TimSchoenle/Portfolio#242",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "dexrobo/samosa#5",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "web-infra-dev/midscene#1593",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "thorsten/phpMyFAQ#4023",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "linux-odyssey/linux-odyssey#196",
+    "bot": false,
+    "lockfiles": 4,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "VHIT201/ban-ve#19",
+    "bot": false,
+    "lockfiles": 2,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "archisquad/eslint-config-archisquad#237",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "michaelkm03/EquiFlow#9",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "bitomic/yarn-template#1055",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "arnoldcho/xpchain-web#2",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "remal-github-actions/read-property#1402",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "johanbijlsma/Jira-dashboard#43",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "xpoes123/scibowl-org#154",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "contentstack/contentstack-utils-javascript#256",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "crazy-max/gonfig#74",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "ryanbmarx/energy-charts-EFIF#8",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "varmil/noxi#2949",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Joeri-Abbo/node-vs-deno-vs-bun#84",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Crowley723/dashboard-site#328",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "inikulin/parse5#1658",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "qwer0516yp/CipherCracker.NextJoy#7",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "remal-github-actions/read-property#1400",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Automattic/vip-cli#2778",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "opista/svn-blamer#645",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "shodaimomiyama/FORMIX#73",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "jdu-coworking-workspace/Parents#600",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "sourov808/shoppin-s#1",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "D-sorganization/Tools#925",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "jkroepke/terraform-provider-azureakscommand#199",
+    "bot": true,
+    "lockfiles": 2,
+    "findings": 9,
+    "advisories": [
+      "osv/GO-2026-4918",
+      "osv/GO-2026-5025",
+      "osv/GO-2026-5026",
+      "osv/GO-2026-5027",
+      "osv/GO-2026-5028",
+      "osv/GO-2026-5029"
+    ],
+    "severities": [
+      "warning",
+      "warning",
+      "warning",
+      "warning",
+      "warning",
+      "warning",
+      "warning",
+      "warning",
+      "warning"
+    ]
+  },
+  {
+    "pr": "Mastermindzh/rickvanlieshout.com#330",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "GovTechSG/oobee#632",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Joeri-Abbo/spring-search#82",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "lettylihao1114-beep/KFC#2",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "coredns/coredns#7763",
+    "bot": true,
+    "lockfiles": 2,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "prompt-edu/prompt#1355",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "vultisig/app-recurring#97",
+    "bot": false,
+    "lockfiles": 2,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "ecoAPM/WiFiSurveyor#1674",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "ottlinger/game-kaiser-java#186",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "CalmCode-Solutions/Mental-Wallness-Journal-System-#7",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "delitamakanda/restaurant#40",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "openshift-pipelines/operator#12905",
+    "bot": true,
+    "lockfiles": 2,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "thorsten/phpMyFAQ#4016",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "collabo-miko/MekuJira#6",
+    "bot": false,
+    "lockfiles": 2,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "alekslesik/telegram-bot-simple#3",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "ppyom/lazy-todo#20",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "mariosknl/RN-MovieApp#225",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "reload/drupal-security-jira#585",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "ChrisCarini/sample-intellij-plugin#735",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "kevinmatheuu/super-league#115",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Fovir-GitHub/thunder-fighter#1",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "ronith2027/NyaayaSetu-AI#12",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "delitamakanda/restaurant#38",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "harryzcy/action-bark#1143",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "aws-actions/configure-aws-credentials#1590",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "aws-actions/configure-aws-credentials#1592",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "MTR-Today/mtr-today-api#844",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "imohsin3797/Devyani-website#1",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 28,
+    "advisories": [
+      "osv/GHSA-267c-6grr-h53f",
+      "osv/GHSA-26hh-7cqf-hhc6",
+      "osv/GHSA-2xp9-vwfh-vxw4",
+      "osv/GHSA-36qx-fr4f-26g5",
+      "osv/GHSA-3g8h-86w9-wvmq",
+      "osv/GHSA-3x4c-7xq6-9pq8"
+    ],
+    "severities": [
+      "error",
+      "error",
+      "error",
+      "error",
+      "note",
+      "warning",
+      "warning",
+      "error",
+      "warning",
+      "warning",
+      "error",
+      "error",
+      "warning",
+      "warning",
+      "error",
+      "warning",
+      "warning",
+      "warning",
+      "error",
+      "warning",
+      "error",
+      "error",
+      "error",
+      "error",
+      "error",
+      "warning",
+      "note",
+      "warning"
+    ]
+  },
+  {
+    "pr": "Gobi6696/zylu-frontend#1",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Urigo/accounter-fullstack#3664",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "michaelayoade/dotmac_erp#4",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "231tr0n/231tr0n.github.io#382",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "sherrylee23/recommended_restaurant_entertainment#5",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "middlewaregruppen/spring-boot-demo-api#18",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "masak1yu/winxmerge#21",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "itsmontoya/scribble#113",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "remal-github-actions/rebase-dependabot-pull-requests#1079",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "cjrace/almostyellow#167",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "genesis-projects-2025/JD-Agent#24",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "davorminchorov/lifeos#133",
+    "bot": false,
+    "lockfiles": 2,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Faissalll/FireVision#11",
+    "bot": false,
+    "lockfiles": 2,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "fosrl/windows#28",
+    "bot": false,
+    "lockfiles": 2,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "technology-studio/error-graphql#567",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "cliftonc/drizzle-cube-try-site#118",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "remal-github-actions/template-typescript#1619",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "visitscotland/visitscotland-dot-com-frontend#55",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "ThaiDuisss/Running-Platform#16",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "rabebe/blog-api#33",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "digabi/exam-engine#4890",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "connect0459/connect-labo#26",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Lee-Yeseul/custom-bot#1",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "dobeutech/unique-staffing-prof#38",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "newhighsco/.github#1869",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "kwangsing3/github-profilemd-Generater#27",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 32,
+    "advisories": [
+      "osv/GHSA-35jp-ww65-95wh",
+      "osv/GHSA-3g43-6gmg-66jw",
+      "osv/GHSA-3p68-rc4w-qgx5",
+      "osv/GHSA-3w6x-2g7m-8v23",
+      "osv/GHSA-42h9-826w-cgv3",
+      "osv/GHSA-445q-vr5w-6q77"
+    ],
+    "severities": [
+      "error",
+      "error",
+      "warning",
+      "warning",
+      "warning",
+      "warning",
+      "warning",
+      "warning",
+      "error",
+      "error",
+      "warning",
+      "warning",
+      "warning",
+      "error",
+      "error",
+      "warning",
+      "warning",
+      "warning",
+      "warning",
+      "error",
+      "error",
+      "warning",
+      "error",
+      "error",
+      "warning",
+      "warning",
+      "note",
+      "warning",
+      "warning",
+      "error",
+      "warning",
+      "error"
+    ]
+  },
+  {
+    "pr": "MorrisonCole/morrisoncole.co.uk#5938",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "sorairolake/zenn-articles#76",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Macarorn/ecomerce_backend#2",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 1,
+    "advisories": [
+      "osv/GHSA-v422-hmwv-36x6"
+    ],
+    "severities": [
+      "note"
+    ]
+  },
+  {
+    "pr": "MasatoMakino/colorable-merged-model#348",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "sleepypod/core#233",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Akkudoktor-EOS/EOS#808",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "serenity-js/serenity-js-cucumber-template#977",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "CST8319-Group-10/LibraryManagementSystem#21",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Harry-0205/Backend-2.0#14",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "ayahfe/Projet-en-developpement#54",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "KengoTODA/inspequte#125",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Apurv-15/Exotex_app#1",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "huytq-dev/digital-youth-handbook-front-end#38",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "kanwar19031/AI4Bharat_Hackathon#1",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "clerk/javascript#7473",
+    "bot": false,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  },
+  {
+    "pr": "Zevhys/product-catalogue#140",
+    "bot": true,
+    "lockfiles": 1,
+    "findings": 0,
+    "advisories": [],
+    "severities": []
+  }
+]

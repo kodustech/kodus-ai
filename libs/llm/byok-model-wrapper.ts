@@ -25,7 +25,19 @@ import {
     attachClassification,
     classifyLLMError,
     LlmErrorCategory,
+    type ClassifiedErrorInfo,
 } from '@libs/llm/error-classifier';
+import { extractProviderMessage } from '@libs/llm/review-error-diagnostics';
+import { createLogger } from '@libs/core/log/logger';
+import {
+    MAX_REFUSAL_RETRIES,
+    rejectedReasoningField,
+    rememberRefusal,
+    withoutReasoningField,
+    withoutRefusedFields,
+} from '@libs/llm/rejected-reasoning-field';
+
+const logger = createLogger('ByokModelWrapper');
 
 /**
  * PRE-call token estimate for the tpm reservoir. Serializes the wire prompt the
@@ -80,7 +92,11 @@ export interface WrapByokModelOptions {
     reporter?: (input: {
         organizationId?: string;
         provider: string;
+        /** The provider's own sentence when it gave one, else `err.message`. */
         errorMessage: string;
+        category?: LlmErrorCategory;
+        httpStatus?: number;
+        routingRefusal?: boolean;
     }) => void;
 }
 
@@ -92,15 +108,57 @@ export function wrapByokModel(
         model: model as any,
         middleware: {
             specificationVersion: 'v3',
-            wrapGenerate: async ({ doGenerate, params }: any) => {
+            wrapGenerate: async ({ doGenerate, params, model: inner }: any) => {
+                const slot = opts.byokConfig;
+                const generate = async () => {
+                    const sent = withoutRefusedFields(
+                        params,
+                        slot,
+                        opts.organizationId,
+                    );
+                    const call = (p: any) =>
+                        p === params ? doGenerate() : inner.doGenerate(p);
+                    // A strict upstream refuses one unknown field per answer
+                    // (Go's decoder stops at the first), so each reasoning field
+                    // we added can cost one more ask, never more than that: a
+                    // retry needs a field still present to remove, and the count
+                    // is capped besides.
+                    let attempt = sent;
+                    for (let retries = 0; ; retries++) {
+                        try {
+                            return await call(attempt);
+                        } catch (err) {
+                            const field = rejectedReasoningField(err);
+                            const retry =
+                                field && retries < MAX_REFUSAL_RETRIES
+                                    ? withoutReasoningField(attempt, field)
+                                    : undefined;
+                            if (!retry) throw err;
+                            rememberRefusal(slot, opts.organizationId, field);
+                            logger.warn({
+                                message: `Upstream refused \`${field}\`; asking again without it`,
+                                context: 'ByokModelWrapper',
+                                metadata: {
+                                    field,
+                                    provider: slot?.provider,
+                                    baseURL: slot?.baseURL,
+                                    model: slot?.model,
+                                    organizationId: opts.organizationId,
+                                },
+                            });
+                            attempt = retry;
+                        }
+                    }
+                };
                 const run = async () => {
                     try {
-                        return await doGenerate();
+                        return await generate();
                     } catch (err) {
                         // Classify (so downstream can read the canonical category)
                         // and report — never let the reporter mask the LLM error.
+                        let classified: ClassifiedErrorInfo | undefined;
                         if (err && typeof err === 'object') {
-                            const classified = classifyLLMError(
+                            classified = classifyLLMError(
                                 err,
                                 opts.provider,
                             );
@@ -135,10 +193,17 @@ export function wrapByokModel(
                                     opts.provider ??
                                     opts.byokConfig?.provider ??
                                     'unknown',
+                                // For an AI SDK `APICallError` the message
+                                // only restates the status ("Provider returned
+                                // error"); the cause is in the body (#1871).
                                 errorMessage:
-                                    err instanceof Error
+                                    extractProviderMessage(err) ??
+                                    (err instanceof Error
                                         ? err.message
-                                        : String(err ?? 'unknown'),
+                                        : String(err ?? 'unknown')),
+                                category: classified?.category,
+                                httpStatus: classified?.httpStatus,
+                                routingRefusal: classified?.routingRefusal,
                             });
                         } catch {
                             /* reporter failures must not surface */
@@ -148,8 +213,7 @@ export function wrapByokModel(
                 };
 
                 // The limiter keys off the ONE resolved slot the org configured
-                // for this task.
-                const slot = opts.byokConfig;
+                // for this task (`slot`, above).
 
                 // tpm reservoir (hybrid): this wrapper is the ONE seam with BOTH
                 // the pre-call prompt AND the post-call usage. Estimate the

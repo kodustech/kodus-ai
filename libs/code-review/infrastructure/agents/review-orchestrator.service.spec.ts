@@ -172,3 +172,39 @@ describe('ReviewOrchestratorService — warnings from an agent that threw', () =
         expect(result.warnings).toEqual([]);
     });
 });
+
+// Production 2026-09-30: "[AGENT] kody-rules failed: Kody Rules could not be
+// evaluated" logged 582 times a day with empty metadata — no org, no PR — so
+// finding who was affected meant joining shard warnings by correlationId.
+describe('ReviewOrchestratorService — a failed agent names its review', () => {
+    it('logs the organization and the PR with the failure', async () => {
+        const { service, generalist } = setup();
+        generalist.execute.mockRejectedValue(new Error('all 2 rule check(s) failed to run'));
+        const logger = (service as any).logger;
+        const logged: any[] = [];
+        for (const level of ['error', 'warn', 'log']) {
+            jest.spyOn(logger, level).mockImplementation((entry: any) => {
+                logged.push(entry);
+            });
+        }
+
+        await service
+            .execute({
+                ...inputFor({ bug: true }),
+                prNumber: 42,
+                organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+            })
+            .catch(() => undefined);
+
+        const failures = logged.filter((e) => /\[AGENT\] generalist (agent )?failed/.test(e.message));
+        expect(failures.length).toBeGreaterThan(0);
+        for (const entry of failures) {
+            expect(entry.metadata).toEqual(
+                expect.objectContaining({
+                    prNumber: 42,
+                    organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+                }),
+            );
+        }
+    });
+});

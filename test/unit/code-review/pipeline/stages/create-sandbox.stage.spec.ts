@@ -292,6 +292,9 @@ describe('CreateSandboxStage', () => {
             expect(result.sandboxHandle).toBeUndefined();
             expect(logger.warn).toHaveBeenCalled();
             expect(logger.error).not.toHaveBeenCalled();
+            // The review is moot, so it is not reported as one that lost its
+            // checkout (#2066).
+            expect(result.sandboxSuperseded).toBe(true);
         });
 
         it('does not retry acquire itself — retry+backoff lives inside the lease manager', async () => {
@@ -311,6 +314,7 @@ describe('CreateSandboxStage', () => {
 
             expect(mockLeaseManager.acquire).toHaveBeenCalledTimes(1);
             expect(result.sandboxHandle).toBeUndefined();
+            expect(result.sandboxSuperseded).toBeUndefined();
         });
     });
 });

@@ -71,7 +71,7 @@ const GithubStarsContent = () => {
             <Link target="_blank" href={repositoryUrl}>
                 <Button
                     decorative
-                    size="sm"
+                    size="xs"
                     variant="helper"
                     className="rounded-r-none"
                     leftIcon={<SvgGithub />}>
@@ -79,12 +79,15 @@ const GithubStarsContent = () => {
                 </Button>
             </Link>
 
+            {/* The count links to the repository, not to /stargazers:
+                GitHub stopped serving that list to anyone outside the org, so
+                it 404'd for exactly the visitors it was meant to impress. */}
             {data ? (
-                <Link target="_blank" href={`${repositoryUrl}/stargazers`}>
+                <Link target="_blank" href={repositoryUrl}>
                     <Button
                         active
                         decorative
-                        size="sm"
+                        size="xs"
                         variant="helper"
                         className={cn(
                             "button-focused:text-primary-light",

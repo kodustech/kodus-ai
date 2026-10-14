@@ -6,6 +6,19 @@ import {
     parseOpenAiIds,
 } from '../kernel/listing-helpers';
 
+/**
+ * OpenAI's `/models` lists every model the key can reach, and most of them
+ * cannot run a review: embeddings, speech, transcription, image, moderation,
+ * realtime/audio, video, computer-use and the legacy completion models. Only
+ * the native listing is filtered — a custom endpoint's ids are the customer's.
+ */
+const NON_CHAT_OPENAI_MODEL =
+    /(^|[-.])(embedding|tts|whisper|transcribe|dall-e|image|moderation|realtime|audio|sora|computer-use)([-.]|$)|^(babbage|davinci)(-|$)/i;
+
+export function isOpenAiChatModelId(id: string): boolean {
+    return !NON_CHAT_OPENAI_MODEL.test(id);
+}
+
 /** Native OpenAI: fixed endpoint, Bearer, reasoning derived from the cap table. */
 const nativeListing: ModelListing = {
     kind: 'http',
@@ -15,7 +28,10 @@ const nativeListing: ModelListing = {
     timeoutMs: 15_000,
     url: () => 'https://api.openai.com/v1/models',
     headers: ({ apiKey }) => bearerHeaders(apiKey),
-    parse: (body) => parseOpenAiIds(body).map((m) => catalogWithReasoning(m.id)),
+    parse: (body) =>
+        parseOpenAiIds(body)
+            .filter((m) => isOpenAiChatModelId(m.id))
+            .map((m) => catalogWithReasoning(m.id)),
 };
 
 /** openai_compatible: the org's OWN baseURL (SSRF-gated by the fetcher), plain

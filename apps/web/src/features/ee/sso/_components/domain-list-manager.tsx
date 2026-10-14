@@ -75,7 +75,7 @@ export const DomainListManager = ({
                             {!status?.verified && (
                                 <Button
                                     type="button"
-                                    variant="secondary"
+                                    variant="helper"
                                     size="sm"
                                     onClick={() =>
                                         openVerifyDomainModal(domain)
@@ -85,7 +85,7 @@ export const DomainListManager = ({
                             )}
                             <Button
                                 type="button"
-                                variant="secondary"
+                                variant="helper"
                                 size="icon-sm"
                                 onClick={() => {
                                     const nextDomains = normalizeDomains(
@@ -112,7 +112,7 @@ export const DomainListManager = ({
                     />
                     <Button
                         type="button"
-                        variant="secondary"
+                        variant="helper"
                         size="icon-sm"
                         onClick={() => {
                             const newDomain = newDomainValue.trim();

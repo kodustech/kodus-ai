@@ -847,6 +847,17 @@
     }
   },
   {
+    "key": "kodyRules.controller.ts#getKodyRulesIndex",
+    "httpMethod": "GET",
+    "urlPath": "/kody-rules/index",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "kodyRules.controller.ts#getPending",
     "httpMethod": "GET",
     "urlPath": "/kody-rules/pending",
@@ -1301,6 +1312,17 @@
     "key": "parameters.controller.ts#getCodeReviewParameter",
     "httpMethod": "GET",
     "urlPath": "/parameters/code-review-parameter",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "parameters.controller.ts#getCodeReviewScopes",
+    "httpMethod": "GET",
+    "urlPath": "/parameters/code-review-scopes",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",

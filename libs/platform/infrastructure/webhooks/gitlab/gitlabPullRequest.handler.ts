@@ -20,6 +20,7 @@ import {
     parseReviewDirective,
     isHeavyReviewCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import {
     isGitlabDraftToReadyChange,
     type GitlabDraftChangesLike,
@@ -616,7 +617,8 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                 if (
                     !isStartCommand &&
                     !hasMarker &&
-                    isKodyMentionNonReview(comment.body, botUsername)
+                    (isKodyMentionNonReview(comment.body, botUsername) ||
+                        isNewThreadReply(PlatformType.GITLAB, params.event, payload))
                 ) {
                     this.chatWithKodyFromGitUseCase.execute(params);
                     return;

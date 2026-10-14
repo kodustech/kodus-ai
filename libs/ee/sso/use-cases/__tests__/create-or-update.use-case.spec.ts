@@ -34,6 +34,7 @@ describe('CreateOrUpdateSSOConfigUseCase', () => {
             ssoConfigService as any,
             ssoTestSessionService as any,
             ssoDomainVerificationService as any,
+            { ssoConfigured: jest.fn() } as any,
         );
 
         return {

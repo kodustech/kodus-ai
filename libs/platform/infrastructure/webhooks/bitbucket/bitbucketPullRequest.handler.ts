@@ -19,6 +19,7 @@ import {
     parseReviewDirective,
     isHeavyReviewCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
@@ -564,7 +565,12 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
             if (
                 !isStartCommand &&
                 !hasMarker &&
-                isKodyMentionNonReview(comment.body)
+                (isKodyMentionNonReview(comment.body) ||
+                    isNewThreadReply(
+                        PlatformType.BITBUCKET,
+                        params.event,
+                        payload,
+                    ))
             ) {
                 this.chatWithKodyFromGitUseCase.execute(params);
                 return;

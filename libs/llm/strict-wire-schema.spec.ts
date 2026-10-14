@@ -38,6 +38,7 @@ import { CrossFileAnalysisSchema } from '@libs/common/utils/prompts/codeReviewCr
 import { DocumentationPlannerSchema } from '@libs/common/utils/prompts/codeReviewDocumentationPlanner';
 import { validateCodeSemanticsSchema } from '@libs/common/utils/prompts/validateCodeSemantics';
 import { checkSuggestionSimplicitySchema } from '@libs/common/utils/prompts/checkSuggestionSimplicity';
+import { replyAddressedToKodySchema } from '@libs/common/utils/prompts/replyAddressedToKody';
 import { classificationBatchSchema } from '@libs/ee/analytics-warehouse/classification/classification.prompts';
 import {
     kodyRulesClassifierSchema,
@@ -178,6 +179,10 @@ describe('zodToStrictWireSchema', () => {
             checkSuggestionSimplicitySchema,
         ],
         [
+            'replyAddressedToKodySchema (unmentioned reply router)',
+            replyAddressedToKodySchema,
+        ],
+        [
             'classificationBatchSchema (pr classifier)',
             classificationBatchSchema,
         ],
@@ -315,6 +320,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service.ts', // validateCodeSemanticsSchema, checkSuggestionSimplicitySchema
         'libs/ee/analytics-warehouse/classification/pull-request-classifier.service.ts', // classificationBatchSchema
         'libs/ee/codeBase/kodyIssuesAnalysis.service.ts', // kodyIssuesMergeSchema, kodyIssuesResolveSchema
+        'libs/platform/application/use-cases/codeManagement/implicit-reply.ts', // replyAddressedToKodySchema
         // Phase 3b: withStructuredOutputFallback → LLM.run migrations.
         'libs/code-review/infrastructure/agents/core/finder.agent.ts', // RECOVERY_SCHEMA (zod)
         'libs/code-review/pipeline/stages/agent-review.stage.ts', // DEDUP_SCHEMA, DEDUP_TIEBREAK_SCHEMA via jsonSchema() — AI-SDK Schema, passes through untouched (exempt from strict-wire conversion)

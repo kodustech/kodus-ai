@@ -508,7 +508,7 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         expect(lastCall.previousDecisions).toBe(previousDecisions);
     });
 
-    // ── language resolution + forwarding (Starian GitLab MR !16111) ──────────
+    // ── language resolution + forwarding (customer-reported) ──────────
     // The sharded judge's system prompts have zero language templating on
     // their own; execute() must resolve `input.languageResultPrompt` via the
     // SAME `resolveLanguageLabel` helper the other review agents use
@@ -803,6 +803,16 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
             shardsErrored: 1,
             shardsSucceeded: 1,
         });
+
+        // Recorded on the run too, so the dashboard and the doctor see that
+        // some rules were not applied (#2066).
+        const partial = (out.warnings ?? []).find(
+            (w) => w.kind === 'KODY_RULES_PARTIAL',
+        );
+        expect(partial).toMatchObject({
+            reason: 'judge_shard_failed',
+            detail: expect.stringContaining('1 of 2 Kody Rules check(s)'),
+        });
     });
 
     // The healthy path must stay quiet: no partial-degrade warn when every
@@ -824,7 +834,7 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
             .spyOn((provider as any).shardLogger, 'warn')
             .mockImplementation(() => undefined);
 
-        await provider.execute(
+        const out = await provider.execute(
             input({
                 kodyRules: [
                     {
@@ -843,6 +853,9 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
             /PARTIAL judge-shard failure/i.test((c[0] as any)?.message ?? ''),
         );
         expect(partialWarns).toHaveLength(0);
+        expect(
+            (out.warnings ?? []).some((w) => w.kind === 'KODY_RULES_PARTIAL'),
+        ).toBe(false);
     });
 });
 

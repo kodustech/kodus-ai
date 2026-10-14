@@ -184,11 +184,7 @@ export class LoadExternalContextStage
         context: CodeReviewPipelineContext,
     ): Promise<PrDecisionRecord[] | undefined> {
         try {
-            const changedFilePaths = (context.changedFiles ?? [])
-                .map((file) => file?.filename)
-                .filter((filename): filename is string => !!filename);
-
-            if (changedFilePaths.length === 0) {
+            if (!context.changedFiles?.length) {
                 return undefined;
             }
 
@@ -201,11 +197,12 @@ export class LoadExternalContextStage
                 return undefined;
             }
 
+            // The whole PR's history, not only the changed files: a finding
+            // can repeat a suggestion anchored on a file it moved out of.
             const decisions = await this.buildPreviousReviewDecisionsUseCase.execute({
                 organizationId: context.organizationAndTeamData.organizationId,
                 prNumber,
                 repositoryFullName,
-                filePaths: changedFilePaths,
             });
 
             if (decisions.length === 0) {

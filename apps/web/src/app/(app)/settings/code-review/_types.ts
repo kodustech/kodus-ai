@@ -50,6 +50,16 @@ export type CodeReviewFormType = FormattedCodeReviewConfig & {
 
 export type CodeReviewOptions = Record<string, boolean>;
 
+/** Mirrors ANALYZER_TOOL_IDS on the backend. */
+export type DeterministicToolId = "secrets" | "dependencies";
+
+/**
+ * `auto` defers to the repository's own CI — the tool runs only when no
+ * equivalent check ran there — while `on` runs it regardless.
+ */
+/** On or off. An enabled tool still stands down when the repo's CI covers it. */
+export type DeterministicToolMode = boolean;
+
 type SuggestionControlConfig = {
     groupingMode: GroupingModeSuggestions;
     limitationType: LimitationType;
@@ -95,6 +105,15 @@ export type CodeReviewGlobalConfig = {
         enabled: boolean;
     };
     runOnDraft: boolean;
+    /**
+     * Scanners Kody can run itself, and whether to read the checks the
+     * repository's own CI already ran. Each tool is off unless set: this is
+     * opted into, never inherited.
+     */
+    deterministicEvidence?: {
+        ciChecks?: boolean;
+        tools?: Partial<Record<DeterministicToolId, DeterministicToolMode>>;
+    };
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
     ideRulesSyncEnabled: boolean;
     /** Only consulted on a true→false transition of `ideRulesSyncEnabled`.

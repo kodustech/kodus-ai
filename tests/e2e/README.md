@@ -88,7 +88,7 @@ What this does NOT cover (requires real infra):
 - Real license key validation
 - Real cloud tenant entitlement
 
-These can only be validated by triggering an actual release. See `docs-internal/release-quality-gates-secrets.md` for the setup checklist.
+These can only be validated by triggering an actual release.
 
 ## Running
 

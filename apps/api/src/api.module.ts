@@ -89,6 +89,7 @@ import { TeamMembersController } from './controllers/teamMembers.controller';
 import { TokenUsageController } from './controllers/tokenUsage.controller';
 import { SpendLimitController } from './controllers/spendLimit.controller';
 import { KodusCreditsController } from './controllers/kodusCredits.controller';
+import { BillingEventsController } from './controllers/billingEvents.controller';
 import { UsersController } from './controllers/user.controller';
 import { CronModule } from './cron/cron.module';
 import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
@@ -182,6 +183,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         TokenUsageController,
         SpendLimitController,
         KodusCreditsController,
+        BillingEventsController,
         PermissionsController,
         GithubController,
         IntegrationController,

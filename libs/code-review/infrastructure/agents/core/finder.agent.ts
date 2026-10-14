@@ -15,6 +15,7 @@ import type {
     AgentRunner,
     AgentSpec,
 } from '@libs/agent-harness/domain/contracts/agent.contract';
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import type { Compressor } from '@libs/agent-harness/domain/contracts/compression.contract';
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
 import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
@@ -39,6 +40,7 @@ import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agent
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import type {
     Verdict,
     VerdictParseMode,
@@ -119,6 +121,8 @@ export interface FinderSuggestion {
      *  um so por passada, todo filtro a jusante julga a conclusao sem o
      *  caminho que a produziu. */
     reason?: string;
+    /** Id of the earlier suggestion on this PR this finding revises (#2039). */
+    revisesSuggestionId?: string;
 }
 
 /** JSON schema for submitResult — mirrors the legacy _findingsSchema.
@@ -141,9 +145,10 @@ const REASON_DESCRIPTION_EVIDENCE =
 const DEV_LEVEL_DESCRIPTION =
     'The LEAST experienced reviewer who would have caught this: junior if it is visible in the changed lines themselves, pleno if you had to follow the value somewhere else, senior if it only appears when you compare the change against what the code guaranteed before, expert if it only appears on a run that is not the simple one (a second execution, a concurrent one, a retry, a cold cache, or an API contract that disagrees with how the call reads), qa if it only showed up when a quality analyst exercised a concrete test case. This is not severity.';
 
-/** The finder's output: exactly the fields the prompt asks for, all required.
- *  Snippet, fix, severity and confidence are not part of it at all; a later
- *  enrichment stage adds them. */
+/** The finder's output schema. Optional `reason` / `developerLevel` are opt-in
+ *  knobs (eval only); the rest is the production schema. `label` and the line
+ *  range are required too because parseFinderSchema discards a finder
+ *  suggestion without them. */
 function buildSubmitResultSchema(
     requireFindingReason = false,
     claudeSafeWording = false,
@@ -156,7 +161,8 @@ function buildSubmitResultSchema(
     return {
         type: 'object',
         // additionalProperties:false on every object is required by provider strict
-        // tool use / structured output modes.
+        // tool use / structured output modes. Harmless in best-effort mode; optional
+        // properties are still allowed.
         additionalProperties: false,
         properties: {
             reasoning: { type: 'string' },
@@ -166,14 +172,27 @@ function buildSubmitResultSchema(
                     type: 'object',
                     additionalProperties: false,
                     properties: {
+                        relevantFile: { type: 'string' },
+                        language: { type: 'string' },
                         label: {
                             type: 'string',
                             enum: ['bug', 'security', 'performance'],
                         },
-                        relevantFile: { type: 'string' },
+                        suggestionContent: { type: 'string' },
+                        existingCode: { type: 'string' },
+                        improvedCode: { type: 'string' },
+                        oneSentenceSummary: {
+                            type: 'string',
+                            description: TITLE_PROMPT_SPEC,
+                        },
                         relevantLinesStart: { type: 'number' },
                         relevantLinesEnd: { type: 'number' },
-                        suggestionContent: { type: 'string' },
+                        severity: {
+                            type: 'string',
+                            enum: ['critical', 'high', 'medium', 'low'],
+                        },
+                        confidence: { type: 'number' },
+                        ruleUuid: { type: 'string' },
                         ...(requireFindingReason
                             ? {
                                   reason: {
@@ -200,6 +219,9 @@ function buildSubmitResultSchema(
                         'relevantLinesStart',
                         'relevantLinesEnd',
                         'suggestionContent',
+                        'existingCode',
+                        'improvedCode',
+                        'oneSentenceSummary',
                         ...(requireFindingReason ? ['reason'] : []),
                         ...(requireDevLevel ? ['developerLevel'] : []),
                     ],
@@ -246,6 +268,33 @@ export function buildSubmitResultTool(
     };
 }
 
+/** submitResult with `revisesSuggestionId` on each finding (#2039/#2020).
+ *  Offered only when the PR has earlier suggestions: a first-round review sends
+ *  exactly the tool it always did, so this change cannot move its recall. */
+function withRevisionField(tool: AgentTool): AgentTool {
+    const schema = tool.inputSchema as any;
+    const items = schema.properties.suggestions.items;
+    return {
+        ...tool,
+        inputSchema: {
+            ...schema,
+            properties: {
+                ...schema.properties,
+                suggestions: {
+                    ...schema.properties.suggestions,
+                    items: {
+                        ...items,
+                        properties: {
+                            ...items.properties,
+                            revisesSuggestionId: { type: 'string' },
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
+
 export interface BuildFinderSpecParams {
     systemPrompt: string;
     modelId: string;
@@ -276,6 +325,9 @@ export interface BuildFinderSpecParams {
     usageRunName?: string;
     /** Cost-span agentName (the review agent's identity name). */
     agentName?: string;
+    /** The PR has earlier suggestions: the done-tool accepts
+     *  `revisesSuggestionId` (see withRevisionField). */
+    acceptsRevisions?: boolean;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the long system prompt is cached across the loop's steps. */
 }
@@ -290,11 +342,19 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         // Considers the failover target too: a strict tool built for a Gemini
         // primary must NOT be sent to an OpenAI fallback (it rejects the schema).
         {
-            ...buildSubmitResultTool(
-                params.requireFindingReason,
-                params.claudeSafeWording,
-                params.requireDevLevel,
-            ),
+            ...(params.acceptsRevisions
+                ? withRevisionField(
+                      buildSubmitResultTool(
+                          params.requireFindingReason,
+                          params.claudeSafeWording,
+                          params.requireDevLevel,
+                      ),
+                  )
+                : buildSubmitResultTool(
+                      params.requireFindingReason,
+                      params.claudeSafeWording,
+                      params.requireDevLevel,
+                  )),
             strict: supportsStrictToolsForRun(
                 params.modelId,
                 params.fallbackModelId,
@@ -478,6 +538,14 @@ const RECOVERY_SCHEMA = z.object({
     ),
 });
 
+const REVISION_RECOVERY_SCHEMA = RECOVERY_SCHEMA.extend({
+    suggestions: z.array(
+        RECOVERY_SCHEMA.shape.suggestions.element.extend({
+            revisesSuggestionId: z.string().optional(),
+        }),
+    ),
+});
+
 /** Injected capability: re-structure a prose `reasoning` into findings. The
  *  domain (finder/recall passes) depends only on this function; the adapter
  *  wires it to the concrete internal-model fallback. Undefined = recovery off. */
@@ -542,6 +610,7 @@ export async function recoverFindingsFromProse(
     byokConfig: NormalizedModel | undefined,
     organizationId: string | undefined,
     usageRunName?: string,
+    previousDecisions?: readonly PrDecisionRecord[],
     prebuiltModel?: LanguageModel,
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
@@ -553,7 +622,9 @@ export async function recoverFindingsFromProse(
         // it is part of the same review, not a separate `other` area.
         const result = await LLM.run({
             byokConfig,
-            schema: RECOVERY_SCHEMA,
+            schema: previousDecisions?.length
+                ? REVISION_RECOVERY_SCHEMA
+                : RECOVERY_SCHEMA,
             // Original instruction text is untouched — only the trailing
             // sentence is new. It must literally contain the word "json"
             // somewhere: OpenAI (and OpenAI-compatible providers) reject a
@@ -577,7 +648,10 @@ export async function recoverFindingsFromProse(
                 'the structured schema — one entry per distinct issue, ' +
                 'using the file paths and line numbers mentioned. Do NOT ' +
                 'invent findings; only extract what is explicitly ' +
-                `described.\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}`,
+                `described.\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
+                (previousDecisions?.length
+                    ? `\n\n${formatPreviousDecisions(previousDecisions)}\nPreserve the earlier suggestion's Id in revisesSuggestionId when the analysis revises it. Do not invent a relationship absent from the analysis; omit the field for unrelated findings.`
+                    : ''),
             runName: usageRunName
                 ? `${usageRunName}-recovery`
                 : 'code-review-recovery',

@@ -1,0 +1,808 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "engine": {
+    "commit": "14439a95335f07c92cb445ccea3069a9b2904e30",
+    "sourceDigest": "3771942b8bf2db18620b87904bc4b42afc4f16b763723e5f4808fe5910a9c7d3"
+  },
+  "startedAt": "2026-10-03T16:45:17.502Z",
+  "updatedAt": "2026-10-03T17:14:03.093Z",
+  "complete": true,
+  "selectedCases": [
+    "U4-cross-file-dead",
+    "U5-premise-read-then-dies"
+  ],
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 3,
+        "violations": 1,
+        "rate": 0.333
+      },
+      "true-bug-missed (guard)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 8,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "U4-cross-file-dead · resubmit-double-charge [not_deliver_normal, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "U5-premise-read-then-dies · fee-sign [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U5-premise-read-then-dies · null-crash [not_deliver]": {
+        "pass": 2,
+        "n": 3,
+        "delivered": 1
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U4-cross-file-dead",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 267138,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus no longer wraps NotReadyError in FailedError, so it now re-throws a raw NotReadyError where callers previously always received a FailedError. WHY: any caller that catches only FailedError (the prior universal contract for all gw.status failures) will no longer handle the not-ready case — the NotReadyError escapes as an unhandled rejection and whatever failure handling the caller did (e.g. marking the charge failed, logging, retry) is silently skipped. HOW: if callers are meant to special-case not-ready, update every fetchStatus caller to also catch NotReadyError; otherwise wrap it too, e.g. keep `throw new FailedError(chargeId, err)` and expose not-ready via a flag on FailedError.",
+          "keep": true,
+          "rationale": "The tool sandbox was unavailable, so I could not trace fetchStatus callers or the FailedError/NotReadyError hierarchy to confirm or refute the claim. The cited code does plainly re-throw a raw NotReadyError while wrapping all other errors in FailedError, which is a genuine behavior change to the prior error contract. I have no concrete evidence that callers already handle NotReadyError (which would refute the finding) nor that the branch is unreachable. Per the default-to-keep rule and lack of any active refutation, the finding stands; confidence is limited by the inability to verify the caller paths.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/status.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "FailedError"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: the new catch branch references `NotReadyError`, but the diff adds no import for it in this file. WHY: if NotReadyError is not imported/defined in this module, the catch block throws `ReferenceError: NotReadyError is not defined` for every caught error (and TypeScript fails to compile), turning any gateway failure into a crash inside the error handler. HOW: verify NotReadyError is imported from the gateway/errors module (e.g. `import { NotReadyError } from './errors'`); add the import if missing.",
+          "keep": true,
+          "rationale": "Tooling was unavailable (sandbox stopped responding) so I could not read src/billing/status.ts or grep for NotReadyError to determine whether an import/definition already exists. The claim is a concrete, testable code path (a ReferenceError / compile failure inside the catch block) and I found no evidence refuting it. Per the default rule, keep when the claim cannot be actively refuted. Confidence is low because the finding is conditional on no existing import, which I was unable to verify.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "status.ts",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 24,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "fetchStatus no longer wraps NotReadyError in FailedError, so callers that catch only FailedError will let the not-ready case escape as an unhandled rejection, silently skipping failure handling such as marking the charge failed, logging, or retry. Either update every fetchStatus caller to also catch NotReadyError, or wrap it too by keeping `throw new FailedError(chargeId, err)` and exposing not-ready via a flag on FailedError."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new catch branch references NotReadyError, but the diff adds no import for it, so if it is not imported or defined in this module the catch block throws `ReferenceError: NotReadyError is not defined` for every caught error and TypeScript fails to compile. Verify NotReadyError is imported from the gateway/errors module (e.g. `import { NotReadyError } from './errors'`) and add the import if missing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "not_deliver_normal",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U4-cross-file-dead",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 147998,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now re-throws NotReadyError unwrapped instead of normalizing every failure into FailedError, changing the function's error contract. WHY: callers that catch FailedError to detect/handle a failed charge will no longer catch NotReadyError, so the not-ready case escapes as an unhandled rejection/500 or skips the caller's failure/retry handling. HOW: confirm all callers of fetchStatus handle NotReadyError (e.g. `catch (e) { if (e instanceof NotReadyError) {...} else if (e instanceof FailedError) {...} }`); if they only handle FailedError, either keep wrapping or update the callers. Also verify NotReadyError is imported/defined in this module — it is not shown in the diff.",
+          "keep": true,
+          "rationale": "The cited code block explicitly re-throws NotReadyError unwrapped and only wraps other errors in FailedError, which is a concrete change to fetchStatus's error contract as described. I could not refute the claimed caller impact (callers catching only FailedError would miss NotReadyError) because the sandbox was unavailable to trace callers, and NotReadyError must already be in scope for the instanceof check to compile. No evidence shows the failure path is impossible or guarded upstream, so the finding is kept.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus|NotReadyError",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 16,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "fetchStatus now re-throws NotReadyError unwrapped instead of normalizing every failure into FailedError, changing the function's error contract so callers that catch FailedError to handle a failed charge no longer catch NotReadyError, allowing the not-ready case to escape as an unhandled rejection/500 or skip failure/retry handling. Confirm all callers of fetchStatus handle NotReadyError explicitly (e.g. `catch (e) { if (e instanceof NotReadyError) {...} else if (e instanceof FailedError) {...} }`); if they only handle FailedError, either keep wrapping or update the callers, and verify NotReadyError is imported/defined in this module since it is not shown in the diff."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "not_deliver_normal",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U4-cross-file-dead",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 167455,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new branch references `NotReadyError`, but the diff adds no import/definition for it (the hunk starts at line 4 and only `FailedError` was referenced before). WHY: If `NotReadyError` is not already imported in the file's top lines, `err instanceof NotReadyError` throws a ReferenceError at runtime (or fails TypeScript compilation), breaking every call to `fetchStatus`. HOW: Ensure `NotReadyError` is imported from the same module as `FailedError` (e.g. `import { FailedError, NotReadyError } from './errors';`), and if it is an ES5-transpiled subclass confirm it restores its prototype chain so `instanceof` works.",
+          "keep": true,
+          "rationale": "Tooling failed (sandbox not running), so I could not inspect the imports at the top of src/billing/status.ts to confirm whether NotReadyError is already imported. The claim depends on that fact and I have no concrete evidence refuting it (no guard, no existing import proven). Default is to keep an unrefuted candidate; confidence is lowered because the claim is conditional on an unverified import.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": "src"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 15,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new branch references `NotReadyError`, but the diff adds no import or definition for it, so if it isn't already imported at the top of the file, `err instanceof NotReadyError` throws a ReferenceError at runtime or fails TypeScript compilation and breaks every call to `fetchStatus`. Ensure `NotReadyError` is imported from the same module as `FailedError` (e.g. `import { FailedError, NotReadyError } from './errors';`), and if it is an ES5-transpiled subclass confirm it restores its prototype chain so `instanceof` works."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "not_deliver_normal",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U5-premise-read-then-dies",
+      "family": "unread-premise",
+      "sandbox": "dies-after-reading:src/payments/queue.ts",
+      "ms": 213880,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/payments/settle.ts",
+          "claim": "WHAT: The debit amount was changed from `job.amount + fee` to `job.amount - fee`, reversing the sign of the fee applied to the account. WHY: This silently alters the amount charged to `job.account`; if the previous `+ fee` semantics were correct, the account is now debited `2*fee` less than expected, producing an incorrect ledger balance / financial discrepancy on every settlement. HOW: Restore `job.amount + fee` unless this flip is a deliberate correction validated against the ledger and fee definitions (which could not be inspected in this session).",
+          "keep": true,
+          "rationale": "Unable to access the repository (sandbox unavailable), so the sign-flip claim could not be refuted. The finding describes a concrete behavioral change (`job.amount + fee` -> `job.amount - fee`) on a ledger debit affecting `job.account`, a plausible financial-discrepancy bug. No evidence exists in this session that the flip is a validated deliberate correction. Per the rules, absent active refutation the finding is KEPT.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/payments/settle.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fee",
+                "path": "src/payments"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/payments"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "settle.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 19,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In src/payments/settle.ts, the amount passed to `ledger.debit(job.account, ...)` was changed from `job.amount + fee` to `job.amount - fee`, reversing the fee sign and silently altering what is charged to `job.account`; if the previous `+ fee` semantics were correct, this debits `2*fee` less and produces an incorrect ledger balance on every settlement. Restore `job.amount + fee` unless this flip is a deliberate correction validated against the ledger and fee definitions."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U5-premise-read-then-dies",
+      "family": "unread-premise",
+      "sandbox": "dies-after-reading:src/payments/queue.ts",
+      "ms": 374658,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/payments/settle.ts",
+          "claim": "WHAT: The debit argument changed from `job.amount + fee` to `job.amount - fee`, flipping the sign of the fee applied to the account. WHY: if `computeFee` returns a surcharge that should be added (or `debit` is the credit-side leg), this now under-debits the account by `2 * fee`, silently producing a wrong monetary result; if fee is a deducted platform cut, `- fee` is correct. HOW: confirm the intended direction against `computeFee` (src/payments/fees.ts) and `Ledger.debit` semantics (src/payments/ledger.ts) before merging — the sign must match the fee's meaning.",
+          "keep": true,
+          "rationale": "Confirmed the cited line (settle.ts:8) applies `job.amount - fee`. The finding asserts a sign flip from `+ fee` to `- fee` with a concrete monetary consequence (under-debit by 2*fee). Refuting it requires inspecting computeFee's return semantics (src/payments/fees.ts) and Ledger.debit's sign convention (src/payments/ledger.ts), but the sandbox stopped responding and those files could not be read. With no evidence that `- fee` is definitively correct, the claim cannot be actively refuted; default is KEEP.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/payments/settle.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "fees.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "ledger.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "computeFee|debit",
+                "path": "src/payments"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/payments/fees.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/payments/ledger.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "claim": "WHAT: Removing `if (!job) { return { status: 'missing' as const }; }` also removes the `'missing'` variant from `settle`'s return type, narrowing it to `{ status: 'settled' }`. WHY: any caller that branches on `result.status === 'missing'` (handler.ts:7 merely forwards the result) now becomes a type-incompatible/unreachable branch and the soft-failure contract ('missing' result) is silently replaced by a thrown `JobNotFoundError`, so a not-found job can no longer be handled as a normal return value. HOW: either update all callers to handle the thrown `JobNotFoundError`, or preserve the contract by catching it: `try { const job = await claim(id); ... } catch (e) { if (e instanceof JobNotFoundError) return { status: 'missing' as const }; throw e; }`.",
+          "keep": true,
+          "rationale": "The sandbox became unavailable, so I could not inspect settle.ts, claim(), or the callers (handler.ts) to refute the claim. The described change is internally consistent: if the only non-'settled' return was the `!job` guard returning { status: 'missing' }, removing it does narrow the return type and changes the not-found handling from a soft return to relying on a thrown JobNotFoundError. No concrete evidence (e.g. a caller that never branches on 'missing', or a non-nullable claim return making the guard dead code) is available to refute the finding. Under the default-keep rule, the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/payments/settle.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "status === 'missing'|'missing'|JobNotFoundError|settle\\(",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/payments"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "settle|missing|JobNotFoundError",
+                "path": "src",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 20,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Removing `if (!job) { return { status: 'missing' as const }; }` also removes the `'missing'` variant from `settle`'s return type, narrowing it to `{ status: 'settled' }`, so any caller branching on `result.status === 'missing'` (handler.ts:7 merely forwards the result) becomes a type-incompatible branch and the soft-failure contract is silently replaced by a thrown `JobNotFoundError`. Either update all callers to handle the thrown `JobNotFoundError`, or preserve the contract by catching it: `try { const job = await claim(id); ... } catch (e) { if (e instanceof JobNotFoundError) return { status: 'missing' as const }; throw e; }`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The debit argument changed from `job.amount + fee` to `job.amount - fee`, flipping the sign of the fee applied to the account. If `computeFee` returns a surcharge that should be added (or `debit` is the credit-side leg), this under-debits the account by `2 * fee`, so confirm the intended direction against `computeFee` (src/payments/fees.ts) and `Ledger.debit` semantics (src/payments/ledger.ts) before merging, since the sign must match the fee's meaning."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U5-premise-read-then-dies",
+      "family": "unread-premise",
+      "sandbox": "dies-after-reading:src/payments/queue.ts",
+      "ms": 552237,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/payments/settle.ts",
+          "claim": "WHAT: The debit amount passed to ledger.debit was changed from `job.amount + fee` to `job.amount - fee`, flipping the sign of the fee. WHY: This alters the settled debit by 2*fee — the account is debited the amount minus the fee instead of plus the fee, so every settlement under-credits/over-credits the ledger relative to the previous behavior (and it is the only debit call site, so nothing compensates for it). HOW: Restore the previous computation `await ledger.debit(job.account, job.amount + fee);` unless the fee is intended to be deducted from the amount, in which case confirm against computeFee/ledger semantics.",
+          "keep": true,
+          "rationale": "Tool calls failed (sandbox unavailable), so no evidence could be gathered to refute the claim. The candidate describes a concrete behavioral change: the debit amount flipped from `job.amount + fee` to `job.amount - fee` at the sole debit call site, which would change every settlement by 2*fee. With no contradicting evidence (no guard, no compensating call site, no proof the fee is intended to be subtracted), the default is to KEEP.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/payments/settle.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "ledger.debit|computeFee|debit\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "settle.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "ledger.debit"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 26,
+      "sandboxFailed": 21,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The debit amount passed to ledger.debit was changed from `job.amount + fee` to `job.amount - fee`, flipping the fee sign and altering the settled debit by 2*fee so the account is debited the amount minus the fee instead of plus the fee, which under-credits/over-credits the ledger relative to previous behavior since this is the only debit call site. Restore `await ledger.debit(job.account, job.amount + fee);` unless the fee is intended to be deducted from the amount, in which case confirm against computeFee/ledger semantics."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

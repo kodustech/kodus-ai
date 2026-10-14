@@ -36,6 +36,9 @@
  */
 jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
 
+import { APICallError } from '@ai-sdk/provider';
+import { RetryError } from 'ai';
+
 import { LLM } from '@libs/llm/llm';
 
 import type { AgentSpec, AgentRunInput } from '../../domain/contracts/agent.contract';
@@ -321,6 +324,49 @@ describe('request assembly (LLM.run args)', () => {
             input: { prompt: 'go', telemetryMetadata: meta },
         });
         expect(req.telemetryMetadata).toEqual(meta);
+    });
+
+    // The code-review finder, its recall passes and every verify hand over
+    // Langfuse metadata as `telemetry` + `runtimeContext` (toAiSdkTelemetryArgs),
+    // never as `telemetryMetadata`. Since 9f634e93e the runner forwarded only
+    // the latter, so those runs reached Langfuse with no name, org or PR.
+    it('forwards the runtimeContext as Langfuse metadata when no telemetryMetadata is given', async () => {
+        const runtimeContext = { organizationId: 'o', pullRequestId: 42 };
+        const { req } = await runOnce({
+            input: {
+                prompt: 'go',
+                telemetry: { isEnabled: true, functionId: 'finder' },
+                runtimeContext,
+            },
+        });
+        expect(req.telemetryMetadata).toEqual(runtimeContext);
+    });
+
+    it('still names the run in Langfuse when telemetry carries no metadata', async () => {
+        const { req } = await runOnce({
+            input: {
+                prompt: 'go',
+                telemetry: { isEnabled: true, functionId: 'finder' },
+            },
+        });
+        expect(req.telemetryMetadata).toEqual({});
+    });
+
+    it('prefers explicit telemetryMetadata over the runtimeContext', async () => {
+        const meta = { organizationId: 'explicit' };
+        const { req } = await runOnce({
+            input: {
+                prompt: 'go',
+                telemetryMetadata: meta,
+                runtimeContext: { organizationId: 'ctx' },
+            },
+        });
+        expect(req.telemetryMetadata).toEqual(meta);
+    });
+
+    it('sends no Langfuse metadata when the caller asked for no telemetry', async () => {
+        const { req } = await runOnce({ input: { prompt: 'go' } });
+        expect(req.telemetryMetadata).toBeUndefined();
     });
 
     it('hands LLM.run the loop seams (tools + maxSteps + the 3 policy hooks)', async () => {
@@ -950,5 +996,93 @@ describe('return-shape guarantee (RunState across all branches)', () => {
         expect(state.artifacts).toHaveLength(2);
         expect(state.artifacts[1].payload).toEqual({ findings: ['second'] });
         expect(state.artifacts[1].location).toBe('step:1');
+    });
+
+    // Production 2026-09-28: a provider that answered 503 on all four attempts
+    // reached the customer as "Unexpected error". The SDK throws a RetryError
+    // with no status of its own; the status and body live on `lastError`, and
+    // the trace is the only thing the review path classifies from.
+    describe('error trace: retries exhausted (AI_RetryError)', () => {
+        function exhausted(statusCode: number, responseBody?: string) {
+            const last = new APICallError({
+                message: 'Service Unavailable',
+                url: 'https://llm.example.test/v1/chat/completions',
+                requestBodyValues: {},
+                statusCode,
+                responseBody,
+            });
+            return new RetryError({
+                message: `Failed after 4 attempts. Last error: ${last.message}`,
+                reason: 'maxRetriesExceeded',
+                errors: [last, last, last, last],
+            });
+        }
+
+        async function errorDetail(err: unknown) {
+            mockRun.mockImplementation(async () => {
+                throw err;
+            });
+            const runner = new AiSdkAgentRunner(undefined);
+            const state = await runner.run(baseSpec(), { prompt: 'go' }, ctx);
+            expect(state.status).toBe('error');
+            return state.trace.find((e) => e.kind === 'error')?.detail ?? {};
+        }
+
+        it('carries the last attempt\'s HTTP status', async () => {
+            const detail = await errorDetail(exhausted(503));
+            expect(detail.status).toBe(503);
+        });
+
+        it('carries the last attempt\'s response body', async () => {
+            const body = '{"error":{"message":"upstream overloaded"}}';
+            const detail = await errorDetail(exhausted(503, body));
+            expect(detail.responseBody).toBe(body);
+        });
+
+        it('reads `status` when the error has no `statusCode`', async () => {
+            const err = Object.assign(new Error('Bad Gateway'), { status: 502 });
+            const detail = await errorDetail(err);
+            expect(detail.status).toBe(502);
+        });
+
+        it('adds no status or body when the error carries neither', async () => {
+            const detail = await errorDetail(new Error('socket hang up'));
+            expect(detail).not.toHaveProperty('status');
+            expect(detail).not.toHaveProperty('responseBody');
+        });
+
+        it('ignores a non-numeric status and a non-string body', async () => {
+            const err = Object.assign(new Error('weird'), {
+                statusCode: '503',
+                status: '503',
+                responseBody: { error: 'object, not text' },
+            });
+            const detail = await errorDetail(err);
+            expect(detail).not.toHaveProperty('status');
+            expect(detail).not.toHaveProperty('responseBody');
+        });
+
+        it('survives a thrown non-object and records it under the runner source', async () => {
+            mockRun.mockImplementation(async () => {
+                throw undefined;
+            });
+            const runner = new AiSdkAgentRunner(undefined);
+            const state = await runner.run(baseSpec(), { prompt: 'go' }, ctx);
+            const event = state.trace.find((e) => e.kind === 'error');
+            expect(state.status).toBe('error');
+            expect(event?.source).toBe('runner');
+            expect(event?.detail).not.toHaveProperty('status');
+        });
+
+        it('keeps the status of a direct (non-retried) provider error', async () => {
+            const direct = new APICallError({
+                message: 'Not Found',
+                url: 'https://llm.example.test/v1/chat/completions',
+                requestBodyValues: {},
+                statusCode: 404,
+            });
+            const detail = await errorDetail(direct);
+            expect(detail.status).toBe(404);
+        });
     });
 });

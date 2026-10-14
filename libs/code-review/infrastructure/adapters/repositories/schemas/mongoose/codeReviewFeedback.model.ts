@@ -56,4 +56,12 @@ CodeReviewFeedbackSchema.index(
     { name: 'idx_org_suggestion', background: true },
 );
 
+// Analytics ingestion (FeedbackIngestionService) walks `(updatedAt, _id)` ASC
+// as a watermark tuple, same as `idx_updatedAt_for_analytics_ingestion` on
+// pullRequests. Without it every hourly run scanned the whole collection.
+CodeReviewFeedbackSchema.index(
+    { updatedAt: 1, _id: 1 },
+    { name: 'idx_updatedAt_for_analytics_ingestion', background: true },
+);
+
 export { CodeReviewFeedbackSchema };

@@ -18,6 +18,7 @@ import { Response } from 'express';
 
 import { createLogger } from '@libs/core/log/logger';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
+import { McpAuthGuard } from '../guards/mcp-auth.guard';
 import { McpEnabledGuard } from '../guards/mcp-enabled.guard';
 import { KodusIssuesMcpServerService } from '../services/kodus-issues-mcp-server.service';
 import {
@@ -28,7 +29,7 @@ import {
 @ApiTags('MCP Issues')
 @Public()
 @Controller('mcp/issues')
-@UseGuards(McpEnabledGuard)
+@UseGuards(McpEnabledGuard, McpAuthGuard)
 export class KodusIssuesMcpController {
     private readonly logger = createLogger(KodusIssuesMcpController.name);
 

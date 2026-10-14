@@ -15,6 +15,8 @@ import {
     FolderIcon,
 } from "lucide-react";
 
+import { SkeletonRows } from "@components/system/page-skeletons";
+
 import { providerFromModel } from "../_utils";
 import { ProviderAvatar } from "./provider-avatar";
 
@@ -112,15 +114,26 @@ export const PerRepositoryPanel = ({
     models?: PerRepositoryModelInfo[];
 }) => {
     const [data, setData] = useState<ListModelOverridesResult | null>(null);
+    // `data === null` means both "still fetching" and "came back empty", so an
+    // explicit flag keeps the empty state from flashing "nothing configured"
+    // over rows that are about to arrive.
+    const [loading, setLoading] = useState(!!teamId);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         if (!teamId) {
+            setLoading(false);
             return;
         }
+        let alive = true;
+        setLoading(true);
         void listModelOverrides(teamId)
-            .then(setData)
-            .catch(() => setData(null));
+            .then((result) => alive && setData(result))
+            .catch(() => alive && setData(null))
+            .finally(() => alive && setLoading(false));
+        return () => {
+            alive = false;
+        };
     }, [teamId]);
 
     const repos = useMemo(() => groupOverrides(data), [data]);
@@ -160,7 +173,12 @@ export const PerRepositoryPanel = ({
                 </Link>
             </div>
 
-            {repos.length === 0 ? (
+            {loading ? (
+                <SkeletonRows
+                    rows={3}
+                    className="border-card-lv3/40 overflow-hidden rounded-lg border"
+                />
+            ) : repos.length === 0 ? (
                 <div className="border-card-lv3/40 text-text-tertiary rounded-lg border border-dashed px-4 py-6 text-center text-sm text-pretty">
                     No per-repository models yet — every repository uses the
                     models above. Assign a model to a specific repository or
@@ -169,7 +187,7 @@ export const PerRepositoryPanel = ({
             ) : (
                 <div className="border-card-lv3/40 divide-card-lv3/30 flex flex-col divide-y overflow-hidden rounded-lg border">
                     {/* Header spine */}
-                    <div className="text-text-tertiary bg-card-lv2/40 grid grid-cols-[1fr_16rem] gap-4 px-3 py-2 text-[0.6875rem] font-medium tracking-wide uppercase">
+                    <div className="text-text-tertiary bg-card-lv2/40 hidden grid-cols-[minmax(0,1fr)_16rem] gap-4 px-3 py-2 text-[0.6875rem] font-medium tracking-wide uppercase sm:grid">
                         <span>Repository / Folder</span>
                         <span>Model</span>
                     </div>
@@ -179,7 +197,7 @@ export const PerRepositoryPanel = ({
                         const isOpen = expanded.has(repo.id);
                         return (
                             <div key={repo.id} className="flex flex-col">
-                                <div className="grid grid-cols-[1fr_16rem] items-center gap-4 px-3 py-2.5">
+                                <div className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,1fr)_16rem] items-center gap-4 px-3 py-2.5">
                                     <span className="flex min-w-0 items-center gap-2">
                                         {isMonorepo ? (
                                             <button
@@ -220,7 +238,7 @@ export const PerRepositoryPanel = ({
                                         {repo.folders.map((f) => (
                                             <div
                                                 key={f.id}
-                                                className="grid grid-cols-[1fr_16rem] items-center gap-4 py-2 pr-3 pl-3">
+                                                className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,1fr)_16rem] items-center gap-4 py-2 pr-3 pl-3">
                                                 <span className="flex min-w-0 items-center gap-2 pl-8">
                                                     <FolderIcon className="text-text-tertiary size-3.5 shrink-0" />
                                                     <span className="text-text-secondary truncate font-mono text-sm">

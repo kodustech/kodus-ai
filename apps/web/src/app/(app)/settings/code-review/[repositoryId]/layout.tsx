@@ -20,6 +20,7 @@ import {
     findFirstDirtyFieldOutsidePromptOverrides,
     shouldBlockCodeReviewLayoutNavigation,
 } from "./_utils/layout-dirty-state";
+import { withModelOverrideField } from "./_utils/model-override-field";
 import {
     useCodeReviewConfig,
     useDefaultCodeReviewConfig,
@@ -56,12 +57,14 @@ export default function Layout(props: React.PropsWithChildren) {
     const language = parameters.data?.configValue ?? (teamId === bridgeInitialTeamId ? (initialLanguage?.configValue as LanguageValue) : undefined) ?? LanguageValue.ENGLISH;
     const initialFormValues = useMemo(
         () =>
-            normalizePromptFormValues(
-                {
-                    ...config,
-                    language,
-                },
-                defaultCodeReviewConfig?.v2PromptOverrides,
+            withModelOverrideField(
+                normalizePromptFormValues(
+                    {
+                        ...config,
+                        language,
+                    },
+                    defaultCodeReviewConfig?.v2PromptOverrides,
+                ),
             ),
         [config, defaultCodeReviewConfig?.v2PromptOverrides, language],
     );

@@ -128,6 +128,15 @@ function grepStrongUsages(): Set<string> {
         // strings (e.g. SECRET_RE in build-slim-csv.ts, KODUS_PREFIX_RE
         // here). Don't double-count those.
         '--exclude-dir=scripts/env',
+        // Measurement corpus, not runtime code. dataset.json embeds real
+        // source from third-party projects (harvested from public security
+        // advisories), so every `process.env.X` those projects happen to read
+        // — GITLAB_GRAPHQL_URL, MCP_SERVER_NAME and friends — looks like ours.
+        // Same category as evals above: tooling that never runs in api/worker/
+        // web, and a corpus that grows every time a sample is added.
+        // NOTE: --exclude-dir matches the directory BASENAME, not a path —
+        // 'scripts/security-benchmark' would be a silent no-op.
+        '--exclude-dir=security-benchmark',
         '--include=*.ts',
         '--include=*.tsx',
         '--include=*.js',

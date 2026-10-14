@@ -36,7 +36,9 @@ import {
 } from './catalog';
 import type { ProviderBuildConfig } from '../kernel/types';
 
-const FLASH = 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731';
+const FLASH = 'fireworks/accounts/fireworks/models/deepseek-v4p1-flash';
+const RETIRED_FLASH =
+    'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731';
 const PRO = 'fireworks/accounts/fireworks/models/deepseek-v4-pro-0813';
 const KIMI = 'fireworks/accounts/fireworks/models/kimi-k2p7-code';
 const GLM52 = 'fireworks/accounts/fireworks/models/glm-5p2';
@@ -82,13 +84,32 @@ describe('model id grammar', () => {
         expect(splitKodusModelId(FLASH)).toEqual({
             upstream: 'fireworks',
             providerId: 'openai_compatible',
-            model: 'accounts/fireworks/models/deepseek-v4-flash-0731',
+            model: 'accounts/fireworks/models/deepseek-v4p1-flash',
         });
         expect(splitKodusModelId('anthropic/claude-sonnet-5')).toEqual({
             upstream: 'anthropic',
             providerId: 'anthropic',
             model: 'claude-sonnet-5',
         });
+    });
+
+    it('routes a retired Fireworks id saved in an old config to its replacement', () => {
+        // Fireworks stopped serving deepseek-v4-flash-0731 (404 "not deployed");
+        // a config saved with it must keep running, billed at the new model.
+        expect(splitKodusModelId(RETIRED_FLASH)?.model).toBe(
+            'accounts/fireworks/models/deepseek-v4p1-flash',
+        );
+        expect(isKodusCatalogModel(RETIRED_FLASH)).toBe(true);
+        expect(kodusModelPricing(RETIRED_FLASH)).toEqual(
+            kodusModelPricing(FLASH),
+        );
+    });
+
+    it('does not resolve Object.prototype names as retired ids', () => {
+        for (const id of ['constructor', 'toString', '__proto__']) {
+            expect(splitKodusModelId(id)).toBeNull();
+            expect(isKodusCatalogModel(id)).toBe(false);
+        }
     });
 
     it('rejects unknown prefixes, missing slash, and empty halves', () => {

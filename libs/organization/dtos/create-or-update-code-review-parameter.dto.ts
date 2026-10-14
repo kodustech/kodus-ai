@@ -371,6 +371,35 @@ class LinkedRepositoryDto {
     ref?: string;
 }
 
+/**
+ * Per-tool switch for the deterministic scanners. Named explicitly rather than
+ * a Record, because `forbidNonWhitelisted` is on globally: an unlisted key is
+ * a rejected request, not a silently ignored one.
+ */
+class DeterministicEvidenceToolsDto {
+    @IsOptional()
+    @IsBoolean()
+    @ApiPropertyOptional()
+    secrets?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    @ApiPropertyOptional()
+    dependencies?: boolean;
+}
+
+class DeterministicEvidenceDto {
+    /** Read the checks the repository's own CI already ran on the commit. */
+    @IsOptional()
+    @IsBoolean()
+    ciChecks?: boolean;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => DeterministicEvidenceToolsDto)
+    tools?: DeterministicEvidenceToolsDto;
+}
+
 class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsString()
@@ -472,6 +501,12 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsBoolean()
     runOnDraft?: boolean;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => DeterministicEvidenceDto)
+    @ApiPropertyOptional({ type: DeterministicEvidenceDto })
+    deterministicEvidence?: DeterministicEvidenceDto;
 
     @IsOptional()
     @IsEnum(CodeReviewVersion)

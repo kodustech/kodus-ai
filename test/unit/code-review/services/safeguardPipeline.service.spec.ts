@@ -96,8 +96,7 @@ describe('SafeguardPipelineService', () => {
                 } as any,
                 prNumber: 14282,
                 file: {
-                    filename:
-                        'apps/quintoandar_app/lib/app/tenants_app/tenants_app.dart',
+                    filename: 'apps/mobile_app/lib/app/home/home.dart',
                 },
                 relevantContent: '',
                 codeDiff: '@@',
@@ -106,8 +105,7 @@ describe('SafeguardPipelineService', () => {
                         id: 'suggestion-1',
                         label: 'bug',
                         severity: 'critical',
-                        filePath:
-                            'apps/quintoandar_app/lib/app/tenants_app/tenants_app.dart',
+                        filePath: 'apps/mobile_app/lib/app/home/home.dart',
                     },
                 ],
                 languageResultPrompt: 'en-US',

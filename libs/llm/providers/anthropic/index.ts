@@ -36,6 +36,7 @@ import {
 } from '../kernel/reasoning-traits';
 import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
+import { effortFromOutputConfig } from '../kernel/override-wire-spelling';
 
 
 
@@ -338,6 +339,10 @@ export const anthropicModule: ProviderModule = {
         },
     ],
     providerOptionsNamespace: () => 'anthropic',
+    // The adapter renders `output_config.effort` from `effort` and strips the
+    // `output_config` spelling Anthropic's own API docs show.
+    normalizeReasoningOverride: (_ns, options) =>
+        effortFromOutputConfig(options),
     // Native Anthropic accepts the adaptive thinking shape (the form every Claude
     // 4.6+ takes); an anthropic_compatible upstream isn't the brand, so it falls
     // back to the generic enabled-thinking example (undefined here).

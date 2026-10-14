@@ -117,6 +117,7 @@ export function resolveSuggestionLabel(
 export interface RawFinding {
     suggestionContent?: string;
     ruleUuid?: string;
+    revisesSuggestionId?: string;
     relevantFile?: string;
     oneSentenceSummary?: string;
     language?: string;
@@ -151,6 +152,8 @@ export interface MappedFindings {
     suggestions: Partial<CodeSuggestion>[];
     discardedBySeverity: Partial<CodeSuggestion>[];
     discardedByVerify: Partial<CodeSuggestion>[];
+    /** Findings dropped because the file they named is not in the PR. */
+    droppedForPath: number;
 }
 
 /**
@@ -178,6 +181,7 @@ export function mapAgentFindings(
     );
     const warn = (message: string, metadata: Record<string, unknown>) =>
         ctx.logger?.warn({ message, context: ctx.identityName, metadata });
+    let droppedForPath = 0;
 
     // The model sometimes cites only the tail of the path (`EventManager.ts`
     // for `packages/core/EventManager.ts`). Complete it when exactly one
@@ -272,6 +276,7 @@ export function mapAgentFindings(
                     !s.relevantFile || !!resolveChangedFile(s.relevantFile);
 
                 if (!kodyRulePathMatch) {
+                    droppedForPath++;
                     warn(
                         `@@PATH_MISMATCH@@ Dropping kody_rules suggestion — relevantFile not in changedFiles after normalization`,
                         {
@@ -295,6 +300,7 @@ export function mapAgentFindings(
             const pathMatch = !!resolveChangedFile(s.relevantFile);
 
             if (!pathMatch && s.relevantFile) {
+                droppedForPath++;
                 warn(
                     `@@PATH_MISMATCH@@ Dropping suggestion — relevantFile not in changedFiles after normalization`,
                     {
@@ -343,6 +349,9 @@ export function mapAgentFindings(
                 : s.severity || 'medium',
             llmPrompt: s.suggestionContent,
             ...(s.ruleUuid && { brokenKodyRulesIds: [s.ruleUuid] }),
+            ...(s.revisesSuggestionId && {
+                revisesSuggestionId: s.revisesSuggestionId,
+            }),
         } as Partial<CodeSuggestion>;
     });
 
@@ -359,5 +368,6 @@ export function mapAgentFindings(
         suggestions,
         discardedBySeverity: mapDiscarded(agentResult.discardedBySeverity),
         discardedByVerify: mapDiscarded(agentResult.droppedByVerify),
+        droppedForPath,
     };
 }

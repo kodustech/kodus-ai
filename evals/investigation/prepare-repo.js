@@ -71,6 +71,27 @@ function prNumberFrom(sourceUrl) {
     return m ? m[1] : null;
 }
 
+/** Empty, or shallow from this script's own fetches — not a hand-made clone. */
+async function startedHere(repoDir) {
+    try {
+        const { stdout: shallow } = await git(repoDir, ['rev-parse', '--is-shallow-repository']);
+        if (shallow.trim() === 'true') return true;
+        const { stdout: any } = await git(repoDir, ['rev-list', '-n', '1', '--all']);
+        return !any.trim();
+    } catch {
+        return false;
+    }
+}
+
+// One git operation at a time per clone: parallel cases share it, and two
+// fetches into one repository race on its refs and shallow file.
+const repoLocks = new Map();
+function withRepoLock(repoDir, fn) {
+    const run = (repoLocks.get(repoDir) || Promise.resolve()).then(fn);
+    repoLocks.set(repoDir, run.catch(() => {}));
+    return run;
+}
+
 async function hasCommit(repoDir, sha) {
     try {
         await git(repoDir, ['cat-file', '-e', `${sha}^{commit}`]);
@@ -93,6 +114,23 @@ async function hasCommit(repoDir, sha) {
 async function resolveSha(repoDir, vars) {
     const head = vars.benchmarkHeadRef;
     if (head && (await hasCommit(repoDir, head))) return head;
+
+    // A repository this script started holds only the commits the cases name:
+    // fetch just the head, shallow. GitHub serves any commit by its id; a few
+    // seconds and tens of MB where a full clone of these repos takes minutes.
+    // A full clone made by hand takes the path below, so it never turns shallow.
+    if (head && (await startedHere(repoDir))) {
+        const upstream = upstreamFor(vars.repositoryFullName);
+        if (!upstream) return null;
+        try {
+            await git(repoDir, ['fetch', '--quiet', '--depth=1', upstream, head], {
+                timeout: 300_000,
+            });
+        } catch {
+            return null;
+        }
+        return (await hasCommit(repoDir, head)) ? head : null;
+    }
 
     if (head) {
         const upstream = upstreamFor(vars.repositoryFullName);
@@ -120,30 +158,39 @@ async function resolveSha(repoDir, vars) {
 }
 
 /**
- * @returns {Promise<{dir:string, cleanup:()=>Promise<void>, baseSha:string, applied:boolean}|null>}
- *   null when the repo/commit isn't available locally — caller falls back to replay.
+ * @returns {Promise<{dir:string, cleanup:()=>Promise<void>, sha:string}|null>}
+ *   null when the commit could not be checked out (unknown repo, fetch failed)
+ *   — caller falls back to replay.
  */
 async function prepareRepo(vars, caseId) {
     const repoDir = repoDirFor(vars.repositoryFullName);
-    if (!repoDir || !fs.existsSync(repoDir)) return null;
-
-    const sha = await resolveSha(repoDir, vars);
-    if (!sha) return null;
+    if (!repoDir) return null;
 
     const wtDir = path.join(
         BENCH_ROOT,
         '.worktrees',
         `${path.basename(repoDir)}-${String(caseId).slice(0, 40)}-${process.pid}`,
     );
-    fs.mkdirSync(path.dirname(wtDir), { recursive: true });
 
-    try {
-        await git(repoDir, ['worktree', 'add', '--detach', '--force', wtDir, sha], {
-            timeout: 300_000,
-        });
-    } catch {
-        return null;
-    }
+    const sha = await withRepoLock(repoDir, async () => {
+        // No clone yet (CI, a fresh machine): start an empty one.
+        if (!fs.existsSync(path.join(repoDir, '.git'))) {
+            fs.mkdirSync(repoDir, { recursive: true });
+            await execFileAsync('git', ['init', '--quiet', repoDir]);
+        }
+        const resolved = await resolveSha(repoDir, vars);
+        if (!resolved) return null;
+        fs.mkdirSync(path.dirname(wtDir), { recursive: true });
+        try {
+            await git(repoDir, ['worktree', 'add', '--detach', '--force', wtDir, resolved], {
+                timeout: 300_000,
+            });
+        } catch {
+            return null;
+        }
+        return resolved;
+    }).catch(() => null);
+    if (!sha) return null;
 
     const cleanup = async () => {
         try {

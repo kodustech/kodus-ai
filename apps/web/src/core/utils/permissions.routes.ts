@@ -1,7 +1,7 @@
 import { UserRole } from "@enums";
-import { ResourceType } from "@services/permissions/types";
 import { Role } from "@libs/identity/domain/permissions/enums/permissions.enum";
 import { ROLE_POLICIES } from "@libs/identity/domain/permissions/policies/role-policies";
+import { ResourceType } from "@services/permissions/types";
 
 // Pure route-authorization logic, deliberately free of `next/server` so it can
 // be imported directly by unit tests (permissions.route-coverage.spec.ts and
@@ -22,9 +22,8 @@ export const resourceRoutes: Partial<Record<ResourceType, string[]>> = {
         "/library/*",
         "/setup/*",
         "/auth/*",
-        // Support iframe + CLI device-authorize flow: open to every
-        // authenticated role, no dedicated backend resource.
-        "/helpdesk/*",
+        // CLI device-authorize flow: open to every authenticated role, no
+        // dedicated backend resource.
         "/cli/*",
     ],
     [ResourceType.Billing]: ["/settings/subscription/*", "/choose-plan"],
@@ -35,7 +34,11 @@ export const resourceRoutes: Partial<Record<ResourceType, string[]>> = {
     [ResourceType.CliReview]: ["/cli-reviews/*"],
     [ResourceType.Issues]: ["/issues/*"],
     [ResourceType.CodeReviewSettings]: ["/settings/code-review/*"],
-    [ResourceType.OrganizationSettings]: ["/organization/*", "/byok/*", "/byok"],
+    [ResourceType.OrganizationSettings]: [
+        "/organization/*",
+        "/byok/*",
+        "/byok",
+    ],
     [ResourceType.GitSettings]: ["/settings/git/*", "/settings/integrations/*"],
     [ResourceType.UserSettings]: ["/settings/subscription/*"],
     [ResourceType.PluginSettings]: ["/settings/plugins/*"],

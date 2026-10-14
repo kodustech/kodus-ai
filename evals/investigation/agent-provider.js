@@ -876,6 +876,38 @@ function buildCurrentPrompts(caseData) {
     };
 }
 
+// The grep, read and listDir production's local sandbox (the self-hosted path)
+// hands the agent, over a prepared worktree: the same output and the same
+// errors for those three. Built by the sandbox's own method, so they cannot
+// drift from production. exec is left out for now, as in the replay, so the
+// exec-gated tools (checkTypes, findNearestProjectFile, findFile's fd/find
+// path) are not registered: a smaller tool set than production's, recorded as
+// `sandboxExec` in each row. Wrapped only to count calls for the fidelity
+// metric: a real answer, empty or not, is never an unserved call.
+function sandboxCommands(repoDir) {
+    const { LocalSandboxService } = require(
+        path.join(
+            __dirname,
+            '../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts',
+        ),
+    );
+    // buildRemoteCommands is private in TypeScript; it reads no instance
+    // state, and the constructor ignores its ConfigService.
+    const inner = new LocalSandboxService(undefined).buildRemoteCommands(
+        repoDir,
+    );
+    const commands = { calls: [], unexpectedCalls: [] };
+    for (const name of ['grep', 'read', 'listDir']) {
+        const fn = inner[name];
+        const kind = name === 'read' ? 'readFile' : name;
+        commands[name] = (...args) => {
+            commands.calls.push({ kind, actual: args, matched: true });
+            return fn(...args);
+        };
+    }
+    return commands;
+}
+
 function assignEvalFileTiers(input) {
     if ((input.changedFiles || []).length < 2) return undefined;
     const { computeFileScores, assignFileTiers } = require(
@@ -980,6 +1012,10 @@ function serializeResult(caseId, agentResult, remoteCommands, input, modelStats,
             replayCalls: Array.isArray(remoteCommands.calls)
                 ? remoteCommands.calls.length
                 : null,
+            repoPrepared: !!pipeline?.repoPrepared,
+            headSha: pipeline?.headSha ?? null,
+            // false: the exec-gated tools were not registered for this case.
+            sandboxExec: typeof remoteCommands.exec === 'function',
         },
     };
 }
@@ -1075,23 +1111,17 @@ class InvestigationAgentProvider {
             const model = await createModel(this.config, caseData.caseId);
 
             stage = 'build-replay-commands';
-            // RECALL_REAL_REPO=1: search a real git worktree (base commit +
-            // this PR's diff) instead of replaying recorded tool calls. The
-            // replay can only answer calls captured when the dataset was built,
-            // which (a) left ~15% of calls unserved in recent runs and (b) makes
-            // selector-style passes untestable by construction — a selector
-            // searches for code the diff does NOT contain. Falls back to replay
-            // whenever the repo or the base commit isn't available locally, so a
-            // missing clone degrades the run instead of failing it.
-            //
-            // Runs BEFORE the prompts are built: the call graph below is part of
-            // the generalist's user prompt, and it needs the worktree.
+            // RECALL_REAL_REPO=1: answer the tools from a git worktree at the
+            // PR's head instead of replaying recorded tool calls. The replay
+            // only answers calls captured when the dataset was built; any other
+            // call gets an empty answer the real repository would not give.
+            // Falls back to replay when the commit can't be fetched;
+            // `repoPrepared` in the trace says which one ran.
             let remoteCommands;
             if (process.env.RECALL_REAL_REPO === '1') {
                 const { prepareRepo } = require('./prepare-repo');
-                const { LocalRepoCommands } = require('./local-repo-commands');
                 repoHandle = await prepareRepo(caseData, caseData.caseId);
-                if (repoHandle) remoteCommands = new LocalRepoCommands(repoHandle.dir);
+                if (repoHandle) remoteCommands = sandboxCommands(repoHandle.dir);
             }
             if (!remoteCommands) {
                 remoteCommands = new ReplayRemoteCommands(

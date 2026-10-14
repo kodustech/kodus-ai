@@ -14,6 +14,7 @@ import {
     Reaction,
     ReviewStatusReaction,
 } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
+import { withFallbackWarnings } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -34,6 +35,7 @@ import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { recordModelFailovers } from '@libs/llm/model-failover';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 
@@ -251,7 +253,11 @@ export class CodeReviewHandlerService {
 
             const pipeline =
                 this.pipelineFactory.getPipeline('CodeReviewPipeline');
-            const result = await pipeline.execute(initialContext);
+            // Collects the LLM calls that only succeeded on the fallback model, so
+            // the run records that it did not review on the configured model.
+            const { value: result, failovers } = await recordModelFailovers(
+                () => pipeline.execute(initialContext),
+            );
 
             const collectedErrors = result.errors || [];
             const hasCriticalError = collectedErrors.some(
@@ -352,7 +358,10 @@ export class CodeReviewHandlerService {
                 statusInfo: finalStatus,
                 orphanedBaseCommit: result?.orphanedBaseCommit,
                 businessLogicValidatedAt: result?.businessLogicValidatedAt,
-                reviewWarnings: result?.reviewWarnings,
+                reviewWarnings: withFallbackWarnings(
+                    result?.reviewWarnings,
+                    failovers,
+                ),
                 linkedRepositoriesMetadata: result?.linkedRepositoriesMetadata,
             };
         } catch (error) {

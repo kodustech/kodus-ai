@@ -1,9 +1,9 @@
 /**
  * Validação do schema de submission.
  *
- * Sem dependência externa de propósito: isto roda no CI do PR de submissão de
- * terceiro, e a mensagem de erro é o que a pessoa vai ler para consertar. Erro
- * claro > validador genérico.
+ * Sem dependência externa de propósito: a mensagem de erro é o que a pessoa vai ler
+ * para consertar, e ela é lida na revisão do PR de submissão — não por um validador
+ * automático, que não existe neste caminho. Erro claro > validador genérico.
  *
  * Contrato completo: evals/scorer/README.md
  */
@@ -27,7 +27,7 @@ function validateSubmission(s) {
     if (!isObj(s)) return errs;
 
     req(typeof s.benchmarkVersion === 'string' && s.benchmarkVersion,
-        'benchmarkVersion: string obrigatória (ex: "light-30-v1")');
+        'benchmarkVersion: string obrigatória (ex: "light-v1")');
 
     // ── run ──
     const run = s.run;

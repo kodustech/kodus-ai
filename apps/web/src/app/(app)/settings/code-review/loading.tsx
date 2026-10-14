@@ -1,3 +1,5 @@
-import { GenericLoading } from "@components/ui/generic-loading";
+import { RouteSkeleton } from "../../_components/route-skeleton";
 
-export default GenericLoading;
+// Same chooser as the section boundary, so Kody Rules gets its table
+// skeleton rather than the settings cards.
+export default RouteSkeleton;

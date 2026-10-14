@@ -21,7 +21,7 @@ export const LEAN_FINDER_FIELDS = [
 
 export type LeanFinderField = (typeof LEAN_FINDER_FIELDS)[number];
 
-const ACCEPTED_FIELDS = [...LEAN_FINDER_FIELDS, 'llmPrompt'];
+const ACCEPTED_FIELDS = [...LEAN_FINDER_FIELDS, 'llmPrompt', 'oneSentenceSummary', 'revisesSuggestionId'];
 
 const LOCATION_FIELDS: LeanFinderField[] = [
     'relevantFile',

@@ -1,0 +1,369 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "engine": {
+    "commit": "14439a95335f07c92cb445ccea3069a9b2904e30",
+    "sourceDigest": "3771942b8bf2db18620b87904bc4b42afc4f16b763723e5f4808fe5910a9c7d3"
+  },
+  "startedAt": "2026-10-03T16:45:17.503Z",
+  "updatedAt": "2026-10-03T16:54:20.722Z",
+  "complete": true,
+  "selectedCases": [
+    "K1-rule-already-posted",
+    "K2-rule-reverses-prior"
+  ],
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "K1-rule-already-posted · finishRun-repeat [not_deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "K1-rule-already-posted · finishBatch-new-site [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "K2-rule-reverses-prior · result-first-violates-rule [if_delivered_linked]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 49758,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In the new `finishBatch` handler, `db.results.insertMany(batch.id, batch.outputs)` runs before `db.progress.update(batch.id, 'done')`, violating rule [1] (update progress before writing results). If the process dies between the two calls, the batch outputs are already persisted while progress still shows the job as unfinished, so swap the two statements to await `db.progress.update(batch.id, 'done')` first."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 116290,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In the newly added `finishBatch` handler, `db.results.insertMany` runs before `db.progress.update`, making batch outputs visible before progress has been recorded for the job and violating the rule 'Update progress before writing results'. Swap the two calls so `db.progress.update` runs first."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 50468,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In the newly added finishBatch, db.results.insertMany is called before db.progress.update, violating the rule that progress must be recorded before results are written so a result is never visible for a job whose progress was not recorded. Swap the two calls so progress is updated to 'done' first, then insert the batch outputs."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 133562,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-result-first",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/jobs/handler.ts:5` (2026-09-30 00:46 UTC).\n\nIn src/jobs/handler.ts, Rule [1] requires db.progress.update to be called before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded, but this added line puts the progress update after the result insert and breaks that ordering. Move the progress update above the insert so the handler calls db.progress.update(run.id, 'done') before db.results.insert(run.id, run.output); this reverses the earlier suggestion to write the result first, which was a general bug review rather than this rule and produced this violation."
+        }
+      ],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 104360,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-result-first",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/jobs/handler.ts:5` (2026-09-30 00:46 UTC).\n\nIn src/jobs/handler.ts, rule [1] requires db.progress.update to run before db.results.insert/insertMany so a result is never visible for a job whose progress was not recorded, but moving the progress update after the insert makes the run's output visible while the job is still recorded as not done. This reverses the earlier round-a-result-first suggestion on this PR, which stored output first to avoid marking a run done with no output, so the ordering should now satisfy rule [1] by updating progress first and then inserting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 86647,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-result-first",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/jobs/handler.ts:5` (2026-09-30 00:46 UTC).\n\nIn `finishRun`, `db.results.insert` (line 5) now runs before `db.progress.update` (line 6), violating rule [1] that job handlers must call `db.progress.update` before `db.results.insert`/`insertMany` so a result is never visible for a job whose progress was not recorded; a crash between the calls leaves the run's output stored while progress still shows it as unfinished. Restore the progress-before-result ordering, and since this reverses the earlier suggestion to write the result first, if the goal is to avoid a run being marked done without output the correct fix is to make the two writes atomic (e.g. a single transaction) rather than reorder them and break the invariant."
+        }
+      ],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

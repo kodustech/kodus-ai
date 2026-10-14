@@ -47,6 +47,13 @@ export interface ClassifiedErrorInfo {
      * and dropping theirs is what left a failed review with nothing to act on.
      */
     providerMessage?: string;
+    /**
+     * Set when a MODEL_NOT_FOUND is a routing refusal: the model exists, but
+     * the aggregator's allowed/pinned providers serve no upstream for it.
+     * Decided here, on the full error text, so every surface that words the
+     * failure (the PR comment, the dashboard banner) agrees.
+     */
+    routingRefusal?: boolean;
 }
 
 const CLASSIFICATION_KEY = Symbol('reviewErrorClassification');
@@ -130,6 +137,10 @@ export function classifyLLMError(
                 ? buildContextOverflowMessage(err, provider)
                 : buildFriendlyMessage(category, provider, lower),
         providerMessage: extractProviderMessage(err),
+        ...(category === LlmErrorCategory.MODEL_NOT_FOUND &&
+        isRoutingRefusal(lower)
+            ? { routingRefusal: true }
+            : {}),
     };
 }
 
@@ -210,7 +221,7 @@ export function llmErrorLogLevel(err: unknown): 'warn' | 'error' {
  * `cause` chain. The Vercel AI SDK in particular puts the upstream JSON error
  * body in `responseBody` while leaving `message` as a generic status phrase.
  */
-function extractErrorText(err: unknown, depth = 0): string {
+export function extractErrorText(err: unknown, depth = 0): string {
     if (!err || depth > 3) return '';
     if (typeof err === 'string') return err;
     if (typeof err !== 'object') return String(err);
@@ -230,16 +241,22 @@ function extractErrorText(err: unknown, depth = 0): string {
     if (e.cause && e.cause !== err) {
         parts.push(extractErrorText(e.cause, depth + 1));
     }
+    // The AI SDK's RetryError carries no body of its own: the provider's answer
+    // is on the last attempt.
+    if (e.lastError && e.lastError !== err) {
+        parts.push(extractErrorText(e.lastError, depth + 1));
+    }
     return parts.join(' ');
 }
 
-function extractHttpStatus(err: unknown): number | undefined {
-    if (!err || typeof err !== 'object') return undefined;
+export function extractHttpStatus(err: unknown, depth = 0): number | undefined {
+    if (!err || typeof err !== 'object' || depth > 3) return undefined;
     const e = err as {
         status?: number;
         statusCode?: number;
         response?: { status?: number };
         cause?: { status?: number; statusCode?: number };
+        lastError?: unknown;
     };
     return (
         e.status ??
@@ -247,7 +264,10 @@ function extractHttpStatus(err: unknown): number | undefined {
         e.response?.status ??
         e.cause?.status ??
         e.cause?.statusCode ??
-        undefined
+        // RetryError: the status is on the attempt that ended the retries.
+        (e.lastError !== err
+            ? extractHttpStatus(e.lastError, depth + 1)
+            : undefined)
     );
 }
 
@@ -362,7 +382,10 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('model_not_found') ||
         lower.includes('model not found') ||
         lower.includes('no such model') ||
-        lower.includes('does not exist')
+        lower.includes('does not exist') ||
+        // An OpenAI-compatible gateway that does not serve this model over the
+        // chat-completions protocol it was called with.
+        lower.includes('does not support this protocol')
     ) {
         return LlmErrorCategory.MODEL_NOT_FOUND;
     }
@@ -371,7 +394,9 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('context_length') ||
         lower.includes('maximum context') ||
         lower.includes('token limit') ||
-        lower.includes('too many tokens')
+        lower.includes('too many tokens') ||
+        // OpenAI: "Your input exceeds the context window of this model."
+        lower.includes('exceeds the context window')
     ) {
         return LlmErrorCategory.CONTEXT_OVERFLOW;
     }
@@ -382,7 +407,21 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('network error') ||
         lower.includes('fetch failed') ||
         lower.includes('timeout') ||
-        lower.includes('aborted')
+        lower.includes('aborted') ||
+        // 502/503 status phrases: all that is left of the status once the
+        // review path has rebuilt the error from its text.
+        lower.includes('service unavailable') ||
+        lower.includes('bad gateway') ||
+        // More 5xx phrasings, the text-only safety net for an upstream outage
+        // whose HTTP status never reached the classifier (a passthrough or a
+        // RetryError whose embedded text carries no status field). The real
+        // status now rides in via lastError (#1875), so a *bare* 5xx digit in
+        // a message body is deliberately not read as a status: a permanent
+        // 400/422 body can carry one (`max_tokens must be <= 503`,
+        // `530 credits remaining`, `id 503-abc`) and must not bill the BYOK
+        // fallback (#1898 review).
+        lower.includes('gateway timeout') ||
+        lower.includes('internal server error')
     ) {
         return LlmErrorCategory.TRANSIENT;
     }

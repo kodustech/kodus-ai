@@ -24,6 +24,7 @@ import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from '@libs/kodyR
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import { ParametersKey } from '@libs/core/domain/enums';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -128,6 +129,13 @@ describe('GenerateKodyRulesUseCase', () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 GenerateKodyRulesUseCase,
                 {
                     provide: INTEGRATION_SERVICE_TOKEN,

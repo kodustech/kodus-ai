@@ -16,6 +16,7 @@ import { DeleteRepositoryCodeReviewParameterUseCase } from '../application/use-c
 import { GenerateKodusConfigFileUseCase } from '../application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCliRepositorySettingsUseCase } from '../application/use-cases/configuration/get-cli-repository-settings.use-case';
 import { GetCodeReviewParameterUseCase } from '../application/use-cases/configuration/get-code-review-parameter.use-case';
+import { GetCodeReviewScopesUseCase } from '../application/use-cases/configuration/get-code-review-scopes.use-case';
 import { ListCodeReviewAutomationLabelsUseCase } from '../application/use-cases/configuration/list-code-review-automation-labels-use-case';
 import { ListCodeReviewAutomationLabelsWithStatusUseCase } from '../application/use-cases/configuration/list-code-review-automation-labels-with-status.use-case';
 import { UpdateCliRepositorySettingsUseCase } from '../application/use-cases/configuration/update-cli-repository-settings.use-case';
@@ -46,6 +47,7 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,
         GetCodeReviewParameterUseCase,
+        GetCodeReviewScopesUseCase,
         ListCodeReviewAutomationLabelsUseCase,
         ListCodeReviewAutomationLabelsWithStatusUseCase,
         UpdateCodeReviewParameterRepositoriesUseCase,
@@ -58,6 +60,7 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,
         GetCodeReviewParameterUseCase,
+        GetCodeReviewScopesUseCase,
         ListCodeReviewAutomationLabelsUseCase,
         ListCodeReviewAutomationLabelsWithStatusUseCase,
         UpdateCodeReviewParameterRepositoriesUseCase,

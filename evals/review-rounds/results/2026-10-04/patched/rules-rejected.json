@@ -1,0 +1,960 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "claude-haiku-4-5",
+  "engine": {
+    "commit": "03b25de6ec9310180b9797eaa725f4dae7922a25",
+    "sourceDigest": "3b409a719f077fff11ab4d17d1afee27fe9943ff3b13422cbaf3795144723628"
+  },
+  "complete": true,
+  "reps": 3,
+  "runs": [
+    {
+      "sequence": "rules-rejected-four-rounds",
+      "action": "Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
+      "rep": 1,
+      "rounds": [
+        {
+          "case": "rules-rejected-four-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 87938,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 6,
+              "severity": "high",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "The reordering in finishRun inserts the run result before recording progress, violating Rule 1's requirement that db.progress.update run before db.results.insert/insertMany so a result is never visible for a job whose progress was not recorded and making the result observable before 'done' is written. Restore the original order by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output)."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n+    await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 7753,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "The reordering in finishRun inserts the run result before recording progress, violating Rule 1's requirement that db.progress.update run before db.results.insert/insertMany so a result is never visible for a job whose progress was not recorded and making the result observable before 'done' is written. Restore the original order by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:18:18.627Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 4979,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "The reordering in finishRun inserts the run result before recording progress, violating Rule 1's requirement that db.progress.update run before db.results.insert/insertMany so a result is never visible for a job whose progress was not recorded and making the result observable before 'done' is written. Restore the original order by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:18:18.627Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 4097,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "The reordering in finishRun inserts the run result before recording progress, violating Rule 1's requirement that db.progress.update run before db.results.insert/insertMany so a result is never visible for a job whose progress was not recorded and making the result observable before 'done' is written. Restore the original order by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:18:18.627Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 11924,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "The reordering in finishRun inserts the run result before recording progress, violating Rule 1's requirement that db.progress.update run before db.results.insert/insertMany so a result is never visible for a job whose progress was not recorded and making the result observable before 'done' is written. Restore the original order by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:18:18.627Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 4: document completion telemetry.\n     // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 122271,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 14,
+              "severity": "medium",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In the new `finishBatch` handler, `db.results.insertMany(...)` is awaited before `db.progress.update(batch.id, 'done')`, so the batch results become visible before the job's progress is recorded as done \u2014 exactly the ordering Rule 1 forbids. Swap the two statements so progress is updated first, then the results are written."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            },
+            {
+              "id": "finishBatch-new-site",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:1:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 6,
+              "suggestionContent": "The reordering in finishRun inserts the run result before recording progress, violating Rule 1's requirement that db.progress.update run before db.results.insert/insertMany so a result is never visible for a job whose progress was not recorded and making the result observable before 'done' is written. Restore the original order by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:18:18.627Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -1,5 +1,5 @@\n import { db } from './db';\n-import type { Run } from './types';\n+import type { Run, Batch } from './types';\n \n export async function finishRun(run: Run) {\n     // Commit 4: document completion telemetry.\n@@ -9,3 +9,8 @@\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n }\n+\n+export async function finishBatch(batch: Batch) {\n+    await db.results.insertMany(batch.id, batch.outputs);\n+    await db.progress.update(batch.id, 'done');\n+}\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rules-rejected-four-rounds",
+      "action": "Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
+      "rep": 2,
+      "rounds": [
+        {
+          "case": "rules-rejected-four-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 71821,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 5,
+              "severity": "high",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "This PR reorders the two calls in finishRun so that db.results.insert now runs before db.progress.update, which inverts the required order: Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded, and writing the result first opens a window where the output exists but progress is still not 'done'. Restore the original ordering by updating progress first, then inserting the result."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n+    await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 4172,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "This PR reorders the two calls in finishRun so that db.results.insert now runs before db.progress.update, which inverts the required order: Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded, and writing the result first opens a window where the output exists but progress is still not 'done'. Restore the original ordering by updating progress first, then inserting the result.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:22:01.483Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 7685,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "This PR reorders the two calls in finishRun so that db.results.insert now runs before db.progress.update, which inverts the required order: Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded, and writing the result first opens a window where the output exists but progress is still not 'done'. Restore the original ordering by updating progress first, then inserting the result.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:22:01.483Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 5822,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "This PR reorders the two calls in finishRun so that db.results.insert now runs before db.progress.update, which inverts the required order: Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded, and writing the result first opens a window where the output exists but progress is still not 'done'. Restore the original ordering by updating progress first, then inserting the result.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:22:01.483Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 4758,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "This PR reorders the two calls in finishRun so that db.results.insert now runs before db.progress.update, which inverts the required order: Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded, and writing the result first opens a window where the output exists but progress is still not 'done'. Restore the original ordering by updating progress first, then inserting the result.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:22:01.483Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 4: document completion telemetry.\n     // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 85885,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 14,
+              "severity": "medium",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "The new finishBatch function writes results with db.results.insertMany before recording progress with db.progress.update, violating Rule [1], which requires db.progress.update before db.results.insert / insertMany in the same function and leaves a window where outputs are visible while progress is not 'done'. Swap the two calls so progress is updated first, then the results are inserted."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            },
+            {
+              "id": "finishBatch-new-site",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:2:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "This PR reorders the two calls in finishRun so that db.results.insert now runs before db.progress.update, which inverts the required order: Rule [1] requires db.progress.update before db.results.insert / insertMany so a result is never visible for a job whose progress was not recorded, and writing the result first opens a window where the output exists but progress is still not 'done'. Restore the original ordering by updating progress first, then inserting the result.",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:22:01.483Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -1,5 +1,5 @@\n import { db } from './db';\n-import type { Run } from './types';\n+import type { Run, Batch } from './types';\n \n export async function finishRun(run: Run) {\n     // Commit 4: document completion telemetry.\n@@ -9,3 +9,8 @@\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n }\n+\n+export async function finishBatch(batch: Batch) {\n+    await db.results.insertMany(batch.id, batch.outputs);\n+    await db.progress.update(batch.id, 'done');\n+}\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rules-rejected-four-rounds",
+      "action": "Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
+      "rep": 3,
+      "rounds": [
+        {
+          "case": "rules-rejected-four-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 48947,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 5,
+              "severity": "high",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "The diff reorders finishRun so that db.results.insert now runs before db.progress.update, inverting the required order; rule [1] requires progress to be recorded before the result is written, otherwise a result can be visible for a job whose progress was never updated. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output)."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,6 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n-    await db.progress.update(run.id, 'done');\n     await db.results.insert(run.id, run.output);\n+    await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 3658,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:3:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The diff reorders finishRun so that db.results.insert now runs before db.progress.update, inverting the required order; rule [1] requires progress to be recorded before the result is written, otherwise a result can be visible for a job whose progress was never updated. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:24:38.766Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 14708,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:3:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The diff reorders finishRun so that db.results.insert now runs before db.progress.update, inverting the required order; rule [1] requires progress to be recorded before the result is written, otherwise a result can be visible for a job whose progress was never updated. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:24:38.766Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 6002,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:3:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The diff reorders finishRun so that db.results.insert now runs before db.progress.update, inverting the required order; rule [1] requires progress to be recorded before the result is written, otherwise a result can be visible for a job whose progress was never updated. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:24:38.766Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n     await db.results.insert(run.id, run.output);\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 5273,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:3:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The diff reorders finishRun so that db.results.insert now runs before db.progress.update, inverting the required order; rule [1] requires progress to be recorded before the result is written, otherwise a result can be visible for a job whose progress was never updated. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:24:38.766Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -2,6 +2,7 @@\n import type { Run } from './types';\n \n export async function finishRun(run: Run) {\n+    // Commit 4: document completion telemetry.\n     // Commit 3: document completion telemetry.\n     // Commit 2: document completion telemetry.\n     // Commit 1: document completion telemetry.\n"
+            }
+          ]
+        },
+        {
+          "case": "rules-rejected-four-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 66528,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "warnings": 0,
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/jobs/handler.ts",
+              "line": 14,
+              "severity": "high",
+              "linkedById": false,
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "marked": false,
+              "text": "In the newly added `finishBatch` handler, `db.results.insertMany(...)` is awaited before `db.progress.update(...)`, violating rule [1]: progress must be recorded before results are written, otherwise a batch's results can be visible while its progress was never updated. Swap the two calls so the progress update runs first and the insertMany afterwards."
+            }
+          ],
+          "claims": [
+            {
+              "id": "finishRun-repeat",
+              "expect": "not_deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            },
+            {
+              "id": "finishBatch-new-site",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rules-rejected-four-rounds:3:0:0",
+              "relevantFile": "src/jobs/handler.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The diff reorders finishRun so that db.results.insert now runs before db.progress.update, inverting the required order; rule [1] requires progress to be recorded before the result is written, otherwise a result can be visible for a job whose progress was never updated. Restore the original ordering by calling db.progress.update(run.id, 'done') first, then db.results.insert(run.id, run.output).",
+              "label": "kody_rules",
+              "brokenKodyRulesIds": [
+                "rule-progress-first"
+              ],
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-04T14:24:38.766Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/jobs/handler.ts",
+              "patch": "@@ -1,5 +1,5 @@\n import { db } from './db';\n-import type { Run } from './types';\n+import type { Run, Batch } from './types';\n \n export async function finishRun(run: Run) {\n     // Commit 4: document completion telemetry.\n@@ -9,3 +9,8 @@\n     await db.results.insert(run.id, run.output);\n     await db.progress.update(run.id, 'done');\n }\n+\n+export async function finishBatch(batch: Batch) {\n+    await db.results.insertMany(batch.id, batch.outputs);\n+    await db.progress.update(batch.id, 'done');\n+}\n"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,762 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "8d22cf93b7b767539c70cf6d879db8b39e0dbdde1464815e132caf5145e6d525"
+  },
+  "startedAt": "2026-10-13T21:22:45.466Z",
+  "updatedAt": "2026-10-13T21:29:08.113Z",
+  "complete": true,
+  "selectedCases": [
+    "K9-rule-repost-prod-rules-volume",
+    "K9-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 5,
+        "rate": 1
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 20,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "K9-rule-repost-prod-rules-volume · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "K9-rule-repost-prod-rules-volume · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "K9-control · rangeLabel-start-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "K9-control · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K9-rule-repost-prod-rules-volume",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 46868,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-local-day",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/reports/range.ts:4` (2026-10-06 14:02 UTC).\n\nBecause `rangeLabel` still derives the start day with `range.start.toISOString().slice(0, 10)`, users west of UTC see the previous day after their local evening, violating \"Format date-only values in local calendar time\". The earlier finding was applied only to `range.end`, so use `formatLocalDate(range.start)` for `range.start` as well."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` returns the UTC day via `at.toISOString().slice(0, 10)`, so users west of UTC see the previous calendar day after their local evening, violating \"Format date-only values in local calendar time\". Since `formatLocalDate` is already imported in this file, return `formatLocalDate(at)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K9-rule-repost-prod-rules-volume",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28103,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Because line 5 still uses `toISOString().slice(0, 10)` for `range.start`, it violates the local-calendar-time rule and shows the previous day for users west of UTC, unlike the already-fixed `range.end` on line 6. Use `formatLocalDate(range.start)` here as well."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC after their local evening, `dayKey` returns the previous calendar day via `at.toISOString().slice(0, 10)`, so any keys built from it will be off by one and violate the local-calendar-time rule. Replace that expression with `formatLocalDate(at)` from `./dates`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K9-rule-repost-prod-rules-volume",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25431,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-local-day",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/reports/range.ts:4` (2026-10-06 14:02 UTC).\n\n`startDay` in `rangeLabel` still derives its calendar day with `range.start.toISOString().slice(0, 10)`, so west of UTC the label shows the previous day after the local evening. Use `formatLocalDate(range.start)` here too, matching the `endDay` side that was already converted."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` still renders the UTC instant via `at.toISOString().slice(0, 10)`, so west of UTC it returns the previous day after the local evening. Use `formatLocalDate` here as well, since it is already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K9-rule-repost-prod-rules-volume",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45567,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-local-day",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/reports/range.ts:4` (2026-10-06 14:02 UTC).\n\nUsers west of UTC still see `rangeLabel` show the previous day because the start day is derived with `toISOString().slice(0, 10)` rather than local calendar time, and the earlier round-a-local-day entry was marked implemented even though the diff only converted the end day to `formatLocalDate`. Convert the start day with `formatLocalDate(range.start)` as well."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `dayKey` returns the previous calendar day because `toISOString().slice(0, 10)` is not local calendar time. Return `formatLocalDate(at)` from `./dates` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K9-rule-repost-prod-rules-volume",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 31486,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-local-day",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/reports/range.ts:4` (2026-10-06 14:02 UTC).\n\nUsers west of UTC still see the previous day for the range start because `rangeLabel` derives `startDay` with `range.start.toISOString().slice(0, 10)` instead of local calendar time. Change it to `formatLocalDate(range.start)`, matching the already-converted `range.end`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Users west of UTC get the previous day from `dayKey` because it uses `at.toISOString().slice(0, 10)` rather than local calendar time. Replace that expression with `formatLocalDate(at)`, which is already imported from './dates' and used by `rangeLabel`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K9-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 48679,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC after their local evening, `range.start.toISOString().slice(0, 10)` derives the calendar day from the UTC instant and shows the previous day—the exact support-ticket bug this rule was written for—while the `end` value on the next line already uses `formatLocalDate`. Use `formatLocalDate(range.start)` from `src/reports/dates.ts` so this site matches."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` builds the key with `at.toISOString().slice(0, 10)`, so for users west of UTC after 21:00 local it returns the previous calendar day and misattributes the day's rows. Return `formatLocalDate(at)` from `src/reports/dates.ts` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K9-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 28173,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`range.start.toISOString().slice(0, 10)` derives the calendar day from the UTC instant, so for users west of UTC after their local evening the range label starts a day early. Replace it with `formatLocalDate(range.start)`, the shared helper already imported for the other endpoint, so both ends of the range use local-calendar formatting."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` renders the UTC instant, so a key built for a user west of UTC after 21:00 local time is a day early, and report buckets, filenames, and labels built from those strings will not line up with what the user sees. Use `formatLocalDate(at)` from `src/reports/dates.ts`, which the file already imports, so the key is the calendar day the user is in."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K9-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 47896,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Because `rangeLabel` derives the start day with `toISOString().slice(0, 10)`, it renders the UTC instant and shows the previous calendar day for users west of UTC after their local evening, unlike the end date on the next line that already uses `formatLocalDate`. Use `formatLocalDate(range.start)` like the sibling line."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Because the new `dayKey` helper returns a calendar day via `at.toISOString().slice(0, 10)`, it returns the UTC day and is off by one for users west of UTC after 21:00 local time. Use `formatLocalDate(at)` from `./dates`, which the file already imports."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K9-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 32383,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Users west of UTC see the previous calendar day after their local evening because `range.start.toISOString().slice(0, 10)` derives the day from the UTC instant, which is exactly the bug this rule was written for. Use `formatLocalDate` from `src/reports/dates.ts`, the same helper the neighboring line already uses."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Anyone west of UTC sees the previous calendar day in their local evening because `dayKey` builds its key with `at.toISOString().slice(0, 10)`. Use `formatLocalDate` from `src/reports/dates.ts` so the key is the day the user sees."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K9-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 42702,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`range.start.toISOString().slice(0, 10)` derives the calendar day from the UTC instant, so users west of UTC see the previous day after their local evening. Use `formatLocalDate` from `src/reports/dates.ts` (already imported on line 1) as the line below it does."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` builds a day key with `at.toISOString().slice(0, 10)`, which renders the UTC instant, so for users west of UTC the key is the previous calendar day. Return `formatLocalDate(at)` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

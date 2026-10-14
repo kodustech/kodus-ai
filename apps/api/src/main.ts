@@ -62,6 +62,7 @@ import { HttpServerConfiguration } from '@libs/core/infrastructure/config/types'
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
 import { ApiModule } from './api.module';
+import { BILLING_EVENTS_PATH } from './controllers/billingEvents.controller';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import {
     buildDocsConfig,
@@ -178,6 +179,19 @@ async function bootstrap() {
             });
         });
 
+        // Billing callbacks are HMAC-signed over the exact bytes sent, so
+        // keep them for that route only. Mounted on the controller's own path
+        // so Express matches it exactly like the router does; the generic
+        // parser below skips bodies that were already read.
+        app.use(
+            BILLING_EVENTS_PATH,
+            bodyParser.json({
+                limit: '25mb',
+                verify: (req: any, _res, buf) => {
+                    req.rawBody = buf;
+                },
+            }),
+        );
         app.use(bodyParser.json({ limit: '25mb' }));
         app.use(bodyParser.urlencoded({ limit: '25mb', extended: true }));
         app.set('trust proxy', 1);

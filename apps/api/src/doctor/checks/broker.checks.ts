@@ -1,7 +1,12 @@
 import * as amqplib from 'amqplib';
 import { DataSource } from 'typeorm';
 
-import { DoctorCheck, DoctorContext, DoctorResult } from '../doctor.types';
+import {
+    DoctorCheck,
+    DoctorContext,
+    DoctorResult,
+    RECENT_DAYS,
+} from '../doctor.types';
 
 /** Queues a code review needs a live consumer on (workflow-queue-arguments.ts). */
 export const REVIEW_QUEUES = [
@@ -159,23 +164,28 @@ export function staleJobsCheck(dataSource: DataSource): DoctorCheck {
     return {
         id: 'jobs.stale',
         async run(): Promise<DoctorResult[]> {
-            // PENDING is never reaped (workflow-job.repository.ts:276); a job
-            // scheduled for later is legitimately PENDING until then.
+            // PENDING is never reaped (WorkflowJobRepository) and FAILED outbox
+            // rows are never cleaned (OutboxRelayService.cleanupOldMessages), so
+            // without a lower bound an incident from months ago reads as a
+            // failure today. A job scheduled for later is legitimately PENDING
+            // until then.
             const [pending] = await dataSource.query(
                 `SELECT COUNT(*)::int AS count, MIN("createdAt") AS oldest
                    FROM kodus_workflow.workflow_jobs
                   WHERE status = 'PENDING'
                     AND "createdAt" < now() - make_interval(mins => $1)
+                    AND "createdAt" > now() - make_interval(days => $2)
                     AND ("scheduledAt" IS NULL OR "scheduledAt" < now() - make_interval(mins => $1))`,
-                [STALE_JOB_MINUTES],
+                [STALE_JOB_MINUTES, RECENT_DAYS],
             );
             const [unsent] = await dataSource.query(
                 `SELECT COUNT(*)::int AS count
                    FROM kodus_workflow.outbox_messages
                   WHERE status IN ('READY', 'FAILED')
                     AND attempts > 0
-                    AND "createdAt" < now() - make_interval(mins => $1)`,
-                [STALE_JOB_MINUTES],
+                    AND "createdAt" < now() - make_interval(mins => $1)
+                    AND "createdAt" > now() - make_interval(days => $2)`,
+                [STALE_JOB_MINUTES, RECENT_DAYS],
             );
 
             const results: DoctorResult[] = [];
@@ -183,7 +193,7 @@ export function staleJobsCheck(dataSource: DataSource): DoctorCheck {
                 results.push({
                     check: 'jobs.outbox',
                     status: 'fail',
-                    title: `${unsent.count} job(s) could not be handed to the message queue.`,
+                    title: `${unsent.count} job(s) from the last ${RECENT_DAYS} days could not be handed to the message queue.`,
                     impact: 'Those reviews never start.',
                     fix: 'Check RabbitMQ health (disk and memory alarms block publishing) and the worker logs for "Error publishing message".',
                 });
@@ -192,7 +202,7 @@ export function staleJobsCheck(dataSource: DataSource): DoctorCheck {
                 results.push({
                     check: 'jobs.pending',
                     status: 'fail',
-                    title: `${pending.count} review job(s) have waited more than ${STALE_JOB_MINUTES} minutes to start (oldest ${new Date(pending.oldest).toISOString()}).`,
+                    title: `${pending.count} review job(s) from the last ${RECENT_DAYS} days have waited more than ${STALE_JOB_MINUTES} minutes to start (oldest ${new Date(pending.oldest).toISOString()}).`,
                     impact: 'Reviews are queued but not running.',
                     fix: 'Check that the worker is running and consuming (see the worker line above), then check the worker logs.',
                 });

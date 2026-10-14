@@ -210,7 +210,9 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                         prNumber: context?.pullRequest?.number,
                     },
                 });
-                return context;
+                return this.updateContext(context, (draft) => {
+                    draft.sandboxSuperseded = true;
+                });
             }
             this.logger.error({
                 message: `Failed to acquire sandbox lease for ${label} (all retries exhausted), continuing without it`,

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { IntegrationOAuthService } from '../integrations/integration-oauth.service';
 import { MCPIntegrationAuthType } from '../integrations/enums/integration.enum';
 import { MCPIntegrationInterface } from '../integrations/interfaces/mcp-integration.interface';
@@ -43,6 +43,19 @@ const MANAGED_CATEGORY_BY_ID: Record<string, string> = Object.fromEntries(
         .filter((server) => typeof server.category === 'string')
         .map((server) => [server.id, server.category as string]),
 );
+
+// Managed integrations Kodus no longer runs. Their connection rows outlive the
+// catalog entry, and every review would still try to register them (a 404 per
+// server, per review) — and on the free plan, which keeps the OLDEST three
+// connections, a dead one can hold the slot a working one needs. They are left
+// out of every connection listing; the rows themselves are kept.
+//   - context7-default: dropped from the catalog on 2026-07-01 (5702c4c26).
+//   - kodus-github-issues-default: replaced by kodus-issues-default on
+//     2026-06-12 (c6bc2dd64); /mcp/github-issues no longer exists.
+export const RETIRED_MANAGED_INTEGRATION_IDS = [
+    'context7-default',
+    'kodus-github-issues-default',
+];
 
 // The available-integrations catalog comes from a slow per-provider fetch
 // (external round-trip), but it's static-ish. Cache it briefly per
@@ -94,12 +107,24 @@ export class McpService {
 
     async getConnections(query: QueryDto, organizationId: string) {
         const { page, pageSize, ...where } = query;
+        if (
+            where.integrationId &&
+            RETIRED_MANAGED_INTEGRATION_IDS.includes(where.integrationId)
+        ) {
+            return { items: [], total: 0 };
+        }
         const [items, total] = await this.connectionRepository.findAndCount({
             // organizationId LAST so the auth-derived tenant always wins: a
             // client-supplied `organizationId` in the query must never override
             // it (cross-tenant leak). Defense-in-depth: the field is also gone
             // from QueryDto so it can't be passed at all.
-            where: { ...where, organizationId },
+            where: {
+                ...where,
+                integrationId:
+                    where.integrationId ??
+                    Not(In(RETIRED_MANAGED_INTEGRATION_IDS)),
+                organizationId,
+            },
             // Deterministic order: the free-plan cap keeps the first 3
             // connections (libs/mcp-server getConnections slice), so "first"
             // must be stable — oldest connections win.

@@ -583,3 +583,103 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
         });
     });
 });
+
+describe('ReferenceDetectorService.detectionFingerprint', () => {
+    const svc = new ReferenceDetectorService();
+    const base = {
+        promptText: 'Follow docs/api.md',
+        detectionMode: 'rule' as const,
+        context: 'rule' as const,
+    };
+
+    it('is stable for the same request', () => {
+        expect(svc.detectionFingerprint(base)).toBe(
+            svc.detectionFingerprint({ ...base }),
+        );
+    });
+
+    it('is a sha256 hex digest', () => {
+        expect(svc.detectionFingerprint(base)).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('changes with the text', () => {
+        expect(svc.detectionFingerprint(base)).not.toBe(
+            svc.detectionFingerprint({ ...base, promptText: 'Follow docs/v2.md' }),
+        );
+    });
+
+    it('changes with the mode, whose system prompt differs', () => {
+        expect(svc.detectionFingerprint(base)).not.toBe(
+            svc.detectionFingerprint({ ...base, detectionMode: 'prompt' }),
+        );
+    });
+
+    it('changes with the context', () => {
+        expect(svc.detectionFingerprint(base)).not.toBe(
+            svc.detectionFingerprint({ ...base, context: 'instruction' }),
+        );
+    });
+
+    it('treats a missing mode and context as their own values', () => {
+        const bare = { promptText: base.promptText };
+        expect(svc.detectionFingerprint(bare)).not.toBe(
+            svc.detectionFingerprint({ ...bare, context: 'rule' }),
+        );
+    });
+
+    it('ignores control markers the model never sees', () => {
+        expect(
+            svc.detectionFingerprint({
+                ...base,
+                promptText: 'Follow docs/api.md @kody-sync',
+            }),
+        ).toBe(
+            svc.detectionFingerprint({ ...base, promptText: 'Follow docs/api.md ' }),
+        );
+    });
+});
+
+describe('ReferenceDetectorService.detectReferencesWithStatus', () => {
+    const svc = new ReferenceDetectorService();
+    const params = {
+        requirementId: 'r',
+        promptText: 'Follow docs/api.md',
+        organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+        detectionMode: 'rule' as const,
+    };
+    let run: jest.SpyInstance;
+    beforeEach(() => {
+        run = jest.spyOn(LLM, 'run');
+    });
+    afterEach(() => run.mockRestore());
+
+    it('an empty reply is not a reliable answer', async () => {
+        run.mockResolvedValue('');
+        expect(await svc.detectReferencesWithStatus(params as any)).toEqual({
+            references: [],
+            reliable: false,
+        });
+    });
+
+    it('a reply that is not a JSON array is not a reliable answer', async () => {
+        run.mockResolvedValue('{"filePath":"docs/api.md"}');
+        expect(
+            (await svc.detectReferencesWithStatus(params as any)).reliable,
+        ).toBe(false);
+    });
+
+    it('an empty JSON array is a reliable "no references"', async () => {
+        run.mockResolvedValue('[]');
+        expect(await svc.detectReferencesWithStatus(params as any)).toEqual({
+            references: [],
+            reliable: true,
+        });
+    });
+
+    it('detectReferences keeps returning just the references', async () => {
+        run.mockResolvedValue('[{"filePath":"docs/api.md"}]');
+        expect(await svc.detectReferences(params as any)).toEqual([
+            { filePath: 'docs/api.md' },
+        ]);
+    });
+});

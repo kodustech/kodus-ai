@@ -62,12 +62,17 @@ const nextConfig = {
     // Dev-server origins allowed to request /_next/* assets. The dev server
     // answers 403 to any cross-origin asset request it was not told about,
     // which is exactly what a preview environment is: the app runs `next dev`
-    // on a VM and the browser reaches it through a public hostname. Empty in
-    // normal local dev (localhost is always allowed).
-    allowedDevOrigins: (process.env.ALLOWED_DEV_ORIGINS ?? '')
-        .split(',')
-        .map((origin) => origin.trim())
-        .filter(Boolean),
+    // on a VM and the browser reaches it through a public hostname.
+    // 127.0.0.1 is always allowed: it is the host we use to keep two tunnelled
+    // environments' cookies apart (cookies ignore the port, so localhost:3000
+    // and localhost:3100 share a jar while localhost and 127.0.0.1 do not).
+    allowedDevOrigins: [
+        '127.0.0.1',
+        ...(process.env.ALLOWED_DEV_ORIGINS ?? '')
+            .split(',')
+            .map((origin) => origin.trim())
+            .filter(Boolean),
+    ],
     // React Compiler (automatic memoization). Top-level option since Next 16.
     // Runs through `babel-plugin-react-compiler`, which costs ~13s per build.
     // Next 16.3 ships the native Rust port behind
