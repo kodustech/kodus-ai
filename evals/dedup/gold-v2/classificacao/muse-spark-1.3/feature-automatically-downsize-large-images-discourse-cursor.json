@@ -1,0 +1,161 @@
+{
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "optimized_image.rb:145 e :149 definem self.downsize duas vezes; a segunda vence e resize_emoji.rb:14 chama com 4 args + opts.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "uploads_controller.rb:65-68 ignora o retorno de downsize; em falha so repete o convert ate 5x e o upload acima do limite e rejeitado depois como antes: desperdicio de CPU, sem resultado errado.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "utilities.js:182 troca Discourse.SiteSettings['max_'+type+'_size_kb'] por 10*1024 fixo.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.75
+      },
+      "concordaComJuiz": false,
+      "evidencia": "uploads_controller.rb:55 limite de download da API para 10.megabytes e intencional (baixar e reduzir); o limite max_image_size_kb continua aplicado no Upload.create_for. Golden 1 e sobre o JS do cliente (utilities.js), outra causa/correcao.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "uploads_controller.rb:63-69 convert sincrono no request e escolha de design; sem caminho de falha concreto alem de custo.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "optimized_image.rb:145/149 dupla definicao; Ruby mantem so a ultima.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "optimized_image.rb:145/149 dupla definicao quebra chamadas de 4 args.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "optimized_image.rb:145/149 dupla definicao, last-def-wins, ArgumentError em resize_emoji.rb:14.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "evidencia": "uploads_controller.rb:67 passa '80%' como dimensions; no caminho animado (allow_animation) vira gifsicle --resize-fit 80% (optimized_image.rb:119), geometria invalida, que e o golden 2. Ressalva: para o convert (-resize 80%\\>) o percentual e valido, entao a afirmacao geral e exagerada.",
+      "confianca": "media",
+      "tipoFPSeNaoForTP": "alucinacao",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    }
+  ]
+}

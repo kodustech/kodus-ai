@@ -1,0 +1,366 @@
+{
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "tipoFPSeNaoForTP": "bug_real",
+      "evidencia": "topic_embed.rb:13 interpola url sem escape em <a href='#{url}'>#{url}</a> e o post e raw_html; e a parte de XSS por url nao escapada do golden 4.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": false,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "post.rb:131 retorna raw quando cook_method e raw_html, por design (comentario no codigo); o conteudo vem do feed do proprio admin ou do embeddable_host (topic_retriever.rb:14-16), fonte confiavel.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "tipoFPSeNaoForTP": "nit",
+      "evidencia": "embed.js:17 valida com discourseUrl.indexOf(e.origin) === -1, a mesma checagem por indexOf do golden 1.",
+      "confianca": "alta",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "poll_feed.rb:35 chama i.content.scrub sem guarda para content nil.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "tipoFPSeNaoForTP": "nit",
+      "evidencia": "topic_embed.rb:52 passa doc.content para import, que faz contents << na linha 13 sem checar nil; e a parte de NoMethodError do golden 4.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": false,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "topic_embed.rb:32-36 usa embed.post sem guarda; Post e Trashable (default_scope exclui deletados), entao post apagado vira nil e PostRevisor.new(nil).revise! quebra.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "layouts/embed.html.erb:11 passa request.referer completo como targetOrigin do postMessage.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "embed.js:5-12 assume que o div discourse-comments existe; esse div faz parte do snippet obrigatorio de integracao, entao e so defensivo.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "disqus.thor:143-149 troca PostCreator por import_remote e remove a opcao --category de proposito; e mudanca intencional numa task de import, sem crash.",
+      "confianca": "baixa",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "poll_feed.rb:24-37 rebaixa o feed toda hora, mas topic_embed.rb:34 so revisa quando o sha1 muda; e otimizacao sem impacto real.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "topic_embed.rb:15-29 faz check-then-create, mas ha indice unico em embed_url (create_topic_embeds.rb) e Topic.transaction faz rollback; o pior caso e um job falhar, cenario teorico.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "poll_feed.rb:35 i.content.scrub com content nil gera NoMethodError.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "topic_embed.rb:32-35: com o post soft-deleted, embed.post vira nil (default_scope do Trashable) e PostRevisor.new(nil) quebra no caminho de update.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "tipoFPSeNaoForTP": "bug_real",
+      "evidencia": "topic_embed.rb:13 url interpolada sem escape no HTML guardado como raw_html; e a parte de XSS do golden 4.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": false,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "embed/best.html.erb:14 usa strftime fixo; e so i18n.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "spec/jobs/poll_feed_spec.rb:12-28 e lacuna de teste real (os defaults de site_settings.yml sao falsy), mas so cobertura.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S17",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "lib/enum.rb:14 comeca o Enum em 1, entao regular=1 e raw_html=2; o default 1 da migration e regular, nao raw_html.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "embed.js:17 checa a origem com indexOf invertido em vez de igualdade estrita.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S19",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "layouts/embed.html.erb:11 usa o referer completo como targetOrigin, entao a mensagem e descartada.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S20",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "poll_feed.rb:20-22 feed_key nunca e usado (git grep); e codigo morto, sem defeito.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S21",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "jobs/base.rb:153-173 executa o job inline quando queue_jobs? e falso (caso do teste), e retrieve_topic.rb chama TopicRetriever.new(...).retrieve, entao o mock da spec casa.",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
+}

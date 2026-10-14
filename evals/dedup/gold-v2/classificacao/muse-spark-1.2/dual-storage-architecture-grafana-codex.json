@@ -431,7 +431,9 @@
       "precisaAstra": false,
       "evidencia": "dualwriter_mode3.go:50-57: Storage.Create termina antes do goroutine começar, então não há acesso concorrente com o Storage; a mutação do obj pelo chamador depois do retorno não é mostrada. Data race afirmado sem base no código.",
       "confianca": "baixa",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "especulativo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S24",

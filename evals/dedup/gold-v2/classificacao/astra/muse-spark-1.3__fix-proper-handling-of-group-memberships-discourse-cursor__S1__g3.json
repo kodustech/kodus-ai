@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "id": "S1",
+  "golden": 3,
+  "promptSha": "3e9a2d57f890d97db6af4c72ce73aa020039f415",
+  "sameProblem": true,
+  "reason": "Both comments identify the same totalPages calculation overcounting by one when user_count is exactly divisible by limit, allowing navigation to an empty page."
+}

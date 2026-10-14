@@ -1,9 +1,9 @@
 {
- "modelo": "gpt-6.1-sol",
- "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
- "id": "S4",
- "golden": 0,
- "promptSha": "bfd60671f16f2111c25612ecf8c725f947b821e6",
- "sameProblem": false,
- "reason": "The review reports ambiguous selection between tied FIPS and ordinary Bouncy Castle providers, whereas the golden issue concerns returning the default keystore provider instead of BouncyCastle; fixing the tie would not fix that incorrect return."
+  "modelo": "gpt-6.1-sol",
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "id": "S4",
+  "golden": 0,
+  "promptSha": "bfd60671f16f2111c25612ecf8c725f947b821e6",
+  "sameProblem": false,
+  "reason": "The review reports ambiguous selection between tied FIPS and ordinary Bouncy Castle providers, whereas the golden issue concerns returning the default keystore provider instead of BouncyCastle; fixing the tie would not fix that incorrect return."
 }

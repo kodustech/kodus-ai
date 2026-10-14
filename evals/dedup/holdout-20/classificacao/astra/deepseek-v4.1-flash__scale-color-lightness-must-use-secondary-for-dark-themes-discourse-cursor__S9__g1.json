@@ -1,9 +1,9 @@
 {
- "modelo": "deepseek-v4.1-flash",
- "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
- "id": "S9",
- "golden": 1,
- "promptSha": "9b653554dc62ef18508efa6597a49157d86ea28f",
- "sameProblem": true,
- "reason": "Both flag the unintended change from 30% to 50% lightness for $primary in the affected user-name styling, which should preserve 30% and use 70% for $secondary in dark mode."
+  "modelo": "deepseek-v4.1-flash",
+  "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+  "id": "S9",
+  "golden": 1,
+  "promptSha": "9b653554dc62ef18508efa6597a49157d86ea28f",
+  "sameProblem": true,
+  "reason": "Both flag the unintended change from 30% to 50% lightness for $primary in the affected user-name styling, which should preserve 30% and use 70% for $secondary in dark mode."
 }

@@ -1,9 +1,9 @@
 {
- "modelo": "sonnet-5.5",
- "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
- "id": "S3",
- "golden": 0,
- "promptSha": "565b460ce6d5d4a4e4e308b2b449769da91e8d76",
- "sameProblem": true,
- "reason": "The review identifies negative cursor offsets causing server errors in the same paginator, and validating or clamping those offsets would prevent the unsupported negative queryset slicing described by the golden comment."
+  "modelo": "sonnet-5.5",
+  "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+  "id": "S3",
+  "golden": 0,
+  "promptSha": "565b460ce6d5d4a4e4e308b2b449769da91e8d76",
+  "sameProblem": true,
+  "reason": "The review identifies negative cursor offsets causing server errors in the same paginator, and validating or clamping those offsets would prevent the unsupported negative queryset slicing described by the golden comment."
 }

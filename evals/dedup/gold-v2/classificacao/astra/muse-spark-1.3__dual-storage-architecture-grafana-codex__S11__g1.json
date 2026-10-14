@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "id": "S11",
+  "golden": 1,
+  "promptSha": "1ec4af5067c703a39d797deba68a0a5e5d3bb76a",
+  "sameProblem": false,
+  "reason": "The review comment identifies the incorrect metric call in Create, while the golden comment identifies it in DeleteCollection, so fixing the reported location would not fix the golden issue."
+}

@@ -1,0 +1,168 @@
+{
+  "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "scheduleEmailReminders.ts:54-75 awaits sequenciais dentro de um unico try: um erro do SendGrid aborta o loop e as delecoes (PrismaPromise lazy) nao executam, deixando os demais emails cancelados ativos. A parte de SMS com referenceId nulo nao ocorre (SMS e deletado, nunca marcado cancelled).",
+      "confianca": "baixa",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Linhas com scheduled:false sao criadas sem referenceId (emailReminderManager.ts:181-190) e deleteScheduledEmailReminder deleta a linha quando referenceId e nulo; logo nunca ha cancelled:true com scheduled:false para o query de unscheduled pegar.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "emailReminderManager.ts:213-223 ramo immediateDelete cancela no SendGrid e retorna sem apagar a linha WorkflowReminder.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "handleCancelBooking.ts:484-493 deleteScheduledEmailReminder/SMSReminder async chamados dentro de forEach sem await.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "workflows.tsx:375-382 marca cancelled:true e o cron (scheduleEmailReminders.ts:44-75) cancela no SendGrid os que vencem na proxima hora; envios antigos nao saem e o query de unscheduled nao pega linhas com referenceId.",
+      "confianca": "media",
+      "precisaAstra": false,
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "scheduleEmailReminders.ts:56-64 await sequencial por lembrete; so latencia do cron.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "WorkflowStepContainer.tsx placeholder 'Verification code' hardcoded (bloco so reindentado pelo PR); i18n.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "WorkflowStepContainer.tsx label 'Verify' hardcoded; i18n.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "emailReminderManager.ts:213-223 immediateDelete nao apaga nem marca a linha, diferente do SMS que deleta.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "emailReminderManager.ts:213-223 immediateDelete retorna sem deletar o WorkflowReminder.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

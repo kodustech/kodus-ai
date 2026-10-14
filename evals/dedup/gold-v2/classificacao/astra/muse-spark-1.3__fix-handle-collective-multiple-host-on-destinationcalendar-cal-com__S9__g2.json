@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "id": "S9",
+  "golden": 2,
+  "promptSha": "b4b78635b4275928e4332b6b99adab1754f64221",
+  "sameProblem": true,
+  "reason": "Both comments identify the unreachable calendar match in the deleteEvent fallback, which requires correcting the lookup logic."
+}

@@ -1,0 +1,284 @@
+{
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "embeddable_host.rb:5-8 chama self.host.sub! sem guarda para nil.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "embeddable_hosts_controller.rb:9-17 usa where(id:).first e chama save_host(host) e host.destroy sem checar nil.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "tipoFPSeNaoForTP": "nit",
+      "evidencia": "create_embeddable_hosts.rb:25 interpola '#{h}' cru no INSERT; e o mesmo '#{h}' citado no golden 5, que atribui o arquivo ao controller por engano (o controller nao tem SQL).",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": false,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "create_embeddable_hosts.rb:9-11 faz execute(...)[0]['id'] sem checar se ha linha.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "create_embeddable_hosts.rb:24-26 insere as linhas cruas (com esquema/caminho) sem a normalizacao do before_validation.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "embeddable_host.rb:17 compara lower(host) = ? sem fazer downcase do parametro.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "topic.rb:868-870 tirou SiteSetting.embeddable_hosts.present?, mas has_topic_embed? ainda exige um TopicEmbed; a diferenca so aparece com todos os hosts removidos depois, sem quebra concreta.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "store.js.es6:196-200 chama obj[k].map sem checar array; os payloads *_ids do rest serializer sao arrays, entao e so defensivo.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "embeddable_host.rb:6 faz host.sub! com host nil e gera NoMethodError.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "embeddable_hosts_controller.rb:10-11 o update nao checa se o registro existe.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "embeddable_hosts_controller.rb:15-16 o destroy nao checa se o registro existe.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 6,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 6,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "create_embeddable_hosts.rb:9-11 indexa [0] sem checar resultado vazio.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "spec/fabricators/category_fabricator.rb agora define Fabricator(:embeddable_host) e o de category foi para embeddable_host_fabricator.rb.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "create_embeddable_hosts.rb:22-26 grava hosts sem normalizar, e record_for_host compara so uri.host.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "topic_spec.rb:1403-1405: o teste do caso false nao isola a condicao de host (embed_truncate e has_topic_embed ja sao falsos). E so lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "create-pretender.js.es6:226 devolve sempre fruits[0], entao store-test.js.es6:111 pede o id 2 mas verifica as cores do fruit 1. E so lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S17",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "topic.rb:868-870 removeu a guarda de hosts; has_topic_embed? continua exigindo embed existente, entao nao ha falha concreta.",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
+}

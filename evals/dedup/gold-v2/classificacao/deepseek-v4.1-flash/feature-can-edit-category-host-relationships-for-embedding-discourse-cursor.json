@@ -180,7 +180,9 @@
       "precisaAstra": false,
       "evidencia": "ApplicationSerializer declara `embed :ids, include: true` (app/serializers/application_serializer.rb:2), então o has_many com embed: :ids herda o sideload e o payload traz embeddable_hosts junto; o store consegue hidratar.",
       "confianca": "media",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C + H1"
     },
     {
       "id": "S11",

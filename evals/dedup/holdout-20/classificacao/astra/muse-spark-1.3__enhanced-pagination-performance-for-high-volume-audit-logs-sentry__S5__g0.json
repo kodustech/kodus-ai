@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+  "id": "S5",
+  "golden": 0,
+  "promptSha": "007977b6eac2e018c336dee8ca78ae753b1189cd",
+  "sameProblem": true,
+  "reason": "Both comments identify negative pagination offsets reaching Django queryset slicing and causing an AssertionError; the review specifies the previous-page path that allows this."
+}

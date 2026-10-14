@@ -1,76 +1,76 @@
 {
- "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
- "modelo": "gpt-6.1-sol",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "common/components/badges.css.scss:239 fundo do .badge-notification no tema escuro virou scale-color($secondary,30%) (cinza escuro) com color: $secondary (escuro); antes o fundo era primary 70% (claro). Contraste cai, introduzido pelo PR.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "style",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "desktop/topic-post.scss:291 30% -> 70% no light, golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": false,
-   "evidencia": "mobile/modal.scss:102 percentuais invertidos (30/70) vs original 70% e desktop/modal.scss:94; golden 2.",
-   "confianca": "alta",
-   "tipoFPSeNaoForTP": "bug_real",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": null,
-    "golden_classificacao": false,
-    "vale": "juiz"
-   }
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "mobile/topic-post.scss:182 h3 20% -> 50/50 vs desktop 20/80; regressao real sem golden.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "common/components/badges.css.scss:239 fundo do .badge-notification no tema escuro virou scale-color($secondary,30%) (cinza escuro) com color: $secondary (escuro); antes o fundo era primary 70% (claro). Contraste cai, introduzido pelo PR.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "style",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "desktop/topic-post.scss:291 30% -> 70% no light, golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "evidencia": "mobile/modal.scss:102 percentuais invertidos (30/70) vs original 70% e desktop/modal.scss:94; golden 2.",
+      "confianca": "alta",
+      "tipoFPSeNaoForTP": "bug_real",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": false,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "mobile/topic-post.scss:182 h3 20% -> 50/50 vs desktop 20/80; regressao real sem golden.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

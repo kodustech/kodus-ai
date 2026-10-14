@@ -1,123 +1,123 @@
 {
- "caseId": "authzservice-improve-authz-caching-grafana-codex",
- "modelo": "gpt-6.1-sol",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "TP",
-   "golden": 2,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 2,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "cache.go:30-31: userPermDenialCacheKey concatena name e parent com \"_\", e (\"a_b\",\"c\") colide com (\"a\",\"b_c\").",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.72
-   },
-   "concordaComJuiz": false,
-   "evidencia": "service.go:123-139: negacao no permCache sempre cai em getIdentityPermissions, entao N recursos negados distintos dao N recargas. E custo de performance do desenho, sem falha; o golden 0 trata de grant obsoleto (seguranca), outra causa.",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S3",
-   "classe": "TP",
-   "golden": 2,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 2,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "cache.go:30-31: userPermDenialCacheKey concatena name e parent com \"_\", e (\"a_b\",\"c\") colide com (\"a\",\"b_c\").",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "doc_defect",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "service_test.go:981-982: o comentario diz \"Allow access\", mas o permCache semeado tem dashboards:uid:dash1 = false, entao o teste nao prova a precedencia do denial cache.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "TP",
-   "golden": 2,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 2,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "cache.go:30-31: userPermDenialCacheKey concatena name e parent com \"_\", e (\"a_b\",\"c\") colide com (\"a\",\"b_c\").",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "TP",
-   "golden": 2,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 2,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "cache.go:30-31: userPermDenialCacheKey concatena name e parent com \"_\", e (\"a_b\",\"c\") colide com (\"a\",\"b_c\").",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "doc_defect",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.92
-   },
-   "concordaComJuiz": true,
-   "evidencia": "service_test.go:981-982: o comentario diz \"Allow access\", mas o permCache semeado tem dashboards:uid:dash1 = false, entao o teste nao prova a precedencia do denial cache.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "authzservice-improve-authz-caching-grafana-codex",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "cache.go:30-31: userPermDenialCacheKey concatena name e parent com \"_\", e (\"a_b\",\"c\") colide com (\"a\",\"b_c\").",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.72
+      },
+      "concordaComJuiz": false,
+      "evidencia": "service.go:123-139: negacao no permCache sempre cai em getIdentityPermissions, entao N recursos negados distintos dao N recargas. E custo de performance do desenho, sem falha; o golden 0 trata de grant obsoleto (seguranca), outra causa.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "cache.go:30-31: userPermDenialCacheKey concatena name e parent com \"_\", e (\"a_b\",\"c\") colide com (\"a\",\"b_c\").",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "service_test.go:981-982: o comentario diz \"Allow access\", mas o permCache semeado tem dashboards:uid:dash1 = false, entao o teste nao prova a precedencia do denial cache.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "cache.go:30-31: userPermDenialCacheKey concatena name e parent com \"_\", e (\"a_b\",\"c\") colide com (\"a\",\"b_c\").",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "cache.go:30-31: userPermDenialCacheKey concatena name e parent com \"_\", e (\"a_b\",\"c\") colide com (\"a\",\"b_c\").",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "service_test.go:981-982: o comentario diz \"Allow access\", mas o permCache semeado tem dashboards:uid:dash1 = false, entao o teste nao prova a precedencia do denial cache.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

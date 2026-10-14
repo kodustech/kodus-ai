@@ -1,22 +1,22 @@
 {
- "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
- "modelo": "gpt-6.1-sol",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "UpdateCommandDistTest.java:46-50 so assere a mensagem de erro, nao o exitCode; lacuna de teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "UpdateCommandDistTest.java:46-50 so assere a mensagem de erro, nao o exitCode; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

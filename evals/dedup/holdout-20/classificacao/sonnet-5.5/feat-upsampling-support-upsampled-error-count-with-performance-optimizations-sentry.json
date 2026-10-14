@@ -1,54 +1,54 @@
 {
- "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
- "modelo": "sonnet-5.5",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "error_upsampling.py:95-105 substring; transacoes/nao-erros sem sample_weight contam 1 via ifNull, sem valor errado concreto.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "test_organization_events_stats.py:3654-3697 nao discrimina count vs upsampled_count; lacuna de teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Mesmo achado do S1 (error_upsampling.py:100-105).",
-   "confianca": "media",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "error_upsampling.py:95-105 substring; transacoes/nao-erros sem sample_weight contam 1 via ifNull, sem valor errado concreto.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "test_organization_events_stats.py:3654-3697 nao discrimina count vs upsampled_count; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Mesmo achado do S1 (error_upsampling.py:100-105).",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
 }

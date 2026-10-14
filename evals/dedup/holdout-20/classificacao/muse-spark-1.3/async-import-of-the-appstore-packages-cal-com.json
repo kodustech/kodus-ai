@@ -1,0 +1,214 @@
+{
+  "caseId": "async-import-of-the-appstore-packages-cal-com",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "packages/trpc/server/routers/viewer/bookings.tsx:553 o PR trocou o callback para forEach(async ...) com await getCalendar; os deleteEvent ficam sem await, exatamente o forEach-async do golden.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "packages/app-store/vital/lib/reschedule.ts:125 o PR tornou o callback do forEach async (await getCalendar); delecoes viram fire-and-forget.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "packages/app-store/wipemycalother/lib/reschedule.ts:125 mesma mudanca para forEach(async) com await getCalendar, sem await das delecoes.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "handleCancelBooking.ts:458-468 forEach(async credential) com await getCalendar antes dos apiDeletes.push; os pushes ocorrem depois do Promise.all(apiDeletes). Mesmo padrao forEach-async do golden.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "CalendarManager.ts:28 guarda a Promise, mas os unicos consumidores (viewer.tsx:340/415, api/availability/calendar.ts) passam o resultado a getConnectedCalendars, que faz await item.calendar (linha 48); nenhum consumidor quebra.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "videoClient.ts:21-36 o loop for...of aguarda cada import em sequencia; correto, so custo de latencia de modulos ja cacheados apos o 1o import.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "bookings.tsx:553 forEach(async) com await getCalendar, deleteEvent nao aguardado.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "vital/lib/reschedule.ts:125 forEach(async) fire-and-forget.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "wipemycalother/lib/reschedule.ts:125 forEach(async) fire-and-forget.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "handleCancelBooking.ts:458 forEach(async) com await getCalendar; deletes recorrentes nao aguardados.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "CalendarManager.ts:28 getCalendar(credential) sem await deixa calendar como Promise, mas getConnectedCalendars (linha 48) ja faz await item.calendar; mudanca de contrato sem falha concreta.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "bookings.tsx:550-559 forEach(async ...) nao aguarda deleteEvent.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "vital/lib/reschedule.ts:124-132 forEach(async ...) nao aguarda deleteEvent.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

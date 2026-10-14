@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "id": "S9",
+  "golden": 2,
+  "promptSha": "bc61fb0582b6499f638a77c9370c5d01440ae87c",
+  "sameProblem": true,
+  "reason": "Both flag passing \"80%\" where WxH geometry is needed, and the proposed caller fix would also resolve the animated GIF failure, despite the review’s imprecise explanation."
+}

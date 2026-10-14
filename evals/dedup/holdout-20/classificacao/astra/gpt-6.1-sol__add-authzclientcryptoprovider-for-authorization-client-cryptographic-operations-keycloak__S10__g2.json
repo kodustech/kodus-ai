@@ -1,9 +1,9 @@
 {
- "modelo": "gpt-6.1-sol",
- "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
- "id": "S10",
- "golden": 2,
- "promptSha": "878cd69a6a80849e3a1b3e21acd7a16d0558868d",
- "sameProblem": false,
- "reason": "The review describes overrunning a definite-length SEQUENCE boundary, whereas the golden issue concerns subtracting from the -1 sentinel for indefinite-length encoding, which requires separate handling."
+  "modelo": "gpt-6.1-sol",
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "id": "S10",
+  "golden": 2,
+  "promptSha": "878cd69a6a80849e3a1b3e21acd7a16d0558868d",
+  "sameProblem": false,
+  "reason": "The review describes overrunning a definite-length SEQUENCE boundary, whereas the golden issue concerns subtracting from the -1 sentinel for indefinite-length encoding, which requires separate handling."
 }

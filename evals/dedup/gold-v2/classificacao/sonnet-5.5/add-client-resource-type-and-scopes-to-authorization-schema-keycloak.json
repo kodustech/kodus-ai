@@ -95,7 +95,9 @@
       "precisaAstra": false,
       "evidencia": "AdminPermissions.java:77 e de fato guardado pela flag V1 (local do G0), mas o cenario da sugestao (V1 e V2 ativos ao mesmo tempo, setPermissionsEnabled lancando) e impossivel: Profile.java:56/58 torna V1 e V2 versoes exclusivas da mesma feature. O G0 diz o oposto (com V2 o listener nao roda e deixa permissoes orfas) e a correcao proposta (pular em V2) agrava o G0.",
       "confianca": "media",
-      "observacao": "Mesmo local do G0 com conclusao e correcao opostas; o juiz tambem nao casou. Candidato a revisao: poderia ser lido como TP G0 por apontar a guarda de flag errada."
+      "observacao": "Mesmo local do G0 com conclusao e correcao opostas; o juiz tambem nao casou. Candidato a revisao: poderia ser lido como TP G0 por apontar a guarda de flag errada.",
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C + H1"
     }
   ]
 }

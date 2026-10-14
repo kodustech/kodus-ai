@@ -1,86 +1,86 @@
 {
- "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
- "modelo": "deepseek-v4.1-flash",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "BackwardsCompatibilityUserStorage.java:326-340 (provider de testsuite) valida com anyMatch sem consumir o codigo; e um provider de teste que simula storage externo, o consumo fica a cargo do provider real; sem impacto em codigo de produto.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "CredentialHelper.java:117-125 passa os codigos crus ao updateCredential do user storage, como o SPI faz com senha; o provider precisa do valor cru para validar no isValid; escolha de design, armazenamento em claro so no provider de teste.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.98
-   },
-   "concordaComJuiz": true,
-   "evidencia": "BackwardsCompatibilityUserStorage.java:237-242 getCredentials cria o modelo via createFromValues sem setId(myUser.recoveryCodes.getId()); mesmo problema do golden 1.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "BackwardsCompatibilityUserStorage.java:340 compara com String.equals no provider de testsuite; timing attack em fixture de teste, hardening opcional.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Mesmo achado do S2 (CredentialHelper.java:117-125 codigos crus para user storage); design do SPI.",
-   "confianca": "media",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "BackwardsCompatibilityUserStorage.java:326-340 (provider de testsuite) valida com anyMatch sem consumir o codigo; e um provider de teste que simula storage externo, o consumo fica a cargo do provider real; sem impacto em codigo de produto.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "CredentialHelper.java:117-125 passa os codigos crus ao updateCredential do user storage, como o SPI faz com senha; o provider precisa do valor cru para validar no isValid; escolha de design, armazenamento em claro so no provider de teste.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "BackwardsCompatibilityUserStorage.java:237-242 getCredentials cria o modelo via createFromValues sem setId(myUser.recoveryCodes.getId()); mesmo problema do golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "BackwardsCompatibilityUserStorage.java:340 compara com String.equals no provider de testsuite; timing attack em fixture de teste, hardening opcional.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Mesmo achado do S2 (CredentialHelper.java:117-125 codigos crus para user storage); design do SPI.",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
 }

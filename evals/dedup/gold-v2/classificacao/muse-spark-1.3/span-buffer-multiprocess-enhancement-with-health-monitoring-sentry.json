@@ -1,0 +1,118 @@
+{
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "flusher.py:349-350 isinstance(process, multiprocessing.Process) com processos de get_context('spawn').Process.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "flusher.py:51/59 so falha com --flusher-processes negativo (entrada invalida de CLI, default 1); programacao defensiva.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "flusher.py:337-344 break ao estourar o deadline sai antes de terminate dos processos restantes.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "flusher.py:299-301 get_memory_info (buffer.py:375) e cluster-wide e repete por buffer; a razao used/available nao muda, so custo extra de INFO.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "flusher.py:185 tags={'shard'} vs :199 tags={'shards'}.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "flusher.py:31 docstring 'one process per shard' desatualizada com max_processes: doc.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "test_gap",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "test_consumer.py:60-63 time.sleep(0.1) com sleep monkeypatchado para no-op.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

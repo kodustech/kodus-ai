@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "id": "S2",
+  "golden": 1,
+  "promptSha": "0a320b987cf250ea442de58746c7d9cf13dbe67d",
+  "sameProblem": false,
+  "reason": "The review asks to disable passkeys when the user is null in PasswordForm, while the golden comment requires enabling passkeys for a null user on the initial login form, so fixing the review would not fix the golden issue."
+}

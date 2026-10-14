@@ -1,150 +1,150 @@
 {
- "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
- "modelo": "gpt-6.1-sol",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "app/controllers/topics_controller.rb:105-107: tu = TopicUser.find_by(...) sem guarda e na linha seguinte tu.notification_level; sem linha topic_users -> NoMethodError.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "topics_controller.rb:113 salva notification_level direto, sem notifications_reason_id; topic_user.rb update_last_read promove para tracking quando notifications_reason_id is null e tempo > limiar, desfazendo o unsubscribe de topico auto-trackeado. TopicUser.change seta user_changed (linha 89).",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "routes/topic-unsubscribe.js.es6:4-9 so carrega o topico; o unsubscribe ocorre no GET do servidor. O link vem do email (carga completa); nenhum link interno do app transiciona para essa rota, entao nao ha caminho concreto que falhe.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "config/routes.rb:440-441 sao GET e topics_controller.rb:98-115 altera notification_level (tu.save!) so com cookie de sessao, sem token; Rails nao checa CSRF em GET, entao <img src> de terceiro muda a preferencia. Introduzido pelo PR.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "topics_controller.rb:105-111 passa watching/tracking para regular (nao muted), e client.en.yml:985 diz que as notificacoes vao parar. O texto exagera, mas e so copy.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Topic#url (app/models/topic.rb:702-710) usa Topic.url, que comeca com Discourse.base_url, entao unsubscribe_url (\"#{url}/unsubscribe\") ja e absoluto.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "app/controllers/topics_controller.rb:105-107: tu = TopicUser.find_by(...) sem guarda e na linha seguinte tu.notification_level; sem linha topic_users -> NoMethodError.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "routes/topic-unsubscribe.js.es6:4-9 so carrega o topico; o unsubscribe ocorre no GET do servidor. O link vem do email (carga completa); nenhum link interno do app transiciona para essa rota, entao nao ha caminho concreto que falhe.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S9",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "topics_controller.rb:113 salva notification_level direto, sem notifications_reason_id; topic_user.rb update_last_read promove para tracking quando notifications_reason_id is null e tempo > limiar, desfazendo o unsubscribe de topico auto-trackeado. TopicUser.change seta user_changed (linha 89).",
-   "confianca": "media",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "app/controllers/topics_controller.rb:105-107: tu = TopicUser.find_by(...) sem guarda e na linha seguinte tu.notification_level; sem linha topic_users -> NoMethodError.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "topics_controller.rb:113 salva notification_level direto, sem notifications_reason_id; topic_user.rb update_last_read promove para tracking quando notifications_reason_id is null e tempo > limiar, desfazendo o unsubscribe de topico auto-trackeado. TopicUser.change seta user_changed (linha 89).",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "routes/topic-unsubscribe.js.es6:4-9 so carrega o topico; o unsubscribe ocorre no GET do servidor. O link vem do email (carga completa); nenhum link interno do app transiciona para essa rota, entao nao ha caminho concreto que falhe.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "config/routes.rb:440-441 sao GET e topics_controller.rb:98-115 altera notification_level (tu.save!) so com cookie de sessao, sem token; Rails nao checa CSRF em GET, entao <img src> de terceiro muda a preferencia. Introduzido pelo PR.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "topics_controller.rb:105-111 passa watching/tracking para regular (nao muted), e client.en.yml:985 diz que as notificacoes vao parar. O texto exagera, mas e so copy.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Topic#url (app/models/topic.rb:702-710) usa Topic.url, que comeca com Discourse.base_url, entao unsubscribe_url (\"#{url}/unsubscribe\") ja e absoluto.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "app/controllers/topics_controller.rb:105-107: tu = TopicUser.find_by(...) sem guarda e na linha seguinte tu.notification_level; sem linha topic_users -> NoMethodError.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "routes/topic-unsubscribe.js.es6:4-9 so carrega o topico; o unsubscribe ocorre no GET do servidor. O link vem do email (carga completa); nenhum link interno do app transiciona para essa rota, entao nao ha caminho concreto que falhe.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "topics_controller.rb:113 salva notification_level direto, sem notifications_reason_id; topic_user.rb update_last_read promove para tracking quando notifications_reason_id is null e tempo > limiar, desfazendo o unsubscribe de topico auto-trackeado. TopicUser.change seta user_changed (linha 89).",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
 }

@@ -1,0 +1,324 @@
+{
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "EventManager.ts:118-119 destrutura evt.destinationCalendar ?? [] e le mainHostDestinationCalendar.integration sem ?.; com a lista null ou vazia (e location Meet), da TypeError.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "tipoFPSeNaoForTP": "bug_real",
+      "evidencia": "googlecalendar CalendarService.ts:254-256 faz find(cal.externalId === externalCalendarId) no ramo em que externalCalendarId e falsy, entao nunca casa; mesmo erro de logica do golden 2.",
+      "confianca": "alta",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "evidencia": "googlecalendar CalendarService.ts:315-317 repete o find impossivel no deleteEvent.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "handleNewBooking.ts:1063-1079 deixa destinationCalendar null quando o organizador nao tem calendario, e evt.destinationCalendar?.push(...teamDestinationCalendars) vira no-op; os calendarios dos co-hosts collective se perdem. Introduzido pelo PR.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "create.handler.ts:151 inverteu a condicao para (IS_TEAM_BILLING_ENABLED ? {slug} : {}).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "tipoFPSeNaoForTP": "bug_real",
+      "evidencia": "office365calendar CalendarService.ts:72-77 mantem createEvent(event) sem credentialId e usa sempre destinationCalendar[0]; e o descumprimento do contrato do golden 4.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "EventManager.ts:118-119 acessa .integration sem optional chaining.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "tipoFPSeNaoForTP": "bug_real",
+      "evidencia": "googlecalendar CalendarService.ts:254-256 tem fallback morto no updateEvent (find contra externalCalendarId falsy).",
+      "confianca": "alta",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "tipoFPSeNaoForTP": "bug_real",
+      "evidencia": "googlecalendar CalendarService.ts:315-317 tem fallback morto no deleteEvent, mesma logica do golden 2.",
+      "confianca": "alta",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "EventManager.ts:118-119 le .integration de undefined quando destinationCalendar e null.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "EventManager.ts:116-120 desreferencia mainHostDestinationCalendar possivelmente undefined.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "evidencia": "googlecalendar CalendarService.ts:253-257 tem fallback do updateEvent que nunca casa.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "EventManager.ts:117-120 le .integration sem ?.; handleNewBooking produz null.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "googlecalendar CalendarService.ts:254-256 compara contra externalCalendarId falsy.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "tipoFPSeNaoForTP": "bug_real",
+      "evidencia": "googlecalendar CalendarService.ts:315-317 faz a mesma busca invertida no deleteEvent e perde o fallback antigo.",
+      "confianca": "alta",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S16",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "EventManager.ts:114-122: o codigo antigo era null-safe e o novo nao.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "office365calendar CalendarService.ts:72 mantem createEvent(event) apesar do novo contrato createEvent(event, credentialId) em Calendar.d.ts:221.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "larkcalendar CalendarService.ts:125 mantem createEvent(event) sem credentialId.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

@@ -1,22 +1,22 @@
 {
- "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
- "modelo": "sonnet-5.5",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "user_serializer.rb:144-146 compara split('.')[1..-1]; forum.co.uk vs unrelated.co.uk (ou a.github.io vs b.github.io) casam e o rotulo mostra host+path de site nao relacionado. Resultado errado do PR, impacto cosmetico.",
-   "confianca": "baixa",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "user_serializer.rb:144-146 compara split('.')[1..-1]; forum.co.uk vs unrelated.co.uk (ou a.github.io vs b.github.io) casam e o rotulo mostra host+path de site nao relacionado. Resultado errado do PR, impacto cosmetico.",
+      "confianca": "baixa",
+      "precisaAstra": false
+    }
+  ]
 }

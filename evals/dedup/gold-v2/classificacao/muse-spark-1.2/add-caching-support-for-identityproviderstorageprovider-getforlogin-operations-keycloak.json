@@ -136,7 +136,9 @@
       "precisaAstra": false,
       "evidencia": "getForLogin (Infinispan...java:226-241) usa addRevisioned com revisão, o mesmo padrão já usado por getByOrganization; uma escrita concorrente perdida só gera cache miss (query.getIDPs(searchKey)==null -> refetch), não um Set corrompido servido como válido.",
       "confianca": "baixa",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "especulativo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S9",

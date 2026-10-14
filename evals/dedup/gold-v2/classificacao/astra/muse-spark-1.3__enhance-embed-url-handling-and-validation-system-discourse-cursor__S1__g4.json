@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "id": "S1",
+  "golden": 4,
+  "promptSha": "c2913c7a70be2a4f98dc704992ecbc44b2f4890d",
+  "sameProblem": false,
+  "reason": "The review identifies the unescaped URL XSS vulnerability but does not address the nil contents append that causes the golden comment’s NoMethodError."
+}

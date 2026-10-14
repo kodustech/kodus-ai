@@ -1,0 +1,107 @@
+{
+  "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "JpaOrganizationProvider.java:341-342 e :371 chamam session.identityProviders().update(idp) ao vincular/desvincular, e update() registra registerIDPLoginInvalidationOnUpdate (InfinispanIdentityProviderStorageProvider.java:93), que invalida quando organizationId muda.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "IdentityProviderStorageProvider.java:254: IdentityProviderModel.config e inicializado com new HashMap (IdentityProviderModel.java:102); getConfig() nulo nao tem caminho concreto.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "InfinispanIdentityProviderStorageProvider.java:98-104: registerIDPInvalidation(null) com alias inexistente e cacheKey invalido ja existia na base (remove() chamava registerIDPInvalidation(idpDelegate.getByAlias(alias))); PR so extraiu a variavel.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "InfinispanIdentityProviderStorageProvider.java:244-252: loop por getById e o mesmo padrao de getByOrganization (:200-208) e resolve majoritariamente do cache; e perf sem impacto concreto. Nao e o golden 0 (reentrada pela camada de cache): trocar por idpDelegate.getById mantem o loop N.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "OrganizationCacheTest.java:369-388: lacuna de teste para o ramo BROKER_PUBLIC; nao e defeito.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "getById (InfinispanIdentityProviderStorageProvider.java:122-141) sempre retorna createOrganizationAwareIdentityProviderModel(...), entao o caminho de cache-hit ja devolve o modelo embrulhado.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

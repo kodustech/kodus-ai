@@ -1,0 +1,70 @@
+{
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupAdapter.java:274-275 retorna null quando o model foi removido, violando o contrato de getSubGroupsCount (nunca nulo).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupTest.java:136-157: thread leitora nao e guardada nem joinada; deletedAll.set(true) e o assert imediato correm contra leituras em andamento.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupTest.java:136-157: thread leitora nao e guardada nem joinada; deletedAll.set(true) e o assert imediato correm contra leituras em andamento.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupTest.java:136-157: thread leitora nao e guardada nem joinada; deletedAll.set(true) e o assert imediato correm contra leituras em andamento.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

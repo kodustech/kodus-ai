@@ -1,166 +1,166 @@
 {
- "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
- "modelo": "deepseek-v4.1-flash",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "add-buffer.lua:53 zunionstore sem AGGREGATE (SUM); num replay o payload e re-ZADDado na chave do parent (buffer.py:197) e unido ao set_key que ja o contem, dobrando o score e distorcendo o zpopmin da linha 63; antes sunionstore era idempotente.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "buffer.py:446-449 removeu o guard de max_segment_spans, mas add-buffer.lua:62-64 roda atomico a cada span e faz zpopmin acima de 1000, entao o set fica limitado; risco so hipotetico.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "factory.py:141 usa val['end_timestamp_precise'] direto; o campo e obrigatorio no SpanEvent e ja e lido com indexacao direta em process_segments/enrichment.py:89 e message.py:121; defensivo sem caminho concreto.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "add-buffer.lua:30 o diff removeu o comentario inline sobre depth 10k junto com a troca para 1000; nao ha comentario contraditorio no head.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "tests/sentry/spans/test_buffer.py no diff so acrescenta end_timestamp_precise; de fato nao testa o trim por zpopmin, mas e lacuna de teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "buffer.py:150 max_segment_spans=1001 so tem o default (git grep nao acha caller que configure); limite Lua 1000 hardcoded diverge do parametro morto, sem caminho concreto.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Mesmo achado: max_segment_spans (buffer.py:150) ficou sem uso e o Lua (add-buffer.lua:62) usa 1000; nenhum caller configura outro valor.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Mesmo achado: limite hardcoded em add-buffer.lua:62 vs max_segment_spans nao configurado por ninguem.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S9",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "buffer.py:197 troca sadd por zadd no mesmo namespace span-buf:s:; chaves SET ainda vivas (TTL redis_ttl) no deploy fazem ZADD/ZCARD/ZSCAN falhar com WRONGTYPE no batch do consumer.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S10",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Mesmo achado de max_segment_spans sem uso (buffer.py:150, 437-449); nenhum caller configura valor diferente.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "add-buffer.lua:53 zunionstore sem AGGREGATE (SUM); num replay o payload e re-ZADDado na chave do parent (buffer.py:197) e unido ao set_key que ja o contem, dobrando o score e distorcendo o zpopmin da linha 63; antes sunionstore era idempotente.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "buffer.py:446-449 removeu o guard de max_segment_spans, mas add-buffer.lua:62-64 roda atomico a cada span e faz zpopmin acima de 1000, entao o set fica limitado; risco so hipotetico.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "factory.py:141 usa val['end_timestamp_precise'] direto; o campo e obrigatorio no SpanEvent e ja e lido com indexacao direta em process_segments/enrichment.py:89 e message.py:121; defensivo sem caminho concreto.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "add-buffer.lua:30 o diff removeu o comentario inline sobre depth 10k junto com a troca para 1000; nao ha comentario contraditorio no head.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "tests/sentry/spans/test_buffer.py no diff so acrescenta end_timestamp_precise; de fato nao testa o trim por zpopmin, mas e lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "buffer.py:150 max_segment_spans=1001 so tem o default (git grep nao acha caller que configure); limite Lua 1000 hardcoded diverge do parametro morto, sem caminho concreto.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Mesmo achado: max_segment_spans (buffer.py:150) ficou sem uso e o Lua (add-buffer.lua:62) usa 1000; nenhum caller configura outro valor.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Mesmo achado: limite hardcoded em add-buffer.lua:62 vs max_segment_spans nao configurado por ninguem.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "buffer.py:197 troca sadd por zadd no mesmo namespace span-buf:s:; chaves SET ainda vivas (TTL redis_ttl) no deploy fazem ZADD/ZCARD/ZSCAN falhar com WRONGTYPE no batch do consumer.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Mesmo achado de max_segment_spans sem uso (buffer.py:150, 437-449); nenhum caller configura valor diferente.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

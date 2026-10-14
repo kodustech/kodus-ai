@@ -1,0 +1,40 @@
+{
+  "caseId": "advanced-query-processing-architecture-grafana-codex",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "O PR passa a chamar applyTemplateVariables no inicio (querySplitting.ts:296-299, shardQuerySplitting.ts:49-52) e super.query o aplica de novo, mas addFilterToStreamSelector (modifyQuery.ts:494) nao adiciona label repetido e a segunda interpolacao nao tem variaveis restantes; o resultado errado/duplicado descrito nao acontece.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "O PR passa a chamar applyTemplateVariables no inicio (querySplitting.ts:296-299, shardQuerySplitting.ts:49-52) e super.query o aplica de novo, mas addFilterToStreamSelector (modifyQuery.ts:494) nao adiciona label repetido e a segunda interpolacao nao tem variaveis restantes; o resultado errado/duplicado descrito nao acontece.",
+      "confianca": "media",
+      "precisaAstra": false,
+      "subtipoAlucinacao": "nit",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
+    }
+  ]
+}

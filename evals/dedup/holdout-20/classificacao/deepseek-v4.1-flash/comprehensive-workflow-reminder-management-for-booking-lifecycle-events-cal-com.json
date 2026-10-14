@@ -1,230 +1,230 @@
 {
- "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
- "modelo": "deepseek-v4.1-flash",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "workflows.tsx:9 importa Prisma como valor e o arquivo nao o usa mais (grep so acha a linha 9); e import sem uso.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete faz POST cancel na SendGrid e return, sem apagar a linha nem marcar cancelled; callers como handleNewBooking.ts:968 e workflows.tsx:214/521 tiraram o proprio delete.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "scheduleEmailReminders.ts:53-74: requests seriais num cron; e melhoria de performance sem falha concreta.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "scheduleEmailReminders.ts:43-51: o comentario diz \"next hour\", e a query so tem lte now+1h; e comentario impreciso.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.92
-   },
-   "concordaComJuiz": true,
-   "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete nao remove a linha; a sugestao pede \"make the delete path actually delete\", que e o golden 1 (alem de renomear).",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.85
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Cita o ramo immediateDelete de emailReminderManager.ts:213-223, que retorna sem apagar nem marcar a linha: mesmo problema do golden 1, embora sem acao.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "sem_problema",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Nao descreve defeito nenhum, so diz que a remocao do branch isSenderIdNeeded (WorkflowStepContainer.tsx) fica para outros revisores.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "concurrency",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "handleCancelBooking.ts:485-495 / bookings.tsx:486-495: deleteScheduledEmailReminder/SMS chamados dentro de forEach sem await, e o await Promise.all(remindersToDelete) foi removido.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S9",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "concurrency",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "handleCancelBooking.ts:485-495 / bookings.tsx:486-495: deleteScheduledEmailReminder/SMS chamados dentro de forEach sem await, e o await Promise.all(remindersToDelete) foi removido.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S10",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete faz POST cancel na SendGrid e return, sem apagar a linha nem marcar cancelled; callers como handleNewBooking.ts:968 e workflows.tsx:214/521 tiraram o proprio delete.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S11",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "scheduleEmailReminders.ts:3 tem import client from \"@sendgrid/client\"; client esta importado e nao ha ReferenceError.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S12",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete faz POST cancel na SendGrid e return, sem apagar a linha nem marcar cancelled; callers como handleNewBooking.ts:968 e workflows.tsx:214/521 tiraram o proprio delete.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S13",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.92
-   },
-   "concordaComJuiz": true,
-   "evidencia": "handleNewBooking.ts:966-972 passa immediateDelete=true, e esse ramo (emailReminderManager.ts:213-223) nao apaga a linha; a divergencia apontada vem da mesma causa do golden 1.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S14",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "data",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete faz POST cancel na SendGrid e return, sem apagar a linha nem marcar cancelled; callers como handleNewBooking.ts:968 e workflows.tsx:214/521 tiraram o proprio delete.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "workflows.tsx:9 importa Prisma como valor e o arquivo nao o usa mais (grep so acha a linha 9); e import sem uso.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete faz POST cancel na SendGrid e return, sem apagar a linha nem marcar cancelled; callers como handleNewBooking.ts:968 e workflows.tsx:214/521 tiraram o proprio delete.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "scheduleEmailReminders.ts:53-74: requests seriais num cron; e melhoria de performance sem falha concreta.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "scheduleEmailReminders.ts:43-51: o comentario diz \"next hour\", e a query so tem lte now+1h; e comentario impreciso.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete nao remove a linha; a sugestao pede \"make the delete path actually delete\", que e o golden 1 (alem de renomear).",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Cita o ramo immediateDelete de emailReminderManager.ts:213-223, que retorna sem apagar nem marcar a linha: mesmo problema do golden 1, embora sem acao.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Nao descreve defeito nenhum, so diz que a remocao do branch isSenderIdNeeded (WorkflowStepContainer.tsx) fica para outros revisores.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "handleCancelBooking.ts:485-495 / bookings.tsx:486-495: deleteScheduledEmailReminder/SMS chamados dentro de forEach sem await, e o await Promise.all(remindersToDelete) foi removido.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "handleCancelBooking.ts:485-495 / bookings.tsx:486-495: deleteScheduledEmailReminder/SMS chamados dentro de forEach sem await, e o await Promise.all(remindersToDelete) foi removido.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete faz POST cancel na SendGrid e return, sem apagar a linha nem marcar cancelled; callers como handleNewBooking.ts:968 e workflows.tsx:214/521 tiraram o proprio delete.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "scheduleEmailReminders.ts:3 tem import client from \"@sendgrid/client\"; client esta importado e nao ha ReferenceError.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete faz POST cancel na SendGrid e return, sem apagar a linha nem marcar cancelled; callers como handleNewBooking.ts:968 e workflows.tsx:214/521 tiraram o proprio delete.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "handleNewBooking.ts:966-972 passa immediateDelete=true, e esse ramo (emailReminderManager.ts:213-223) nao apaga a linha; a divergencia apontada vem da mesma causa do golden 1.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "emailReminderManager.ts:213-223: o ramo immediateDelete faz POST cancel na SendGrid e return, sem apagar a linha nem marcar cancelled; callers como handleNewBooking.ts:968 e workflows.tsx:214/521 tiraram o proprio delete.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

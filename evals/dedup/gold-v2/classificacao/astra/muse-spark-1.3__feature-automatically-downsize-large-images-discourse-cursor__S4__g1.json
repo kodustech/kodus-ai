@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "id": "S4",
+  "golden": 1,
+  "promptSha": "48f368b6c0a8bce71c0c9ecbe96a09fb779b3fdf",
+  "sameProblem": false,
+  "reason": "The review flags a server-side API URL download cap, while the golden comment flags client-side upload and 413-handler limits ignoring per-type settings, so fixing the former would not fix the latter."
+}

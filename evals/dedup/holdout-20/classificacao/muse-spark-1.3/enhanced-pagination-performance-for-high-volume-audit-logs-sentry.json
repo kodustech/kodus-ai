@@ -1,0 +1,237 @@
+{
+  "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:838-839 get_item_key faz math.floor/ceil(getattr(item,'datetime')) e organization_auditlogs.py usa order_by='-datetime' -> TypeError.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:877-882 com enable_advanced_features e cursor.offset<0 faz queryset[start_offset:stop] com indice negativo; Django rejeita.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:182-191 o clamp so acontece quando not is_prev, e a checagem len(results)==offset+limit+extra so roda quando is_prev, onde start_offset==offset; o descompasso descrito nao ocorre.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:877-882 slice negativo em QuerySet no OptimizedCursorPaginator.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "evidencia": "paginator.py:182-184 (BasePaginator): para is_prev o offset cru vai ao slice exatamente como na base (queryset[offset:stop]); Cursor.from_string ja aceitava offset negativo. O golden e o paginator novo.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "tipoFPOriginal": "bug_preexistente",
+      "astra": {
+        "golden_juiz": true,
+        "golden_classificacao": null,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:874-886 ramo de offset negativo do OptimizedCursorPaginator fatia QuerySet com indice negativo.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "evidencia": "paginator.py:182 BasePaginator: no caminho is_prev o comportamento e identico a base (slice com offset cru); o PR so adicionou clamp no caminho nao-prev.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "tipoFPOriginal": "bug_preexistente",
+      "astra": {
+        "golden_juiz": true,
+        "golden_classificacao": null,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "evidencia": "paginator.py:179-184 o comentario novo e falso, mas o slice com offset negativo em is_prev ja existia na base do BasePaginator; nao e o paginator do golden.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "tipoFPOriginal": "bug_preexistente",
+      "astra": {
+        "golden_juiz": true,
+        "golden_classificacao": null,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:874-882 o comentario afirma que o ORM lida com slicing negativo e o codigo repassa cursor.offset negativo ao QuerySet.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.72
+      },
+      "concordaComJuiz": false,
+      "evidencia": "paginator.py:821-832 docstring promete otimizacoes inexistentes; e divergencia de documentacao, o defeito de slicing negativo nao e o foco.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "organization_auditlogs.py:73-83 instancia OptimizedCursorPaginator com order_by='-datetime' e get_item_key numerico (math.floor) -> quebra.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:884-891 a checagem com offset so roda quando cursor.is_prev, e nesse caso start_offset==offset em ambos os ramos; nao ha descompasso.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:877-882 slice negativo em QuerySet; Django lanca 'Negative indexing is not supported'.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

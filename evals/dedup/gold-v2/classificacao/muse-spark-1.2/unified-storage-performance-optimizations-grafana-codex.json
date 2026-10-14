@@ -34,7 +34,9 @@
       "precisaAstra": false,
       "evidencia": "server.go:303-311 troca a ordem para search.init antes de initWatcher, mas Init agora roda dentro de NewResourceServer (:258) antes de o servidor existir para clientes de Watch; não há cliente que perca eventos. E search.go:203 só assina WatchWriteEvents depois do build, então a premissa de eventos indexados durante o build está errada.",
       "confianca": "media",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "especulativo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S3",

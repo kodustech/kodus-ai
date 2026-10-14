@@ -1,166 +1,166 @@
 {
- "caseId": "database-performance-optimizations-grafana-codex",
- "modelo": "deepseek-v4.1-flash",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "perf",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "xorm_store.go:534/537 (e 554/557, 576/579) loga com r.log.Error mensagens de progresso normal com a lista de ids; mesmo problema do golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "perf",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "cleanup.go:77 ticker passou de time.Minute*10 para time.Minute*1; mesmo problema do golden 1.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "perf",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "xorm_store.go:534-579 r.log.Error no caminho normal; golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "perf",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "xorm_store.go:534/537 Error-level para operacao bem-sucedida (err nil); golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "perf",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "cleanup.go:76-77 ticker 10min->1min; golden 1.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "xorm_store.go:614-618 fora do SQLite gera um placeholder por id sem limite; na base o DELETE usava subquery sem binds, entao AnnotationCleanupJobBatchSize (setting.go:710, configuravel) acima de 65535 passa a falhar em Postgres/MySQL; exige config extrema.",
-   "confianca": "baixa",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "perf",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "cleanup.go:77 ticker 10min->1min; golden 1.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "perf",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "xorm_store.go:534/537 Error-level com ids inteiros no caminho de sucesso; golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S9",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "sem_problema",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Item vazio, sem texto nem arquivo.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S10",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "sem_problema",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Texto truncado/incoerente ('删除了this later') sem descrever problema.",
-   "confianca": "media",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "database-performance-optimizations-grafana-codex",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "xorm_store.go:534/537 (e 554/557, 576/579) loga com r.log.Error mensagens de progresso normal com a lista de ids; mesmo problema do golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "cleanup.go:77 ticker passou de time.Minute*10 para time.Minute*1; mesmo problema do golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "xorm_store.go:534-579 r.log.Error no caminho normal; golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "xorm_store.go:534/537 Error-level para operacao bem-sucedida (err nil); golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "cleanup.go:76-77 ticker 10min->1min; golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "xorm_store.go:614-618 fora do SQLite gera um placeholder por id sem limite; na base o DELETE usava subquery sem binds, entao AnnotationCleanupJobBatchSize (setting.go:710, configuravel) acima de 65535 passa a falhar em Postgres/MySQL; exige config extrema.",
+      "confianca": "baixa",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "cleanup.go:77 ticker 10min->1min; golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "xorm_store.go:534/537 Error-level com ids inteiros no caminho de sucesso; golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Item vazio, sem texto nem arquivo.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Texto truncado/incoerente ('删除了this later') sem descrever problema.",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
 }

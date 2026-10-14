@@ -255,7 +255,9 @@
       "precisaAstra": false,
       "evidencia": "Antes do PR, BrowserReport(**report) era dataclass sem campo age e com timestamp obrigatório, então relatórios com ambos ou sem nenhum já falhavam (TypeError); a afirmação de que eram aceitos é falsa.",
       "confianca": "media",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S16",

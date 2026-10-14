@@ -34,7 +34,9 @@
       "precisaAstra": false,
       "evidencia": "GrafanaGroupLoader.tsx:68 usa promResponse.data.groups.at(0)?.rules.map(...). O optional chaining interrompe a cadeia inteira quando at(0) é undefined, e a expressão vira undefined sem lançar erro. O crash descrito não acontece.",
       "confianca": "alta",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S3",

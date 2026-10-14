@@ -1,9 +1,9 @@
 {
- "modelo": "gpt-6.1-sol",
- "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
- "id": "S6",
- "golden": 0,
- "promptSha": "a0df247d4aa0a36a5e43b83e80579d9b00068990",
- "sameProblem": false,
- "reason": "An atomic increment fixes lost counts under concurrency but leaves should_block_email? updating statistics during a read-style check, which is the golden comment’s core issue."
+  "modelo": "gpt-6.1-sol",
+  "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+  "id": "S6",
+  "golden": 0,
+  "promptSha": "a0df247d4aa0a36a5e43b83e80579d9b00068990",
+  "sameProblem": false,
+  "reason": "An atomic increment fixes lost counts under concurrency but leaves should_block_email? updating statistics during a read-style check, which is the golden comment’s core issue."
 }

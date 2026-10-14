@@ -1,0 +1,246 @@
+{
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "project_replay_summarize_breadcrumbs.py:110-119 zip(error_ids, events.values()) assume ordem e presenca do dict do get_multi.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "browser_reporting_collector.py:52/58 usa initial_data.get(...) como presenca; age=0/timestamp=0 burlam a exclusao mutua.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "detector.py:64 le validated_data.get(\"detector_type\") mas o campo e type (:35).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "widgetCard/chart.tsx:165-173 TableWidgetVisualization recebe columns=[] e data/meta vazios fixos.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "tableWidgetVisualization.tsx:21 tableData e obrigatorio e TabularData.meta e obrigatorio (common/types.tsx:73); o unico caller (chart.tsx:166) passa meta. A guarda e defensiva.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "delayed_workflow.py:652 o mapa vem de get_slow_conditions_for_groups(event_data.dcg_ids), que cria chave para todo id (data_condition_group.py:55); data_condition_groups e filter(id__in=dcg_ids) (:295), entao todo dcg.id esta no mapa.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "delayed_workflow.py:419 mesmo mapa construido de event_data.dcg_ids; os dcgs iterados sao subconjunto desses ids, o KeyError nao acontece.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 5,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 5,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "organization_preprod_artifact_assemble.py:81-91 analytics.record roda antes do features.has que devolve 404.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "useGetTraceItemAttributeValues.tsx:69 interpolacao de attributeKey sem encodeURIComponent nao foi alterada pelo PR (so rename); chaves de atributo nao trazem '/', o risco e hipotetico.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "commit_context.py:584-591 get_environment_info faz uma busca por issue (github/integration.py:409); o comentario lista poucas issues, impacto de performance desprezivel.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "browser_reporting_collector.py:106-128 o array nao tem limite, mas o endpoint fica atras de option e so valida/conta; limitar e endurecimento defensivo.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "useFeedbackSummary.tsx:43-65 useApiQuery (TanStack v5): com enabled=false o estado e pending e retorna em :43; apos isPending/isError falsos, data esta definido.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "browser_reporting_collector.py:52/58 a checagem por truthiness deixa 0 passar na exclusao mutua.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "project_replay_summarize_breadcrumbs.py:118 zip com events.values() desalinha ids e payloads.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "project_replay_summarize_breadcrumbs.py:104-121 o mesmo zip(error_ids, events.values()).",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

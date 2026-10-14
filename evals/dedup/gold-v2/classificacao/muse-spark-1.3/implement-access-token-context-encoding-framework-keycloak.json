@@ -1,0 +1,252 @@
+{
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AccessTokenContext.java:72-73 requireNonNull(grantType) duas vezes; rawTokenId nunca validado.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AssertEvents.java:480-484 substring(3,5) e equals -> return false: offset errado e logica invertida.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "OAuth2GrantType.java:102 grantType capturado no construtor; setFormParams (:105) nao tem chamadores no repo (git grep), entao o estado obsoleto nao tem caminho concreto.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "OAuth2GrantTypeFactory.java:33 getShortcut() abstrato quebra so implementacoes externas; e SPI privada (server-spi-private) e todas as fabricas do repo implementam.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AssertEvents.java:483 substring(3,5) le a posicao errada; o shortcut fica em 4..6. Parte do golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "evidencia": "AssertEvents.java:483 if (...equals(expected)) return false: inversao descrita no golden 1.",
+      "confianca": "alta",
+      "tipoFPSeNaoForTP": "bug_real",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": false,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AssertEvents.java:476-492 inversao + offset; o matcher aceita grant errado.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "OAuth2GrantTypeFactory.java:33 metodo abstrato novo numa SPI privada; so quebraria providers de terceiros, todos os internos implementam.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AssertEvents.java:483 substring(3,5) + equals invertido; corrigir para !substring(4,6).equals.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AccessTokenContext.java:73 checa grantType com a mensagem de rawTokenId.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AccessTokenContext.java:73 requireNonNull(grantType, \"Null rawTokenId...\"); rawTokenId nulo passa.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AccessTokenContext.java:73 a mensagem diz rawTokenId mas checa grantType; mesmo defeito.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AssertEvents.java:483 matcher retorna false quando o shortcut bate; inversao do golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "OAuth2GrantTypeFactory.java:30 javadoc diz 3 letras e os shortcuts sao de 2.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AssertEvents.java:483 le substring(3,5); o encoder poe o grant em 4..6.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

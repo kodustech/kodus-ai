@@ -17,7 +17,9 @@
       "precisaAstra": false,
       "evidencia": "AuthenticationProcessor.java:589-600 form() reconfigura o provider obtido por session.getProvider(LoginFormsProvider.class), que é cacheado por sessão; os atributos USERNAME_HIDDEN/REGISTRATION_DISABLED setados em AuthenticatorUtils.java:128-131 sobrevivem até o challenge. Premissa de 'provider novo a cada chamada' está errada.",
       "confianca": "media",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S2",

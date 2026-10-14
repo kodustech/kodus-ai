@@ -1,192 +1,192 @@
 {
- "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
- "modelo": "gpt-6.1-sol",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "ASN1Decoder.readSequence:57-61 nao limita filhos ao comprimento declarado (length pode ficar negativo); verdadeiro, mas a entrada vem do Signature.sign local (ECDSAAlgorithm.java:50) e nao ha caminho concreto de dano; leniencia de parser.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "createECParams/getKeyFactory lancam UnsupportedOperationException (AuthzClientCryptoProvider.java:167-180), mas o authz-client nao usa AbstractJWKParser (so JWSInput.getContent em TokenCallable.java:69); sem caminho concreto.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Mesmo achado de limite de sequencia em ASN1Decoder.java:57-60; parser leniente sem caminho concreto de falha; causa diferente do golden 2 (-1 indefinite).",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.75
-   },
-   "concordaComJuiz": false,
-   "evidencia": "Empate order()=200 Default/FIPS em CryptoIntegration.java:56-62; servidor usa setProvider explicito (KeycloakRecorder.java:214); nao e o golden 0.",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S5",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "ECDSAAlgorithmTest.java:53-56 so testa round-trip; lacuna de teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "ECDSAAlgorithmTest.java:42 gera chave EC com curva default para todos os casos; lacuna de teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "ASN1Decoder.java:57-61 aceita filho que ultrapassa o comprimento declarado; leniencia de parser sobre entrada local; nao e o golden 2.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "ECDSAAlgorithmTest.java:41-42 curva default para ES384/ES512; lacuna de teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S9",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "perf",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "AuthzClientCryptoProvider.java:114-115 encoders descartados; golden 1.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S10",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": true,
-    "golden": 2,
-    "conf": 0.92
-   },
-   "concordaComJuiz": false,
-   "evidencia": "Relata filho que cruza o limite da SEQUENCE (length vira -2) em ASN1Decoder.java:57-60; o golden 2 e sobre -1 do indefinite-length; causa diferente, e o achado e leniencia sem dano concreto.",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S11",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "integerToBytes (AuthzClientCryptoProvider.java:153-156) trunca bytes altos, mas r,s de ECDSA valido < n cabem em qLength; so com DER forjado, entrada vem de assinatura local.",
-   "confianca": "media",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ASN1Decoder.readSequence:57-61 nao limita filhos ao comprimento declarado (length pode ficar negativo); verdadeiro, mas a entrada vem do Signature.sign local (ECDSAAlgorithm.java:50) e nao ha caminho concreto de dano; leniencia de parser.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "createECParams/getKeyFactory lancam UnsupportedOperationException (AuthzClientCryptoProvider.java:167-180), mas o authz-client nao usa AbstractJWKParser (so JWSInput.getContent em TokenCallable.java:69); sem caminho concreto.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Mesmo achado de limite de sequencia em ASN1Decoder.java:57-60; parser leniente sem caminho concreto de falha; causa diferente do golden 2 (-1 indefinite).",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.75
+      },
+      "concordaComJuiz": false,
+      "evidencia": "Empate order()=200 Default/FIPS em CryptoIntegration.java:56-62; servidor usa setProvider explicito (KeycloakRecorder.java:214); nao e o golden 0.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ECDSAAlgorithmTest.java:53-56 so testa round-trip; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ECDSAAlgorithmTest.java:42 gera chave EC com curva default para todos os casos; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ASN1Decoder.java:57-61 aceita filho que ultrapassa o comprimento declarado; leniencia de parser sobre entrada local; nao e o golden 2.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ECDSAAlgorithmTest.java:41-42 curva default para ES384/ES512; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AuthzClientCryptoProvider.java:114-115 encoders descartados; golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "Relata filho que cruza o limite da SEQUENCE (length vira -2) em ASN1Decoder.java:57-60; o golden 2 e sobre -1 do indefinite-length; causa diferente, e o achado e leniencia sem dano concreto.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "integerToBytes (AuthzClientCryptoProvider.java:153-156) trunca bytes altos, mas r,s de ECDSA valido < n cabem em qLength; so com DER forjado, entrada vem de assinatura local.",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
 }

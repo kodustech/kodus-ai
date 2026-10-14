@@ -1,0 +1,102 @@
+{
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "anonstore/database.go:108-118 faz CountDevices e depois INSERT/UPSERT sem transacao/lock; requisicoes concorrentes passam no count e excedem o limite.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "impl.go:144-148 agora retorna o erro de tagDeviceUI, que ja fez localCache.SetDefault antes de CreateOrUpdateDevice; device rejeitado fica no cache e burla o limite.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "client.go:44-50 + database.go:108-118: device_id vem do header sem autenticacao e o limite novo nega Authenticate com ErrDeviceLimitReached; um cliente pode encher os slots e bloquear novos anonimos (DoS introduzido pelo limite).",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "client.go:44-50 trocou goroutine por TagDevice sincrono; e verdade, mas so em cache-miss (localCache 29min) e o impacto e latencia sem falha concreta.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 4,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "impl.go:144-148: cache preenchido antes do CreateOrUpdateDevice e nunca removido no erro; retry passa pelo cache e burla o limite.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "concurrency",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "database.go:108-118: check-then-act CountDevices/insert sem transacao permite exceder deviceLimit sob concorrencia.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

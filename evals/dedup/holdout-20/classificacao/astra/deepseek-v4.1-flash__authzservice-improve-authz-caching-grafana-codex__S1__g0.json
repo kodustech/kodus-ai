@@ -1,9 +1,9 @@
 {
- "modelo": "deepseek-v4.1-flash",
- "caseId": "authzservice-improve-authz-caching-grafana-codex",
- "id": "S1",
- "golden": 0,
- "promptSha": "d8e8296c0656ed0b194728317a081fc65961eea8",
- "sameProblem": false,
- "reason": "The review flags stale cached denials blocking newly granted access, while the golden comment flags stale cached grants allowing revoked access; fixing denial revalidation would not fix trusted stale grants."
+  "modelo": "deepseek-v4.1-flash",
+  "caseId": "authzservice-improve-authz-caching-grafana-codex",
+  "id": "S1",
+  "golden": 0,
+  "promptSha": "d8e8296c0656ed0b194728317a081fc65961eea8",
+  "sameProblem": false,
+  "reason": "The review flags stale cached denials blocking newly granted access, while the golden comment flags stale cached grants allowing revoked access; fixing denial revalidation would not fix trusted stale grants."
 }

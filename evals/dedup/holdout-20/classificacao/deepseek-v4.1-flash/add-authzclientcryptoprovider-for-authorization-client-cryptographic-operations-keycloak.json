@@ -1,186 +1,186 @@
 {
- "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
- "modelo": "deepseek-v4.1-flash",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "AuthzClientCryptoProvider.java:63 retorna KeyStore.getInstance(getDefaultType()).getProvider() (provider do JDK), nao BouncyCastle; mesmo achado do golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.92
-   },
-   "concordaComJuiz": false,
-   "evidencia": "CryptoIntegration.java:57-71 troca o throw por escolha silenciosa; Default/Elytron/FIPS retornam 200 (empate), mas o servidor Quarkus escolhe o provider via setProvider (KeycloakRecorder.java:214) e o empate so ocorre com classpath mal configurado; nao e o golden 0 (provider errado em getBouncyCastleProvider).",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.92
-   },
-   "concordaComJuiz": false,
-   "evidencia": "FIPS1402Provider order()=200 igual ao Default; empate so importa com os dois jars no mesmo classloader sem setProvider explicito (Quarkus usa KeycloakRecorder.java:214); causa diferente do golden 0.",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S4",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "perf",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "AuthzClientCryptoProvider.java:114-115 cria encoders e descarta; o retorno 117-121 recodifica. Golden 1.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.98
-   },
-   "concordaComJuiz": true,
-   "evidencia": "AuthzClientCryptoProvider.java:60-67 retorna provider do keystore default em vez de BC. Golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": false,
-   "evidencia": "Mesmo empate de order() em CryptoIntegration.java:57-71; mudanca intencional do PR para aceitar multiplos providers, caminho de falha so com classpath ambiguo; nao e o golden 0.",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S7",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "ECDSAAlgorithmTest.java:52-56 so compara round-trip; lacuna de teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "TP",
-   "golden": 2,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 2,
-    "conf": 0.92
-   },
-   "concordaComJuiz": true,
-   "evidencia": "ASN1Decoder.readLength:133-134 retorna -1 (indefinite) e readInteger:71-72 faz read(-1) -> new byte[-1]; mesma raiz do golden 2 (-1 de indefinite-length nao tratado).",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S9",
-   "classe": "TP",
-   "golden": 3,
-   "goldenCategoria": "speculative",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 3,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "CryptoProvider.java: order() adicionado como metodo abstrato sem default; golden 3.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S10",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": false,
-   "evidencia": "FIPS1402Provider/DefaultCryptoProvider ambos order()=200; empate so com ambos no classpath sem setProvider explicito (KeycloakRecorder.java:214); nao e o golden 0.",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  }
- ]
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AuthzClientCryptoProvider.java:63 retorna KeyStore.getInstance(getDefaultType()).getProvider() (provider do JDK), nao BouncyCastle; mesmo achado do golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "CryptoIntegration.java:57-71 troca o throw por escolha silenciosa; Default/Elytron/FIPS retornam 200 (empate), mas o servidor Quarkus escolhe o provider via setProvider (KeycloakRecorder.java:214) e o empate so ocorre com classpath mal configurado; nao e o golden 0 (provider errado em getBouncyCastleProvider).",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "FIPS1402Provider order()=200 igual ao Default; empate so importa com os dois jars no mesmo classloader sem setProvider explicito (Quarkus usa KeycloakRecorder.java:214); causa diferente do golden 0.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AuthzClientCryptoProvider.java:114-115 cria encoders e descarta; o retorno 117-121 recodifica. Golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AuthzClientCryptoProvider.java:60-67 retorna provider do keystore default em vez de BC. Golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "evidencia": "Mesmo empate de order() em CryptoIntegration.java:57-71; mudanca intencional do PR para aceitar multiplos providers, caminho de falha so com classpath ambiguo; nao e o golden 0.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ECDSAAlgorithmTest.java:52-56 so compara round-trip; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ASN1Decoder.readLength:133-134 retorna -1 (indefinite) e readInteger:71-72 faz read(-1) -> new byte[-1]; mesma raiz do golden 2 (-1 de indefinite-length nao tratado).",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "speculative",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "CryptoProvider.java: order() adicionado como metodo abstrato sem default; golden 3.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "evidencia": "FIPS1402Provider/DefaultCryptoProvider ambos order()=200; empate so com ambos no classpath sem setProvider explicito (KeycloakRecorder.java:214); nao e o golden 0.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    }
+  ]
 }

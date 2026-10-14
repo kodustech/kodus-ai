@@ -238,7 +238,9 @@
       "precisaAstra": false,
       "evidencia": "getTokenContextFromTokenId só é usado nos testes no head (git grep); introspecção/revogação não o chamam, então não há 500 por id malformado.",
       "confianca": "media",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "defensivo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S15",

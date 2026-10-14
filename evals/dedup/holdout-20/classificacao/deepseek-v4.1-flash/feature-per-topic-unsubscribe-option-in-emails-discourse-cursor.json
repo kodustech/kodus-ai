@@ -1,198 +1,198 @@
 {
- "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
- "modelo": "deepseek-v4.1-flash",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.98
-   },
-   "concordaComJuiz": true,
-   "evidencia": "app/controllers/topics_controller.rb:105-107: tu = TopicUser.find_by(...) sem guarda e na linha seguinte tu.notification_level; sem linha topic_users -> NoMethodError.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "config/routes.rb:440-441 sao GET e topics_controller.rb:98-115 altera notification_level (tu.save!) so com cookie de sessao, sem token; Rails nao checa CSRF em GET, entao <img src> de terceiro muda a preferencia. Introduzido pelo PR.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "app/controllers/topics_controller.rb:105-107: tu = TopicUser.find_by(...) sem guarda e na linha seguinte tu.notification_level; sem linha topic_users -> NoMethodError.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Unico caller com add_unsubscribe_link: true e app/mailers/user_notifications.rb:294-295, que ja passa unsubscribe_url; rejection_mailer.rb:9 lista add_unsubscribe_link em DISALLOWED_TEMPLATE_ARGS e o digest usa outra chave. Nenhum email fica sem o argumento.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "spec/components/email/message_builder_spec.rb:169-172 passa unsubscribe_url e nenhum expect le esse valor; e lacuna de teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Topic#fancy_title (app/models/topic.rb:263-264) aplica ERB::Util.html_escape(title) antes de devolver; o titulo chega ao {{{stopNotificiationsText}}} ja escapado, sem injecao de HTML.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.98
-   },
-   "concordaComJuiz": true,
-   "evidencia": "app/controllers/topics_controller.rb:105-107: tu = TopicUser.find_by(...) sem guarda e na linha seguinte tu.notification_level; sem linha topic_users -> NoMethodError.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Topic#fancy_title (app/models/topic.rb:263-264) aplica ERB::Util.html_escape(title) antes de devolver; o titulo chega ao {{{stopNotificiationsText}}} ja escapado, sem injecao de HTML.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S9",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Unico caller com add_unsubscribe_link: true e app/mailers/user_notifications.rb:294-295, que ja passa unsubscribe_url; rejection_mailer.rb:9 lista add_unsubscribe_link em DISALLOWED_TEMPLATE_ARGS e o digest usa outra chave. Nenhum email fica sem o argumento.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S10",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Unico caller com add_unsubscribe_link: true e app/mailers/user_notifications.rb:294-295, que ja passa unsubscribe_url; rejection_mailer.rb:9 lista add_unsubscribe_link em DISALLOWED_TEMPLATE_ARGS e o digest usa outra chave. Nenhum email fica sem o argumento.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S11",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "O resolver (discourse/ember/resolver.js.es6:148-158) tenta decamelized.replace(/_/,\"/\"): topicUnsubscribe -> topic_unsubscribe -> topic/unsubscribe, achando templates/topic/unsubscribe.hbs.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S12",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Unico caller com add_unsubscribe_link: true e app/mailers/user_notifications.rb:294-295, que ja passa unsubscribe_url; rejection_mailer.rb:9 lista add_unsubscribe_link em DISALLOWED_TEMPLATE_ARGS e o digest usa outra chave. Nenhum email fica sem o argumento.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "app/controllers/topics_controller.rb:105-107: tu = TopicUser.find_by(...) sem guarda e na linha seguinte tu.notification_level; sem linha topic_users -> NoMethodError.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "config/routes.rb:440-441 sao GET e topics_controller.rb:98-115 altera notification_level (tu.save!) so com cookie de sessao, sem token; Rails nao checa CSRF em GET, entao <img src> de terceiro muda a preferencia. Introduzido pelo PR.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "app/controllers/topics_controller.rb:105-107: tu = TopicUser.find_by(...) sem guarda e na linha seguinte tu.notification_level; sem linha topic_users -> NoMethodError.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Unico caller com add_unsubscribe_link: true e app/mailers/user_notifications.rb:294-295, que ja passa unsubscribe_url; rejection_mailer.rb:9 lista add_unsubscribe_link em DISALLOWED_TEMPLATE_ARGS e o digest usa outra chave. Nenhum email fica sem o argumento.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "spec/components/email/message_builder_spec.rb:169-172 passa unsubscribe_url e nenhum expect le esse valor; e lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Topic#fancy_title (app/models/topic.rb:263-264) aplica ERB::Util.html_escape(title) antes de devolver; o titulo chega ao {{{stopNotificiationsText}}} ja escapado, sem injecao de HTML.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "app/controllers/topics_controller.rb:105-107: tu = TopicUser.find_by(...) sem guarda e na linha seguinte tu.notification_level; sem linha topic_users -> NoMethodError.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Topic#fancy_title (app/models/topic.rb:263-264) aplica ERB::Util.html_escape(title) antes de devolver; o titulo chega ao {{{stopNotificiationsText}}} ja escapado, sem injecao de HTML.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Unico caller com add_unsubscribe_link: true e app/mailers/user_notifications.rb:294-295, que ja passa unsubscribe_url; rejection_mailer.rb:9 lista add_unsubscribe_link em DISALLOWED_TEMPLATE_ARGS e o digest usa outra chave. Nenhum email fica sem o argumento.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Unico caller com add_unsubscribe_link: true e app/mailers/user_notifications.rb:294-295, que ja passa unsubscribe_url; rejection_mailer.rb:9 lista add_unsubscribe_link em DISALLOWED_TEMPLATE_ARGS e o digest usa outra chave. Nenhum email fica sem o argumento.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "O resolver (discourse/ember/resolver.js.es6:148-158) tenta decamelized.replace(/_/,\"/\"): topicUnsubscribe -> topic_unsubscribe -> topic/unsubscribe, achando templates/topic/unsubscribe.hbs.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Unico caller com add_unsubscribe_link: true e app/mailers/user_notifications.rb:294-295, que ja passa unsubscribe_url; rejection_mailer.rb:9 lista add_unsubscribe_link em DISALLOWED_TEMPLATE_ARGS e o digest usa outra chave. Nenhum email fica sem o argumento.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

@@ -1,0 +1,246 @@
+{
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:46-48 usa isTeamAdmin && isTeamOwner; isTeamAdmin (queries/teams:264) ja aceita ADMIN|OWNER, entao && exige OWNER e nega ADMIN.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:71 lowercasa a blacklist e :77 compara guest cru com includes(guest); maiusculas burlam o bloqueio.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:74-78 so filtra contra attendees existentes/blacklist; schema (addGuests.schema.ts) nao exige unicidade, createMany :101 insere repetidos.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:168 passa guests cru; email-manager.ts:541 usa newGuests.includes(attendee.email), entao attendee existente reenviado recebe AttendeeScheduledEmail.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AddGuestsDialog.tsx:36-41 onSuccess fecha e limpa o valor mas nao faz setIsInvalidEmail(false) (so o Cancelar :91 faz); o aviso de erro reaparece ao reabrir. Arquivo novo do PR.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.schema.ts:5 z.array sem max e verdade, mas limite de tamanho e endurecimento defensivo; o handler exige ser organizador/attendee/admin.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:71 vs :77: blacklist lowercased, guest comparado cru; bypass por caixa.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "MultiEmail.tsx:46 Tooltip content=\"Remove email\" hardcoded; i18n e estilo, sem defeito funcional.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:74-106 nao deduplica guests[] antes do createMany; duplicatas na entrada viram linhas repetidas.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:26-106 findFirst + update nao atomicos; corrida entre duas chamadas concorrentes com o mesmo email e especulativa, sem caminho concreto no PR.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:46-48 nome diz OR mas o codigo usa &&; trocar por || e o golden.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:168 envia guests em vez de uniqueGuests; email-manager.ts:541 classifica existentes como novos.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "security",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:71/77 blacklist lowercased vs guest cru; mesmo bypass por caixa do golden.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AddGuestsDialog.tsx:43-44 message e template sempre truthy, fallback morto; o toast mostra o erro traduzido de qualquer jeito, impacto cosmetico.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S15",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "addGuests.handler.ts:167-169 sendAddGuestsEmails(evt, guests) com a lista crua; email-manager.ts:541 depende de newGuests ser so os novos.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

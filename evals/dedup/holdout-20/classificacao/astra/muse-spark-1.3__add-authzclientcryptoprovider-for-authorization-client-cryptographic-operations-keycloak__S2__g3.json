@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "id": "S2",
+  "golden": 3,
+  "promptSha": "4a2c9b09c106559d82b6be37f5c3ed0824928e0b",
+  "sameProblem": false,
+  "reason": "The review comment concerns ambiguous provider selection when priorities tie, while the golden comment concerns backward compatibility broken by adding an abstract order() method; fixing tie handling would not fix existing implementations."
+}

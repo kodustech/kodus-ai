@@ -1,80 +1,80 @@
 {
- "caseId": "authzservice-improve-authz-caching-grafana-codex",
- "modelo": "deepseek-v4.1-flash",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.92
-   },
-   "concordaComJuiz": false,
-   "evidencia": "service.go:116-121 devolve a negacao cacheada por shortCacheTTL. Antes do PR o permCache tambem servia negacao por esse mesmo TTL (getUserPermissions retornava o cache), entao a janela de staleness nao e nova; e trade-off de TTL. O golden 0 e sobre grant obsoleto, causa diferente.",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "service.go:55: o comentario da struct nao cita o novo permDenialCache; e so comentario.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "doc_defect",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "service_test.go:981-982: o comentario diz \"Allow access\", mas o permCache semeado tem dashboards:uid:dash1 = false, entao o teste nao prova a precedencia do denial cache.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.92
-   },
-   "concordaComJuiz": false,
-   "evidencia": "service.go:116-121 devolve a negacao cacheada por shortCacheTTL. Antes do PR o permCache tambem servia negacao por esse mesmo TTL (getUserPermissions retornava o cache), entao a janela de staleness nao e nova; e trade-off de TTL. O golden 0 e sobre grant obsoleto, causa diferente.",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  }
- ]
+  "caseId": "authzservice-improve-authz-caching-grafana-codex",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "service.go:116-121 devolve a negacao cacheada por shortCacheTTL. Antes do PR o permCache tambem servia negacao por esse mesmo TTL (getUserPermissions retornava o cache), entao a janela de staleness nao e nova; e trade-off de TTL. O golden 0 e sobre grant obsoleto, causa diferente.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "service.go:55: o comentario da struct nao cita o novo permDenialCache; e so comentario.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "service_test.go:981-982: o comentario diz \"Allow access\", mas o permCache semeado tem dashboards:uid:dash1 = false, entao o teste nao prova a precedencia do denial cache.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "service.go:116-121 devolve a negacao cacheada por shortCacheTTL. Antes do PR o permCache tambem servia negacao por esse mesmo TTL (getUserPermissions retornava o cache), entao a janela de staleness nao e nova; e trade-off de TTL. O golden 0 e sobre grant obsoleto, causa diferente.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    }
+  ]
 }

@@ -1,0 +1,155 @@
+{
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "evidencia": "admin-group.js.es6:12-15 totalPages = floor(user_count/limit)+1 superconta em multiplos exatos; e a causa do golden 3 (o efeito offset==total do golden 1 some com o mesmo ceil).",
+      "confianca": "alta",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "admin/groups_controller.rb:89 group.users.delete(user_id) apaga o join sem passar por destroy_deletions (group.rb:287-292), que zera primary_group_id; o fluxo antigo via usernames= fazia a limpeza, entao o usuario removido fica com primary_group_id apontando para o grupo.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "admin/groups_controller.rb:70 split(',') sem strip; o user-selector da UI envia 'a,b' sem espacos, so afeta input manual.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "groups_controller.rb:22-23 limit sem teto; na base members ja devolvia todos os membros sem limite (grupos nao automaticos), sem regressao.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "admin-group.js.es6:12-15 floor+1 em vez de ceil.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 5,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 5,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "admin/groups_controller.rb:66 le params.require(:group_id), exatamente o golden 5. Ressalva: em routes.rb:49-50 a rota esta aninhada dentro de resources :groups (sem member do), o que no Rails gera :group_id, entao o problema pode nao existir.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 5,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 5,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "admin/groups_controller.rb:85 mesmo params.require(:group_id) do golden 5 (mesma ressalva da rota aninhada).",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "admin-group.js.es6:12-15 floor+1 off-by-one.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "group-members.js.es6:8-12 nao ha controller group-members; o Ember 1.x gera um ObjectController que faz proxy de members para model.members (group.js:33 seta members), entao {{#each m in members}} resolve.",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
+}

@@ -1,198 +1,198 @@
 {
- "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
- "modelo": "deepseek-v4.1-flash",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "error_upsampling.py:100-103 faz substring 'event.type:error' sobre request.GET['query'] (nao a query split); mas para eventos sem sample_weight upsampled_count=toInt64(sum(ifNull(sample_weight,1))) = count(), entao '!event.type:error'/transacoes nao mudam o numero; imprecisao sem caminho concreto de valor errado.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "TP",
-   "golden": 2,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 2,
-    "conf": 0.92
-   },
-   "concordaComJuiz": true,
-   "evidencia": "organization_events_stats.py:218-220 passa o `dataset` externo a is_errors_query_for_error_upsampled_projects enquanto a query roda em scoped_dataset (split usa discover); mesmo defeito do golden 2.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "discover.py:1044-1049 usa toInt64(sum(...)); truncar a soma perde <1 unidade por bucket, escolha de arredondamento sem impacto relevante.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "sem_problema",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Texto 'no defect'.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "sem_problema",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Texto 'no defect'.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "sem_problema",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Texto 'dismissed'.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "sem_problema",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Texto 'no defect'.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "test_organization_events_stats.py:3655-3697: transacao sem sample_weight da 1 tanto em count quanto em upsampled_count, entao o teste nao discrimina; lacuna de teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S9",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "test_error_upsampling.py:48-52: allowlist [] ja retorna False antes do guard de project_ids; lacuna de teste verdadeira.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S10",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "organization_events_stats.py:124 muda a mensagem; git grep na base nao acha teste/consumidor com 'If topEvents needs'; nenhum caller quebra, mudanca de texto apenas.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S11",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "factories.py:344-357 grava sample_rate; o sample_weight e derivado pelo pipeline de ingestao (snuba) a partir de sample_rate, e o teste novo que espera 10 com rate 0.1 depende disso; a afirmacao de que o campo nunca chega ao consumidor e falsa.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S12",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "error_upsampling.py:28-44 recebe organization e nao usa; parametro morto, estilo.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "error_upsampling.py:100-103 faz substring 'event.type:error' sobre request.GET['query'] (nao a query split); mas para eventos sem sample_weight upsampled_count=toInt64(sum(ifNull(sample_weight,1))) = count(), entao '!event.type:error'/transacoes nao mudam o numero; imprecisao sem caminho concreto de valor errado.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "organization_events_stats.py:218-220 passa o `dataset` externo a is_errors_query_for_error_upsampled_projects enquanto a query roda em scoped_dataset (split usa discover); mesmo defeito do golden 2.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "discover.py:1044-1049 usa toInt64(sum(...)); truncar a soma perde <1 unidade por bucket, escolha de arredondamento sem impacto relevante.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Texto 'no defect'.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Texto 'no defect'.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Texto 'dismissed'.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Texto 'no defect'.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "test_organization_events_stats.py:3655-3697: transacao sem sample_weight da 1 tanto em count quanto em upsampled_count, entao o teste nao discrimina; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "test_error_upsampling.py:48-52: allowlist [] ja retorna False antes do guard de project_ids; lacuna de teste verdadeira.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "organization_events_stats.py:124 muda a mensagem; git grep na base nao acha teste/consumidor com 'If topEvents needs'; nenhum caller quebra, mudanca de texto apenas.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "factories.py:344-357 grava sample_rate; o sample_weight e derivado pelo pipeline de ingestao (snuba) a partir de sample_rate, e o teste novo que espera 10 com rate 0.1 depende disso; a afirmacao de que o campo nunca chega ao consumidor e falsa.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "error_upsampling.py:28-44 recebe organization e nao usa; parametro morto, estilo.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

@@ -119,7 +119,9 @@
       "precisaAstra": false,
       "evidencia": "pluginTarget devolvendo ErrPluginNotRegistered antes de chamar next (metrics_middleware.go:94-108) é o mesmo código da InstrumentationMiddleware antes do PR; a afirmação de que o PR mudou o contrato para gate é falsa.",
       "confianca": "media",
-      "observacao": "Se o comportamento em si for considerado defeito, seria bug_preexistente."
+      "observacao": "Se o comportamento em si for considerado defeito, seria bug_preexistente.",
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S8",

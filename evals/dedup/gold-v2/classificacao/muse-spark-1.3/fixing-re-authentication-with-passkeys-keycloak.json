@@ -1,0 +1,43 @@
+{
+  "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "WebAuthnAuthenticator.java:189-202: com context.getUser() definido, action() compara o userHandle da asserção com o usuario ja autenticado e responde WEBAUTHN_ERROR_DIFFERENT_USER; a substituicao alegada nao acontece (e UsernamePasswordForm.action nao mudou no PR).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.72
+      },
+      "concordaComJuiz": false,
+      "evidencia": "PasswordForm.java:51-54: PasswordForm exige usuario (requiresUser), entao o ramo user==null de isConditionalPasskeysEnabled nao tem caminho concreto. Nao e o golden 1, que fala do oposto (exigir user != null e perder a UI condicional no login inicial).",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    }
+  ]
+}

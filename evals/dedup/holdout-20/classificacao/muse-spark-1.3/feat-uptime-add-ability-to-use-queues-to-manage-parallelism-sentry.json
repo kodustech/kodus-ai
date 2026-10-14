@@ -1,0 +1,232 @@
+{
+  "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "queue_consumer.py:335-342 close/terminate chamam queue_pool.shutdown() no pool do factory (result_consumer.py:131), e create_thread_queue_parallel_worker reutiliza self.queue_pool; apos rebalance o novo strategy usa filas desligadas (put lanca ShutDown, capturado no submit e o offset e marcado completo: mensagem descartada).",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "queue_consumer.py:129/234 workers saem pelo flag shutdown sem drenar, mas os offsets ficam pendentes e nao sao commitados; resultado e reprocessamento at-least-once no restart, sem perda.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "result_consumer.py:180-185 factory.shutdown nao para commit threads, mas o Arroyo chama close/join da strategy (queue_consumer.py:335) antes, e as threads sao daemon; sem caminho concreto.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "queue_consumer.py:185 queue.Queue() sem maxsize e submit sem bloqueio; falta de backpressure e risco de memoria sob carga, sem falha concreta demonstrada.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "evidencia": "test_results_consumer.py:1874 docstring diz que erros nao bloqueiam commits, mas o teste afirma len(committed_offsets)==0 or particao ausente; e a divergencia docstring x teste do golden.",
+      "confianca": "alta",
+      "tipoFPSeNaoForTP": "nit",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "test_queue_consumer.py:137-173 o teste so confere contagens; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "test_results_consumer.py:1780-1822 so confere call_count==2; lacuna de teste, nao e o teste do golden.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "queue_consumer.py:148-149 completa o offset no finally, mas result_processor.__call__ (result_consumer.py:44-54) ja engole excecoes em todos os modos; comportamento consistente com serial.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "queue_consumer.py:211-212 se put lancar, o except de SimpleQueueProcessingStrategy.submit (linhas 317-325) chama add_offset+complete_offset, removendo o offset de outstanding; nao vaza.",
+      "confianca": "alta",
+      "precisaAstra": false,
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
+    },
+    {
+      "id": "S10",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "sentry.utils.metrics.incr(key, amount=1, instance=None, ...) (metrics.py:119): o 2o posicional ja e amount.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "queue_consumer.py:214-229 get_stats so soma qsize; usado em poll (gauge) e testes, sem decisao de producao baseada nele.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "evidencia": "queue_consumer.py:250-254 docstring da strategy de producao diverge (offset completado no finally), mas o golden e sobre o docstring do teste test_thread_queue_parallel_error_handling; e falha de documentacao sem impacto.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "queue_consumer.py:253 docstring promete backpressure com filas ilimitadas (linha 185); divergencia de doc da classe de producao, nao do teste do golden.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    }
+  ]
+}

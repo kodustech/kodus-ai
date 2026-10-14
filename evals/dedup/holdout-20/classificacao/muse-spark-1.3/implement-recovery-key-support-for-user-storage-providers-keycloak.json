@@ -1,0 +1,54 @@
+{
+  "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "BackwardsCompatibilityUserStorage.java:231-242 recria o modelo com createFromValues sem setId do credential guardado; golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "BackwardsCompatibilityUserStorage.java:326-340 so faz anyMatch sem consumir o codigo, mas e o provider de teste (testsuite-providers); nao e codigo de produto.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "RecoveryAuthnCodeInputLoginBean.java:17-21 chama credentialModelOpt.get() sem isPresent(); golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

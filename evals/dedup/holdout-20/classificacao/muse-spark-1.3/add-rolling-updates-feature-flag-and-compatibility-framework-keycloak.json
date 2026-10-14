@@ -1,0 +1,38 @@
+{
+  "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "UpdateCommandDistTest.java:46-50 testFeatureNotEnabled so lanca o subcomando metadata, sem cobrir o gate do check; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "UpdateCommandDistTest.java:46-50 testFeatureNotEnabled so lanca o subcomando metadata, sem cobrir o gate do check; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

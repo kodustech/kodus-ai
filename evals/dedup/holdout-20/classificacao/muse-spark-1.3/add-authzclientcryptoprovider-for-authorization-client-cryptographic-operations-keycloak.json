@@ -1,0 +1,179 @@
+{
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AuthzClientCryptoProvider.java:61-66 getBouncyCastleProvider devolve KeyStore.getInstance(defaultType).getProvider() (SUN), nao BouncyCastle.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "CryptoIntegration.java:57-71 ordena por order() e pega o 1o, removendo o erro de multiplos providers; Default/FIPS/Elytron todos 200, empate so com classpath mal configurado. Nao e o golden 3 (order() abstrato quebrando implementacoes externas).",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "evidencia": "ASN1Decoder.java:133-134 readLength devolve -1 para 0x80 e os chamadores nao tratam (readInteger->read(-1) -> NegativeArraySizeException; readSequence usa o -1 na aritmetica). Rejeitar 0x80 em readLength corrige o golden.",
+      "confianca": "media",
+      "tipoFPSeNaoForTP": "nit",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AuthzClientCryptoProvider.java:103-110 sem checar tamanho, igual ao BCECDSACryptoProvider.java:28-33; ECDSASignatureVerifierContext.verify captura Exception e vira VerificationException.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ASN1Decoder so e usado em asn1derToConcatenatedRS, chamado apenas por ECDSASignatureSignerContext.java:33 (assinatura de DER do proprio JCA); nao esta no caminho de verificacao, nao ha maleabilidade.",
+      "confianca": "alta",
+      "precisaAstra": false,
+      "subtipoAlucinacao": "defensivo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "perf",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AuthzClientCryptoProvider.java:114-115 cria encoders e descarta; o return recria.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ECDSAAlgorithmTest.java:46-57 round-trip so compara consigo mesmo; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ECDSAAlgorithmTest.java:39-43 um so KeyPair EC para ES256/384/512; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AuthzClientCryptoProvider.java:103-112 sem validar tamanho, mesmo comportamento do provider BC; o verifier (ECDSASignatureVerifierContext.java:27-33) captura qualquer Exception.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ASN1Decoder.java:65-73 readInteger passa o -1 de readLength (indefinite length) para read(length) -> new byte[-1]; mesma causa do golden (-1 de indefinite length nao tratado).",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
+}

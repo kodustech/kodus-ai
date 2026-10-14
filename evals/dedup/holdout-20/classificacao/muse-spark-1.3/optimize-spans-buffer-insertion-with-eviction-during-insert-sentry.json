@@ -1,0 +1,118 @@
+{
+  "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "add-buffer.lua:46-54 e buffer.py trocam sadd/sscan por zadd/zcard/zunionstore/zscan sem migracao; chaves SET antigas ainda vivas ate o TTL geram WRONGTYPE durante o deploy. Os goldens (paginator) nao tratam disso.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "add-buffer.lua:47-53 ZUNIONSTORE sem AGGREGATE soma scores de membros iguais, mas o mesmo payload so aparece nos dois conjuntos em reentrega duplicada; o efeito e so a ordem de eviccao. Programacao defensiva sem caminho concreto.",
+      "confianca": "baixa",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "factory.py:141 indexa val['end_timestamp_precise'] diretamente, como ja fazia com trace_id/span_id/project_id; o campo faz parte do schema SpanEvent. Defensivo, sem caminho concreto.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "add-buffer.lua:62-64 zpopmin remove o menor end_timestamp; o root normalmente termina por ultimo e so ha eviccao acima de 1000 spans. Risco hipotetico.",
+      "confianca": "baixa",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "add-buffer.lua:30 o limite de redirecionamento cai de 10000 para 1000 de forma intencional; arvores com profundidade >1000 sao hipoteticas.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "add-buffer.lua:47-53 ZUNIONSTORE sem AGGREGATE soma scores de membros iguais, mas o mesmo payload so aparece nos dois conjuntos em reentrega duplicada; o efeito e so a ordem de eviccao. Programacao defensiva sem caminho concreto.",
+      "confianca": "baixa",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "test_buffer.py usa end_timestamp_precise=1700000000.0 em todos os spans e nao testa a eviccao; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

@@ -1,0 +1,145 @@
+{
+  "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 3,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 3,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "desktop/topic-post.scss:288-292 troca scale-color($primary, 30%) por dark-light-choose(scale-color($primary, 70%), ...) em .topic-meta-data h5 a, invertendo o tema claro; e o golden 0/3 (duplicados).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "mobile/modal.scss:99-102 troca scale-color($primary, 70%) por dark-light-choose(scale-color($primary, 30%), $secondary 70%) em .custom-message-length (desktop mantem 70/30); e a unica inversao 70->30 do PR, que o golden 2 descreve (citando topic-post por engano).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "speculative",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "desktop/user.scss:519-523 .name passa de scale-color($primary, 30%) para dark-light-choose(primary 50%, secondary 50%); exatamente o golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "mobile/topic-post.scss:179-183 .topic-map h3 passa de scale-color($primary, 20%) para dark-light-choose(primary 50%, secondary 50%), clareando o tema claro (desktop mantem 20/80). E outro seletor/arquivo, nao citado nos goldens (golden 1 fala de user.scss .name); corrigir um nao corrige o outro.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "style",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "desktop/topic-post.scss:288-292 troca scale-color($primary, 30%) por dark-light-choose(scale-color($primary, 70%), ...) em .topic-meta-data h5 a, invertendo o tema claro; e o golden 0/3 (duplicados).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "evidencia": "mobile/topic-post.scss:179-183 .topic-map h3 passa de scale-color($primary, 20%) para dark-light-choose(primary 50%, secondary 50%), clareando o tema claro (desktop mantem 20/80). E outro seletor/arquivo, nao citado nos goldens (golden 1 fala de user.scss .name); corrigir um nao corrige o outro.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "evidencia": "mobile/modal.scss:99-102 troca scale-color($primary, 70%) por dark-light-choose(scale-color($primary, 30%), $secondary 70%) em .custom-message-length (desktop mantem 70/30); e a unica inversao 70->30 do PR, que o golden 2 descreve (citando topic-post por engano).",
+      "confianca": "media",
+      "tipoFPSeNaoForTP": "bug_real",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": false,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "speculative",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": true,
+      "evidencia": "desktop/user.scss:519-523 .name passa de scale-color($primary, 30%) para dark-light-choose(primary 50%, secondary 50%); exatamente o golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

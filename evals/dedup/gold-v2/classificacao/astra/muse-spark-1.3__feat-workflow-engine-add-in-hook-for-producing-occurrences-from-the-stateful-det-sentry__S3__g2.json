@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+  "id": "S3",
+  "golden": 2,
+  "promptSha": "db4c7605bdedee059091ad9f35dd6d6aeef3b548",
+  "sameProblem": true,
+  "reason": "The review explicitly asks to replace hardcoded 6 values with actual packet values, which includes correcting the group_2 occurrence from 6 to 10 as required by the golden comment."
+}

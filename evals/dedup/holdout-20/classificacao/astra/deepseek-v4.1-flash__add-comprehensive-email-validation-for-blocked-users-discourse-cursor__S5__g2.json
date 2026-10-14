@@ -1,9 +1,9 @@
 {
- "modelo": "deepseek-v4.1-flash",
- "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
- "id": "S5",
- "golden": 2,
- "promptSha": "b04a0d86fd1c1513e474b22d091c2446ba360d60",
- "sameProblem": false,
- "reason": "The review targets client-side rejected-email tracking; fixing its case normalization would leave the case-sensitive lookup in BlockedEmail.should_block? and its server-side bypass unresolved."
+  "modelo": "deepseek-v4.1-flash",
+  "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+  "id": "S5",
+  "golden": 2,
+  "promptSha": "b04a0d86fd1c1513e474b22d091c2446ba360d60",
+  "sameProblem": false,
+  "reason": "The review targets client-side rejected-email tracking; fixing its case normalization would leave the case-sensitive lookup in BlockedEmail.should_block? and its server-side bypass unresolved."
 }

@@ -34,7 +34,9 @@
       "precisaAstra": false,
       "evidencia": "wire.go:374 ainda lista anonstore.ProvideAnonDBStore, mas nenhum provider consome AnonStore via wire (impl.go:43 constrói o store direto e api.go recebe por parâmetro), então o int64 sem provider não é resolvido e a geração do wire não quebra; o 'store duplicado com limite errado' não é usado. Sobra só um provider morto.",
       "confianca": "media",
-      "observacao": "Mesmo grupo do S15; o efeito alegado (falha de wire/injeção) não se confirma."
+      "observacao": "Mesmo grupo do S15; o efeito alegado (falha de wire/injeção) não se confirma.",
+      "subtipoAlucinacao": "nit",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S3",

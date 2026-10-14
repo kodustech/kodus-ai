@@ -1,9 +1,9 @@
 {
- "modelo": "sonnet-5.5",
- "caseId": "advanced-sql-analytics-framework-grafana-codex",
- "id": "S7",
- "golden": 1,
- "promptSha": "72e57033c1b7a902aae5ba1e3d768aede3b89596",
- "sameProblem": true,
- "reason": "The review explicitly identifies the stubbed DB.RunCommands failure behind broken table extraction, which is part of the golden comment’s unimplemented DB-method issue."
+  "modelo": "sonnet-5.5",
+  "caseId": "advanced-sql-analytics-framework-grafana-codex",
+  "id": "S7",
+  "golden": 1,
+  "promptSha": "72e57033c1b7a902aae5ba1e3d768aede3b89596",
+  "sameProblem": true,
+  "reason": "The review explicitly identifies the stubbed DB.RunCommands failure behind broken table extraction, which is part of the golden comment’s unimplemented DB-method issue."
 }

@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+  "id": "S6",
+  "golden": 1,
+  "promptSha": "6a81ac09e1b06e94757a5ec2afbb9813f4b0d67b",
+  "sameProblem": false,
+  "reason": "The review flags an h3 lightness change from 20% to 50% in mobile/topic-post.scss, while the golden issue concerns a 30% to 50% change in desktop/user.css and its mobile .name counterpart."
+}

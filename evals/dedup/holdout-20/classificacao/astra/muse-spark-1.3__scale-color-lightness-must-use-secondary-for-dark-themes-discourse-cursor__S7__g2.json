@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+  "id": "S7",
+  "golden": 2,
+  "promptSha": "42ba45218902a4895bcbb907eb3c705373ec868d",
+  "sameProblem": false,
+  "reason": "The review comment identifies an inverted lightness value in mobile/modal.scss, while the golden issue is in topic-post.css, so fixing the reported location would not fix the golden issue."
+}

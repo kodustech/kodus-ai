@@ -1,0 +1,118 @@
+{
+  "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "viewer/slots.ts:114 compara dayjs(...) === dayjs(...) (referencia), sempre false; golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "viewer/slots.ts:141-142 calcula start e end ambos a partir de slotStartTime; golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "viewer/slots.ts:139-151 (novo no PR) usa workingHours.find e rejeita o slot se QUALQUER entrada do mesmo dia nao o contem; com duas entradas no mesmo dia (turno dividido ou entradas quebradas pela meia-noite UTC) um slot valido e rejeitado.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "lib/slots.ts:206-207 filtra overrides pelo dia UTC de override.start e o PR (212-224) so desloca hora/minuto pelo offset invitee-organizador, sem trocar o dia; override que cruza a meia-noite no fuso do invitee cai no dia errado ou gera endTime<startTime.",
+      "confianca": "baixa",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "viewer/slots.ts:141-142 calcula start e end ambos a partir de slotStartTime; golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "viewer/slots.ts:141-142 calcula start e end ambos a partir de slotStartTime; golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "viewer/slots.ts:114 compara dayjs(...) === dayjs(...) (referencia), sempre false; golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

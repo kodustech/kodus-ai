@@ -1,166 +1,166 @@
 {
- "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
- "modelo": "gpt-6.1-sol",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "AdminPermissionsSchema.getOrCreateResource (linhas 119-126) cria o recurso de cada grupo sem setType; so os recursos all-type ganham tipo (linha 274). Com isso o findByType(GROUPS) em GroupPermissionsV2.java:121 nao enumera grupos especificos, e grants por grupo nao entram no filtro. Causa diferente do golden 1.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "api",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.92
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "JpaUserProvider.java:1059-1080 groupsWithPermissionsSubquery exige um ResourceEntity com nome like \"group.resource.\"+groupId (nomenclatura V1); no V2 o nome e so o group id (resolveGroup). Os ids V2 que o PR passa nunca casam, e membros autorizados somem da busca.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionEvaluator.java:132-135: o Javadoc de requireManageMembers cita canManageMembership; erro so de documentacao.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionEvaluator.java:145-147: @return fala em Stream, mas o metodo retorna Set<String>; erro so de documentacao.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "api",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "api",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S9",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "api",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S10",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.92
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "modelo": "gpt-6.1-sol",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AdminPermissionsSchema.getOrCreateResource (linhas 119-126) cria o recurso de cada grupo sem setType; so os recursos all-type ganham tipo (linha 274). Com isso o findByType(GROUPS) em GroupPermissionsV2.java:121 nao enumera grupos especificos, e grants por grupo nao entram no filtro. Causa diferente do golden 1.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "JpaUserProvider.java:1059-1080 groupsWithPermissionsSubquery exige um ResourceEntity com nome like \"group.resource.\"+groupId (nomenclatura V1); no V2 o nome e so o group id (resolveGroup). Os ids V2 que o PR passa nunca casam, e membros autorizados somem da busca.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionEvaluator.java:132-135: o Javadoc de requireManageMembers cita canManageMembership; erro so de documentacao.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionEvaluator.java:145-147: @return fala em Stream, mas o metodo retorna Set<String>; erro so de documentacao.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

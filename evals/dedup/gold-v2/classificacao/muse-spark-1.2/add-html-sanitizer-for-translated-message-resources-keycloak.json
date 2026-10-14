@@ -68,7 +68,9 @@
       "precisaAstra": false,
       "evidencia": "VerifyMessageProperties.java:75: mesmo se [a-zA-Z-_] fosse lido como range Z-_, só entrariam [\\]^, irrelevantes para nomes de locale; '_' casa nas duas leituras e pt_BR funciona. Não há efeito funcional.",
       "confianca": "media",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "nit",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S5",

@@ -1,9 +1,9 @@
 {
- "modelo": "deepseek-v4.1-flash",
- "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
- "id": "S7",
- "golden": 1,
- "promptSha": "12a739c3b5e7b4c703f4a5eab27e72a97c1d7ac9",
- "sameProblem": false,
- "reason": "The review flags a 30%-to-70% change in desktop/topic-post.scss, while the golden comment flags a 30%-to-50% change in desktop/user.css and a similar mobile .name change, so fixing it would not fix the golden issue."
+  "modelo": "deepseek-v4.1-flash",
+  "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+  "id": "S7",
+  "golden": 1,
+  "promptSha": "12a739c3b5e7b4c703f4a5eab27e72a97c1d7ac9",
+  "sameProblem": false,
+  "reason": "The review flags a 30%-to-70% change in desktop/topic-post.scss, while the golden comment flags a 30%-to-50% change in desktop/user.css and a similar mobile .name change, so fixing it would not fix the golden issue."
 }

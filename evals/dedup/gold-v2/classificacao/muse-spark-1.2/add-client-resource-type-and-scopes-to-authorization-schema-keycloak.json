@@ -102,7 +102,9 @@
       "precisaAstra": false,
       "evidencia": "ClientPermissionsV2.java:138: findByType(CLIENTS_RESOURCE_TYPE) só retorna o recurso-tipo (os recursos por cliente são criados sem type em getOrCreateResource), então não há N avaliações por cliente.",
       "confianca": "media",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S7",

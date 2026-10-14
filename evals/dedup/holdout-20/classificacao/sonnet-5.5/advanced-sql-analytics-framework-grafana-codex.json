@@ -1,124 +1,124 @@
 {
- "caseId": "advanced-sql-analytics-framework-grafana-codex",
- "modelo": "sonnet-5.5",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.98
-   },
-   "concordaComJuiz": true,
-   "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "api",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.75
-   },
-   "concordaComJuiz": true,
-   "evidencia": "sql_command.go:96-100 chama QueryFramesInto do stub (db.go:20-22) que sempre retorna 'not implemented'. Golden 1.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "api",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": false,
-   "evidencia": "parser.go:23-26 TablesList usa o stub RunCommands (db.go:16-18) que sempre erra; e o mesmo golden 1 (metodos do DB hardcoded 'not implemented').",
-   "confianca": "alta",
-   "tipoFPSeNaoForTP": "bug_real",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": null,
-    "golden_classificacao": true,
-    "vale": "classificacao"
-   }
-  }
- ]
+  "caseId": "advanced-sql-analytics-framework-grafana-codex",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "reader.go:194-200 enableSqlExpressions retorna false nos dois caminhos; QueryTypeSQL (reader.go:129-132) sempre falha. Golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.75
+      },
+      "concordaComJuiz": true,
+      "evidencia": "sql_command.go:96-100 chama QueryFramesInto do stub (db.go:20-22) que sempre retorna 'not implemented'. Golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "evidencia": "parser.go:23-26 TablesList usa o stub RunCommands (db.go:16-18) que sempre erra; e o mesmo golden 1 (metodos do DB hardcoded 'not implemented').",
+      "confianca": "alta",
+      "tipoFPSeNaoForTP": "bug_real",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    }
+  ]
 }

@@ -1,0 +1,118 @@
+{
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AdminPermissions.java:77 o PR envolveu o listener em isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ) (V1); V1 e V2 sao versoes da mesma feature (Profile.java:56/58) e nao ficam ligadas juntas, entao com V2 o setPermissionsEnabled do ClientPermissionsV2 nunca e chamado.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ClientPermissionsV2.java:224-232 nao filtra por resourceId como UserPermissionsV2.java:134; a avaliacao e feita sobre um unico ResourcePermission, sem caminho concreto mostrado em que volte permissao de outro recurso.",
+      "confianca": "baixa",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ClientPermissionsV2.java:138-142 avalia por recurso do findByType; so recursos com type Clients entram (os por-client nao tem type), N pequeno: performance sem impacto.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ClientPermissionEvaluator.java:95-98 javadoc 'Returns true' em metodo void: doc.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "ClientPermissionEvaluator.java:100-103 mesmo javadoc errado: doc.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AdminPermissions.java:77-92 o handler so roda com a feature V1 ligada; com V2 (mutuamente exclusiva) o ClientRemovedEvent nao chega a setPermissionsEnabled.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "AdminPermissions.java:77 guard V1 impede que o listener chame ClientPermissionsV2.setPermissionsEnabled (192-195); a exclusao de client nao lanca.",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
+}

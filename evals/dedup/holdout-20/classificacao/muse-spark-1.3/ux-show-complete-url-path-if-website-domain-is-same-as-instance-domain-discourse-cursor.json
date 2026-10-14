@@ -1,0 +1,54 @@
+{
+  "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.75
+      },
+      "concordaComJuiz": true,
+      "evidencia": "user_serializer.rb:153-155 define include_website_name sem '?', entao o AMS nunca chama; golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "user_serializer.rb:147-150 so cobre o caso em que o site e o dominio pai da instancia (como no spec 'website domain is parent'); um site que seja subdominio da instancia mostrar so o host e escolha de produto, nao defeito.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "user_serializer.rb:153-155 define include_website_name sem '?', entao o AMS nunca chama; golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

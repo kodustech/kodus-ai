@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "id": "S6",
+  "golden": 4,
+  "promptSha": "be9b091c916c35133599697f08e7af22e931f740",
+  "sameProblem": true,
+  "reason": "Threading credentialId into Office365’s createEvent to select the matching destination would also fix the missing parameter in its interface implementation."
+}

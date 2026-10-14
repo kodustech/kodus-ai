@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "implement-access-token-context-encoding-framework-keycloak",
+  "id": "S6",
+  "golden": 1,
+  "promptSha": "6b1563562f385f5906545cd3b62969d223410784",
+  "sameProblem": false,
+  "reason": "The review identifies the inverted equality check but omits the incorrect substring indices, so its proposed fix would leave part of the golden issue unresolved."
+}

@@ -1,0 +1,252 @@
+{
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:43-45 falha do Storage.Create grava recordLegacyDuration(startStorage): a mesma troca storage/legacy de metrica que o golden descreve (o golden cita DeleteCollection, mas o mecanismo e este).",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:127-129 falha do Storage.Update grava recordLegacyDuration; mesma troca de metrica do golden.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:161-166 goroutine legacy do DeleteCollection grava recordStorageDuration com startLegacy; troca de metrica no DeleteCollection.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:106 recordStorageDuration(false, mode3Str, name, ...) usa name no lugar de options.Kind.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:96-97 cria log enriquecido mas instala d.Log no contexto (klog.NewContext(ctx, d.Log)).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:50-51 (e 110/135/163) a goroutine legacy deriva o timeout do ctx da requisicao; antes do PR a escrita legacy era sincrona, agora o cancelamento do request ao retornar aborta a escrita legacy.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:139 Legacy.Update recebe o objInfo original; o PR removeu o updateWrapper que fixava o objeto gravado no Storage, entao o legacy recalcula sobre o proprio estado e pode divergir.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3_test.go:17-78 TestMode3_Create nao espera nem verifica a goroutine legacy; lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.98
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:96-97 log enriquecido descartado; ctx recebe d.Log.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:106 passa name como label kind, diferente de :103 e de todos os outros metodos.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "evidencia": "dualwriter_mode3.go:43-45 mesmo achado de S1: falha do storage registrada com recordLegacyDuration.",
+      "confianca": "media",
+      "tipoFPSeNaoForTP": "bug_real",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": false,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S12",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:166 legacy DeleteCollection grava recordStorageDuration; troca storage/legacy no DeleteCollection.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:50-57 Create legacy virou go func com WithTimeoutCause(ctx da requisicao); antes era sincrono (diff), agora o cancelamento do request aborta a escrita.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:51/110/135/163 todas as goroutines legacy derivam do ctx da requisicao, cancelado quando o handler retorna.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "dualwriter_mode3.go:50-59 a goroutine le obj enquanto o caller devolve created; nao ha escrita concorrente demonstrada em obj, a corrida e especulativa.",
+      "confianca": "baixa",
+      "precisaAstra": false
+    }
+  ]
+}

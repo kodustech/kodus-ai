@@ -119,7 +119,9 @@
       "precisaAstra": false,
       "evidencia": "VerifyMessageProperties.java:75 usa [a-zA-Z-_]: a classe não inclui '/' (nem lida como range Z-_, 0x5A-0x5F), e o .properties final ancora a troca no último segmento. O argumento central (o regex reescreve caminhos com '/') está errado; RuntimeException em vez de MojoExecutionException só muda o tipo do erro.",
       "confianca": "media",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C + H1"
     },
     {
       "id": "S8",

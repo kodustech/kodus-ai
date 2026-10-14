@@ -1,54 +1,54 @@
 {
- "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
- "modelo": "sonnet-5.5",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "factory.py:141 indexacao direta de end_timestamp_precise; campo obrigatorio no schema e ja lido assim em process_segments; defensivo.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "add-buffer.lua:30 limite do loop de redirect cai de 10000 para 1000 de proposito; arvores com profundidade >1000 sao irreais, ja havia limite antes.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Mesmo achado do S1 (factory.py:141).",
-   "confianca": "media",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "factory.py:141 indexacao direta de end_timestamp_precise; campo obrigatorio no schema e ja lido assim em process_segments; defensivo.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "add-buffer.lua:30 limite do loop de redirect cai de 10000 para 1000 de proposito; arvores com profundidade >1000 sao irreais, ja havia limite antes.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Mesmo achado do S1 (factory.py:141).",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
 }

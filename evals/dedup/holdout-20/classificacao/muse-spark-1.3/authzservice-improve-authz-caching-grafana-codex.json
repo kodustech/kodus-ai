@@ -1,0 +1,104 @@
+{
+  "caseId": "authzservice-improve-authz-caching-grafana-codex",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "data",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "rbac/cache.go:30-32: userPermDenialCacheKey concatena com \"_\" sem escape; tuplas distintas colidem.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "rbac/service.go:116-121/153-155: denial cache curto-circuita ate shortCacheTTL; staleness por TTL ja existia com o permCache na base e nao ha fluxo concreto em que o dashboard novo tenha sido negado antes de existir.",
+      "confianca": "baixa",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "rbac/service.go:180-192: na base List chamava getIdentityPermissions -> getUserPermissions, que retornava o permCache em cache-hit (linhas removidas pelo PR); \"pre-PR List sempre ia ao DB\" e falso, o comportamento de staleness e o mesmo.",
+      "confianca": "media",
+      "precisaAstra": false,
+      "subtipoAlucinacao": "absurdo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "rbac/service.go:153-155: uma entrada por recurso negado e verdade, mas com shortCacheTTL no cache local; crescimento limitado pelo TTL, sem falha concreta.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "service_test.go:973-995: permCache semeado com dash1=false enquanto o comentario diz que permite; o teste nao isola o denial cache.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "doc_defect",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": true,
+      "evidencia": "service_test.go:981-982: comentario diz allow, mapa guarda false.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "id": "S6",
+  "golden": 0,
+  "promptSha": "6d272573da34571c57b7dbe2225a5811f7faceeb",
+  "sameProblem": false,
+  "reason": "The review identifies missing nil guards in metrics middleware, while the golden issue concerns ContextualLoggerMiddleware’s instrumentContext calls; fixing the former would not fix the latter."
+}

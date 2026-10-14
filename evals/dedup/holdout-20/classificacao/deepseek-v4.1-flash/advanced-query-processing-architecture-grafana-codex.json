@@ -1,102 +1,102 @@
 {
- "caseId": "advanced-query-processing-architecture-grafana-codex",
- "modelo": "deepseek-v4.1-flash",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:52 interpola e depois runSplitQuery (linha 163, querySplitting.ts:299) interpola de novo, e DataSourceWithBackend.ts:185 ainda reaplica. Verdade, mas os filtros ad hoc duplicados sao idempotentes em LogQL e a reexpansao de '$' exige valor de variavel com token de outra variavel; sem falha concreta.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "datasource.ts:1113 applyTemplateVariables remove __range/__range_s/__range_ms dos scopedVars antes do templateSrv.replace, entao $__range continua no expr e isQueryWithRangeVariable ainda o detecta no partition.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "sem_problema",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Item no_defect: so afirma que o map com applyTemplateVariables em querySplitting.ts:296-299 esta coberto por teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "sem_problema",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "Item no_defect: diz que a interpolacao em shardQuerySplitting.ts:49-52 esta coberta por teste.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:49-52 agora filtra expr cru antes de interpolar (antes filtrava apos interpolateVariablesInQueries). Caso de variavel que resolve para vazio e marginal, e runSplitQuery ja filtrava o expr cru.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "datasource.ts:1113 tira __range dos scopedVars; $__range nao e interpolado no frontend, entao o guard querySupportsSplitting (querySplitting.ts:283-288) segue funcionando.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "advanced-query-processing-architecture-grafana-codex",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:52 interpola e depois runSplitQuery (linha 163, querySplitting.ts:299) interpola de novo, e DataSourceWithBackend.ts:185 ainda reaplica. Verdade, mas os filtros ad hoc duplicados sao idempotentes em LogQL e a reexpansao de '$' exige valor de variavel com token de outra variavel; sem falha concreta.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "datasource.ts:1113 applyTemplateVariables remove __range/__range_s/__range_ms dos scopedVars antes do templateSrv.replace, entao $__range continua no expr e isQueryWithRangeVariable ainda o detecta no partition.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Item no_defect: so afirma que o map com applyTemplateVariables em querySplitting.ts:296-299 esta coberto por teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "sem_problema",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "Item no_defect: diz que a interpolacao em shardQuerySplitting.ts:49-52 esta coberta por teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:49-52 agora filtra expr cru antes de interpolar (antes filtrava apos interpolateVariablesInQueries). Caso de variavel que resolve para vazio e marginal, e runSplitQuery ja filtrava o expr cru.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "datasource.ts:1113 tira __range dos scopedVars; $__range nao e interpolado no frontend, entao o guard querySupportsSplitting (querySplitting.ts:283-288) segue funcionando.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

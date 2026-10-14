@@ -1,0 +1,70 @@
+{
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "common/foundation/mixins.scss:125-131: order($val) emite -webkit/-moz-box-ordinal-group: $val, que e 1-indexado; order 0 vira valor invalido/desalinhado.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "common/foundation/mixins.scss:117-123: align-items emite -ms-align-items, propriedade inexistente (correto e -ms-flex-align).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "common/foundation/mixins.scss:125-131: order($val) emite -webkit/-moz-box-ordinal-group: $val, que e 1-indexado; order 0 vira valor invalido/desalinhado.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "common/foundation/mixins.scss:125-131: order($val) emite -webkit/-moz-box-ordinal-group: $val, que e 1-indexado; order 0 vira valor invalido/desalinhado.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
+}

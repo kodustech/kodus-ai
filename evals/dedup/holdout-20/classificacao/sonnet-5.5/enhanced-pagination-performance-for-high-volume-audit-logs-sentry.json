@@ -1,257 +1,257 @@
 {
- "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
- "modelo": "sonnet-5.5",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_preexistente",
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.92
-   },
-   "concordaComJuiz": false,
-   "evidencia": "paginator.py:182 na base ja era queryset[offset:stop] com offset cru para todas as direcoes; o PR passou a clampar o nao-prev e manteve o prev igual. Slice negativo em BasePaginator ja existia; nao e o golden 0 (OptimizedCursorPaginator).",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S3",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": false,
-   "evidencia": "organization_auditlogs.py:70-83 + paginator.py:877-882: a causa apontada e o offset negativo nao validado no paginator otimizado que gera erro 500; clampar/validar (fix proposto) corrige o golden 0. O angulo de seguranca e exagerado.",
-   "confianca": "media",
-   "tipoFPSeNaoForTP": "nit",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": null,
-    "golden_classificacao": true,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S4",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": false,
-   "evidencia": "paginator.py:182 na base ja era queryset[offset:stop] com offset cru para todas as direcoes; o PR passou a clampar o nao-prev e manteve o prev igual. Slice negativo em BasePaginator ja existia; nao e o golden 0 (OptimizedCursorPaginator).",
-   "confianca": "media",
-   "precisaAstra": true,
-   "tipoFPOriginal": "bug_preexistente",
-   "astra": {
-    "golden_juiz": true,
-    "golden_classificacao": null,
-    "vale": "juiz"
-   }
-  },
-  {
-   "id": "S6",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_preexistente",
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": false,
-   "evidencia": "paginator.py:182: o slice negativo para cursor prev em BasePaginator ja existia na base (queryset[offset:stop] cru); nao e o OptimizedCursorPaginator do golden 0.",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S9",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "paginator.py:874-882: o slice negativo nao expoe linhas fora da janela; o Django levanta excecao e o queryset ja e filtrado por organization_id (organization_auditlogs.py:48). O vazamento de dados alegado nao existe.",
-   "confianca": "media",
-   "precisaAstra": false
-  },
-  {
-   "id": "S10",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S11",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S12",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.92
-   },
-   "concordaComJuiz": false,
-   "evidencia": "paginator.py:179-184: foco e o comentario enganoso do BasePaginator; o caminho prev com offset cru ja existia na base. Nao e o golden 0.",
-   "confianca": "media",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S13",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "organization_auditlogs.py:68-72: pede renomear variavel/comentarios; estilo.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S14",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "paginator.py:182 na base ja era queryset[offset:stop] com offset cru para todas as direcoes; o PR passou a clampar o nao-prev e manteve o prev igual. Slice negativo em BasePaginator ja existia; nao e o golden 0 (OptimizedCursorPaginator).",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "evidencia": "organization_auditlogs.py:70-83 + paginator.py:877-882: a causa apontada e o offset negativo nao validado no paginator otimizado que gera erro 500; clampar/validar (fix proposto) corrige o golden 0. O angulo de seguranca e exagerado.",
+      "confianca": "media",
+      "tipoFPSeNaoForTP": "nit",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "evidencia": "paginator.py:182 na base ja era queryset[offset:stop] com offset cru para todas as direcoes; o PR passou a clampar o nao-prev e manteve o prev igual. Slice negativo em BasePaginator ja existia; nao e o golden 0 (OptimizedCursorPaginator).",
+      "confianca": "media",
+      "precisaAstra": true,
+      "tipoFPOriginal": "bug_preexistente",
+      "astra": {
+        "golden_juiz": true,
+        "golden_classificacao": null,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_preexistente",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "evidencia": "paginator.py:182: o slice negativo para cursor prev em BasePaginator ja existia na base (queryset[offset:stop] cru); nao e o OptimizedCursorPaginator do golden 0.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S9",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:874-882: o slice negativo nao expoe linhas fora da janela; o Django levanta excecao e o queryset ja e filtrado por organization_id (organization_auditlogs.py:48). O vazamento de dados alegado nao existe.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "paginator.py:179-184: foco e o comentario enganoso do BasePaginator; o caminho prev com offset cru ja existia na base. Nao e o golden 0.",
+      "confianca": "media",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S13",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "organization_auditlogs.py:68-72: pede renomear variavel/comentarios; estilo.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S14",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "paginator.py:877-882 (OptimizedCursorPaginator) faz queryset[cursor.offset:stop] com offset negativo vindo do cursor (cursors.py aceita int negativo); QuerySet do Django rejeita indice negativo -> 500. Mesmo problema do golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

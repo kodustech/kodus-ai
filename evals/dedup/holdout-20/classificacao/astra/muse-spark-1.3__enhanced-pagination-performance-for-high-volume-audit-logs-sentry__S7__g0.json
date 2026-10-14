@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+  "id": "S7",
+  "golden": 0,
+  "promptSha": "550a915b7ed0e6c615274ee7ce649e67c484bd8f",
+  "sameProblem": true,
+  "reason": "Both identify negative offsets reaching Django queryset slicing and causing AssertionError; the proposed unconditional offset clamp addresses the golden issue."
+}

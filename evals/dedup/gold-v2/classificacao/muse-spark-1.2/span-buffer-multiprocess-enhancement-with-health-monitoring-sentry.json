@@ -17,7 +17,9 @@
       "precisaAstra": false,
       "evidencia": "flusher.py:60-66 com assigned_shards vazio não se cria processo, mas também não há shard algum para flushar (antes o único processo com buffer vazio também não flushava nada); a 'perda silenciosa de dados' não existe.",
       "confianca": "media",
-      "observacao": null
+      "observacao": null,
+      "subtipoAlucinacao": "defensivo",
+      "sobreviveAoVerify": "verify C -> r1 -> nit protegido"
     },
     {
       "id": "S2",

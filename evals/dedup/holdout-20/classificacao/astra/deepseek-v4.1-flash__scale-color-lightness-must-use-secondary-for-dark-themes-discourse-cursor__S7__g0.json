@@ -1,9 +1,9 @@
 {
- "modelo": "deepseek-v4.1-flash",
- "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
- "id": "S7",
- "golden": 0,
- "promptSha": "59b8c65eb5378a954b3a37172ec78714ddf469bb",
- "sameProblem": true,
- "reason": "Both comments identify the unintended light-theme lightness change from 30% to 70% at the same location, and the proposed fix restores 30%."
+  "modelo": "deepseek-v4.1-flash",
+  "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+  "id": "S7",
+  "golden": 0,
+  "promptSha": "59b8c65eb5378a954b3a37172ec78714ddf469bb",
+  "sameProblem": true,
+  "reason": "Both comments identify the unintended light-theme lightness change from 30% to 70% at the same location, and the proposed fix restores 30%."
 }

@@ -1,134 +1,134 @@
 {
- "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
- "modelo": "sonnet-5.5",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionEvaluator.java:145-147: @return fala em Stream, mas o metodo retorna Set<String>; erro so de documentacao.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionEvaluator.java:132-135: o Javadoc de requireManageMembers cita canManageMembership; erro so de documentacao.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "api",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "api",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S8",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "alucinacao",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "UsersResource.java toRepresentation (logo apos searchForUser) ainda faz userModels.filter(usersEvaluator::canView); o PR so tirou um filtro duplicado de searchForUser, entao usuarios nao visiveis continuam filtrados.",
-   "confianca": "alta",
-   "precisaAstra": false
-  }
- ]
+  "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "modelo": "sonnet-5.5",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionEvaluator.java:145-147: @return fala em Stream, mas o metodo retorna Set<String>; erro so de documentacao.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionEvaluator.java:132-135: o Javadoc de requireManageMembers cita canManageMembership; erro so de documentacao.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "api",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:121-124: hasPermission(groupResource.getId()) e granted.add(getId()), mas hasPermission resolve por findByName e o nome do recurso e o group id (AdminPermissionsSchema.resolveGroup).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GroupPermissionsV2.java:70: canManage() retorna hasPermission(null, VIEW, MANAGE), igual a canView(); quem so tem VIEW passa em requireManage.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "alucinacao",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "UsersResource.java toRepresentation (logo apos searchForUser) ainda faz userModels.filter(usersEvaluator::canView); o PR so tirou um filtro duplicado de searchForUser, entao usuarios nao visiveis continuam filtrados.",
+      "confianca": "alta",
+      "precisaAstra": false
+    }
+  ]
 }

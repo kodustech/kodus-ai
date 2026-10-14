@@ -1,0 +1,9 @@
+{
+  "modelo": "muse-spark-1.3",
+  "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+  "id": "S5",
+  "golden": 1,
+  "promptSha": "f49f42c3a2ea7f537bb6c32e372b9fa907cfdca8",
+  "sameProblem": true,
+  "reason": "The review explicitly identifies the mismatch between the test’s docstring claim and its assertions, which is the golden issue, while adding timing concerns and a suggested fix."
+}

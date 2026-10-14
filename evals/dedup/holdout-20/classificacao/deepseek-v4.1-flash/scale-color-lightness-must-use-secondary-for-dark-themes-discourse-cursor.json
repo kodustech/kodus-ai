@@ -1,349 +1,349 @@
 {
- "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
- "modelo": "deepseek-v4.1-flash",
- "itens": [
-  {
-   "id": "S1",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "style",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "desktop/topic-post.scss:291 passou de scale-color($primary,30%) para dark-light-choose(primary 70%, secondary 30%): argumento light invertido, igual ao golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S2",
-   "classe": "TP",
-   "golden": 2,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 2,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "mobile/modal.scss:102 era primary 70% e virou dark-light-choose(primary 30%, secondary 70%); unico 70->30 do PR, e o que o golden 2 descreve (apesar de citar topic-post).",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S3",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "speculative",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "desktop/user.scss:522 .name era primary 30% e virou 50/50, exatamente o golden 1.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S4",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "speculative",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "mobile/user.scss:497 .name era 30% e virou 50/50; golden 1 cita a variante mobile (golden 4 tambem).",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S5",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "mobile/topic-post.scss:182 h3 era primary 20% e virou 50/50 (desktop/topic-post.scss:321 manteve 20/80): regressao real no tema claro introduzida pelo PR, sem golden.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S6",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "nit",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "common/base/discourse.scss:72-74 comentario fala do default scale-color($primary,50%); so documentacao desatualizada, sem efeito.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S7",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "style",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.92
-   },
-   "concordaComJuiz": false,
-   "evidencia": "Mesmo achado de desktop/topic-post.scss:291 (30% -> 70% no light), golden 0/3; nao e o golden 1 (user.scss).",
-   "confianca": "alta",
-   "tipoFPSeNaoForTP": "bug_real",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": true,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S8",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": true,
-   "evidencia": "mobile/topic-post.scss:182 20% -> 50/50 diverge do desktop 20/80; regressao real fora do gabarito.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S9",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "speculative",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": false,
-   "evidencia": "common/base/user.scss:124 .name ja esta dark-light-choose(primary 30%, secondary 70%) no head; o 50/50 do arquivo e outra regra que ja era 50%.",
-   "confianca": "alta",
-   "precisaAstra": true,
-   "tipoFPOriginal": "alucinacao",
-   "astra": {
-    "golden_juiz": true,
-    "golden_classificacao": null,
-    "vale": "juiz"
-   }
-  },
-  {
-   "id": "S10",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "speculative",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "desktop/user.scss:522 30% -> 50/50, golden 1.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S11",
-   "classe": "TP",
-   "golden": 2,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 2,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "mobile/modal.scss:102 70% -> 30% no light, golden 2.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S12",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": false,
-    "golden": null,
-    "conf": 0
-   },
-   "concordaComJuiz": false,
-   "evidencia": "desktop/topic-post.scss:291 primary 30% virou 70% no light (descricao do seletor imprecisa, mas e a mesma linha e causa do golden 0).",
-   "confianca": "alta",
-   "tipoFPSeNaoForTP": "bug_real",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": null,
-    "golden_classificacao": false,
-    "vale": "juiz"
-   }
-  },
-  {
-   "id": "S13",
-   "classe": "TP",
-   "golden": 1,
-   "goldenCategoria": "speculative",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "desktop/user.scss:522 30% -> 50/50 (e cita mobile/user.scss:497), golden 1.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S14",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.72
-   },
-   "concordaComJuiz": false,
-   "evidencia": "mobile/topic-post.scss:182 h3 20% -> 50/50; nenhum golden fala dessa regra (golden 1 e .name em user.scss).",
-   "confianca": "alta",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S15",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.85
-   },
-   "concordaComJuiz": false,
-   "evidencia": "mobile/topic-post.scss:182 a.star h3 20% -> 50/50 vs desktop 20/80; regressao real nao coberta pelos goldens.",
-   "confianca": "alta",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  },
-  {
-   "id": "S16",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": true,
-    "golden": 4,
-    "conf": 0.85
-   },
-   "concordaComJuiz": false,
-   "evidencia": "mobile/modal.scss:102 70% -> 30% invertido vs desktop/modal.scss:94; golden 2 (golden 4 e user.scss:497).",
-   "confianca": "alta",
-   "tipoFPSeNaoForTP": "bug_real",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": false,
-    "vale": "juiz"
-   }
-  },
-  {
-   "id": "S17",
-   "classe": "TP",
-   "golden": 0,
-   "goldenCategoria": "style",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 0,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "desktop/topic-post.scss:291 argumentos trocados (70/30 em vez de 30/70), golden 0.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S18",
-   "classe": "TP",
-   "golden": 2,
-   "goldenCategoria": "bug",
-   "tipoFP": null,
-   "juizMartian": {
-    "tp": true,
-    "golden": 2,
-    "conf": 0.95
-   },
-   "concordaComJuiz": true,
-   "evidencia": "mobile/modal.scss:102 trocado 30/70 em vez de 70/30, golden 2.",
-   "confianca": "alta",
-   "precisaAstra": false
-  },
-  {
-   "id": "S19",
-   "classe": "FP",
-   "golden": null,
-   "goldenCategoria": null,
-   "tipoFP": "bug_real",
-   "juizMartian": {
-    "tp": true,
-    "golden": 1,
-    "conf": 0.85
-   },
-   "concordaComJuiz": false,
-   "evidencia": "mobile/topic-post.scss:182 h3 20% -> 50/50, diverge do desktop:321; regressao real fora do gabarito.",
-   "confianca": "alta",
-   "precisaAstra": true,
-   "astra": {
-    "golden_juiz": false,
-    "golden_classificacao": null,
-    "vale": "classificacao"
-   }
-  }
- ]
+  "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+  "modelo": "deepseek-v4.1-flash",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "style",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "desktop/topic-post.scss:291 passou de scale-color($primary,30%) para dark-light-choose(primary 70%, secondary 30%): argumento light invertido, igual ao golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "mobile/modal.scss:102 era primary 70% e virou dark-light-choose(primary 30%, secondary 70%); unico 70->30 do PR, e o que o golden 2 descreve (apesar de citar topic-post).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "speculative",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "desktop/user.scss:522 .name era primary 30% e virou 50/50, exatamente o golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "speculative",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "mobile/user.scss:497 .name era 30% e virou 50/50; golden 1 cita a variante mobile (golden 4 tambem).",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "mobile/topic-post.scss:182 h3 era primary 20% e virou 50/50 (desktop/topic-post.scss:321 manteve 20/80): regressao real no tema claro introduzida pelo PR, sem golden.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "common/base/discourse.scss:72-74 comentario fala do default scale-color($primary,50%); so documentacao desatualizada, sem efeito.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "style",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.92
+      },
+      "concordaComJuiz": false,
+      "evidencia": "Mesmo achado de desktop/topic-post.scss:291 (30% -> 70% no light), golden 0/3; nao e o golden 1 (user.scss).",
+      "confianca": "alta",
+      "tipoFPSeNaoForTP": "bug_real",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": true,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "mobile/topic-post.scss:182 20% -> 50/50 diverge do desktop 20/80; regressao real fora do gabarito.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S9",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "speculative",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": false,
+      "evidencia": "common/base/user.scss:124 .name ja esta dark-light-choose(primary 30%, secondary 70%) no head; o 50/50 do arquivo e outra regra que ja era 50%.",
+      "confianca": "alta",
+      "precisaAstra": true,
+      "tipoFPOriginal": "alucinacao",
+      "astra": {
+        "golden_juiz": true,
+        "golden_classificacao": null,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S10",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "speculative",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "desktop/user.scss:522 30% -> 50/50, golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S11",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "mobile/modal.scss:102 70% -> 30% no light, golden 2.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S12",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": false,
+      "evidencia": "desktop/topic-post.scss:291 primary 30% virou 70% no light (descricao do seletor imprecisa, mas e a mesma linha e causa do golden 0).",
+      "confianca": "alta",
+      "tipoFPSeNaoForTP": "bug_real",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": null,
+        "golden_classificacao": false,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S13",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "speculative",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "desktop/user.scss:522 30% -> 50/50 (e cita mobile/user.scss:497), golden 1.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S14",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.72
+      },
+      "concordaComJuiz": false,
+      "evidencia": "mobile/topic-post.scss:182 h3 20% -> 50/50; nenhum golden fala dessa regra (golden 1 e .name em user.scss).",
+      "confianca": "alta",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S15",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "evidencia": "mobile/topic-post.scss:182 a.star h3 20% -> 50/50 vs desktop 20/80; regressao real nao coberta pelos goldens.",
+      "confianca": "alta",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    },
+    {
+      "id": "S16",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 4,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "evidencia": "mobile/modal.scss:102 70% -> 30% invertido vs desktop/modal.scss:94; golden 2 (golden 4 e user.scss:497).",
+      "confianca": "alta",
+      "tipoFPSeNaoForTP": "bug_real",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": false,
+        "vale": "juiz"
+      }
+    },
+    {
+      "id": "S17",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "style",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "desktop/topic-post.scss:291 argumentos trocados (70/30 em vez de 30/70), golden 0.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S18",
+      "classe": "TP",
+      "golden": 2,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 2,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "mobile/modal.scss:102 trocado 30/70 em vez de 70/30, golden 2.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S19",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.85
+      },
+      "concordaComJuiz": false,
+      "evidencia": "mobile/topic-post.scss:182 h3 20% -> 50/50, diverge do desktop:321; regressao real fora do gabarito.",
+      "confianca": "alta",
+      "precisaAstra": true,
+      "astra": {
+        "golden_juiz": false,
+        "golden_classificacao": null,
+        "vale": "classificacao"
+      }
+    }
+  ]
 }

@@ -1,0 +1,134 @@
+{
+  "caseId": "notification-rule-processing-engine-grafana-codex",
+  "modelo": "muse-spark-1.3",
+  "itens": [
+    {
+      "id": "S1",
+      "classe": "TP",
+      "golden": 0,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 0,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "FilterView.tsx:157-162 GrafanaRuleListItem sem key, os outros ramos passam key.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S2",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "useAbilities.ts:222-231 useAllAlertRuleAbilities agora delega para useAllRulerRuleAbilities com isFederated=false fixo; a base usava isFederatedRuleGroup(rule.group). RuleActionsButtons.tsx:57 (lista v1) passa a mostrar Edit para grupos federados do Mimir.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S3",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "useAbilities.ts:287-318 com rule undefined (skipToken) loading=false, MaybeSupported=AlwaysSupported e Duplicate=toAbility(Always, grafana create); AlertRuleMenu.tsx:91-93 faz OR e libera Duplicate em regra de datasource. Nao esta no gabarito.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S4",
+      "classe": "TP",
+      "golden": 1,
+      "goldenCategoria": "bug",
+      "tipoFP": null,
+      "juizMartian": {
+        "tp": true,
+        "golden": 1,
+        "conf": 0.95
+      },
+      "concordaComJuiz": true,
+      "evidencia": "RuleActionsButtons.V2.tsx:130-144 o drawer de silence so monta com rulerRuleType.grafana.alertingRule(rule), mas o menu habilita Silence pelas abilities do promRule.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S5",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GrafanaRuleListItem.tsx:33/44 usa promRule.provenance; o backend ja popula provenance na API prometheus (api_prometheus.go:283-302), o cenario 'se omitir' e hipotetico.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S6",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "nit",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "GrafanaGroupLoader.test.tsx:85-102 teste nao abre o menu: lacuna de teste.",
+      "confianca": "alta",
+      "precisaAstra": false
+    },
+    {
+      "id": "S7",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "useAbilities.ts:307-314 Duplicate=[true, create] quando rule e undefined; ORed em AlertRuleMenu.tsx:91-93 habilita Duplicate em regras nao-Grafana.",
+      "confianca": "media",
+      "precisaAstra": false
+    },
+    {
+      "id": "S8",
+      "classe": "FP",
+      "golden": null,
+      "goldenCategoria": null,
+      "tipoFP": "bug_real",
+      "juizMartian": {
+        "tp": false,
+        "golden": null,
+        "conf": 0
+      },
+      "concordaComJuiz": true,
+      "evidencia": "useAbilities.ts:287-318 mesmo defeito do skipToken retornando AlwaysSupported para Duplicate; Explore tambem fica true mas nao entra no menu.",
+      "confianca": "media",
+      "precisaAstra": false
+    }
+  ]
+}

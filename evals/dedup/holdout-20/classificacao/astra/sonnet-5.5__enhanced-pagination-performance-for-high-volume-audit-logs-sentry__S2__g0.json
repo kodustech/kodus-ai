@@ -1,9 +1,9 @@
 {
- "modelo": "sonnet-5.5",
- "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
- "id": "S2",
- "golden": 0,
- "promptSha": "87863e143e0bea22e86d24482868fe590399b4ff",
- "sameProblem": false,
- "reason": "The review identifies negative slicing in BasePaginator, while the golden issue concerns OptimizedCursorPaginator in organization_auditlogs.py, so fixing the reported location would not fix the golden issue."
+  "modelo": "sonnet-5.5",
+  "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+  "id": "S2",
+  "golden": 0,
+  "promptSha": "87863e143e0bea22e86d24482868fe590399b4ff",
+  "sameProblem": false,
+  "reason": "The review identifies negative slicing in BasePaginator, while the golden issue concerns OptimizedCursorPaginator in organization_auditlogs.py, so fixing the reported location would not fix the golden issue."
 }
