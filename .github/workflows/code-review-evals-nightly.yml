@@ -149,7 +149,10 @@ jobs:
                   # computed; without it nothing is known, so measure.
                   if [ "$FORCE" = "true" ] || [ -z "$base" ] || [ ! -f changed-files.txt ] || [ -s kody-rules-changes.txt ]; then
                       echo "kody_rules_run=true" >> "$GITHUB_OUTPUT"
-                      echo "kody-rules: measuring ($(wc -l < kody-rules-changes.txt) of its files changed since ${base:-no base})"
+                      if [ "$FORCE" = "true" ]; then echo "kody-rules: forced"
+                      elif [ -z "$base" ]; then echo "kody-rules: no measured night to compare with"
+                      elif [ ! -f changed-files.txt ]; then echo "kody-rules: diff against $base unknown, measuring"
+                      else echo "kody-rules: $(wc -l < kody-rules-changes.txt) of its files changed since $base:"; cat kody-rules-changes.txt; fi
                   else
                       echo "kody_rules_run=false" >> "$GITHUB_OUTPUT"
                       echo "kody-rules: none of the $(wc -l < kody-rules-files.txt) files it loads changed since $base — skipping"
