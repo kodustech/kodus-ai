@@ -1,0 +1,3674 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "high",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:35:50.798Z",
+  "updatedAt": "2026-10-13T23:22:51.727Z",
+  "complete": true,
+  "selectedCases": [
+    "P07-rule-absent-assert-cast-rewritten",
+    "P07-rule-absent-assert-cast-rewritten-control",
+    "P08-rule-bottom-cast-moved-to-helper",
+    "P08-rule-bottom-cast-moved-to-helper-control",
+    "P09-rule-changelog-entry-still-deferred",
+    "P09-rule-changelog-entry-still-deferred-control",
+    "P10-rule-manifest-hand-edited-again",
+    "P10-rule-manifest-hand-edited-again-control",
+    "P11-rule-generated-client-line-retouched",
+    "P11-rule-generated-client-line-retouched-control",
+    "P12-rule-soft-asserts-moved-down",
+    "P12-rule-soft-asserts-moved-down-control"
+  ],
+  "summary": {
+    "measured": 57,
+    "infra": 3,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 27,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 77,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 93,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P07-rule-absent-assert-cast-rewritten · absent-cast-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P07-rule-absent-assert-cast-rewritten · absent-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P07-rule-absent-assert-cast-rewritten-control · absent-cast-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P07-rule-absent-assert-cast-rewritten-control · absent-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P08-rule-bottom-cast-moved-to-helper · bottom-cast-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P08-rule-bottom-cast-moved-to-helper · bottom-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P08-rule-bottom-cast-moved-to-helper-control · bottom-cast-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P08-rule-bottom-cast-moved-to-helper-control · bottom-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P09-rule-changelog-entry-still-deferred · changelog-deferred-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P09-rule-changelog-entry-still-deferred · changelog-deferred-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P09-rule-changelog-entry-still-deferred-control · changelog-deferred-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P09-rule-changelog-entry-still-deferred-control · changelog-deferred-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P10-rule-manifest-hand-edited-again · manifest-hand-edit-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P10-rule-manifest-hand-edited-again-control · manifest-hand-edit-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P11-rule-generated-client-line-retouched · generated-client-hand-edit-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P11-rule-generated-client-line-retouched · console-error-unrelated [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P11-rule-generated-client-line-retouched-control · generated-client-hand-edit-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P11-rule-generated-client-line-retouched-control · console-error-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P12-rule-soft-asserts-moved-down · soft-asserts-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P12-rule-soft-asserts-moved-down · cap-truthy-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P12-rule-soft-asserts-moved-down-control · soft-asserts-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P12-rule-soft-asserts-moved-down-control · cap-truthy-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 230055,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Because `undefined as unknown as Coupon` makes the assertion type-check no matter what `quote.appliedCoupon` is declared as, the new 'ignores an expired coupon' test would keep passing even if the field's type changed and stop catching that regression, violating Rule 21's requirement that absence assertions be made on the value as it is. Assert absence directly with `expect(quote.appliedCoupon).toBeUndefined();`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 231444,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The cast `undefined as unknown as Coupon` silences the type error, so the expired-coupon test can keep compiling even if `appliedCoupon`'s type changes and silently stops guarding the behavior it names, violating Rule 21's requirement to assert absence with `toBeUndefined()` or `toBeNull()` on the value as it is. Use `expect(quote.appliedCoupon).toBeUndefined();` and drop `Coupon` from the type import on line 3 since it is no longer used."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 266562,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `undefined as unknown as Coupon` cast hides the real type of `quote.appliedCoupon` from the checker and is forbidden by the rule. Assert the absence directly on the value with `expect(quote.appliedCoupon).toBeUndefined();`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 208787,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Because Rule 21 forbids casting the actual or expected value to make an absence check type-check, this cast keeps the assertion compiling even if `appliedCoupon` changes type, so the test can no longer catch that regression. Replace it with `expect(quote.appliedCoupon).toBeUndefined();` to assert absence on the value as it is."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 255800,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Rule 21 forbids casting the actual or expected value in an absence check, and the `undefined as unknown as Coupon` cast lets the assertion compile no matter what `appliedCoupon`'s real type is, so a type change slips through unnoticed and the dedicated absence matcher is not used. Assert absence on the value as it is with `expect(quote.appliedCoupon).toBeUndefined();`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P07-rule-absent-assert-cast-rewritten-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 38324,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `as unknown as Discount | null` cast hides a real type mismatch and makes the absence assertion meaningless, which rule 21 forbids. Assert on the value as it is with `expect(quote.discount).toBeNull();` and fix the underlying type of `quote.discount` (e.g. `Discount | null`) so the cast — and the now-unused `Discount` import — can be dropped."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `as unknown as Coupon` cast defeats type-checking and its `Coupon` annotation is misleading for an undefined value, which rule 21 forbids in absence checks. Use `expect(quote.appliedCoupon).toBeUndefined();` and remove `Coupon` from the type import on line 3 if it is no longer referenced."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P07-rule-absent-assert-cast-rewritten-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 42159,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the actual value hides whether `quote.discount` is genuinely nullable, so a regression in the quote type could pass the absence check. Remove the `as unknown as Discount | null` cast and assert `quote.discount` with `toBeNull()`, or use `toBeUndefined()` if absence is represented by undefined, as Rule 21 requires."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the expected value to `Coupon` defeats type checking and `toEqual(undefined)` is weaker than `toBeUndefined()`, so the expired-coupon absence check can pass without verifying type or nullability. Assert `quote.appliedCoupon` with `toBeUndefined()` as Rule 21 requires."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P07-rule-absent-assert-cast-rewritten-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 43824,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Because the double cast with `as unknown as Discount | null` erases the real type, a genuinely wrong type on `quote.discount` can slip through, and Rule 21 forbids casting the actual value to make an absence check compile. Assert `expect(quote.discount).toBeNull();` directly and widen `discount` to `Discount | null` in `src/pricing/quote.ts` instead of casting, dropping the now-unused `Discount` import from line 3."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the expected value with `undefined as unknown as Coupon` and comparing via `toEqual(undefined)` violates Rule 21, and `toEqual(undefined)` is a weaker matcher that can hide a wrong type on `quote.appliedCoupon`. Use `expect(quote.appliedCoupon).toBeUndefined();`, fix `appliedCoupon`'s declared type in `src/pricing/quote.ts` if the compiler complains, and remove the unused `Coupon` import from line 3."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P07-rule-absent-assert-cast-rewritten-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 30974,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the actual value with `as unknown as Discount | null` only to satisfy the absence check violates rule [21] and hides a non-nullable type on `quote.discount`. Assert `expect(quote.discount).toBeNull()` directly, and if that does not compile, make `quote.discount` nullable in `./types` instead of widening it in the test."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the expected value with `as unknown as Coupon` to satisfy the absence check violates rule [21], which also requires `toBeUndefined()`/`toBeNull()` rather than `toEqual(undefined)`. Use `expect(quote.appliedCoupon).toBeUndefined()` and, if it does not compile, make `appliedCoupon` optional/undefined-able in the type instead of casting here."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P07-rule-absent-assert-cast-rewritten-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 37026,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `as unknown as Discount | null` cast hides the real type of `quote.discount` and can let a broken assertion compile silently, which rule 21 forbids for absence checks. Assert absence on the value as it is with `expect(quote.discount).toBeNull()` and no cast."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting `undefined as unknown as Coupon` hides the real type of `quote.appliedCoupon` and forces `toEqual` where the dedicated absence matcher belongs, which rule 21 forbids. Drop the cast and use `expect(quote.appliedCoupon).toBeUndefined()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 199567,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `payload as never` cast silences type checking for the `invoice.refunded` event, so a renamed or missing field still compiles and reaches subscribers undetected. Pass `payload` straight to `publish` so `InvoiceEventMap['invoice.refunded']` validates it, and correct the payload fields if the compiler reports a mismatch."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 157136,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `payload as never` cast silences the compiler for the `invoice.refunded` event, so a missing or misnamed field such as `refundCents` versus `amountCents` reaches subscribers with no type error. Type the payload as `InvoiceEventMap['invoice.refunded']` using `invoiceId`, `refundCents`, and `reason` from the `refund` object, then pass it to `publish` without the cast so the compiler checks the fields."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 127459,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Casting through `never` silences the compiler for the `invoice.refunded` payload, so a missing or misnamed field compiles cleanly and a malformed event reaches subscribers with no error at the call site. Drop the cast so `publish` type-checks `payload` against `InvoiceEventMap['invoice.refunded']`, and fix the payload or the event type if they do not match."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 207634,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `as never` cast violates the \"No casts through never or unknown\" rule and silences the compiler, so a renamed or missing field in the refunded payload reaches subscribers without a compile error. Type `payload` as `InvoiceEventMap['invoice.refunded']` (or let `publish` check it) and drop the cast, fixing the object shape if it does not match the event map."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 156560,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Casting `payload as never` in the new `refunded()` method silences the compiler through a bottom type that the rule forbids, so a payload whose fields do not match `InvoiceEventMap['invoice.refunded']`—a missing or renamed field or a wrong cents type—reaches subscribers with no compile error, and because the refund event is the first one added in this method nothing else guards it. Drop the cast and pass the payload object directly, since `bus.publish` is typed per topic and any shape mismatch will then become a compile error at this call site; if the literal does not match, fix the fields or declare `const payload: InvoiceEventMap['invoice.refunded'] = { ... }` instead of casting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P08-rule-bottom-cast-moved-to-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 74297,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 4,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `fields as unknown as InvoiceEventMap[K]` cast silences the compiler, so any shape passed to `payloadFor` is accepted and mismatches surface only at runtime. Type the parameter as `fields: InvoiceEventMap[K]` and return it directly so call sites get real type checking against the declared payload shape, fixing the event map type or the `invoice.paid` literal instead of casting if they disagree."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Because `as never` is assignable to every parameter type, the compiler cannot verify the refund payload matches `InvoiceEventMap['invoice.refunded']`, so a missing or misnamed field ships silently. Drop the cast and pass `payload` directly (optionally annotating it as `InvoiceEventMap['invoice.refunded']`), or route it through `payloadFor` once that helper is typed without the `unknown` cast, letting `publish`'s generic signature validate it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P08-rule-bottom-cast-moved-to-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 74139,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 4,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The double cast through `unknown` violates rule 21 and silences the compiler instead of checking that each event's fields match its payload type, so a wrong or missing field would compile. Type the `fields` parameter as `InvoiceEventMap[K]` and return it directly; callers already pass the exact fields for the topic, so no cast is needed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `payload as never` cast through the bottom type violates rule 21 and hides any mismatch between the object built here and the `invoice.refunded` event shape, so a wrong field type or name would never be caught. Give the payload the concrete `InvoiceEventMap['invoice.refunded']` type, or build it via `payloadFor('invoice.refunded', ...)`, and pass it to `publish` without a cast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P08-rule-bottom-cast-moved-to-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 65407,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 4,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The forbidden double cast `fields as unknown as InvoiceEventMap[K]` in `payloadFor` bypasses every check, so payloads with missing, misspelled, or extra fields compile cleanly and fail only at runtime for event consumers while `K` is never actually validated. Type `fields` as `InvoiceEventMap[K]` instead of `object` so callers get contextual typing and real errors, and if call sites cannot supply that type, narrow or parse the input in the helper rather than casting through `unknown`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 21,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The prohibited `payload as never` cast, like the removed `paid` code's escape hatch, stops the compiler from checking the refunded payload against `InvoiceEventMap['invoice.refunded']`, so a renamed field, a missing `reason`, or a wrong unit on `refundCents` ships silently and only surfaces in subscribers. Give the payload the `InvoiceEventMap['invoice.refunded']` type and drop the cast, narrowing or mapping `refund.reason` explicitly if it is looser than the event expects."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P08-rule-bottom-cast-moved-to-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 149069,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 4,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "With `fields: object` any shape type-checks here, so a typo or wrong field in the payload is never caught and the `InvoiceEventMap` generic is defeated. Declare the parameter as `InvoiceEventMap[K]` and return it directly, letting the call site check the literal against `InvoiceEventMap['invoice.paid']`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Casting through `as never` erases the payload's type entirely, so neither the object literal nor the event map is checked and a wrong or missing field in `invoice.refunded` would ship silently. Annotate the payload as `InvoiceEventMap['invoice.refunded']` and pass it to `publish` without a cast so the compiler verifies its shape."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P08-rule-bottom-cast-moved-to-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 108601,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 4,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `as unknown as InvoiceEventMap[K]` cast silences the compiler instead of checking that callers pass a valid payload for the topic, so a typo or wrong field in the paid payload compiles and only fails at runtime. Give the parameter the payload type it claims to accept (`fields: InvoiceEventMap[K]`) so the object literal at the call site is checked against `InvoiceEventMap['invoice.paid']`, then return `fields` directly with no cast."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Because `as never` is assignable to everything, the compiler never verifies the refunded payload against `InvoiceEventMap['invoice.refunded']`, so a renamed or missing field only surfaces at runtime for subscribers. Annotate the payload with the event's payload type (`const payload: InvoiceEventMap['invoice.refunded'] = { ... }`), narrowing `reason` if the event type expects a specific union, and pass it to `publish` without any cast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44027,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The `Retry details TBD` placeholder leaves the `CHANGELOG.md` entry under `## Unreleased` incomplete and violates the rule that each user-visible change must be fully documented in the same PR, which explicitly bans `TBD`. Replace it with the concrete retry behaviour—number of attempts, intervals, and when retries give up—so the release notes ship complete."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 91691,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Because the changelog is read at release time and follow-ups are easy to lose, leaving `Retry details TBD.` in the Webhooks entry means the released notes can ship incomplete, violating rule [1]'s requirement for a full `CHANGELOG.md` entry under `## Unreleased` in the same PR. Write the retry behavior out in full in this entry, or drop the sentence entirely if retry behavior is unchanged and not user-visible."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 111421,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The `Retry details TBD.` placeholder in `CHANGELOG.md` would ship to users because the changelog is read at release time, violating rule 1 that a changelog entry lands with the change and is written in full in the same PR. Replace it with the actual retry behavior now (e.g., how many retries and over what interval), or drop the sentence if retry behavior is unchanged — do not merge the `TBD`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 38923,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The new Webhooks entry ends with \"Retry details TBD.\", so it would ship release notes with a placeholder where the retry behavior should be; Rule [1] requires exactly one complete `CHANGELOG.md` entry under `## Unreleased` in the same PR and forbids deferring content with \"TBD\", \"will update later\", \"to follow\" or \"in a follow-up PR\". Write the actual retry behavior (attempt count/schedule) into this entry now, or if no description is needed, drop the placeholder sentence so the entry stands complete."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 65180,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The new Webhooks entry ships with the placeholder `Retry details TBD.`, so the released notes omit the retry behaviour and violate the rule that a changelog entry lands complete in the same PR with no `TBD` or deferred content. Replace that placeholder with concrete retry details, or delete the sentence if retries are not user-visible, so the entry is complete as written."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P09-rule-changelog-entry-still-deferred-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 37231,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "A clause like \"Retry details TBD.\" leaves the changelog entry incomplete, breaking the rule that each user-visible change lands as exactly one fully written entry under `## Unreleased` with no `TBD` or similar placeholders. Either describe the retry behavior in this entry now or drop the placeholder clause if those details are not user-visible."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Deferring the rest of the entry to a follow-up PR leaves it incomplete, breaking the rule that forbids \"will update later\", \"to follow\" and \"in a follow-up PR\" wording. Enumerate the full list of exported tax columns now, replacing the vague \"and others\" wording on the preceding line, and delete the follow-up sentence — since the complete column list is not known from the diff, this cannot be expressed as a ready-to-apply replacement."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P09-rule-changelog-entry-still-deferred-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 42936,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The new webhook changelog entry ending with \"Retry details TBD.\" violates Rule [1], which requires each user-visible change to get one `CHANGELOG.md` entry under \"## Unreleased\" written in full in the same PR and never deferred with \"TBD\", \"will update later\", \"to follow\", or \"in a follow-up PR\". Write the actual retry details into this entry now, or drop the dangling \"Retry details TBD.\" sentence so the changelog ships fully described with the change."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The CSV export entry still defers its content with \"The full column list will be added to this entry in a follow-up PR.\", violating Rule [1]'s requirement that the entry be written in full in the same PR without \"TBD\", \"will update later\", \"to follow\", or \"in a follow-up PR\" deferrals, which is the same deferral as the previous wording \"Will update this entry later with the final column list.\", just reworded. Replace this line by listing the complete set of tax columns added to the export directly in the entry (e.g. `tax_rate`, `tax_cents`, ...) and remove the follow-up-PR sentence so the changelog entry is self-contained."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P09-rule-changelog-entry-still-deferred-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 68240,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Because Rule 1 requires each user-visible change to be documented in full in the same PR, ending the `CHANGELOG.md` Unreleased entry for `invoice.paid` with 'Retry details TBD.' leaves the entry incomplete. Write the retry behavior (backoff schedule or retry window) into this entry now, or, if the retry behavior did not change, drop the deferring sentence so the entry matches the `improvedCode`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Because Rule 1 requires the entry to be written in full in the same PR, naming only `tax_rate`, `tax_cents` 'and others' and deferring the rest with 'The full column list will be added to this entry in a follow-up PR.' leaves the `CHANGELOG.md` entry incomplete. Replace that deferring sentence with the complete list of new tax columns in this entry and drop the 'and others' wording so it is self-contained, though the actual column list is not available in the diff and the fix cannot be a ready-made replacement."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P09-rule-changelog-entry-still-deferred-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 30217,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Leaving \"Retry details TBD\" in the Webhooks entry ships the changelog incomplete, since Rule 1 requires each user-visible change to get exactly one full `CHANGELOG.md` entry under `## Unreleased` in the same PR and never defers content with a placeholder. Describe the retry behavior in full right here, or drop the retry clause if there is nothing to document, so the entry is complete as merged."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Saying the full column list will arrive in a follow-up PR leaves the Exports entry deferred, which Rule 1 forbids for any `CHANGELOG.md` entry. Delete this sentence and finish the entry now by naming every tax column the export adds instead of the vague \"and others\"."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P09-rule-changelog-entry-still-deferred-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 70646,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The `Retry details TBD.` placeholder defers part of the `CHANGELOG.md` entry under `## Unreleased`, but Rule 1 requires every user-visible change to land with its entry written in full in the same PR. Replace the placeholder with the actual retry behavior (retry count/backoff window) if this change affects it, or drop the `Retry details TBD.` sentence so the entry stands complete on its own if retries are unchanged and not part of this change."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The exports entry under `## Unreleased` remains incomplete because it says the full column list `will be added to this entry in a follow-up PR`, but Rule 1 bans deferring entry content and requires every user-visible change to be written in full in the same PR. Enumerate the complete list of added tax columns in this entry now, extend the bullet with the full column list, and delete the follow-up sentence, since the vague `and others` teaser is not a full entry."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 57752,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26924,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37165,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39047,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37686,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P10-rule-manifest-hand-edited-again-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 41920,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Hand-editing the `size` of `js/app.e93a27.js` from 241877 to 243102 in `public/asset-manifest.json` violates its `DO NOT EDIT. Generated by scripts/build-asset-manifest.ts` marker and leaves the unchanged `generatedAt` stamp of `2026-09-30T14:02:11Z` next to the changed value, making the manifest's provenance untrustworthy (especially since the `sha256` was not updated despite the size change). Revert this line and run `pnpm run manifest:build` to regenerate and commit the file so `generatedAt` and any hash/size entries reflect the real build."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P10-rule-manifest-hand-edited-again-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 36693,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "This generated `public/asset-manifest.json` carries the `DO NOT EDIT` marker naming `scripts/build-asset-manifest.ts`, which rewrites `generatedAt` on every run, so the unchanged stamp (`2026-09-30T14:02:11Z`) alongside a hand-adjusted `size` (`243102` replacing `241877`) and an identical sha256 for the same entry means it was edited manually rather than regenerated. Rerun `pnpm run manifest:build` and commit the resulting file with its new `generatedAt` instead of changing `size` in place."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P10-rule-manifest-hand-edited-again-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 27965,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "This file carries a `DO NOT EDIT` marker and is generated by `scripts/build-asset-manifest.ts`, yet the `size` value was edited by hand while the `generatedAt` stamp on line 3 still reads `2026-09-30T14:02:11Z`, so the change will be silently lost the next time the manifest is really regenerated. Revert this edit and rerun `pnpm run manifest:build` so both the entry data and the `generatedAt` stamp are refreshed consistently."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P10-rule-manifest-hand-edited-again-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 21310,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Since public/asset-manifest.json is marked \"DO NOT EDIT\" and generated by scripts/build-asset-manifest.ts, the changed size of js/app.e93a27.js with an untouched `generatedAt` stamp (2026-09-30T14:02:11Z) indicates a hand edit and leaves sizes, hashes, and version inconsistent with the generator's next run. Revert this line and regenerate the file with `pnpm run manifest:build`, committing the script's output so `generatedAt` and the related fields stay in sync."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P10-rule-manifest-hand-edited-again-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 27575,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Because this file is marked \"DO NOT EDIT\" and is generated by `scripts/build-asset-manifest.ts`, changing `size` while `generatedAt` is still \"2026-09-30T14:02:11Z\" leaves the manifest inconsistent with its generated timestamp. Revert this line and regenerate the manifest with `pnpm run manifest:build` so `size` and the matching `generatedAt` stamp come from the script."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P11-rule-generated-client-line-retouched",
+      "error": "INFRA: Kody Rules were not fully evaluated: KODY_RULES_PARTIAL: 1 of 2 Kody Rules check(s) failed to run; the rules on them were not applied"
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P11-rule-generated-client-line-retouched",
+      "error": "INFRA: Kody Rules were not fully evaluated: KODY_RULES_PARTIAL: 1 of 2 Kody Rules check(s) failed to run; the rules on them were not applied"
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P11-rule-generated-client-line-retouched",
+      "error": "INFRA: Kody Rules were not fully evaluated: KODY_RULES_PARTIAL: 1 of 2 Kody Rules check(s) failed to run; the rules on them were not applied"
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 210173,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` in the catch block violates rule [1] (No console logging in application code) and bypasses the shared logger from `src/lib/logger.ts` already imported at the top of this file. Replace the `console.error` call with `logger.warn('could not load invoice lines', { invoiceId, err })` so the failure goes through the shared logger again."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Passing `invoiceId` and `err` as positional arguments violates rule [2] (Structured log fields) and loses named structured fields for the shared logger. Pass the context as named fields with `logger.warn('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-swallow"
+          ],
+          "marked": false,
+          "text": "Because the catch block logs with `console.error` instead of the shared logger and neither rethrows nor returns an explicit error result, the load failure is swallowed and callers silently receive an empty list, violating rule [7] (Do not swallow errors). Restore the shared logger with `logger.warn('could not load invoice lines', { invoiceId, err })` or rethrow or return an explicit error result."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 282430,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Because `console.error` bypasses the shared logger in `src/lib/logger.ts`, this warning never reaches the app's log pipeline and cannot be filtered, structured, or shipped like the other logs. Restore the shared logger for this message, passing the context as fields, e.g. `logger.warn('could not load invoice lines', { invoiceId, err })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P11-rule-generated-client-line-retouched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 217596,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Hand edits to `src/api/generated/billingClient.ts` are silently lost on the next `api:gen` run and drift from the spec, since `getInvoice` no longer issues any request and the exported API surface no longer matches `openapi/billing.yaml`. Revert the manual patch and rerun `pnpm run api:gen` so the file is rewritten with a fresh `generatedAt` stamp, and if the `expand=lines` behavior is actually needed, add the parameter to `openapi/billing.yaml` (or the generator template) first."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Console output bypasses the logger's transports, levels and redaction, and the `logger` import at the top of the file is left unused. Restore the shared logger call, e.g. `logger.warn('could not load invoice lines', { invoiceId, err });`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Passing `invoiceId` and `err` as bare positional arguments loses the structure the logging pipeline needs to index and filter by field. Pass the context as an object, e.g. `logger.warn('could not load invoice lines', { invoiceId, err });`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P11-rule-generated-client-line-retouched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 65469,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "This hand-edit of a generated file changes src/api/generated/billingClient.ts while the \"DO NOT EDIT. Generated by scripts/gen-api-client.ts\" marker and unchanged generatedAt stamp (2026-09-28T09:41:52Z) reveal it was patched manually, and removing the `request<Invoice>(...)` call from `getInvoice` means the exported function no longer returns anything. Revert the manual change and rerun `pnpm run api:gen`; if the `expand` parameter is really needed, add it to openapi/billing.yaml first so the generator emits it."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "`console.error` bypasses the shared log pipeline from src/lib/logger.ts, so levels, redaction, and transports are skipped and production logs are not captured. Replace it with `logger.warn('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Passing `invoiceId` and `err` as positional arguments keeps the log entry unstructured and not queryable. Pass context as an object of named fields, e.g. `logger.warn('could not load invoice lines', { invoiceId, err })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P11-rule-generated-client-line-retouched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 68100,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Hand-edits like this one in a file marked DO NOT EDIT and generated by `scripts/gen-api-client.ts` (`pnpm run api:gen`) are silently lost on the next generator run and leave the client out of sync with `openapi/billing.yaml`; here the patch also removed `getInvoice`'s return statement, so every caller now resolves to `undefined`. Revert this hand-edit and rerun `pnpm run api:gen` to regenerate from the spec (the rerun also refreshes the unchanged `generatedAt` stamp), and if the `expand` parameter is really needed, add it to `openapi/billing.yaml` first so the generator emits it."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Console output bypasses the app's log transport, redaction, and level configuration, so this failure will not show up where the rest of the service's logs are collected. Use the shared `logger` from `src/lib/logger.ts` and pass the context as structured fields (`invoiceId`, `err`) at warn level so the error object stays intact for diagnosis."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P11-rule-generated-client-line-retouched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 62596,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Because the hand edit is silently overwritten on the next `pnpm run api:gen` and the unchanged `generatedAt: 2026-09-28T09:41:52Z` stamp hides that the checked-in file no longer matches openapi/billing.yaml, it also leaves `getInvoice` with no return, so it resolves to `undefined` despite its `Promise<Invoice>` type. Revert the hand edit and, if the `expand` parameter is really needed, add it to openapi/billing.yaml and rerun `pnpm run api:gen` so the script rewrites the file and its generatedAt/specHash stamp."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Logging through `console.error` bypasses the project's log transport and redaction, reintroducing raw console output. Use the shared logger from src/lib/logger.ts, which is already imported at the top of the file, and pass the context as a structured object of named fields, e.g. `logger.warn('could not load invoice lines', { invoiceId, err })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P11-rule-generated-client-line-retouched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 199333,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "The hand edit leaves `src/api/generated/billingClient.ts` out of sync with `openapi/billing.yaml`—its `generatedAt` stamp (`2026-09-28T09:41:52Z`) is unchanged, the edit will be silently overwritten on the next codegen run, and `getInvoice` now has no return value. Revert the edit and rerun `pnpm run api:gen` so `scripts/gen-api-client.ts` rewrites the file and its stamp; if the `expand` parameter is genuinely needed, add it to `openapi/billing.yaml` first and regenerate."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Calling `console.error` directly bypasses the shared logger in `src/lib/logger.ts` and its transports/redaction. Replace it with `logger.warn('could not load invoice lines', { invoiceId, err })` so application code logs through the shared logger."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Passing `invoiceId` and `err` as positional arguments makes the log entry unstructured and not searchable by field. Pass the context as an object: `logger.warn('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-swallow"
+          ],
+          "marked": false,
+          "text": "Because the catch block returns `[]` without logging, the error is swallowed and the caller cannot distinguish a failed load from an empty result. Since the error is not rethrown and no explicit error result is returned, log it with the shared logger using `logger.warn('could not load invoice lines', { invoiceId, err })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 76925,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because the cap test knows the exact expected result—a 40% plus a 30% coupon on a 10,000-cent subtotal exceeds the 50% cap, so `discountCents` must be exactly 5,000—`toBeTruthy()` lets a broken or missing cap such as 7,000 or 4,000 ship green. Replace the truthiness check with `expect(capped.discountCents).toBe(5_000);` and keep the separate `expect(capped.capped).toBe(true);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58873,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`toBeTruthy()` passes for any non-zero number, so an uncapped 7,000 or any other wrong discount leaves the cap regression green even though the test knows the exact value: 40% + 30% on a 10,000-cent subtotal is 7,000, capped at 50% is 5,000. Assert the exact value with `expect(capped.discountCents).toBe(5_000)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 67701,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The cap test's `toBeTruthy()` passes for any non-zero value such as 4,000, 6,000, or 7,000, so a broken cap ships green even though a 10,000-cent subtotal with 40% + 30% coupons should cap at exactly 5,000 cents. Assert the exact expected value with `expect(capped.discountCents).toBe(5_000);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59973,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`expect(capped.discountCents).toBeTruthy()` passes for any non-zero value, so a broken cap that returns the uncapped 7,000 cents still goes green. Assert the exact amount with `expect(capped.discountCents).toBe(5_000)` to verify the 50% cap."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45871,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because the test title states the combined discount is capped at 50% of the subtotal, the exact expected value is 50% of 10_000 = 5_000, and `toBeTruthy()` passes for any non-zero amount such as 1 or 4_999, so a broken cap or wrong percentage computation still ships green. Replace the truthiness check with `expect(capped.discountCents).toBe(5_000);` and keep `expect(capped.capped).toBe(true);` as is."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P12-rule-soft-asserts-moved-down-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 74454,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "A truthiness check would pass for any non-zero amount, hiding a cap regression even though the combined discount is capped at 50% of the `10_000` subtotal, exactly `5_000` cents. Replace it with `expect(capped.discountCents).toBe(5_000)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because the rule requires hard, exact assertions, `expect.soft(priced.totalCents).toBeTruthy()` can silently pass on wrong totals for a `10_000`-cent subtotal with a 15% coupon, whose total is exactly `8_500` cents. Replace it with `expect(priced.totalCents).toBe(8_500)`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "A presence-only soft assertion cannot catch a wrong discount amount, even though a 15% coupon on `10_000` cents yields exactly `1_500` cents. Replace it with `expect(priced.discountCents).toBe(1_500)`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "A truthiness check would also pass if the wrong coupon were applied, even though the test knows the exact `percent(15)` coupon it passed in. Replace it with an exact assertion such as `expect(priced.appliedCoupon).toEqual(percent(15))`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P12-rule-soft-asserts-moved-down-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 105614,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Since the test title states the combined discount is capped at 50% of the subtotal, the exact value is known (50% of 10_000 is 5_000), but `toBeTruthy()` only proves the discount is non-zero and would pass for any wrong amount, violating rule 21's requirement for a hard assertion of the exact value. Assert the capped amount with `toBe(5_000)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Rule 21 forbids `expect.soft` and truthiness-only assertions, and with `subtotalCents` of 10_000 and a 15% coupon the total is exactly 8_500, so `toBeTruthy()` would accept any non-zero value. Replace it with a hard `toBe(8_500)` assertion."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Rule 21 forbids `expect.soft` and presence-only assertions, and the discount for a 15% coupon on a 10_000-cent subtotal is exactly 1_500, so `toBeDefined()` says nothing about the amount. Assert the exact value with a hard `toBe(1_500)`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Since the test already knows the exact coupon applied (`percent(15)`), `toBeTruthy()` is a presence-only assertion forbidden by rule 21 that would pass for the wrong coupon. Compare against the exact object with `toEqual(percent(15))`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P12-rule-soft-asserts-moved-down-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 113437,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Since the cap is 50% of the 10_000 subtotal, the discount must be exactly 5_000, and `toBeTruthy` would also pass for an uncapped 5_800, hiding a broken cap. Replace it with the hard assertion `expect(capped.discountCents).toBe(5_000);`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "A 15% coupon on 10_000 gives a total of exactly 8_500, but `expect.soft` lets the test continue after failure and `toBeTruthy` accepts any non-zero total, so a wrong price can slip through. Use a hard assertion on the exact value: `expect(priced.totalCents).toBe(8_500);`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The exact discount is known (15% of 10_000 = 1_500), yet `toBeDefined` passes for any value, including a wrong one, and `expect.soft` does not fail the test immediately. Replace it with `expect(priced.discountCents).toBe(1_500);`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Any truthy value, such as the wrong coupon, passes, so the test cannot detect a mismatched applied coupon. Assert the exact value with `expect(priced.appliedCoupon).toEqual(percent(15));`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P12-rule-soft-asserts-moved-down-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 86040,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The test knows the exact value — the combined 40% + 30% is 7_000, capped at 50% of 10_000, so the discount must be exactly 5_000 — meaning a truthiness check would also pass if the cap were missing or wrong. Assert the exact value with `expect(capped.discountCents).toBe(5_000);`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The rule forbids `expect.soft`, and since the exact total is 10_000 cents minus a 15% discount (8_500 cents), this soft truthiness check would still pass with a wrong total. Replace it with a hard assertion on the exact value: `expect(priced.totalCents).toBe(8_500);`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The rule forbids `expect.soft`, and because 15% of 10_000 cents is 1_500 cents, any defined value — including 0 or a wrong amount — would satisfy this soft presence check. Replace it with `expect(priced.discountCents).toBe(1_500);`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because the test passes `percent(15)` and therefore knows the exact applied coupon, this truthiness check would pass even if a different coupon (e.g. a stale or mis-mapped one) were applied. Assert the exact value with `expect(priced.appliedCoupon).toEqual(percent(15));`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P12-rule-soft-asserts-moved-down-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 62757,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because the 40% + 30% stack (7_000) is capped at 50% of the 10_000 subtotal, i.e. 5_000, `expect(capped.discountCents).toBeTruthy()` would still pass if the cap were computed wrongly. Replace it with a hard assertion on the exact cents value, `expect(capped.discountCents).toBe(5_000);`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The exact total is known—10_000 subtotal minus the 15% (1_500) discount is 8_500—so the soft truthiness check lets a wrong total slip through. Replace it with a hard assertion on the exact value, `expect(priced.totalCents).toBe(8_500);`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The expected discount is exactly 15% of 10_000, or 1_500, so the soft presence assertion would not catch a wrong discount amount. Replace it with the hard assertion `expect(priced.discountCents).toBe(1_500);`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The test knows exactly which coupon was passed in and should be applied, so a truthiness check would still pass if the wrong or a mutated coupon came back. Assert the exact value with `expect(priced.appliedCoupon).toEqual({ kind: 'percent', value: 15 });`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

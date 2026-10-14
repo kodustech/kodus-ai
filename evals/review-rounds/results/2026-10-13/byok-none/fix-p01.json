@@ -1,0 +1,501 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:59:01.987Z",
+  "updatedAt": "2026-10-13T22:01:24.925Z",
+  "complete": true,
+  "selectedCases": [
+    "P01-rule-skip-comment-incomplete",
+    "P01-rule-skip-comment-incomplete-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 5,
+        "rate": 1
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P01-rule-skip-comment-incomplete · skip-comment-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P01-rule-skip-comment-incomplete-control · skip-comment-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17825,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/shipping/address.schema.ts:11` (2026-10-06 12:00 UTC).\n\nIn `src/shipping/address.schema.ts`, because the current `// early exit` comment does not begin with `Skips:`, the rule requiring early returns that skip validation to name the skipped inputs and checks is still unmet for `pickupPoint`. Replace it with a comment such as `// Skips: pickup points skip postal-code validation; every other address is validated against its country pattern.`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 10399,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/shipping/address.schema.ts:11` (2026-10-06 12:00 UTC).\n\nThe `// early exit` comment does not satisfy the rule because it neither starts with `Skips:` nor names the inputs that skip validation and the checks they skip. Replace the comment above the `return` with one that begins with `Skips:` and documents both."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13936,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The `// early exit` comment on the early return in this validator does not start with `Skips:` or name the skipped inputs or checks, so the reason for bypassing `pickupPoint` validation is unclear under the rule that early returns skipping validation must be commented. Replace it with a `Skips:` comment that states pickup points skip postal-code validation while every other address is validated against its country pattern."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17903,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/shipping/address.schema.ts:11` (2026-10-06 12:00 UTC).\n\nThe `// early exit` comment above the `if (value.pickupPoint)` return does not satisfy Rule 21, so the validator still lacks the required `Skips:` prefix naming the skipping inputs and the postal-code validation they bypass, and the previous round's `round-a-P01-rule-skip-comment-incomplete` was marked implemented despite this. Replace it with a `// Skips:` comment above the return that states pickup points skip postal-code validation and every other address is validated against its country pattern."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17083,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "Because the `// early exit` comment does not start with `Skips:` or name the inputs and skipped checks, the early return on `value.pickupPoint` violates the rule requiring every early return in a validator to document what validation it skips. Replace it with a compliant comment such as `// Skips: pickup points skip postal-code validation; every other address is validated against its country pattern.`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 12489,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The `// early exit` comment does not satisfy the validator rule, so the skipped inputs and checks remain undocumented. Replace it with a `Skips:`-prefixed comment that names `pickupPoint === true` and the postal-code pattern check it skips."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 13020,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The early return in the `superRefine` validator skips postal-code validation, but its preceding comment does not start with `Skips:`, which rule 21 requires for every early return in a validator to name the inputs and checks skipped. Replace the comment so it documents the skipped check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P01-rule-skip-comment-incomplete-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 13678,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The undocumented early return hides that `value.pickupPoint` being true bypasses the postal code pattern check, so the skip is not traceable by the required convention. Replace `// early exit` with a comment naming the input and the skipped check, such as `// Skips: pickupPoint=true skips the postal code pattern check.`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P01-rule-skip-comment-incomplete-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 13087,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The `// early exit` comment doesn't start with `Skips:`, so it fails the rule and leaves the validator's skip behavior undocumented. Rename it so it names the `pickupPoint` inputs that skip validation and the country postal-pattern check they bypass."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P01-rule-skip-comment-incomplete-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 12310,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The `// early exit` comment doesn't satisfy the validator rule that every early return in `superRefine` be preceded by a comment starting with `Skips:` and naming the inputs that skip validation and the checks they skip. Rewrite it to begin with `Skips:` and name `pickupPoint=true` as skipping the postal-code pattern check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

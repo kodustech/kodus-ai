@@ -69,6 +69,8 @@ function patchFromUnified(filename, diffText) {
 }
 
 const lines = (...l) => l.join('\n') + '\n';
+const { TEAM_RULES, EXTRA_RULES, otherComments, commitList } = require('./fixtures/prod-profile');
+const { withConventions } = require('./fixtures/rule-conventions');
 
 // ---------------------------------------------------------------------------
 // settle: the premise of the tempting finding is in a file OUTSIDE the diff.
@@ -664,6 +666,264 @@ const touchedJobsDiff = [
     ]),
 ];
 
+// ---------------------------------------------------------------------------
+// Production repeat shapes (prod sample 2026-10-05→12, design on #2114). In 35
+// of 42 sampled reposts the earlier comment was in the prompt; most were Kody
+// Rules whose entry was stored "implemented" while the problem was still there
+// (the developer fixed half of it, or only touched the line). Invented code.
+// ---------------------------------------------------------------------------
+const localDayRule = {
+    uuid: 'rule-local-calendar-day',
+    title: 'Format date-only values in local calendar time',
+    rule: 'Never derive a calendar day with toISOString().slice(0, 10): for users west of UTC it yields the previous day. Use formatLocalDate from src/reports/dates.ts.',
+    path: 'src/reports/**',
+    severity: 'high',
+};
+const rangeRepo = {
+    'src/reports/range.ts': lines(
+        "import { formatLocalDate } from './dates';",
+        "import type { Range } from './types';",
+        '',
+        'export function rangeLabel(range: Range) {',
+        '    const startDay = range.start.toISOString().slice(0, 10);',
+        '    const endDay = formatLocalDate(range.end);',
+        '    return `${startDay} → ${endDay}`;',
+        '}',
+        '',
+        'export function dayKey(at: Date) {',
+        '    return at.toISOString().slice(0, 10);',
+        '}',
+    ),
+    'src/reports/dates.ts': lines(
+        'export function formatLocalDate(d: Date) {',
+        "    const pad = (n: number) => String(n).padStart(2, '0');",
+        '    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;',
+        '}',
+    ),
+    'src/reports/types.ts': lines('export type Range = { start: Date; end: Date };'),
+};
+// The developer fixed the end day, renamed the start day and left its
+// toISOString call in place, and added dayKey (a new site of the same rule).
+const rangeDiff = [
+    patch('src/reports/range.ts', 1, [
+        "+import { formatLocalDate } from './dates';",
+        " import type { Range } from './types';",
+        ' ',
+        ' export function rangeLabel(range: Range) {',
+        '-    const day = range.start.toISOString().slice(0, 10);',
+        '-    const end = range.end.toISOString().slice(0, 10);',
+        '-    return `${day} → ${end}`;',
+        '+    const startDay = range.start.toISOString().slice(0, 10);',
+        '+    const endDay = formatLocalDate(range.end);',
+        '+    return `${startDay} → ${endDay}`;',
+        ' }',
+        '+',
+        '+export function dayKey(at: Date) {',
+        '+    return at.toISOString().slice(0, 10);',
+        '+}',
+    ]),
+];
+const localDayDecision = (outcome) => ({
+    suggestionId: 'round-a-local-day',
+    relevantFile: 'src/reports/range.ts',
+    relevantLinesStart: 4,
+    relevantLinesEnd: 5,
+    suggestionContent: 'rangeLabel derives both calendar days with toISOString().slice(0, 10), violating the rule "Format date-only values in local calendar time": for users west of UTC the label shows the previous day. Use formatLocalDate(range.start) and formatLocalDate(range.end).',
+    label: 'kody_rules',
+    brokenKodyRulesIds: ['rule-local-calendar-day'],
+    outcome,
+    decidedAt: '2026-10-06T14:02:00Z',
+});
+const localDayClaim = (id, expect) => ({
+    id,
+    at: { file: 'src/reports/range.ts', lines: [5, 5] },
+    golden: 'rangeLabel still derives the start day with range.start.toISOString().slice(0, 10), violating the rule to format date-only values in local calendar time.',
+    truth: 'true',
+    expect,
+});
+const dayKeyNewSiteClaim = {
+    id: 'dayKey-new-site',
+    at: { file: 'src/reports/range.ts', lines: [10, 11] },
+    golden: 'dayKey derives a calendar day with toISOString().slice(0, 10), violating the rule to format date-only values in local calendar time.',
+    truth: 'true',
+    expect: 'deliver',
+};
+
+// The bug finder's version: an earlier bug stored "implemented" because the
+// developer changed its line, while the bug is still there (production: same
+// line, one entry in the history, the model wrote that the earlier suggestion
+// "was not implemented" and posted it again).
+const retryRepo = {
+    'src/sync/retry.ts': lines(
+        "import { sleep } from './sleep';",
+        "import { log } from './log';",
+        '',
+        'export async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {',
+        '    let lastError: unknown;',
+        '    for (let attempt = 1; attempt <= attempts; attempt++) {',
+        '        try {',
+        '            return await fn();',
+        '        } catch (err) {',
+        '            lastError = err;',
+        "            log.warn('retrying', { attempt });",
+        '            sleep(200 * attempt);',
+        '        }',
+        '    }',
+        '    throw lastError;',
+        '}',
+    ),
+    'src/sync/sleep.ts': lines('export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));'),
+    'src/sync/log.ts': lines('export const log = { warn(_msg: string, _meta?: unknown) {} };'),
+};
+const retryDiff = [
+    patch('src/sync/retry.ts', 1, [
+        " import { sleep } from './sleep';",
+        "+import { log } from './log';",
+        ' ',
+    ]),
+    patch('src/sync/retry.ts', 9, [
+        '         } catch (err) {',
+        '             lastError = err;',
+        '-            sleep(200);',
+        "+            log.warn('retrying', { attempt });",
+        '+            sleep(200 * attempt);',
+        '         }',
+        '     }',
+    ]),
+];
+const retryDecision = {
+    suggestionId: 'round-a-await-sleep',
+    relevantFile: 'src/sync/retry.ts',
+    relevantLinesStart: 10,
+    relevantLinesEnd: 10,
+    suggestionContent: 'withRetry calls sleep(200) without await, so every retry fires immediately after the failure and the backoff never happens: a failing service gets hit three times back-to-back. Await the sleep.',
+    label: 'bug',
+    outcome: 'implemented',
+    decidedAt: '2026-10-06T13:52:00Z',
+};
+const retryClaim = (id, expect) => ({
+    id,
+    golden: 'withRetry calls sleep(...) without await, so retries run immediately with no backoff delay between attempts.',
+    truth: 'true',
+    premise: 'diff',
+    expect,
+});
+
+// Fixed, then reintroduced: the earlier fix (default a missing qty to 1) is
+// undone by a refactor in this diff. One problem, one thread (#2097): this one
+// must ship, and say it came back.
+const cartRepo = {
+    'src/cart/total.ts': lines(
+        "import type { Item } from './types';",
+        '',
+        'export function total(items: Item[]) {',
+        '    let sum = 0;',
+        '    for (const item of items) sum += item.price * item.qty;',
+        '    return sum;',
+        '}',
+    ),
+    'src/cart/types.ts': lines('export type Item = { price: number; qty?: number };'),
+};
+const cartDiff = [
+    patch('src/cart/total.ts', 3, [
+        ' export function total(items: Item[]) {',
+        '-    return items.reduce((sum, item) => sum + item.price * (item.qty ?? 1), 0);',
+        '+    let sum = 0;',
+        '+    for (const item of items) sum += item.price * item.qty;',
+        '+    return sum;',
+        ' }',
+    ]),
+];
+const cartDecision = {
+    suggestionId: 'round-a-default-qty',
+    relevantFile: 'src/cart/total.ts',
+    relevantLinesStart: 4,
+    relevantLinesEnd: 4,
+    suggestionContent: 'total multiplies by item.qty, which is optional in Item, so an item without qty makes the whole total NaN. Default it: item.qty ?? 1.',
+    label: 'bug',
+    outcome: 'implemented',
+    decidedAt: '2026-10-06T10:15:00Z',
+};
+const cartClaim = {
+    id: 'qty-default-reintroduced',
+    golden: 'The refactored total multiplies by item.qty without the ?? 1 default again, so an item without qty makes the total NaN: the earlier fix was undone.',
+    truth: 'true',
+    premise: 'diff',
+    expect: 'deliver_linked',
+};
+
+
+const reportCommits = (review = true) => commitList(['feat(reports): range label and day keys', 'fix(reports): validate range query', 'address review: cap page size', 'address review: escape CSV cells', `fix(reports): use local date for the range end${review ? ' (review)' : ''}`, 'refactor(reports): totals in cents', 'chore: lint'], '2026-10-06T11:00:00Z');
+
+
+// K9: the volume of the production DeepSeek reposts. Their rule-judge calls
+// were 450K–570K characters, almost all of it the rules block: 78–86 rules,
+// each with the repository convention its sourcePath points at (~6K
+// characters, inlined by the provider). The diff was under 2K characters and
+// the earlier comment sat in the last 5% of the prompt.
+const conventions = withConventions([...TEAM_RULES, ...EXTRA_RULES]);
+const conventionRepo = { ...rangeRepo, ...conventions.files };
+
+
+// K10: the file is new in the PR, so every round shows all of it as added
+// (`@@ -0,0 +1,N @@`) and the earlier comment's line is an added line again.
+// 3 of the 4 production DeepSeek rule reposts were on files new in the PR;
+// the developer had attempted a partial fix and the entry read not_implemented.
+const newFileDiff = (filename, text) => {
+    const l = text.trimEnd().split('\n');
+    return [{ filename, patchWithLinesStr: `## file: '${filename}'\n\n@@ -0,0 +1,${l.length} @@\n__new hunk__\n${l.map((x, i) => `${i + 1} +${x}`).join('\n')}\n__old hunk__\n` }];
+};
+const rangeNewFileDiff = newFileDiff('src/reports/range.ts', rangeRepo['src/reports/range.ts']);
+
+
+// K12: the developer answered the earlier comment with a fix that does not
+// fix it (still UTC) and a comment claiming it does; the entry reads
+// implemented. Production DeepSeek reposts carried this shape: an attempted
+// fix the model judged incomplete, posted as a new comment.
+const attemptedFixRepo = {
+    ...rangeRepo,
+    'src/reports/range.ts': lines(
+        "import type { Range } from './types';",
+        '',
+        'export function rangeLabel(range: Range) {',
+        '    // Local calendar days (see review).',
+        "    const startDay = range.start.toISOString().split('T')[0];",
+        "    const endDay = range.end.toISOString().split('T')[0];",
+        '    return `${startDay} → ${endDay}`;',
+        '}',
+        '',
+        'export function dayKey(at: Date) {',
+        '    return at.toISOString().slice(0, 10);',
+        '}',
+    ),
+};
+const attemptedFixDiff = [
+    patch('src/reports/range.ts', 1, [
+        " import type { Range } from './types';",
+        ' ',
+        ' export function rangeLabel(range: Range) {',
+        '-    const day = range.start.toISOString().slice(0, 10);',
+        '-    const end = range.end.toISOString().slice(0, 10);',
+        '-    return `${day} → ${end}`;',
+        '+    // Local calendar days (see review).',
+        "+    const startDay = range.start.toISOString().split('T')[0];",
+        "+    const endDay = range.end.toISOString().split('T')[0];",
+        '+    return `${startDay} → ${endDay}`;',
+        ' }',
+        '+',
+        '+export function dayKey(at: Date) {',
+        '+    return at.toISOString().slice(0, 10);',
+        '+}',
+    ]),
+];
+const attemptedFixClaim = (id, expect) => ({
+    id,
+    at: { file: 'src/reports/range.ts', lines: [4, 7] },
+    golden: 'rangeLabel still derives its days from toISOString() (split on T), which is the UTC date, violating the rule to format date-only values in local calendar time; the comment says local but the code is not.',
+    truth: 'true',
+    expect,
+});
+
 const cases = [
     { id: 'U1-premise-unread', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'dead', claims: settleClaims('not_deliver_normal') },
     { id: 'U2-premise-readable', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'alive', claims: settleClaims('not_deliver') },
@@ -801,6 +1061,118 @@ const cases = [
         previousDecisions: [{ ...declinedRuleDecision(), suggestionId: 'round-a-bug-progress', label: 'bug', brokenKodyRulesIds: undefined, suggestionContent: 'finishRun stores the result (db.results.insert) before recording progress (db.progress.update); a crash in between leaves output for a run whose progress was never recorded. Update progress first.' }],
         claims: [ruleRepeatClaim('not_deliver'), ruleNewSiteClaim],
     },
+    // --- production repeat shapes (added 2026-10-13, #2114) ---
+    // Each *-control twin has no history: its claim must ship, or the twin's
+    // "not posted again" means only that the agent never saw the problem.
+    // Rule entry stored "implemented" while the violation is still on a line
+    // the developer touched: not posted again (one problem, one thread, #2097).
+    {
+        id: 'K5-rule-repost-stored-implemented', family: 'rounds', agent: 'kody-rules', repo: rangeRepo, changedFiles: rangeDiff, sandbox: 'alive',
+        kodyRules: [localDayRule],
+        previousDecisions: [localDayDecision('implemented')],
+        claims: [localDayClaim('rangeLabel-start-repeat', 'not_deliver'), dayKeyNewSiteClaim],
+    },
+    {
+        id: 'K5-control', family: 'control', agent: 'kody-rules', repo: rangeRepo, changedFiles: rangeDiff, sandbox: 'alive',
+        kodyRules: [localDayRule],
+        claims: [localDayClaim('rangeLabel-start-control', 'deliver'), dayKeyNewSiteClaim],
+    },
+    // Same, entry stored not_implemented (the developer did not apply it).
+    // Its control is K5-control: the same files, and a control carries no
+    // earlier comment, so the stored status cannot change it.
+    {
+        id: 'K6-rule-repost-not-implemented', family: 'rounds', agent: 'kody-rules', repo: rangeRepo, changedFiles: rangeDiff, sandbox: 'alive',
+        kodyRules: [localDayRule],
+        previousDecisions: [localDayDecision('not_implemented')],
+        claims: [localDayClaim('rangeLabel-start-repeat', 'not_deliver'), dayKeyNewSiteClaim],
+    },
+    // Bug finder: entry stored "implemented" because its line changed, bug still there.
+    {
+        id: 'R15-repost-stored-implemented', family: 'rounds', repo: retryRepo, changedFiles: retryDiff, sandbox: 'alive',
+        previousDecisions: [retryDecision],
+        claims: [retryClaim('await-sleep-repeat', 'not_deliver')],
+    },
+    { id: 'R15-control', family: 'control', repo: retryRepo, changedFiles: retryDiff, sandbox: 'alive', claims: [retryClaim('await-sleep-control', 'deliver')] },
+    // Fixed, then undone by this diff: must ship, linked to the earlier fix.
+    {
+        id: 'R16-fixed-then-reintroduced', family: 'rounds', repo: cartRepo, changedFiles: cartDiff, sandbox: 'alive',
+        previousDecisions: [cartDecision],
+        claims: [cartClaim],
+    },
+    { id: 'R16-control', family: 'control', repo: cartRepo, changedFiles: cartDiff, sandbox: 'alive', claims: [{ ...cartClaim, id: 'qty-default-control', expect: 'deliver' }] },
+    // --- the same shapes with what a production round carries (#2114) ---
+    // Production medians for reposts: the rule judge saw 43 rules and 10
+    // earlier comments; the finder saw 10 earlier comments and 7 commits,
+    // most of them answering review. See fixtures/prod-profile.js.
+    {
+        id: 'K7-rule-repost-prod-profile', family: 'rounds', agent: 'kody-rules', repo: rangeRepo, changedFiles: rangeDiff, sandbox: 'alive',
+        kodyRules: TEAM_RULES,
+        previousDecisions: [localDayDecision('implemented'), ...otherComments(9, '2026-10-06T13:20:00Z')],
+        commits: commitList(['feat(reports): range label and day keys', 'fix(reports): validate range query', 'address review: cap page size', 'address review: escape CSV cells', 'fix(reports): use local date for the range end (review)', 'refactor(reports): rename range locals', 'chore: lint'], '2026-10-06T11:00:00Z'),
+        claims: [localDayClaim('rangeLabel-start-repeat', 'not_deliver'), dayKeyNewSiteClaim],
+    },
+    {
+        id: 'K7-control', family: 'control', agent: 'kody-rules', repo: rangeRepo, changedFiles: rangeDiff, sandbox: 'alive',
+        kodyRules: TEAM_RULES,
+        previousDecisions: otherComments(9, '2026-10-06T13:20:00Z'),
+        commits: commitList(['feat(reports): range label and day keys', 'fix(reports): validate range query', 'address review: cap page size', 'address review: escape CSV cells', 'fix(reports): use local date for the range end', 'refactor(reports): rename range locals', 'chore: lint'], '2026-10-06T11:00:00Z'),
+        claims: [localDayClaim('rangeLabel-start-control', 'deliver'), dayKeyNewSiteClaim],
+    },
+    {
+        id: 'R17-repost-prod-profile', family: 'rounds', repo: retryRepo, changedFiles: retryDiff, sandbox: 'alive',
+        previousDecisions: [retryDecision, ...otherComments(9, '2026-10-06T13:20:00Z')],
+        commits: commitList(['feat(sync): retry transient sync failures', 'test(sync): cover retry exhaustion', 'fix(reports): validate range query', 'address review: cap page size', 'address review: escape CSV cells', 'fix(sync): back off between retries (review)', 'chore: lint'], '2026-10-06T11:00:00Z'),
+        claims: [retryClaim('await-sleep-repeat', 'not_deliver')],
+    },
+    {
+        id: 'R17-control', family: 'control', repo: retryRepo, changedFiles: retryDiff, sandbox: 'alive',
+        previousDecisions: otherComments(9, '2026-10-06T13:20:00Z'),
+        commits: commitList(['feat(sync): retry transient sync failures', 'test(sync): cover retry exhaustion', 'fix(reports): validate range query', 'address review: cap page size', 'address review: escape CSV cells', 'fix(sync): back off between retries', 'chore: lint'], '2026-10-06T11:00:00Z'),
+        claims: [retryClaim('await-sleep-control', 'deliver')],
+    },
+    {
+        id: 'K9-rule-repost-prod-rules-volume', family: 'rounds', agent: 'kody-rules', repo: conventionRepo, changedFiles: rangeDiff, sandbox: 'alive',
+        kodyRules: conventions.rules,
+        previousDecisions: [localDayDecision('implemented'), ...otherComments(14, '2026-10-06T13:20:00Z')],
+        commits: reportCommits(),
+        claims: [localDayClaim('rangeLabel-start-repeat', 'not_deliver'), dayKeyNewSiteClaim],
+    },
+    {
+        id: 'K9-control', family: 'control', agent: 'kody-rules', repo: conventionRepo, changedFiles: rangeDiff, sandbox: 'alive',
+        kodyRules: conventions.rules,
+        previousDecisions: otherComments(14, '2026-10-06T13:20:00Z'),
+        commits: reportCommits(false),
+        claims: [localDayClaim('rangeLabel-start-control', 'deliver'), dayKeyNewSiteClaim],
+    },
+    {
+        id: 'K10-rule-repost-new-file', family: 'rounds', agent: 'kody-rules', repo: rangeRepo, changedFiles: rangeNewFileDiff, sandbox: 'alive',
+        kodyRules: [localDayRule],
+        previousDecisions: [localDayDecision('not_implemented')],
+        commits: reportCommits(),
+        claims: [localDayClaim('rangeLabel-start-repeat', 'not_deliver'), dayKeyNewSiteClaim],
+    },
+    {
+        id: 'K10-control', family: 'control', agent: 'kody-rules', repo: rangeRepo, changedFiles: rangeNewFileDiff, sandbox: 'alive',
+        kodyRules: [localDayRule],
+        commits: reportCommits(false),
+        claims: [localDayClaim('rangeLabel-start-control', 'deliver'), dayKeyNewSiteClaim],
+    },
+    {
+        id: 'K12-rule-repost-attempted-fix', family: 'rounds', agent: 'kody-rules', repo: attemptedFixRepo, changedFiles: attemptedFixDiff, sandbox: 'alive',
+        kodyRules: [localDayRule],
+        previousDecisions: [localDayDecision('implemented')],
+        commits: reportCommits(),
+        claims: [attemptedFixClaim('rangeLabel-attempt-repeat', 'not_deliver'), dayKeyNewSiteClaim],
+    },
+    {
+        id: 'K12-control', family: 'control', agent: 'kody-rules', repo: attemptedFixRepo, changedFiles: attemptedFixDiff, sandbox: 'alive',
+        kodyRules: [localDayRule],
+        commits: reportCommits(false),
+        claims: [attemptedFixClaim('rangeLabel-attempt-control', 'deliver'), dayKeyNewSiteClaim],
+    },
+    // One case per production repost shape (prod-shapes/cases), each with
+    // its -control twin.
+    ...require('./prod-shapes').prodShapeCases(),
 ];
 
 module.exports = { cases };
