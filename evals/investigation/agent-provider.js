@@ -497,6 +497,9 @@ function buildCurrentPrompts(caseData) {
         languageResultPrompt: caseData.languageResultPrompt || '',
         memoryRules: parseMaybeJson(caseData.memoryRules) || [],
         traceDecisions: parseMaybeJson(caseData.traceDecisions) || undefined,
+        // Coding-agent instructions (CLAUDE.md, AGENTS.md, ...) collected for
+        // the case, as the agent stage would pass them. Absent = setting off.
+        repoInstructions: parseMaybeJson(caseData.repoInstructions) || undefined,
         v2PromptOverrides: parseMaybeJson(caseData.v2PromptOverrides),
         generationMain: caseData.generationMain,
         prTitle: caseData.prTitle,
@@ -656,6 +659,9 @@ class InvestigationAgentProvider {
                     baseBranch: input.baseBranch,
                     reviewMode: input.reviewMode,
                     maxSteps: input.maxSteps,
+                    // The verifier judges repo_instruction findings against
+                    // these; the finder already has them in systemPrompt.
+                    repoInstructions: input.repoInstructions,
                     // heavy força as passadas de resample (mais recall via
                     // reamostragem). É EIXO DE REGIME: comparar heavy com normal
                     // é o mesmo erro que comparar assinatura com API.

@@ -35,6 +35,7 @@ Neither trigger is a hand-kept folder list. The wiring smoke records every repo 
 |---|---|---|
 | [finder-recall](investigation/README.md) | Does the finder find a PR's known bugs? | nightly (gated) · PR (scripted model) |
 | [kody-rules](kody-rules/README.md) | Does the Kody Rules agent flag every place a rule is broken? | PR (scripted model) |
+| [repo-instructions](repo-instructions/README.md) | Does the generalist report changes that break the repo's coding-agent instructions, and only those? | PR (scripted model) |
 | [anchoring](anchoring/README.md) | How many findings are lost because their lines miss the diff? | PR (scripted model) |
 | [pr-summary](pr-summary/README.md) | Is the summary generated, posted, and sent to the configured model? | PR (scripted model) · Friday (every tier-0 model) |
 | [reply-addressing](reply-addressing/README.md) | Does Kody answer unmentioned replies meant for it, and stay out of the rest? | PR (scripted model) |
