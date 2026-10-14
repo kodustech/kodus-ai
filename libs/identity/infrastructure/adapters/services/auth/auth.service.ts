@@ -407,6 +407,150 @@ export class AuthService implements IAuthService {
         return await bcrypt.compare(enteredPassword, dbPassword);
     }
 
+    /**
+     * Resolve the identity an OAuth provider vouches for, by calling the
+     * provider's own API with the access token the browser obtained during
+     * the OAuth handshake. This is the authentication step the OAuth login
+     * path was missing: without it, `/auth/oauth` trusted a client-supplied
+     * email and issued a JWT for any account (GHSA-95hw-cx5j-2pg8). The caller
+     * must use the returned email — not any email from the request body — as
+     * the account identity. Any failure is surfaced as Unauthorized without
+     * leaking provider detail.
+     */
+    async verifyOAuthProviderEmail(
+        authProvider: AuthProvider,
+        accessToken: string,
+    ): Promise<{ email: string; name?: string }> {
+        if (!accessToken || typeof accessToken !== 'string') {
+            throw new UnauthorizedException('Missing OAuth provider token');
+        }
+
+        try {
+            switch (authProvider) {
+                case AuthProvider.GITHUB:
+                    return await this.verifyGithubToken(accessToken);
+                case AuthProvider.GITLAB:
+                    return await this.verifyGitlabToken(accessToken);
+                case AuthProvider.GOOGLE:
+                    return await this.verifyGoogleToken(accessToken);
+                default:
+                    throw new UnauthorizedException(
+                        'Unsupported OAuth provider',
+                    );
+            }
+        } catch (error) {
+            if (error instanceof UnauthorizedException) {
+                throw error;
+            }
+            // Network error, non-2xx, malformed body — never trust the token.
+            throw new UnauthorizedException(
+                'Could not verify OAuth provider token',
+            );
+        }
+    }
+
+    private async verifyGithubToken(
+        accessToken: string,
+    ): Promise<{ email: string; name?: string }> {
+        const baseUrl = process.env.API_GITHUB_API_URL || 'https://api.github.com';
+        const headers = {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'kodus-auth',
+        };
+
+        const profile = await axios.get(`${baseUrl}/user`, {
+            headers,
+            timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
+        });
+
+        // The public profile email can be null; the verified primary email
+        // lives behind /user/emails (granted by the `user:email` scope).
+        let email: string | undefined = profile.data?.email ?? undefined;
+        try {
+            const emails = await axios.get(`${baseUrl}/user/emails`, {
+                headers,
+                timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
+            });
+            const list: Array<{
+                email: string;
+                primary: boolean;
+                verified: boolean;
+            }> = Array.isArray(emails.data) ? emails.data : [];
+            const primary =
+                list.find((e) => e.primary && e.verified) ??
+                list.find((e) => e.verified);
+            if (primary?.email) {
+                email = primary.email;
+            }
+        } catch {
+            // Fall back to the profile email below.
+        }
+
+        if (!email) {
+            throw new UnauthorizedException(
+                'GitHub token has no verified email',
+            );
+        }
+
+        return {
+            email: email.toLowerCase(),
+            name: profile.data?.name || profile.data?.login,
+        };
+    }
+
+    private async verifyGitlabToken(
+        accessToken: string,
+    ): Promise<{ email: string; name?: string }> {
+        const origin = new URL(
+            process.env.API_GITLAB_TOKEN_URL ||
+                'https://gitlab.com/oauth/token',
+        ).origin;
+
+        const profile = await axios.get(`${origin}/api/v4/user`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
+        });
+
+        const email: string | undefined = profile.data?.email ?? undefined;
+        if (!email) {
+            throw new UnauthorizedException(
+                'GitLab token has no verified email',
+            );
+        }
+
+        return {
+            email: email.toLowerCase(),
+            name: profile.data?.name || profile.data?.username,
+        };
+    }
+
+    private async verifyGoogleToken(
+        accessToken: string,
+    ): Promise<{ email: string; name?: string }> {
+        const profile = await axios.get(
+            'https://www.googleapis.com/oauth2/v3/userinfo',
+            {
+                headers: { Authorization: `Bearer ${accessToken}` },
+                timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
+            },
+        );
+
+        const email: string | undefined = profile.data?.email ?? undefined;
+        // Google marks unverified addresses; never accept one.
+        const verified =
+            profile.data?.email_verified === true ||
+            profile.data?.email_verified === 'true';
+        if (!email || !verified) {
+            throw new UnauthorizedException(
+                'Google token has no verified email',
+            );
+        }
+
+        return { email: email.toLowerCase(), name: profile.data?.name };
+    }
+
     private async refreshThirdPartyToken(
         refreshToken: string,
         authProvider: AuthProvider,
