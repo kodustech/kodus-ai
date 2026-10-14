@@ -56,12 +56,25 @@ function baseMeta(stage) {
 
 function wiringRows(results, stages = STAGES) {
     const byStep = new Map((results || []).map((r) => [r.step, r]));
+    // A failed entry no stage claims (the smoke's own trace check) fails the whole
+    // smoke, so no wired stage's result can be trusted that night.
+    const claimed = new Set(stages.flatMap((stage) => stage.wiring));
+    const harness = (results || []).filter((r) => !claimed.has(r.step) && !r.ok);
     return stages
         .filter((stage) => !stage.nightly)
         .map((stage) => {
             const meta = baseMeta(stage);
             if (!stage.wiring.length) {
                 return { name: NAME_PREFIX + stage.id, status: 'skipped', value: null, unit: null, meta };
+            }
+            if (harness.length) {
+                return {
+                    name: NAME_PREFIX + stage.id,
+                    status: 'infra',
+                    value: null,
+                    unit: null,
+                    meta: { ...meta, reason: `wiring smoke failed: ${harness.map((r) => `${r.step}: ${r.problem}`).join('; ')}` },
+                };
             }
             const missing = stage.wiring.filter((step) => !byStep.has(step));
             if (missing.length) {

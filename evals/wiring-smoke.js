@@ -169,6 +169,9 @@ async function main() {
     fs.rmSync(scratch, { recursive: true, force: true });
     if (resultsOut) {
         const entries = results.map((r) => ({ step: r.step.name, ok: !r.problem, problem: r.problem, ms: Math.round(r.ms), calls: r.calls }));
+        // The trace check fails the smoke on its own; recorded as an entry no stage
+        // claims, so evals/stage-signals.js reads every stage as untrusted, not green.
+        entries.push({ step: 'pr-paths-filter', ok: !coverageProblem, problem: coverageProblem, ms: 0, calls: 0 });
         fs.writeFileSync(resultsOut, `${JSON.stringify(entries, null, 2)}\n`);
     }
 
