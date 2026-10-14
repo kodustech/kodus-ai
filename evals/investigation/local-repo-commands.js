@@ -55,7 +55,11 @@ class LocalRepoCommands {
 
     /** Keep every path inside the repo — a traversal would read the host FS. */
     _resolve(p) {
-        const rel = String(p || '.').replace(/^\/+/, '');
+        // grep answers with repo-relative paths, but the model may still pass an
+        // absolute one from this worktree back to read: map it inside the repo.
+        const root = path.resolve(this.repoRoot);
+        const raw = String(p || '.');
+        const rel = (raw === root || raw.startsWith(`${root}/`) ? path.relative(root, raw) || '.' : raw).replace(/^\/+/, '');
         const abs = path.resolve(this.repoRoot, rel);
         if (!abs.startsWith(path.resolve(this.repoRoot))) {
             return null;
@@ -71,7 +75,7 @@ class LocalRepoCommands {
             if (await ripgrepAvailable()) {
                 const args = ['--line-number', '--no-heading', '--color=never', '--max-count=50'];
                 if (glob) args.push('--glob', glob);
-                args.push('--', pattern, abs);
+                args.push('--', pattern, path.relative(this.repoRoot, abs) || '.');
                 const { stdout } = await execFileAsync('rg', args, {
                     timeout: EXEC_TIMEOUT_MS,
                     maxBuffer: MAX_OUTPUT * 4,
@@ -81,7 +85,7 @@ class LocalRepoCommands {
             }
             const args = ['-rn', '--binary-files=without-match'];
             if (glob) args.push(`--include=${glob}`);
-            args.push('--', pattern, abs);
+            args.push('--', pattern, path.relative(this.repoRoot, abs) || '.');
             const { stdout } = await execFileAsync('grep', args, {
                 timeout: EXEC_TIMEOUT_MS,
                 maxBuffer: MAX_OUTPUT * 4,
