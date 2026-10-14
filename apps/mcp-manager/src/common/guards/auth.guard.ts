@@ -17,7 +17,7 @@ declare module 'fastify' {
 export class AuthGuard implements CanActivate {
     constructor(private readonly jwtService: JwtService) {}
 
-    canActivate(context: ExecutionContext): boolean {
+    async canActivate(context: ExecutionContext): Promise<boolean> {
         const request = context.switchToHttp().getRequest<FastifyRequest>();
 
         try {
@@ -27,12 +27,17 @@ export class AuthGuard implements CanActivate {
                 throw new UnauthorizedException('No token provided');
             }
 
-            const decoded = this.jwtService.decode(token);
+            // Verify the signature (and expiry) against the orchestrator's JWT
+            // secret — the same key that minted this access token. `decode()`
+            // only base64-parsed the payload, so any attacker could forge an
+            // `organizationId` and impersonate any org (GHSA-x89q-mgqp-xhpw).
+            const decoded = await this.jwtService.verifyAsync(token);
 
             if (
                 decoded &&
                 typeof decoded === 'object' &&
-                'organizationId' in decoded
+                typeof decoded.organizationId === 'string' &&
+                decoded.organizationId.length > 0
             ) {
                 request.organizationId = decoded.organizationId;
                 return true;

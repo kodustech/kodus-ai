@@ -19,7 +19,12 @@ import { HealthController } from './health/health.controller';
         }),
         JwtModule.register({
             global: true,
-            secret: process.env.API_MCP_MANAGER_JWT_SECRET,
+            // Verify tokens with the orchestrator's JWT secret — that is the
+            // key the access tokens the web app forwards here are signed with
+            // (the legacy API_MCP_MANAGER_JWT_SECRET was never wired to a
+            // signer and shipped empty). The AuthGuard now verifies, not just
+            // decodes, so this secret must be present (GHSA-x89q-mgqp-xhpw).
+            secret: process.env.API_JWT_SECRET,
         }),
         McpModule,
     ],
