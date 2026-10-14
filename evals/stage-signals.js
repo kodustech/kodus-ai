@@ -48,6 +48,7 @@ function baseMeta(stage) {
         measured: stage.model,
         wiring: stage.wiring,
         note: stage.note,
+        by_hand: stage.byHand || [],
         ...(stage.history ? { history: stage.history } : {}),
         ...fridayMeta(stage),
     };

@@ -24,7 +24,10 @@
 //                mocked    no model: a deterministic stand-in
 //                on-demand an eval exists but nothing runs it on a schedule
 //                none      no eval
-//   wiring   — evals/wiring-smoke.js steps that run it (scripted or mocked)
+//   wiring   — evals/wiring-smoke.js steps that run it (scripted or mocked);
+//              empty for an eval that runs in the unit test suite instead
+//   byHand   — evals that can measure it on a real model, but only when someone
+//              runs them by hand: what it takes to start measuring the stage
 //   nightly  — true when the nightly measures it with a real model; its row then
 //              comes only from the nightly, never from the wiring smoke
 //   friday   — when the Friday check (evals/tier0-smoke.js) runs it on every
@@ -35,7 +38,7 @@
 //              until this stage's own rows have a history
 //   note     — shown by the panel next to the status
 // The parts of the review, in order; every stage names one, and a phase's stages are adjacent.
-const PHASES = ['Before the agents', 'Finding issues', 'On the PR', 'In PR threads'];
+const PHASES = ['Before the agents', 'Finding issues', 'On the PR', 'Conversation with Kody'];
 
 const STAGES = [
     {
@@ -44,10 +47,11 @@ const STAGES = [
         phase: 'Before the agents',
         label: 'Business-logic validation against the linked task',
         pipeline: ['BusinessLogicValidationStage'],
-        eval: null,
-        model: 'none',
+        eval: 'test/evals/business-rules-validation',
+        model: 'mocked',
         wiring: [],
-        note: 'no eval for this stage',
+        byHand: ['libs/agents/skills/business-rules-validation/evals'],
+        note: 'recorded cases in the unit test suite; a real-model run is by hand (RUN_BR_EVAL=1)',
     },
     {
         id: 'analyzers',
@@ -72,6 +76,7 @@ const STAGES = [
         nightly: true,
         friday: 'review',
         history: 'evals.nightly.recall',
+        byHand: ['evals/trace-context'],
         note: 'recall on the nightly light set against its floor; tools answered from a recording',
     },
     {
@@ -83,6 +88,7 @@ const STAGES = [
         eval: 'evals/kody-rules',
         model: 'scripted',
         wiring: ['kody-rules'],
+        byHand: ['evals/kody-rules'],
         note: 'scripted model only on a schedule; real-model runs are on demand',
     },
     {
@@ -94,6 +100,7 @@ const STAGES = [
         eval: 'evals/verifier-verdict',
         model: 'mocked',
         wiring: ['verifier-verdict'],
+        byHand: ['evals/promotion'],
         note: 'checks a verdict reaches the gate; its effect on recall is inside the finder row',
     },
     {
@@ -105,6 +112,7 @@ const STAGES = [
         eval: 'evals/review-chain',
         model: 'mocked',
         wiring: ['review-chain', 'shape-invariance'],
+        byHand: ['evals/parser', 'evals/structured-outputs'],
         note: 'deterministic: every call site wired to the shared recovery, every wire shape normalized',
     },
     {
@@ -116,6 +124,7 @@ const STAGES = [
         eval: 'evals/severity',
         model: 'mocked',
         wiring: ['severity'],
+        byHand: ['evals/severity'],
         note: 'heuristic mock only on a schedule',
     },
     {
@@ -127,6 +136,7 @@ const STAGES = [
         eval: 'evals/dedup',
         model: 'scripted',
         wiring: ['dedup', 'dedup-engine'],
+        byHand: ['evals/dedup'],
         note: 'mocked and scripted only on a schedule; real-model runs are on demand',
     },
     {
@@ -138,6 +148,7 @@ const STAGES = [
         eval: 'evals/format',
         model: 'mocked',
         wiring: ['format'],
+        byHand: ['evals/format'],
         note: 'mock only on a schedule',
     },
     {
@@ -149,6 +160,7 @@ const STAGES = [
         eval: 'evals/anchoring',
         model: 'scripted',
         wiring: ['anchoring'],
+        byHand: ['evals/anchoring'],
         note: 'scripted model only on a schedule; real-model runs are on demand',
     },
     {
@@ -160,6 +172,7 @@ const STAGES = [
         eval: 'evals/review-rounds',
         model: 'scripted',
         wiring: ['review-rounds', 'review-lifecycle'],
+        byHand: ['evals/review-rounds'],
         note: 'scripted model only on a schedule; real-model runs are on demand',
     },
     {
@@ -194,6 +207,7 @@ const STAGES = [
         model: 'scripted',
         wiring: ['pr-summary'],
         friday: 'pr_summary',
+        byHand: ['evals/pr-summary'],
         note: 'scripted model nightly; every tier-0 model on Friday',
     },
     {
@@ -210,13 +224,36 @@ const STAGES = [
     {
         id: 'reply-addressing',
         name: 'Thread replies',
-        phase: 'In PR threads',
+        phase: 'Conversation with Kody',
         label: 'Replies to Kody in PR threads',
         pipeline: null,
         eval: 'evals/reply-addressing',
         model: 'scripted',
         wiring: ['reply-addressing'],
+        byHand: ['evals/reply-addressing'],
         note: 'scripted model only on a schedule',
+    },
+    {
+        id: 'thread-memory',
+        name: 'Memory from a thread',
+        phase: 'Conversation with Kody',
+        label: 'Offers to save a memory when a PR thread shows a team convention or a false positive',
+        pipeline: null,
+        eval: 'test/integration/agents/kody-proactive-actions.integration.spec.ts',
+        model: 'mocked',
+        wiring: [],
+        note: 'no AI, in the unit test suite: the agent is offered the memory action in those threads',
+    },
+    {
+        id: 'thread-rule',
+        name: 'Rule from a thread',
+        phase: 'Conversation with Kody',
+        label: 'Offers to narrow a Kody Rule a PR thread shows is too broad; creates one when asked',
+        pipeline: null,
+        eval: 'test/integration/agents/kody-proactive-actions.integration.spec.ts',
+        model: 'mocked',
+        wiring: [],
+        note: 'no AI, in the unit test suite: covers changing a rule; no case creates one',
     },
 ];
 

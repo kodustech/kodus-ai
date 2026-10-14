@@ -8,7 +8,7 @@ const { wiringRows, nightlyRows } = require('./stage-signals');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { tier0 } = require('./shared/tier0-models');
 
-type Stage = { id: string; name: string; phase: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: boolean; friday?: string };
+type Stage = { id: string; name: string; phase: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: boolean; friday?: string; byHand?: string[] };
 type Row = { name: string; status: string; value: number | null; meta: Record<string, unknown> };
 
 // Steps of evals/wiring-smoke.js that check the harness, not a review stage.
@@ -74,10 +74,11 @@ describe('evals/stages.js', () => {
         for (const key of keys) expect(tier0Meta).toContain(`${key}:`);
     });
 
-    it('points every eval at a folder that exists, and only "none" at no eval', () => {
+    it('points every eval at a path that exists, and only "none" at no eval', () => {
         for (const stage of STAGES as Stage[]) {
             if (stage.model === 'none') expect(stage.eval).toBeNull();
             else expect(fs.existsSync(path.join(__dirname, '..', stage.eval as string))).toBe(true);
+            for (const evalPath of stage.byHand ?? []) expect(fs.existsSync(path.join(__dirname, '..', evalPath))).toBe(true);
         }
     });
 });
