@@ -516,7 +516,39 @@ function buildCurrentPrompts(caseData) {
     };
 }
 
-function serializeResult(caseId, agentResult, remoteCommands) {
+// The grep, read and listDir production's local sandbox (the self-hosted path)
+// hands the agent, over a prepared worktree: the same output and the same
+// errors for those three. Built by the sandbox's own method, so they cannot
+// drift from production. exec is left out for now, as in the replay, so the
+// exec-gated tools (checkTypes, findNearestProjectFile, findFile's fd/find
+// path) are not registered: a smaller tool set than production's, recorded as
+// `sandboxExec` in each row. Wrapped only to count calls for the fidelity
+// metric: a real answer, empty or not, is never an unserved call.
+function sandboxCommands(repoDir) {
+    const { LocalSandboxService } = require(
+        path.join(
+            __dirname,
+            '../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts',
+        ),
+    );
+    // buildRemoteCommands is private in TypeScript; it reads no instance
+    // state, and the constructor ignores its ConfigService.
+    const inner = new LocalSandboxService(undefined).buildRemoteCommands(
+        repoDir,
+    );
+    const commands = { calls: [], unexpectedCalls: [] };
+    for (const name of ['grep', 'read', 'listDir']) {
+        const fn = inner[name];
+        const kind = name === 'read' ? 'readFile' : name;
+        commands[name] = (...args) => {
+            commands.calls.push({ kind, actual: args, matched: true });
+            return fn(...args);
+        };
+    }
+    return commands;
+}
+
+function serializeResult(caseId, agentResult, remoteCommands, repoHandle) {
     return {
         caseId,
         reasoning: agentResult.findings?.reasoning || '',
@@ -540,6 +572,10 @@ function serializeResult(caseId, agentResult, remoteCommands) {
             replayCalls: Array.isArray(remoteCommands.calls)
                 ? remoteCommands.calls.length
                 : null,
+            repoPrepared: !!repoHandle,
+            headSha: repoHandle ? repoHandle.sha : null,
+            // false: the exec-gated tools were not registered for this case.
+            sandboxExec: typeof remoteCommands.exec === 'function',
         },
     };
 }
@@ -600,6 +636,8 @@ class InvestigationAgentProvider {
 
     async callApi(prompt, context, options) {
         let stage = 'parse-prompt';
+        // Declared outside the try so the finally below can always release it.
+        let repoHandle = null;
         try {
             const rawPrompt =
                 typeof prompt === 'string'
@@ -635,9 +673,23 @@ class InvestigationAgentProvider {
             const { input, systemPrompt, userPrompt } =
                 buildCurrentPrompts(caseData);
             stage = 'build-replay-commands';
-            const remoteCommands = new ReplayRemoteCommands(
-                parseMaybeJson(caseData.toolReplay) || {},
-            );
+            // RECALL_REAL_REPO=1: answer the tools from a git worktree at the
+            // PR's head instead of replaying recorded tool calls. The replay
+            // only answers calls captured when the dataset was built; any other
+            // call gets an empty answer the real repository would not give.
+            // Falls back to replay when the commit can't be fetched;
+            // `repoPrepared` in the trace says which one ran.
+            let remoteCommands;
+            if (process.env.RECALL_REAL_REPO === '1') {
+                const { prepareRepo } = require('./prepare-repo');
+                repoHandle = await prepareRepo(caseData, caseData.caseId);
+                if (repoHandle) remoteCommands = sandboxCommands(repoHandle.dir);
+            }
+            if (!remoteCommands) {
+                remoteCommands = new ReplayRemoteCommands(
+                    parseMaybeJson(caseData.toolReplay) || {},
+                );
+            }
 
             stage = 'run-agent-loop';
             // runAgentLoop(input, secrets): `secrets` was split out of `input` so
@@ -683,6 +735,7 @@ class InvestigationAgentProvider {
                 caseData.caseId || 'unknown-case',
                 agentResult,
                 remoteCommands,
+                repoHandle,
             );
             writeResultArtifact('last-output.json', output);
 
@@ -720,6 +773,14 @@ class InvestigationAgentProvider {
             return {
                 ...payload,
             };
+        } finally {
+            // Always drop the worktree: cases run in parallel and each one adds
+            // a full checkout to disk.
+            if (repoHandle) {
+                try {
+                    await repoHandle.cleanup();
+                } catch {}
+            }
         }
     }
 }
