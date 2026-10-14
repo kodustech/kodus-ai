@@ -452,7 +452,7 @@ export class AuthService implements IAuthService {
     private async verifyGithubToken(
         accessToken: string,
     ): Promise<{ email: string; name?: string }> {
-        const baseUrl = process.env.API_GITHUB_API_URL || 'https://api.github.com';
+        const baseUrl = 'https://api.github.com';
         const headers = {
             Authorization: `Bearer ${accessToken}`,
             Accept: 'application/vnd.github+json',
