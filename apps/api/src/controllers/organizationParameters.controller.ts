@@ -723,8 +723,10 @@ export class OrganizationParametersController {
             organizationId?: string;
         },
     ) {
-        const organizationId =
-            body.organizationId || this.request?.user?.organization?.uuid;
+        // Always the caller's own organization. Preferring body.organizationId
+        // let any logged-in user write another org's auto-license settings
+        // (GHSA-gg8q-h8qq-8pj9 / GHSA-vhp8-28q6-jvrj).
+        const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
             throw new BadRequestException('Missing organizationId in request');
