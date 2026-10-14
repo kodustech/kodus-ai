@@ -4,24 +4,46 @@ export const MAX_PATTERN_LEN = 200;
 
 /**
  * Reject regex shapes prone to catastrophic backtracking (ReDoS). A model or a
- * user can write a pattern like `(a+)+$` that matches its examples and still
- * hangs on a long adversarial line. This is a conservative heuristic — a
- * quantifier applied to a group/class that itself contains a quantifier — plus
- * a length cap. Callers also bound the text they run a pattern on.
+ * user can write a pattern like `(a+)+$` or `(a|a)*$` that matches its
+ * examples and still hangs on a long adversarial line. Conservative: any
+ * repeated group whose body (nested groups included) holds a quantifier or an
+ * alternation (or an optional part) is refused, as is a repeated char class holding a quantifier
+ * char, plus a length cap. Callers also bound the text they run a pattern on.
  */
 export function isRegexSafe(pattern: string): boolean {
     if (!pattern || pattern.length > MAX_PATTERN_LEN) return false;
-    // Nested quantifier: a group or char-class that itself contains a
-    // quantifier-ish char (+/*/}), followed by an outer quantifier —
-    // the classic ReDoS shape. The outer quantifier must be matched in
-    // full (*, +, {n,}, {n,m}) — an earlier version only matched a bare
-    // `*`/`+` right after the group, so bounded forms like `(a+){3,}` or
-    // `(a*){5}` (both valid, both still catastrophic) slipped through.
-    // The char-class branch requires the SAME inner-quantifier-char
-    // check as the group branch — without it, this flagged every
-    // ordinary `[a-z]+`-shaped detector as unsafe, which would have
-    // declined nearly every char-class-based pattern.
-    const NESTED_QUANTIFIER =
-        /(\([^()]*[+*}][^()]*\)|\[[^\]]*[+*}][^\]]*\])\s*([*+]|\{\d+,?\d*\})/;
-    return !NESTED_QUANTIFIER.test(pattern);
+    // Escapes (`\+`, `\(`) are literals, not structure.
+    const bare = pattern.replace(/\\./g, '_');
+    const opens: number[] = [];
+    for (let i = 0; i < bare.length; i++) {
+        const ch = bare[i];
+        if (ch === '[') {
+            const end = bare.indexOf(']', i + 1);
+            if (end < 0) return false;
+            if (
+                /[+*}]/.test(bare.slice(i + 1, end)) &&
+                repeats(bare, end + 1)
+            ) {
+                return false;
+            }
+            i = end;
+        } else if (ch === '(') {
+            opens.push(i);
+        } else if (ch === ')') {
+            const start = opens.pop();
+            if (start === undefined) return false;
+            const body = bare
+                .slice(start + 1, i)
+                .replace(/^\?[:=!]|^\?<[=!]?\w*>?/, '');
+            if (/[+*?|{]/.test(body) && repeats(bare, i + 1)) {
+                return false;
+            }
+        }
+    }
+    return opens.length === 0;
+}
+
+/** Whether the token at `index` repeats what precedes it: `*`, `+`, `{n,}`, `{n,m}`. */
+function repeats(pattern: string, index: number): boolean {
+    return /^\s*([*+]|\{\d+,?\d*\})/.test(pattern.slice(index));
 }
