@@ -15,6 +15,8 @@
 // Writes a JSON array of rows for .github/actions/report-signal (`rows`). Telemetry:
 // it never fails a job over a result, only over bad arguments (exit 2).
 const fs = require('fs');
+const path = require('path');
+const { evalQuestion, signalCases } = require('./shared/eval-result');
 const { STAGES } = require('./stages');
 const { tier0 } = require('./shared/tier0-models');
 
@@ -43,6 +45,7 @@ function baseMeta(stage) {
     const index = STAGES.findIndex((s) => s.id === stage.id);
     return {
         stage: stage.label,
+        question: evalQuestion(stage.eval),
         name: stage.name,
         group: stage.group,
         order: index >= 0 ? index + 1 : null,
@@ -105,6 +108,43 @@ function wiringRows(results, stages = STAGES) {
 
 // How each nightly-measured stage reads its result: the number, its floor, the
 // level it usually sits at, and what else the panel shows.
+// The finder's cases name the PR they review; its result only carries the id.
+let finderTitles = null;
+function finderTitle(caseId) {
+    if (!finderTitles) {
+        finderTitles = new Map();
+        const dir = path.join(__dirname, 'investigation', 'datasets');
+        for (const file of fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.json')) : []) {
+            try {
+                const data = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+                for (const test of Array.isArray(data) ? data : [data]) if (test?.vars?.caseId) finderTitles.set(test.vars.caseId, test.vars.prTitle || null);
+            } catch {
+                // a dataset that does not parse only loses its title here
+            }
+        }
+    }
+    return finderTitles.get(caseId) || caseId;
+}
+
+// The finder's rows (run-recall.js) as cases of the shared result shape
+// (evals/shared/eval-result.js): the known bugs of each PR, found or not.
+function finderCases(rows = []) {
+    return rows.map((row) => {
+        const m = row.metadata || {};
+        const checks = `Finds the known bugs in "${finderTitle(row.caseId)}"`;
+        if (!Number.isInteger(m.goldens)) return { id: row.caseId, checks, hits: 0, total: 0, unmeasured: true };
+        return {
+            id: row.caseId,
+            checks,
+            hits: m.matched ?? 0,
+            total: m.goldens,
+            detail: (m.goldenResults || []).map((g) => ({ what: g.golden, ok: Boolean(g.found) })),
+        };
+    });
+}
+
+// How each nightly-measured stage reads its result: the number, its floor, the
+// level it usually sits at, what each case checked, and what else the panel shows.
 const READERS = {
     // evals/investigation/run-recall.js (after confirm-gate.js)
     'finder-recall': (r) => {
@@ -113,23 +153,30 @@ const READERS = {
             value: r.metrics?.recall_mean,
             floor: check?.floor ?? null,
             baseline: r.gate?.observed?.recall_mean ?? null,
-            extra: { precision: r.metrics?.precision_mean ?? null, model: r.model || null, cases: r.cases ?? null, unmeasured: r.unmeasured ?? null },
+            extra: {
+                precision: r.metrics?.precision_mean ?? null,
+                model: r.model || null,
+                cases: r.cases ?? null,
+                unmeasured: r.unmeasured ?? null,
+                case_results: signalCases(finderCases(r.rows)),
+            },
         };
     },
-    // evals/kody-rules/real-agent.js --output (after nightly-verdict.js)
+    // evals/kody-rules/real-agent.js --output (after nightly-verdict.js): the shared shape
     'kody-rules': (r) => ({
-        value: r.occurrenceRecall,
-        floor: r.floors?.occurrenceRecall ?? null,
-        baseline: r.observed?.occurrenceRecall ?? null,
+        value: r.metric?.value,
+        floor: r.metric?.floor ?? null,
+        baseline: r.metric?.baseline ?? null,
         extra: {
-            specificity: r.specificity ?? null,
-            specificity_floor: r.floors?.specificity ?? null,
+            specificity: r.specificity?.value ?? null,
+            specificity_floor: r.specificity?.floor ?? null,
             line_precision: r.linePrecision ?? null,
             model: r.model || null,
-            cases: r.cases ?? null,
-            sites: r.sites ?? null,
+            cases: Array.isArray(r.cases) ? r.cases.length : null,
+            sites: r.counts?.sites ?? null,
             runs: r.runs ?? null,
             tokens: r.tokens || null,
+            case_results: signalCases(r.cases),
         },
     }),
 };

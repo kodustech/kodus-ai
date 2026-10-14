@@ -154,26 +154,58 @@ describe('stage-signals', () => {
         expect(nightlyRows(null, 'infra')[0]).toMatchObject({ status: 'infra', value: null });
     });
 
-    it('reports kody-rules from its own result: occurrence recall against its floor, with specificity', () => {
+    it('reports kody-rules from its own result: occurrence recall against its floor, with specificity and its cases', () => {
         // Made-up floors and levels: the real ones live only in evals/kody-rules/kody-targets.json.
         const result = {
+            eval: 'kody-rules',
+            question: 'Does the Kody Rules agent flag every place a rule is broken?',
             model: 'deepseek-v4-flash@fireworks',
-            cases: 14,
             runs: 2,
-            sites: 86,
-            occurrenceRecall: 0.7,
-            specificity: 1,
+            metric: { name: 'occurrence recall', value: 0.7, floor: 0.8, baseline: 0.93 },
+            specificity: { value: 1, floor: 0.9, baseline: 1 },
             linePrecision: 0.9,
-            floors: { occurrenceRecall: 0.8, specificity: 0.9 },
-            observed: { occurrenceRecall: 0.93, specificity: 1 },
+            counts: { sites: 86 },
+            cases: [{ id: 'n8n#1::no-console', checks: 'Flags every line that breaks "No console" in n8n#1', hits: 3, total: 4, detail: [{ what: 'a.ts:3', ok: false }] }],
             tokens: { in: 10, out: 1 },
+            infra: { errored: 0, total: 28 },
         };
         const [row]: Row[] = nightlyRows(result, 'regression', 'kody-rules');
         expect(row).toMatchObject({ name: 'evals.stage.kody-rules', status: 'red', value: 0.7 });
-        expect(row.meta).toMatchObject({ floor: 0.8, baseline: 0.93, specificity: 1, specificity_floor: 0.9, metric: 'of known rule violations flagged' });
+        expect(row.meta).toMatchObject({ floor: 0.8, baseline: 0.93, specificity: 1, specificity_floor: 0.9, cases: 1, metric: 'of known rule violations flagged' });
+        expect(row.meta.case_results).toEqual([{ id: 'n8n#1::no-console', checks: 'Flags every line that breaks "No console" in n8n#1', hits: 3, total: 4, detail: [{ what: 'a.ts:3', ok: false }] }]);
         expect(row.meta.caveat).toEqual(expect.stringContaining('mechanical rules only'));
         expect(nightlyRows(null, 'infra', 'kody-rules')[0]).toMatchObject({ status: 'infra', value: null });
         expect(nightlyRows(result, 'pass', 'finder')[0]).toMatchObject({ status: 'infra' });
+    });
+
+    it("reports the finder's cases: each PR's known bugs, found or not, by the PR's title", () => {
+        const datasets = path.join(__dirname, 'investigation', 'datasets');
+        const file = fs.readdirSync(datasets).find((f) => f.endsWith('.json')) as string;
+        const data = JSON.parse(fs.readFileSync(path.join(datasets, file), 'utf8'));
+        const { caseId, prTitle } = (Array.isArray(data) ? data[0] : data).vars;
+        const nightly = {
+            model: 'deepseek-v4-flash@fireworks',
+            metrics: { recall_mean: 0.4 },
+            gate: {},
+            rows: [
+                { caseId, metadata: { goldens: 2, matched: 1, goldenResults: [{ golden: 'bug A', found: true }, { golden: 'bug B', found: false }] } },
+                { caseId: 'did-not-run', status: 'infra' },
+            ],
+        };
+        const [finder]: Row[] = nightlyRows(nightly, 'pass');
+        expect(finder.meta.case_results).toEqual([
+            { id: caseId, checks: `Finds the known bugs in "${prTitle}"`, hits: 1, total: 2, detail: [{ what: 'bug A', ok: true }, { what: 'bug B', ok: false }] },
+            { id: 'did-not-run', checks: 'Finds the known bugs in "did-not-run"', hits: 0, total: 0 },
+        ]);
+    });
+
+    it('gives every stage whose eval has a README the question that README answers', () => {
+        const rows: Row[] = wiringRows(allOk(wiringSteps));
+        for (const stage of STAGES as Stage[]) {
+            if (!stage.eval || !fs.existsSync(path.join(__dirname, '..', stage.eval, 'README.md'))) continue;
+            const meta = stage.nightly ? nightlyRows({ metrics: { recall_mean: 0.4 }, metric: { value: 0.9 } }, 'pass', stage.id)[0].meta : rows.find((r) => r.name === `evals.stage.${stage.id}`)?.meta;
+            expect([stage.id, meta?.question]).toEqual([stage.id, expect.stringMatching(/\?/)]);
+        }
     });
 
     it('has a reader for every nightly-measured stage', () => {

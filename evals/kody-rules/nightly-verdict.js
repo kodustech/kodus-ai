@@ -19,40 +19,37 @@
 // with, and, under GitHub Actions, outputs for the message. Exit 0 always: the
 // verdict travels in the outputs and the quality signal, not the exit code.
 const fs = require('fs');
+const { poolCases } = require('../shared/eval-result');
 
 // A drop already alerted pings again only when the pooled recall falls this
 // much further: about one binomial SE over the set's 43 sites.
 const WORSE = 0.04;
 
 function measured(result) {
-    return Boolean(result && result.sites > 0 && result.totalRuns > 0 && result.erroredRuns / result.totalRuns < 0.5);
+    const infra = result?.infra || {};
+    return Boolean(result && result.counts?.sites > 0 && infra.total > 0 && infra.errored / infra.total < 0.5);
 }
 
 function belowFloor(result) {
-    const { floors } = result;
-    return result.occurrenceRecall < floors.occurrenceRecall || (result.specificity ?? 1) < floors.specificity;
+    const { metric, specificity } = result;
+    return metric.value < metric.floor || (specificity?.value ?? 1) < specificity?.floor;
 }
 
+// Two runs as one: counts summed and the rates recomputed from them, cases
+// pooled by id (evals/shared/eval-result.js).
 function pool(a, b) {
-    const sum = (k) => (a[k] || 0) + (b[k] || 0);
-    const sites = sum('sites');
-    const flagged = sum('flagged');
-    const cleanFiles = sum('cleanFiles');
+    const sum = (k) => (a.counts?.[k] || 0) + (b.counts?.[k] || 0);
+    const counts = { sites: sum('sites'), caught: sum('caught'), flagged: sum('flagged'), offSite: sum('offSite'), cleanFiles: sum('cleanFiles'), falseAlarmFiles: sum('falseAlarmFiles') };
     return {
         ...a,
-        runs: sum('runs'),
-        sites,
-        caught: sum('caught'),
-        flagged,
-        offSite: sum('offSite'),
-        cleanFiles,
-        falseAlarmFiles: sum('falseAlarmFiles'),
-        occurrenceRecall: sites ? sum('caught') / sites : null,
-        linePrecision: flagged ? (flagged - sum('offSite')) / flagged : null,
-        specificity: cleanFiles ? (cleanFiles - sum('falseAlarmFiles')) / cleanFiles : null,
+        runs: (a.runs || 0) + (b.runs || 0),
+        metric: { ...a.metric, value: counts.sites ? counts.caught / counts.sites : null },
+        specificity: { ...a.specificity, value: counts.cleanFiles ? (counts.cleanFiles - counts.falseAlarmFiles) / counts.cleanFiles : null },
+        linePrecision: counts.flagged ? (counts.flagged - counts.offSite) / counts.flagged : null,
+        counts,
+        cases: poolCases(a.cases, b.cases),
         tokens: Object.fromEntries(Object.keys(a.tokens || {}).map((k) => [k, (a.tokens[k] || 0) + ((b.tokens || {})[k] || 0)])),
-        erroredRuns: sum('erroredRuns'),
-        totalRuns: sum('totalRuns'),
+        infra: { errored: (a.infra?.errored || 0) + (b.infra?.errored || 0), total: (a.infra?.total || 0) + (b.infra?.total || 0) },
         pooled: true,
     };
 }
@@ -62,7 +59,7 @@ function pool(a, b) {
 // alerted stays red without mentioning anyone again.
 function nextState(verdict, final, previous) {
     if (verdict === 'infra' && previous) return previous;
-    return { verdict, occurrenceRecall: final?.occurrenceRecall ?? null, specificity: final?.specificity ?? null };
+    return { verdict, occurrenceRecall: final?.metric?.value ?? null, specificity: final?.specificity?.value ?? null };
 }
 
 function decide({ first, confirm, previous }) {
@@ -72,7 +69,7 @@ function decide({ first, confirm, previous }) {
     const final = pool(first, confirm);
     if (!belowFloor(final)) return { verdict: 'oscillation', final, mention: false };
     const wasRed = previous && (previous.verdict === 'regression' || previous.verdict === 'still-red');
-    const worse = wasRed && final.occurrenceRecall < previous.occurrenceRecall - WORSE;
+    const worse = wasRed && final.metric.value < previous.occurrenceRecall - WORSE;
     if (wasRed && !worse) return { verdict: 'still-red', final, mention: false };
     return { verdict: 'regression', final, mention: true };
 }
@@ -80,7 +77,7 @@ function decide({ first, confirm, previous }) {
 const pct = (r) => (r == null ? '—' : `${Math.round(r * 100)}%`);
 
 function message(verdict, final) {
-    const line = final ? `${pct(final.occurrenceRecall)} of known rule violations flagged (floor ${pct(final.floors.occurrenceRecall)}), ${pct(final.specificity)} of clean files left alone` : '';
+    const line = final?.metric ? `${pct(final.metric.value)} of known rule violations flagged (floor ${pct(final.metric.floor)}), ${pct(final.specificity?.value)} of clean files left alone` : '';
     return {
         regression: { status: 'failure', title: '🔴 Kody Rules dropped below the floor', description: `${line}. Confirmed by a second run.` },
         'still-red': { status: 'failure', title: '🔴 Kody Rules still below the floor', description: `${line}. Already alerted; no change made it better.` },
