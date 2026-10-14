@@ -8,6 +8,11 @@
  *   RECALL_SET=pr                      → 8 PR-gate cases / 38 goldens
  *   RECALL_ALL=1                       → every per-PR case
  *   RECALL_CASES=caseId1,caseId2,...   → an explicit subset
+ *
+ * RECALL_REPO_INSTRUCTIONS=<file.json> gives each case the coding-agent
+ * instructions recorded for it ({ [caseId]: { repoInstructions } }, the shape
+ * the agent stage collects), as a review with the setting on would read them.
+ * Cases with no instruction files run without, like a repository that has none.
  */
 const fs = require('fs');
 const path = require('path');
@@ -73,7 +78,18 @@ const CASE_SETS = {
     light: LIGHT_CASES,
 };
 
+function loadRepoInstructions() {
+    const file = process.env.RECALL_REPO_INSTRUCTIONS;
+    if (!file) return null;
+    try {
+        return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (err) {
+        throw new Error(`RECALL_REPO_INSTRUCTIONS: cannot read ${file}: ${err.message}`);
+    }
+}
+
 module.exports = async () => {
+    const instructionsByCase = loadRepoInstructions();
     const all = process.env.RECALL_ALL === '1';
     const setName = process.env.RECALL_SET || 'pr';
     const selectedSet = CASE_SETS[setName] || CASE_SETS.pr;
@@ -110,9 +126,10 @@ module.exports = async () => {
               : selectedSet.includes(caseId);
         if (!include) continue;
 
+        const repoInstructions = instructionsByCase?.[caseId]?.repoInstructions;
         tests.push({
             description: `recall: ${caseId}`,
-            vars: c.vars,
+            vars: repoInstructions?.files?.length ? { ...c.vars, repoInstructions } : c.vars,
             assert: [{ type: 'javascript', value: 'file://recall-assertion.js' }],
         });
     }

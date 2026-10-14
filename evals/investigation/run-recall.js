@@ -579,6 +579,9 @@ async function main() {
         infraFailures,
         unmeasured,
         infraBudget,
+        // Which coding-agent instructions the cases carried (recall-tests.js);
+        // null = none, the nightly default.
+        repoInstructions: process.env.RECALL_REPO_INSTRUCTIONS || null,
         metrics: {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
             precision_mean: avg(rows.map((row) => row.metadata?.precision)),
