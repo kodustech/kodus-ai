@@ -1,0 +1,25 @@
+{
+    "name": "git-issues-team-id-pattern",
+    "issue": "#1884",
+    "repository": {
+        "issues": [
+            {
+                "number": 12,
+                "title": "Scale servings",
+                "body": "Cooks change servings.\n\n## Acceptance criteria\n- Amounts are rounded to two decimals"
+            }
+        ]
+    },
+    "gitIssuesConnected": true,
+    "trackers": [],
+    "settings": { "taskIdPattern": "RCP-(\\d+)" },
+    "pullRequest": {
+        "title": "RCP-12 scale servings",
+        "body": "Adds a servings input."
+    },
+    "expect": {
+        "outcome": "validated",
+        "criteria": ["Amounts are rounded to two decimals"],
+        "toolsCalled": ["KODUS_GET_ISSUE"]
+    }
+}

@@ -74,6 +74,12 @@ describe('business-logic task resolution', () => {
             if (want.judgedTasks) {
                 expect(seen.judgedTasks).toEqual(want.judgedTasks);
             }
+            if (want.criteria) {
+                expect(seen.criteria).toEqual(want.criteria);
+            }
+            if (want.toolsCalled) {
+                expect(seen.toolsCalled).toEqual(want.toolsCalled);
+            }
             if (want.checkPasses !== undefined) {
                 expect(seen.checkPasses).toBe(want.checkPasses);
             }

@@ -16,6 +16,10 @@ export type ResolutionObservation = {
     taskReadByJudge?: string;
     /** The tasks the judge read, in order. */
     judgedTasks: string[];
+    /** The acceptance criteria the judge got as such, for the last task. */
+    criteria?: string[];
+    /** Tracker tools called, in order (Kodus MCP's PR tools left out). */
+    toolsCalled: string[];
     /** Whether the PR passed, for a validated case. */
     checkPasses?: boolean;
     /** Text posted on the PR, if anything. */
@@ -63,11 +67,13 @@ export async function driveCurrentStage(
 
         // The judge is the boundary: capture what it read instead of calling a model.
         let taskReadByJudge: string | undefined;
+        let criteria: string[] | undefined;
         const judgedTasks: string[] = [];
         const judge = jest
             .spyOn(IntentJudge.prototype, 'judge')
             .mockImplementation(async (input) => {
                 taskReadByJudge = input.taskText;
+                criteria = input.task.acceptanceCriteria;
                 judgedTasks.push(input.task.id);
                 return {
                     needsMoreInfo: false,
@@ -105,6 +111,7 @@ export async function driveCurrentStage(
         };
         const runs = {
             latestForPullRequest: async () => undefined,
+            forPullRequest: async () => [],
             create: async () => 'run',
             clearPendingRecheck: async () => undefined,
         };
@@ -143,6 +150,8 @@ export async function driveCurrentStage(
                                       fixture.settings.criteriaLocation,
                                   criteriaHeading:
                                       fixture.settings.criteriaHeading,
+                                  criteriaField: fixture.settings.criteriaField,
+                                  taskIdPattern: fixture.settings.taskIdPattern,
                               },
                           }
                         : {}),
@@ -169,6 +178,10 @@ export async function driveCurrentStage(
                       : 'silent',
             taskReadByJudge,
             judgedTasks,
+            criteria,
+            toolsCalled: host.calls
+                .filter((c) => c.server !== 'kodus')
+                .map((c) => c.tool),
             ...(taskReadByJudge !== undefined
                 ? {
                       checkPasses:

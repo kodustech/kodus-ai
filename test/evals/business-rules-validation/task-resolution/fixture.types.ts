@@ -10,6 +10,21 @@ export type TrackerTask = {
     title: string;
     description?: string;
     acceptanceCriteria?: string[];
+    /**
+     * Where the criteria live, as the team keeps them:
+     * - `description` (default): under "Acceptance criteria" in the description;
+     * - `heading`: under `criteriaHeading` in the description;
+     * - `field`: in their own field (`field`): a Jira custom field, Azure's
+     *   AcceptanceCriteria, a ClickUp custom field;
+     * - `properties`: a Notion page property.
+     */
+    criteriaAt?: 'description' | 'heading' | 'field' | 'properties';
+    criteriaHeading?: string;
+    field?: { id: string; name: string };
+    /** Rich text the server returns instead of plain text, where it can. */
+    fieldFormat?: 'text' | 'adf';
+    /** Files attached to the task. */
+    attachments?: number;
 };
 
 /**
@@ -36,9 +51,22 @@ export type TrackerFixture = {
     /** 'kodusmcp' for a managed catalog entry, 'custom' for a customer plugin. */
     provider: 'kodusmcp' | 'custom';
     category: 'task-management' | null;
-    /** The JSON the real server wraps a task in. */
-    /** `linear_markdown`: the task as markdown text instead of JSON. */
-    responseShape: 'linear' | 'linear_markdown' | 'jira' | 'azure';
+    /**
+     * The server whose answers this fake reproduces, as recorded from the real
+     * one (see servers.ts): payload shape, which arguments it honors and how
+     * it says "not found".
+     */
+    responseShape:
+        | 'linear'
+        | 'linear_markdown'
+        | 'jira'
+        | 'azure'
+        | 'notion'
+        | 'jira_community'
+        | 'github_official'
+        | 'gitlab'
+        | 'clickup'
+        | 'shortcut';
     tools: TrackerTool[];
     /** Write tools added by name only, to reproduce a server's full surface. */
     extraWriteTools?: string[];
@@ -80,6 +108,9 @@ export type ResolutionFixture = {
         /** Where the task's acceptance criteria live. */
         criteriaLocation?: 'auto' | 'heading' | 'field';
         criteriaHeading?: string;
+        criteriaField?: string;
+        /** A regex for task ids the built-in shapes miss. */
+        taskIdPattern?: string;
     };
     pullRequest: {
         number: number;
@@ -105,6 +136,13 @@ export type ResolutionFixture = {
         commentNotContains?: string[];
         /** For `validated`: the tasks the judge read, in order. */
         judgedTasks?: string[];
+        /**
+         * For `validated`: the acceptance criteria the judge got as such,
+         * apart from the description. Says where the task's value was found.
+         */
+        criteria?: string[];
+        /** The tracker tools called, in order: which tool read the task. */
+        toolsCalled?: string[];
         /**
          * For `validated`: whether the check passes when the judge reports one
          * requirement MISSING (the driver's judge always does).

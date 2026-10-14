@@ -18,9 +18,9 @@ import { FakeCodeHost } from './fake-code-host';
 import {
     ResolutionFixture,
     TrackerFixture,
-    TrackerTask,
     TrackerTool,
 } from './fixture.types';
+import { notFoundText, renderTask, sameTask } from './servers';
 
 export type ToolCall = {
     server: string;
@@ -292,70 +292,21 @@ export class FakeMcpHost {
             }
             if (tool.kind === 'list') {
                 return this.toolText(
-                    tracker.tasks.map((task) => this.shape(tracker, task)),
+                    tracker.tasks.map((task) => renderTask(tracker, task, {})),
                 );
             }
 
             const requested = String(args[tool.idArg ?? 'id'] ?? '').trim();
             const task = tracker.tasks.find((t) =>
-                this.sameId(tracker, t.id, requested),
+                sameTask(tracker, t, requested),
             );
             if (!task) {
-                return this.toolError(`Not found: ${requested || '(no id)'}`);
+                return this.toolError(notFoundText(tracker, requested));
             }
-            return this.toolText(this.shape(tracker, task));
+            return this.toolText(renderTask(tracker, task, args));
         });
 
         return server;
-    }
-
-    private sameId(tracker: TrackerFixture, taskId: string, requested: string) {
-        if (!requested) {
-            return false;
-        }
-        if (tracker.responseShape === 'azure') {
-            return String(Number(requested)) === taskId;
-        }
-        return taskId.toLowerCase() === requested.toLowerCase();
-    }
-
-    /** The task as the real server wraps it. */
-    private shape(tracker: TrackerFixture, task: TrackerTask) {
-        const criteria = task.acceptanceCriteria?.length
-            ? `\n\nAcceptance criteria:\n${task.acceptanceCriteria
-                  .map((c) => `- ${c}`)
-                  .join('\n')}`
-            : '';
-        const description = `${task.description ?? ''}${criteria}`;
-
-        switch (tracker.responseShape) {
-            case 'linear_markdown':
-                return `# ${task.id}: ${task.title}\n\n${description}`;
-            case 'linear':
-                return {
-                    id: `uuid-${task.id}`,
-                    identifier: task.id,
-                    title: task.title,
-                    description,
-                    url: `https://linear.app/acme/issue/${task.id.toLowerCase()}`,
-                    state: 'Todo',
-                };
-            case 'jira':
-                return {
-                    id: `100${task.id.replace(/\D/g, '')}`,
-                    key: task.id,
-                    fields: { summary: task.title, description },
-                };
-            case 'azure':
-                return {
-                    id: Number(task.id),
-                    fields: {
-                        'System.Title': task.title,
-                        'System.Description': description,
-                        'System.WorkItemType': 'User Story',
-                    },
-                };
-        }
     }
 
     private toolText(value: unknown) {

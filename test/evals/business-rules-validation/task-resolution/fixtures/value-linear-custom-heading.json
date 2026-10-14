@@ -1,0 +1,67 @@
+{
+    "name": "value-linear-custom-heading",
+    "issue": "#1941",
+    "trackers": [
+        {
+            "integrationId": "linear-default",
+            "appName": "Linear",
+            "provider": "kodusmcp",
+            "category": "task-management",
+            "responseShape": "linear",
+            "tools": [
+                {
+                    "name": "get_issue",
+                    "kind": "get",
+                    "idArg": "id",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["id"]
+                    }
+                },
+                {
+                    "name": "list_teams",
+                    "kind": "teams"
+                },
+                {
+                    "name": "list_issues",
+                    "kind": "list"
+                }
+            ],
+            "extraWriteTools": ["create_issue", "update_issue"],
+            "tasks": [
+                {
+                    "id": "SAA-96",
+                    "title": "Scale servings",
+                    "description": "Cooks change servings and see amounts recalculated.",
+                    "acceptanceCriteria": [
+                        "Amounts are rounded to two decimals",
+                        "Servings below 1 are rejected"
+                    ],
+                    "criteriaAt": "heading",
+                    "criteriaHeading": "Definition of done"
+                }
+            ]
+        }
+    ],
+    "pullRequest": {
+        "title": "feat(SAA-96): scale servings",
+        "body": ""
+    },
+    "expect": {
+        "outcome": "validated",
+        "criteria": [
+            "Amounts are rounded to two decimals",
+            "Servings below 1 are rejected"
+        ],
+        "toolsCalled": ["get_issue"]
+    },
+    "settings": {
+        "criteriaLocation": "heading",
+        "criteriaHeading": "Definition of done"
+    }
+}
