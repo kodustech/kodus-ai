@@ -388,6 +388,9 @@ export type CodeReviewConfig = {
     kodyLearningExcludedReviewers?: string[];
     kodyKnowledgeApproval?: KodyKnowledgeApprovalConfig;
     reviewModeConfig?: ReviewModeConfig;
+    // Reviews read the repo's coding-agent instructions (CLAUDE.md, AGENTS.md,
+    // .cursor/rules, ...). The name predates that meaning; it never imports
+    // those files as Kody Rules.
     ideRulesSyncEnabled?: boolean;
     kodyFineTuningConfig?: KodyFineTuningConfig;
     configLevel?: ConfigLevel;

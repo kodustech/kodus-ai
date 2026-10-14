@@ -111,38 +111,6 @@ export const kodyRulesIDEGeneratorSchema = z.object({
     ),
 });
 
-export const kodyRulesIDEGeneratorSchemaOnboarding = z.object({
-    rules: z.array(
-        z.object({
-            title: z.string(),
-            rule: z.string(),
-            path: z.string(),
-            sourcePath: z.string(),
-            severity: z.enum(['low', 'medium', 'high', 'critical']),
-            scope: z.enum(['file', 'pull-request']).optional(),
-            examples: z.array(
-                z.object({ snippet: z.string(), isCorrect: z.boolean() }),
-            ),
-            sourceSnippet: z.string().optional(),
-        }),
-    ),
-});
-
-export const kodyRulesManifestGeneratorSchemaOnboarding = z.object({
-    rules: z.array(
-        z.object({
-            title: z.string(),
-            rule: z.string(),
-            path: z.string(),
-            severity: z.enum(['low', 'medium', 'high', 'critical']),
-            scope: z.enum(['file', 'pull-request']).optional(),
-            examples: z.array(
-                z.object({ snippet: z.string(), isCorrect: z.boolean() }),
-            ),
-        }),
-    ),
-});
-
 export type KodyRulesClassifierSchema = z.infer<
     typeof kodyRulesClassifierSchema
 >;

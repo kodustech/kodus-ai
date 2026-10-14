@@ -81,11 +81,6 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { buildKodusConfigCentralizedMutationRequest } from '@libs/centralized-config/utils/kodus-config-centralized-pr.builder';
 import { formatRuleToYaml } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
 import {
-    IDE_RULES_SYNC_DISABLED_EVENT,
-    IdeRulesSyncDisabledEvent,
-    IdeSyncDisableAction,
-} from '@libs/kodyRules/domain/events/ide-rules-sync.events';
-import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
@@ -491,8 +486,6 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     previousConfig: codeReviewConfigs,
                     updatedConfig,
                     repositoryId,
-                    ideSyncDisableAction: (configValue as any)
-                        ?.ideSyncDisableAction,
                     generatorEnabledInPayload:
                         configValue?.kodyRulesGeneratorEnabled === true,
                 });
@@ -873,8 +866,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
      * Learning settings resolve default → global → repository, so one save can
      * change the effective value of many repositories (a global save) or of
      * one that only inherited it (a repository save). Each repository whose
-     * IDE rules sync goes on→off gets the cleanup picked in the toggle-off
-     * modal. Turning the generator on in a repository save seeds that
+     * coding-agent instructions setting changes is logged; the setting imports
+     * no rules, so there is nothing to clean up. Turning the generator on in a repository save seeds that
      * repository right away. After a global save, the weekly cron backfills.
      */
     private applyKodyLearningTransitions(params: {
@@ -882,7 +875,6 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         previousConfig: CodeReviewParameter;
         updatedConfig: CodeReviewParameter;
         repositoryId?: string;
-        ideSyncDisableAction?: IdeSyncDisableAction;
         generatorEnabledInPayload: boolean;
     }) {
         const {
@@ -903,34 +895,14 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         const resolveBefore =
             createKodyLearningSettingsResolver(previousConfig);
         const resolveAfter = createKodyLearningSettingsResolver(updatedConfig);
-        // Defaulting to 'keep' is deliberate: any caller that doesn't pass an
-        // explicit action gets the least destructive option, which avoids the
-        // silent-deletion regression.
-        const ideSyncDisableAction = params.ideSyncDisableAction ?? 'keep';
-        const ideSyncDisabledIds: string[] = [];
 
         for (const id of repositoryIds) {
             const before = resolveBefore(id);
             const after = resolveAfter(id);
 
-            if (before.ideRulesSyncEnabled && !after.ideRulesSyncEnabled) {
+            if (before.ideRulesSyncEnabled !== after.ideRulesSyncEnabled) {
                 this.logger.log({
-                    message: 'IDE rules sync turned off for repository',
-                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
-                    metadata: {
-                        organizationAndTeamData,
-                        repositoryId: id,
-                        level,
-                        action: ideSyncDisableAction,
-                    },
-                });
-                ideSyncDisabledIds.push(id);
-            } else if (
-                !before.ideRulesSyncEnabled &&
-                after.ideRulesSyncEnabled
-            ) {
-                this.logger.log({
-                    message: 'IDE rules sync turned on for repository',
+                    message: `Coding-agent instructions in review turned ${after.ideRulesSyncEnabled ? 'on' : 'off'} for repository`,
                     context: UpdateOrCreateCodeReviewParameterUseCase.name,
                     metadata: {
                         organizationAndTeamData,
@@ -969,17 +941,6 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             ) {
                 this.seedInitialKodyRules(organizationAndTeamData, id);
             }
-        }
-
-        // One cleanup for the whole save: the listener loads the org's rules
-        // once instead of once per repository.
-        if (ideSyncDisabledIds.length > 0) {
-            const event: IdeRulesSyncDisabledEvent = {
-                organizationAndTeamData,
-                repositoryIds: ideSyncDisabledIds,
-                action: ideSyncDisableAction,
-            };
-            this.eventEmitter.emit(IDE_RULES_SYNC_DISABLED_EVENT, event);
         }
     }
 

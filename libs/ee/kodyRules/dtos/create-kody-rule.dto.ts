@@ -292,7 +292,7 @@ export class CreateKodyRuleDto {
     @IsBoolean()
     @ApiPropertyOptional({
         description:
-            'True when the source file currently carries an `@kody-sync` marker — the per-file override that keeps the rule in sync even with `ideRulesSyncEnabled=false`. Set by the sync service, recomputed on every sync.',
+            'Deprecated. Used to mark rules whose source file carried `@kody-sync`; no longer set.',
     })
     pinnedSync?: boolean;
 }

@@ -88,4 +88,15 @@ describe('CheckSyncStatusUseCase — kodyRulesGeneratorEnabledFirstTime', () => 
         expect(res.kodyRulesGeneratorEnabledFirstTime).toBe(true);
         expect(findRules.execute).not.toHaveBeenCalled();
     });
+
+    it('no longer reports a first-time flag for coding-agent files, which import nothing', async () => {
+        const { useCase } = build({
+            repoConfig: repo({ ideRulesSyncEnabled: false }),
+            rules: [],
+        });
+
+        const res = await useCase.execute('team-1', 'repo-1');
+
+        expect(res).not.toHaveProperty('ideRulesSyncEnabledFirstTime');
+    });
 });

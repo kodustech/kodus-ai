@@ -21,7 +21,7 @@ import { FindSuggestionsByRuleUseCase } from '@libs/kodyRules/application/use-ca
 import { GenerateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-kody-rules.use-case';
 import { GetInheritedRulesKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/get-inherited-kody-rules.use-case';
 import { GetRulesLimitStatusUseCase } from '@libs/kodyRules/application/use-cases/get-rules-limit-status.use-case';
-import { ImportFastKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/import-fast-kody-rules.use-case';
+import { ListAgentInstructionFilesUseCase } from '@libs/kodyRules/application/use-cases/list-agent-instruction-files.use-case';
 import { ManageImportedKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/manage-imported-kody-rules.use-case';
 import { ResyncRulesFromIdeUseCase } from '@libs/kodyRules/application/use-cases/resync-rules-from-ide.use-case';
 import { SyncSelectedRepositoriesKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/sync-selected-repositories.use-case';
@@ -30,8 +30,6 @@ import { UpdateGlobalRulesSourceRepositoriesUseCase } from '@libs/kodyRules/appl
 import { ResyncGlobalRulesUseCase } from '@libs/kodyRules/application/use-cases/resync-global-rules.use-case';
 import { GetGlobalRulesImportStatusUseCase } from '@libs/kodyRules/application/use-cases/get-global-rules-import-status.use-case';
 import { GlobalRulesSourceRepository } from '@libs/kodyRules/domain/interfaces/global-rules-source.interface';
-import { ImportFastKodyRulesDto } from '@libs/kodyRules/dtos/import-fast-kody-rules.dto';
-import { ReviewFastKodyRulesDto } from '../dtos/review-fast-kody-rules.dto';
 
 import { CacheService } from '@libs/core/cache/cache.service';
 import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
@@ -136,7 +134,7 @@ export class KodyRulesController {
         private readonly findSuggestionsByRuleUseCase: FindSuggestionsByRuleUseCase,
         private readonly resyncRulesFromIdeUseCase: ResyncRulesFromIdeUseCase,
         private readonly fastSyncIdeRulesUseCase: FastSyncIdeRulesUseCase,
-        private readonly importFastKodyRulesUseCase: ImportFastKodyRulesUseCase,
+        private readonly listAgentInstructionFilesUseCase: ListAgentInstructionFilesUseCase,
         private readonly convertPendingUpdatesToNewUseCase: ConvertPendingUpdatesToNewUseCase,
         private readonly manageImportedKodyRulesUseCase: ManageImportedKodyRulesUseCase,
         private readonly countRulesByRepositoryUseCase: CountRulesByRepositoryUseCase,
@@ -791,7 +789,7 @@ export class KodyRulesController {
     }
 
     @ApiBearerAuth('jwt')
-    @Get('/pending-ide-rules')
+    @Get('/agent-instruction-files')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
         checkPermissions({
@@ -800,77 +798,14 @@ export class KodyRulesController {
         }),
     )
     @ApiOperation({
-        summary: 'List pending IDE rules (deprecated)',
+        summary: 'List coding-agent instruction files',
         description:
-            'Deprecated: use GET /kody-rules/pending. Returns pending rules for a repository.',
+            'The coding-agent instruction files (CLAUDE.md, AGENTS.md, .cursor/rules, Copilot instructions) on the default branch of each selected repository. Shown before a team turns on "use coding-agent instructions in reviews"; these files are never turned into Kody Rules.',
     })
     @ApiQuery({ name: 'teamId', type: String, required: true })
-    @ApiQuery({ name: 'repositoryId', type: String, required: false })
     @ApiOkResponse({ type: ApiArrayResponseDto })
-    public async listPendingIdeRules(
-        @Query('teamId') teamId: string,
-        @Query('repositoryId') repositoryId?: string,
-    ) {
-        const organizationId = this.request.user.organization.uuid;
-        return this.findRulesInOrganizationByRuleFilterKodyRulesUseCase.execute(
-            organizationId,
-            { status: KodyRulesStatus.PENDING },
-            repositoryId,
-        );
-    }
-
-    @ApiBearerAuth('jwt')
-    @Post('/import-fast-ide-rules')
-    @UseGuards(PolicyGuard)
-    @CheckPolicies(
-        checkPermissions({
-            action: Action.Create,
-            resource: ResourceType.KodyRules,
-        }),
-    )
-    @ApiOperation({
-        summary: 'Import fast IDE rules',
-        description: 'Import rules from fast sync results.',
-    })
-    @ApiCreatedResponse({ type: KodyRulesArrayResponseDto })
-    public async importFastIdeRules(@Body() body: ImportFastKodyRulesDto) {
-        return this.importFastKodyRulesUseCase.execute(body);
-    }
-
-    @ApiBearerAuth('jwt')
-    @Post('/review-fast-ide-rules')
-    @UseGuards(PolicyGuard)
-    @CheckPolicies(
-        checkPermissions({
-            action: Action.Update,
-            resource: ResourceType.KodyRules,
-        }),
-    )
-    @ApiOperation({
-        summary: 'Review fast IDE rules',
-        description: 'Activate or delete fast imported rules.',
-    })
-    @ApiCreatedResponse({ type: ApiObjectResponseDto })
-    public async reviewFastIdeRules(@Body() body: ReviewFastKodyRulesDto) {
-        const results: any = {};
-
-        if (body.activateRuleIds?.length) {
-            results.activated = await this.changeStatusKodyRulesUseCase.execute(
-                {
-                    ruleIds: body.activateRuleIds,
-                    status: KodyRulesStatus.ACTIVE,
-                },
-            );
-        }
-
-        if (body.deleteRuleIds?.length) {
-            results.deleted = await this.changeStatusKodyRulesUseCase.execute({
-                ruleIds: body.deleteRuleIds,
-                status: KodyRulesStatus.DELETED,
-            });
-        }
-
-        return results;
+    public async listAgentInstructionFiles(@Query('teamId') teamId: string) {
+        return this.listAgentInstructionFilesUseCase.execute({ teamId });
     }
 
     @ApiBearerAuth('jwt')
@@ -956,11 +891,12 @@ export class KodyRulesController {
         }),
     )
     @ApiOperation({
-        summary: 'Pause / resume / delete imported (auto-synced) rules',
+        summary: 'Pause / resume / delete rules imported from coding-agent files',
         description:
-            'Acts on the IDE-synced Kody Rules of a repository in bulk. ' +
-            'Used by the toggle-off modal in the web UI and by the orphan-rules ' +
-            'banner. See ManageImportedRulesAction for action semantics.',
+            'Acts in bulk on the frozen Kody Rules a repository imported from ' +
+            'coding-agent files (CLAUDE.md, .cursor/rules, ...). Used by the ' +
+            'frozen-rules notice on the Kody Rules page. See ' +
+            'ManageImportedRulesAction for action semantics.',
     })
     @ApiOkResponse({ type: ApiObjectResponseDto })
     public async manageImportedRules(@Body() body: ManageImportedKodyRulesDto) {
@@ -987,13 +923,12 @@ export class KodyRulesController {
         }),
     )
     @ApiOperation({
-        summary: 'Count imported (auto-synced) rules per status',
+        summary: 'Count rules imported from coding-agent files per status',
         description:
-            'Returns { active, paused, deleted, pinned } counts of IDE-synced rules ' +
-            'for a repository. With repositoryId=global, sums them over the ' +
-            'repositories that inherit IDE rules sync from the global setting. ' +
-            'Drives copy on the toggle-off confirmation modal and the ' +
-            'orphan-rules banner.',
+            'Returns { active, paused, deleted } counts of the frozen rules a ' +
+            'repository imported from coding-agent files. repositoryId=global ' +
+            'counts the ones stored at the global scope. Drives the ' +
+            'frozen-rules notice on the Kody Rules page.',
     })
     @ApiQuery({ name: 'repositoryId', type: String, required: true })
     @ApiQuery({ name: 'teamId', type: String, required: true })

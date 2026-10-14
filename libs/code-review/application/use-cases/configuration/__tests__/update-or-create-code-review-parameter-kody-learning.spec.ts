@@ -1,5 +1,3 @@
-import { IDE_RULES_SYNC_DISABLED_EVENT } from '@libs/kodyRules/domain/events/ide-rules-sync.events';
-
 import { UpdateOrCreateCodeReviewParameterUseCase } from '../update-or-create-code-review-parameter-use-case';
 
 const ORG = { organizationId: 'org-1', teamId: 'team-1' };
@@ -85,123 +83,32 @@ function build(globalConfigs: Record<string, unknown>, repos: RepoSeed[]) {
             ...scope,
         } as any);
 
-    const disabledEvents = () =>
-        eventEmitter.emit.mock.calls
-            .filter(([name]) => name === IDE_RULES_SYNC_DISABLED_EVENT)
-            .map(([, event]) => event);
+    const emittedEvents = () =>
+        eventEmitter.emit.mock.calls.map(([name]) => name);
 
-    return { save, disabledEvents, generateInitialKodyRulesUseCase };
+    return { save, emittedEvents, generateInitialKodyRulesUseCase };
 }
 
 describe('UpdateOrCreateCodeReviewParameterUseCase — Kody Rules learning inheritance', () => {
-    describe('IDE rules sync turned off', () => {
-        it('on a global save, sends one cleanup for all the repos that flipped, not one per repo', async () => {
-            const { save, disabledEvents } = build(
-                { ideRulesSyncEnabled: true },
-                [
-                    { id: 'a' },
-                    { id: 'b' },
-                    { id: 'own-on', configs: { ideRulesSyncEnabled: true } },
-                ],
-            );
-
-            await save({
-                ideRulesSyncEnabled: false,
-                ideSyncDisableAction: 'delete',
-            });
-
-            expect(disabledEvents()).toEqual([
-                expect.objectContaining({
-                    repositoryIds: ['a', 'b'],
-                    action: 'delete',
-                }),
-            ]);
-        });
-
-        it('on a global save, fires the cleanup for every repo that inherited "on", with the chosen action', async () => {
-            const { save, disabledEvents } = build(
-                { ideRulesSyncEnabled: true },
-                [
-                    { id: 'inherits' },
-                    { id: 'own-on', configs: { ideRulesSyncEnabled: true } },
-                    { id: 'own-off', configs: { ideRulesSyncEnabled: false } },
-                ],
-            );
-
-            await save({
-                ideRulesSyncEnabled: false,
-                ideSyncDisableAction: 'pause',
-            });
-
-            expect(disabledEvents()).toEqual([
-                expect.objectContaining({
-                    repositoryIds: ['inherits'],
-                    action: 'pause',
-                }),
-            ]);
-        });
-
-        it('on a repo save, fires the cleanup when the repo inherited "on" from global', async () => {
-            const { save, disabledEvents } = build(
+    describe('coding-agent instructions turned off', () => {
+        // The toggle no longer imports rules, so turning it off has nothing
+        // to clean up: rules imported from agent files before the freeze are
+        // managed from the Kody Rules page.
+        it.each([
+            ['a global save', {}],
+            ['a repo save', { repositoryId: 'repo-1' }],
+        ])('touches no rules on %s', async (_label, scope) => {
+            const { save, emittedEvents } = build(
                 { ideRulesSyncEnabled: true },
                 [{ id: 'repo-1' }],
             );
 
             await save(
                 { ideRulesSyncEnabled: false, ideSyncDisableAction: 'delete' },
-                { repositoryId: 'repo-1' },
+                scope,
             );
 
-            expect(disabledEvents()).toEqual([
-                expect.objectContaining({
-                    repositoryIds: ['repo-1'],
-                    action: 'delete',
-                }),
-            ]);
-        });
-
-        it('on a repo save, still fires the cleanup for a repo with its own "on"', async () => {
-            const { save, disabledEvents } = build({}, [
-                { id: 'repo-1', configs: { ideRulesSyncEnabled: true } },
-            ]);
-
-            await save(
-                { ideRulesSyncEnabled: false },
-                { repositoryId: 'repo-1' },
-            );
-
-            expect(disabledEvents()).toEqual([
-                expect.objectContaining({
-                    repositoryIds: ['repo-1'],
-                    action: 'keep',
-                }),
-            ]);
-        });
-
-        it('does nothing when the effective value does not change', async () => {
-            const { save, disabledEvents } = build({}, [{ id: 'repo-1' }]);
-
-            await save({ ideRulesSyncEnabled: false });
-            await save(
-                { ideRulesSyncEnabled: false },
-                { repositoryId: 'repo-1' },
-            );
-
-            expect(disabledEvents()).toEqual([]);
-        });
-
-        it('ignores directory-level values', async () => {
-            const { save, disabledEvents } = build(
-                { ideRulesSyncEnabled: true },
-                [{ id: 'repo-1', directories: [{ id: 'dir-1' }] }],
-            );
-
-            await save(
-                { ideRulesSyncEnabled: false },
-                { repositoryId: 'repo-1', directoryId: 'dir-1' },
-            );
-
-            expect(disabledEvents()).toEqual([]);
+            expect(emittedEvents()).not.toContain('ide-rules-sync.disabled');
         });
     });
 

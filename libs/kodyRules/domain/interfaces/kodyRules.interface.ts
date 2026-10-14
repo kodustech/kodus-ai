@@ -175,17 +175,10 @@ export interface IKodyRule {
     resolvedAt?: Date;
     resolvedBy?: string;
     /**
-     * Set by the IDE-rule sync flow when the source file currently
-     * carries an `@kody-sync` marker — the per-file override that
-     * keeps a rule synchronized even with the repository's
-     * `ideRulesSyncEnabled=false`. Recomputed from file content on
-     * every sync, so flipping the toggle or editing the marker
-     * self-corrects on the next sync of that file.
-     *
-     * Consumed by the web UI to exclude such rules from the
-     * "orphan auto-sync" chip (they're not orphans, the backend
-     * keeps maintaining them) and to render a pin affordance on
-     * the Auto-sync origin badge.
+     * @deprecated Marked rules whose source file carried `@kody-sync`. The
+     * marker no longer does anything (Kody rule files always sync,
+     * coding-agent files never convert), the sync no longer writes it, and the
+     * agent-file freeze migration cleared it. Kept so old documents parse.
      */
     pinnedSync?: boolean;
     /**

@@ -49,11 +49,9 @@ export class CheckSyncStatusUseCase {
         teamId: string,
         repositoryId?: string,
     ): Promise<{
-        ideRulesSyncEnabledFirstTime: boolean;
         kodyRulesGeneratorEnabledFirstTime: boolean;
     }> {
         const syncStatusFlags = {
-            ideRulesSyncEnabledFirstTime: true,
             kodyRulesGeneratorEnabledFirstTime: true,
         };
 
@@ -82,17 +80,6 @@ export class CheckSyncStatusUseCase {
                     {},
                     repositoryId,
                 );
-
-            const ideRulesSyncEnabled =
-                currentRepositoryConfig.configs.ideRulesSyncEnabled;
-
-            if (!ideRulesSyncEnabled) {
-                const ideRules = rules?.find((rule) =>
-                    rule?.rules?.find((r: IKodyRule) => r.sourcePath),
-                );
-
-                syncStatusFlags.ideRulesSyncEnabledFirstTime = !ideRules;
-            }
 
             // "First time" for the generator means the repo has never been
             // seeded from past reviews. It drives the one-time onboarding
