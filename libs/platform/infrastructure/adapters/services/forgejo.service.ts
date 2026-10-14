@@ -3345,7 +3345,6 @@ export class ForgejoService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string };
         prNumber: number;
-        commentId?: number;
     }): Promise<any[]> {
         try {
             const authDetail = await this.getAuthDetails(
