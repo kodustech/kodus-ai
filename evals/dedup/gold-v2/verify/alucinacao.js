@@ -168,7 +168,40 @@ function ferramentas(cmd) {
     };
 }
 
+// Claude por assinatura: a fachada do Agent SDK nao chama ferramenta; a sessao
+// roda pelo proprio SDK com Read/Grep/Glob no worktree e o veredito em JSON no fim.
+const PELO_SDK = require(path.join(INV, '..', 'shared', 'tier0-models')).TIER0[MODELO]?.provider === 'claude_agent_sdk';
+async function julgaSdk(s, dir) {
+    const { carregaSdk, envDoProcesso } = require(path.join(INV, 'claude-sdk-runner'));
+    const sdk = await carregaSdk();
+    const texto = PROMPTS[arg('prompt', VERSAO)](s)
+        .replace(/grep, readFile and listDir/g, 'Grep, Read and Glob')
+        .replace('Answer with submit.', `End your answer with ONLY this JSON object, no code fence: {"verdict": ${JSON.stringify(VEREDITOS.join('|'))}, "evidence": "...", "reason": "..."}`);
+    let saida = '', turnos = 0;
+    try {
+        for await (const msg of sdk.query({
+            prompt: texto,
+            options: {
+                model: require(path.join(INV, '..', 'shared', 'tier0-models')).TIER0[MODELO].sdkModel,
+                systemPrompt: 'You can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
+                tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'],
+                disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
+                settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso(),
+            },
+        })) {
+            if (msg.type === 'assistant') { turnos++; for (const b of msg.message.content || []) if (b.type === 'text') saida += b.text + '\n'; }
+            if (msg.type === 'result' && msg.result) saida += '\n' + msg.result;
+        }
+    } catch (e) {
+        if (!saida) throw e;
+    }
+    const d = extraiJson(saida);
+    // Sem veredito ao bater o teto: mantem (unverified), como o passo final forcado faria.
+    return { ...normaliza(d && VEREDITOS.includes(d.verdict) ? d : { verdict: 'unverified', evidence: '', reason: 'no verdict' }, s), passos: turnos };
+}
+
 async function julga(model, cmd, s, diff) {
+    if (PELO_SDK) return julgaSdk(s, cmd.repoRoot);
     const schema = SCHEMA;
     let resp = null;
     const tools = {

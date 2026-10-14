@@ -1,0 +1,2118 @@
+{
+ "model": "gpt-6.1-sol",
+ "verificador": "gpt-6.1-sol@sub",
+ "versao": "h1t10",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The admin-or-owner authorization check requires both isTeamAdmin and isTeamOwner to succeed. Since isTeamAdmin accepts ADMIN and OWNER but isTeamOwner accepts only OWNER, a team admin who is not the organizer or an attendee receives FORBIDDEN.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-48 combines the awaited isTeamAdmin and isTeamOwner results with `&&`; lines 54-55 throw `FORBIDDEN` when that result, isOrganizer, and isAttendee are all false. packages/lib/server/queries/teams/index.ts:264-283 filters accepted memberships with `OR: [{ role: \"ADMIN\" }, { role: \"OWNER\" }]` and returns the membership or false; lines 286-294 implement isTeamOwner using `role: \"OWNER\"`.",
+     "reason": "The checked facts hold: an accepted ADMIN membership passes isTeamAdmin but fails isTeamOwner, so the conjunction denies an admin who is neither organizer nor attendee.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "EventManager is initialized with the requesting user's credentials rather than the booking organizer's credentials.",
+     "claimNoTexto": null,
+     "evidence": "addGuests.handler.ts:23 uses `const { user } = ctx`; lines 158-163 call `getUsersCredentials(ctx.user)` and construct `new EventManager({ ...user, credentials: [...credentials] })`. packages/lib/server/getUsersCredentials.ts:9-12 queries credentials with `userId: user.id`. packages/core/EventManager.ts:112-124 derives calendarCredentials from user.credentials; lines 596-601 call updateAllCalendarEvents; lines 871-877 select credentials using `this.calendarCredentials.filter((credential) => credential.type === reference?.type)` when reference.credentialId is absent. addGuests.handler.ts:50-55 permits an attendee distinct from the organizer.",
+     "reason": "The checked code uses caller credentials and, for references without credentialId, performs type-based updates with those credentials rather than loading the booking organizer's credentials.",
+     "passos": 5
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The mutation accepts an unbounded guest array that is persisted and immediately expanded into concurrent emails to every attendee. For non-seated bookings each email's ICS serializes the full attendee list, so adding N guests creates O(N) concurrent sends and O(N²) aggregate attachment work; repeated additions also resend to all existing attendees.",
+     "claimNoTexto": null,
+     "evidence": "addGuests.schema.ts:5 defines guests as z.array(z.string().email()) without a maximum; addGuests.handler.ts:92-106 inserts guests, 108-136 constructs the full attendee list, and 168 calls sendAddGuestsEmails. packages/emails/email-manager.ts:539-549 maps every attendee to a send and awaits Promise.all; lines 70-74 immediately invoke email.sendEmail(). packages/emails/templates/attendee-scheduled-email.ts:21-26 retains the full event for non-seated bookings; attendee-add-guests-email.ts:10-16 also generates ICS from that event. packages/emails/lib/generateIcsString.ts:81-88 maps the full event.attendees into the ICS.",
+     "reason": "The checked code has no guest-count limit in the schema or handler, sends notifications concurrently to new and existing attendees, and serializes the full attendee list into each non-seated attendee's ICS.",
+     "passos": 10
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The removal tooltip hard-codes `Remove email`, neighbouring controls use `t(...)`, and the component obtains `t` from useLocale.",
+     "claimNoTexto": null,
+     "evidence": "packages/ui/form/MultiEmail.tsx:46: `<Tooltip content=\"Remove email\">`; line 13: `const { t } = useLocale();`; line 69: `{t(\"add_another\")}`. packages/ui/components/tooltip/Tooltip.tsx:38 renders `{content}` directly.",
+     "reason": "The tooltip passes and renders a literal English string without translation, while the component already uses its locale translation function for the adjacent add-another control.",
+     "passos": 4
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8",
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The filter compares submitted guests only with the original attendees (and blacklist), retains repeated new addresses, and passes them to createMany without atomic booking/email uniqueness enforcement.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-78 filters against booking.attendees and blacklistedGuestEmails only; lines 83-103 map every retained entry and pass guestsFullDetails to attendees.createMany. packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6 accepts guests: z.array(z.string().email()) without uniqueness validation, and _router.tsx:79-94 passes that input to the handler. packages/prisma/schema.prisma:526-539 defines Attendee with only nonunique indexes on email and bookingId. apps/web/components/dialog/AddGuestsDialog.tsx:82 displays t(\"emails_must_be_unique_valid\").",
+     "reason": "The checked code neither deduplicates new addresses within a request nor atomically checks existing attendees at insertion, so repeated or concurrent submissions can create duplicate attendees as the comment states.",
+     "passos": 5
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6",
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The blacklist is lowercased, incoming guests are not normalized before the case-sensitive includes check, both schemas accept mixed-case emails without lowercasing, and a permitted caller can add and email a mixed-case variant of a blacklisted address.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-77 lowercases only blacklist entries and checks `!blacklistedGuestEmails.includes(guest)`; lines 83-103 store `email: guest` as a new attendee, and line 168 calls `sendAddGuestsEmails(evt, guests)`. packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6 uses `guests: z.array(z.string().email())` without normalization. apps/web/components/dialog/AddGuestsDialog.tsx:26-29 validates emails without normalization and lines 52-54 submit `multiEmailValue` unchanged. packages/trpc/server/routers/viewer/bookings/_router.tsx:79-94 passes the validated input to the handler unchanged. packages/emails/email-manager.ts:539-545 sends attendee emails, including `AttendeeScheduledEmail` for new guests.",
+     "reason": "The checked code preserves guest casing while lowercasing only blacklist entries, so a mixed-case variant passes the blacklist check and proceeds to attendee creation and email sending for an authorized caller.",
+     "passos": 6
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The handler passes unfiltered guests to sendAddGuestsEmails, causing existing attendees included in the request to receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-78 filters existing attendee emails out of uniqueGuests; lines 83-103 insert only uniqueGuests; lines 108-136 build evt.attendees from all updated booking attendees; line 168 calls `await sendAddGuestsEmails(evt, guests);`. packages/emails/email-manager.ts:540-545 maps attendees and uses `if (newGuests.includes(attendee.email)) { return sendEmail(() => new AttendeeScheduledEmail(calendarEvent, attendee)); } else { return sendEmail(() => new AttendeeAddGuestsEmail(calendarEvent, attendee)); }`.",
+     "reason": "The checked code supports the comment's factual premises: existing attendees are excluded from insertion but remain in the original guests argument used to choose scheduled versus add-guests notifications.",
+     "passos": 4
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new credential update references prisma without importing or declaring it; searching this file finds only the new usage.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:96-99: `await prisma.credential.update({ where: { id: credential.id }, data: { key: { ...accessTokenParsed.data, refresh_token: credentialKey.refresh_token } }, });`; the imports at lines 1-20 contain no prisma import, and a whole-file search for `prisma` returns only line 96. packages/prisma/index.ts:63 exports prisma as default.",
+     "reason": "The file uses an unbound prisma identifier after successful token-response validation, and @calcom/prisma provides the default export needed by the suggested import.",
+     "passos": 5
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "getClient now unconditionally exchanges the Salesforce refresh token on every service construction, even when the saved access token is valid.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:55-57: constructor calls `this.conn = this.getClient(credential).then((c) => c);`. Lines 75-84 unconditionally await a POST to the Salesforce token endpoint with `grant_type: \"refresh_token\"`; no access-token validity or expiration check precedes it. Lines 96-99 await `prisma.credential.update(...)` before returning the jsforce connection at lines 101-108. Salesforce operations await `this.conn` (for example, lines 112, 136, 156, 197, and 213), so successful initialization requires the exchange and write first. The connection still receives `accessToken` and `refreshToken` at lines 106-107; jsforce's internal on-demand refresh implementation is not present in the repository.",
+     "reason": "The central performance claim holds: every normally configured service construction starts an unconditional refresh exchange and successful initialization awaits a credential write before Salesforce operations, although the constructor itself does not synchronously block and jsforce internals could not be inspected.",
+     "passos": 4
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The webhook performs a non-atomic findFirst followed by create when no credential exists. Concurrent deliveries for the same user and app can both observe no row and insert duplicates because Credential has no unique userId/appId constraint; subsequent findFirst updates only one duplicate, leaving competing credentials stale.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/pages/api/webhook/app-credential.ts:62-70 calls prisma.credential.findFirst with userId and appId; lines 72-80 update by the single returned id; lines 82-90 call prisma.credential.create when no row was found, without a transaction or lock. packages/prisma/schema.prisma:127-146 defines Credential with only id unique and ordinary @@index([userId]) and @@index([appId]), not a unique userId/appId constraint.",
+     "reason": "The checked code uses separate lookup and insertion operations without pair uniqueness or serialization, allowing concurrent requests to create duplicates and later updates to affect only one matching credential.",
+     "passos": 5
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The webhook authenticates a secret using direct string inequality, which is not constant-time and can leak information about the secret through comparison timing.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/pages/api/webhook/app-credential.ts:24-28: `if (req.headers[process.env.CALCOM_WEBHOOK_HEADER_NAME || \"calcom-webhook-secret\"] !== process.env.CALCOM_WEBHOOK_SECRET) { return res.status(403).json({ message: \"Invalid webhook secret\" }); }`",
+     "reason": "The handler directly compares the incoming header with the environment-configured secret using `!==`, without a constant-time primitive or header validation, so the comment's factual premise holds.",
+     "passos": 2
+    },
+    {
+     "rep": "S24",
+     "membros": [
+      "S1",
+      "S13",
+      "S16",
+      "S19",
+      "S24"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The sync branch returns a raw fetch Response, whereas the Google, HubSpot and Zoho callbacks supplied to this helper return SDK token objects or Axios/Gaxios responses.",
+     "claimNoTexto": null,
+     "evidence": "refreshOAuthTokens.ts:8-15 returns the fetch response without parsing; googlecalendar/lib/CalendarService.ts:86-96 returns fetchTokens.res in the callback and then reads res?.data and token.access_token; hubspot/lib/CalendarService.ts:177-202 supplies tokensApi.createToken and consumes expiresIn/accessToken directly; zoho-bigin/lib/CalendarService.ts:85-96 supplies axios.post and reads tokenInfo.data.error; zohocrm/lib/CalendarService.ts:204-217 supplies axios and reads zohoCrmTokenInfo.data.error.",
+     "reason": "The checked facts hold: when the sharing flag, sync endpoint and user ID condition selects the sync branch, its raw Response lacks the data or token fields these consumers expect.",
+     "passos": 4
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11",
+      "S20",
+      "S23"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The computed keys are string representations of Zod schema objects rather than dynamic property matchers, so they do not recognize ordinary expiry fields, and the object schema does not preserve arbitrary extra properties by default.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:5-11 defines `z.object({ access_token: z.string(), [z.string().toString()]: z.number(), [z.string().optional().toString()]: z.unknown().optional() })`, alongside comments claiming numeric-property expiry detection and allowance of other properties; no `.passthrough()` or catchall is applied. Lines 15-18 use this schema when credential sharing and its sync endpoint are enabled.",
+     "reason": "The documented behavior is not implemented by these literal computed string keys or Zod's default object handling, so the review's factual premises hold.",
+     "passos": 3
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S3",
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "When a refresh response omits refresh_token, this helper manufactures the hardcoded credential \"refresh_token\". Callers such as Office365 merge this into stored credentials, overwriting the valid existing refresh token and causing subsequent provider refreshes to use a predictable invalid token.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:25-26: `if (!refreshTokenResponse.data.refresh_token) { refreshTokenResponse.data.refresh_token = \"refresh_token\"; }`; packages/app-store/office365calendar/lib/CalendarService.ts:51-56 allows `refresh_token: z.string().optional()`; :263-270 parses the response, merges it with `o365AuthCredentials = { ...o365AuthCredentials, ...(tokenResponse.success && tokenResponse.data) };`, and stores the merged credentials; :254 sends `refresh_token: o365AuthCredentials.refresh_token` to the provider.",
+     "reason": "The helper substitutes the literal for an omitted refresh token, and Office365 accepts that omission, overwrites and persists the existing token with the parsed value, and uses stored refresh tokens in provider refresh requests.",
+     "passos": 6
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S18",
+      "S22"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Passing that wrapper as key stores access_token, expiry_date and refresh_token under data rather than at the credential root, so subsequent Google credential parsing fails even with credential sharing disabled.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:97-100 assigns parseRefreshTokenResponse(...) to key and persists data: { key }; line 75 parses credential.key directly. packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:18 uses schema.safeParse(response) when sharing is disabled, and line 29 returns refreshTokenResponse rather than refreshTokenResponse.data. packages/app-store/googlecalendar/lib/googleCredentialSchema.ts:3-8 requires scope, token_type, expiry_date, access_token and refresh_token at the object root.",
+     "reason": "The helper returns the successful safeParse wrapper in the disabled-sharing branch too, and the caller persists that wrapper although subsequent parsing requires root-level credential fields.",
+     "passos": 3
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S5",
+      "S14",
+      "S17",
+      "S21"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The third parameter of refreshOAuthTokens is a user ID and is serialized as calcomUserId, but this call passes credentialId.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/zoho-bigin/lib/CalendarService.ts:53 sets `const credentialId = credential.id;`, and lines 85–94 pass `credentialId` as the third argument to refreshOAuthTokens. packages/app-store/_utils/oauth/refreshOAuthTokens.ts:3 declares `userId: number | null`; lines 5–13 select the sync branch when `userId` is truthy and serialize `calcomUserId: userId.toString()`. packages/prisma/schema.prisma:128–135 define the autoincrement credential `id` separately from nullable `userId` and `teamId`.",
+     "reason": "The checked code passes the credential primary key where the helper expects the owner's user ID, so when syncing is enabled it sends the wrong identifier and does not exclude team credentials by their null userId.",
+     "passos": 5
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The fallback searches for a destination whose externalId equals the absent externalCalendarId. When a booking reference lacks that field, this yields undefined instead of the configured calendar and the update request has no calendarId; the analogous deletion fallback targets primary rather than the configured calendar.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:254-261 selects externalCalendarId or event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId and passes selectedCalendar as calendarId; lines 314-322 use the same lookup for deletion and fall back to \"primary\". packages/features/bookings/lib/handleCancelBooking.ts:748 passes reference.externalCalendarId to updateEvent, and lines 456-457 pass bookingRef.externalCalendarId to deleteEvent.",
+     "reason": "Both fallbacks compare destination externalId to the missing reference value rather than selecting the configured destination, leaving update calendarId undefined and causing deletion to use primary.",
+     "passos": 5
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "updateLocation now reads externalId and credentialId exclusively from results, but CalendarManager.updateEvent returns neither field.",
+     "claimNoTexto": null,
+     "evidence": "packages/core/EventManager.ts:208-209 sets `externalCalendarId: result.externalId` and `credentialId: result.credentialId ?? undefined`; lines 542-548 pass updateEvent results through without enriching them, and line 590 returns `Promise.all(result)`. packages/core/CalendarManager.ts:313-322 returns `{ appName: credential.appName, type: credential.type, success, uid, updatedEvent: updatedResult, originalEvent: calEvent, calError, calWarnings }`, with neither externalId nor credentialId. EventManager.ts:505-542 reads routing fields from existing references but does not preserve them in those results.",
+     "reason": "The checked calendar-update path returns neither routing field and updateLocation builds replacement references solely from those missing result fields, supporting the comment's reported loss of routing information.",
+     "passos": 4
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Organization creation no longer assigns a slug when team billing is disabled, while requestedSlug is also omitted in that mode. New self-hosted organizations therefore have neither publication field, and publish.handler rejects them because requestedSlug is missing.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:151: `...(IS_TEAM_BILLING_ENABLED ? { slug } : {}),`; :153: `...(IS_TEAM_BILLING_ENABLED ? { requestedSlug: slug } : {}),`. packages/prisma/schema.prisma:259: `slug String?` (no default). packages/trpc/server/routers/viewer/organizations/publish.handler.ts:54-58: `if (!metadata.data?.requestedSlug) { throw new TRPCError({ code: \"BAD_REQUEST\", message: \"Can't publish organization without `requestedSlug`\", }); }`.",
+     "reason": "With team billing disabled, creation omits both fields and the non-billing publication path explicitly rejects the missing requestedSlug, matching the reported problem.",
+     "passos": 5
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S1",
+      "S10",
+      "S14",
+      "S17",
+      "S18"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The fallback dereferences the first destination without an optional guard; handleNewBooking supplies null when neither destination exists, and payment webhook event producers supply an empty array.",
+     "claimNoTexto": null,
+     "evidence": "packages/core/EventManager.ts:118-120: `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [];` followed by `if (evt.location === MeetLocationType && mainHostDestinationCalendar.integration !== \"google_calendar\")`. packages/features/bookings/lib/handleNewBooking.ts:1063-1067 sets `destinationCalendar: eventType.destinationCalendar ? [eventType.destinationCalendar] : organizerUser.destinationCalendar ? [organizerUser.destinationCalendar] : null`; line 2114 calls `eventManager.create(evt)`. packages/features/ee/payments/api/webhook.ts:119 and 229 use `destinationCalendar: selectedDestinationCalendar ? [selectedDestinationCalendar] : []`. EventManager.ts:47-59 processes location without filling destinationCalendar.",
+     "reason": "Both null and an empty destination array leave the destructured first destination undefined, so the Google Meet branch throws on its unguarded integration access rather than executing the Cal Video fallback.",
+     "passos": 6
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S2",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The mapping replaces the dedicated video result's credential ID with undefined for non-calendar references.",
+     "claimNoTexto": null,
+     "evidence": "packages/core/EventManager.ts:149: `return result.type.includes(\"_calendar\");`; packages/core/EventManager.ts:170: `credentialId: isCalendarType ? result.credentialId : undefined,`; packages/core/EventManager.ts:452-456: `const credential = this.getVideoCredential(event);` and `return createMeeting(credential, event);`; packages/core/videoClient.ts:78: `credentialId: credential.id,`.",
+     "reason": "The checked code confirms that video creation returns its credential ID but the cited reference mapping discards it, and no code contradicting that reported loss was found.",
+     "passos": 7
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S3",
+      "S9",
+      "S11",
+      "S15",
+      "S16",
+      "S19"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Office365 creation always selects the first destination; collective booking appends other hosts' destinations, and EventManager passes the full event to CalendarManager for each destination's credential, which forwards credentialId to the calendar service.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/office365calendar/lib/CalendarService.ts:72-79 selects `const [mainHostDestinationCalendar] = event.destinationCalendar ?? []` and posts to `/me/calendars/${mainHostDestinationCalendar?.externalId}/events`; packages/features/bookings/lib/handleNewBooking.ts:992-993 collects collective hosts' calendars and :1077-1078 appends them; packages/core/EventManager.ts:339-370 resolves each destination's credential and calls `createEvent(credential, event, destination.externalId)`; packages/core/CalendarManager.ts:234-236 calls `.createEvent(calEvent, credential.id)` without filtering destinations; Office365 CalendarService.ts:65-67 binds authentication to the supplied credential and :319-320 obtains its token.",
+     "reason": "The checked code supports the comment's premises: each host's credential receives the same destination array, while Office365 ignores the forwarded credentialId and uses its first destination.",
+     "passos": 5
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S5",
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "When neither the event type nor organizer has a destination, it is set to null above, so optional push silently discards all the computed teamDestinationCalendars.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/bookings/lib/handleNewBooking.ts:987-993 collects users.slice(1) destinations into teamDestinationCalendars; lines 1063-1067 initialize destinationCalendar from the event type or organizer destination, otherwise null; lines 1077-1078 use `evt.destinationCalendar?.push(...teamDestinationCalendars)`. packages/core/EventManager.ts:338-380 creates host destination events by iterating event.destinationCalendar; lines 384-395 instead fall back to a connected organizer calendar when that list is absent.",
+     "reason": "The null initialization skips appending collective hosts' destinations, and the downstream fallback does not restore those hosts' configured destination calendars.",
+     "passos": 6
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S7",
+      "S20"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new outer loop iterates all calendar references, but this inner block still iterates only the organizer's credentials and takes the first calendar reference of each booking.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:418-424 filters calendar references and loops over each reference; :449-457 uses `bookingToDelete.user.credentials.filter((credential) => credential.type.endsWith(\"_calendar\"))`, then `updBooking.references.find((ref) => ref.type.includes(\"_calendar\"))` and `calendar?.deleteEvent(uid, evt, externalCalendarId)`; :44-48 selects credentials from the booking's user, and :431-443 retrieves an additional reference's credential without adding it to that user's credentials.",
+     "reason": "The recurring cancel-all branch ignores the outer reference and its resolved credential, repeatedly deleting each updated booking's first calendar reference using only the booking user's calendar credentials rather than deleting the additional hosts' matching references.",
+     "passos": 4
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": []
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The cleanup comment describes deletion of past-dated SMS reminders, but the OR branch also deletes reminders with retryCount > 1 regardless of date or method.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:28-45: The comment says \"//delete all scheduled sms reminders where scheduled date is past current date\"; deleteMany uses where: { OR: [{ method: WorkflowMethods.SMS, scheduledDate: { lte: dayjs().toISOString() } }, { retryCount: { gt: 1 } }] }.",
+     "reason": "The retry-count predicate is an independent OR alternative with no date or SMS-method restriction, so the stated discrepancy between the cleanup comment and deletion scope holds.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "A reminder can fail twice, enter the next invocation with retryCount = 2, and successfully schedule; the success update does not reset that count.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:29-45 executes `await prisma.workflowReminder.deleteMany({ where: { OR: [ { method: WorkflowMethods.SMS, scheduledDate: { lte: dayjs().toISOString() } }, { retryCount: { gt: 1 } } ] } });` before lines 48-60 execute `await prisma.workflowReminder.findMany({ where: { method: WorkflowMethods.SMS, scheduled: false, scheduledDate: { lte: dayjs().add(7, \"day\").toISOString() } }, select: { ...select, retryCount: true } })` and before the scheduling loop at line 67.",
+     "reason": "Although the success update does not reset retryCount and the retry-limit arm lacks an SMS restriction, a reminder entering an invocation with retryCount = 2 is deleted before reminders are fetched for scheduling, contradicting the claimed successful-scheduling scenario.",
+     "passos": 2
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new database update inside catch can itself throw when a reminder has been deleted during scheduling. Booking cancellation deletes reminders through handleCancelBooking and deleteScheduledSMSReminder, so a concurrent cancellation followed by a scheduling error now rejects the entire cron handler and prevents the remaining reminders from being processed.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:67 processes reminders in a sequential for loop; lines 189-197 await prisma.workflowReminder.update({ where: { id: reminder.id }, data: { retryCount: reminder.retryCount + 1 } }) inside catch without another error guard. packages/features/bookings/lib/handleCancelBooking.ts:453-458 calls deleteScheduledSMSReminder for cancelled bookings' SMS reminders. packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:245-255 optionally cancels the provider message and then awaits prisma.workflowReminder.delete({ where: { id: reminderId } }).",
+     "reason": "The cancellation path can delete a reminder already loaded by the cron handler, and the unguarded single-row Prisma update in catch then throws for the missing row and exits the sequential loop.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Retry counts are assigned from the stale findMany snapshot instead of incremented atomically, both here and in the catch branch.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:48-60 reads reminders with findMany and selects retryCount; lines 183-185 assign `retryCount: reminder.retryCount + 1`, and lines 194-196 make the same assignment in the catch branch. Lines 39-40 delete reminders when `retryCount: { gt: 1 }`; lines 49-55 select unscheduled SMS reminders without a retry-count filter.",
+     "reason": "Both failure branches write a value calculated from the previously fetched snapshot without an atomic increment or concurrency guard, so overlapping requests can both write one from zero and leave the reminder below the deletion threshold.",
+     "passos": 2
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The backup-code branch accepts a valid backup code even when an arbitrary nonempty totpCode has skipped password verification.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/auth/lib/next-auth-options.ts:121–128 verifies the password only inside `if (user.password && !credentials.totpCode)`. Lines 131–145 enter `if (user.twoFactorEnabled && credentials.backupCode)` and check the backup code via `backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"))`. Lines 157–187 place TOTP verification in the mutually exclusive `else if (user.twoFactorEnabled)` branch. Lines 205–214 return the authenticated user.",
+     "reason": "A nonempty totpCode skips password verification, while a valid backupCode selects the backup-code branch and bypasses the only TOTP validation before the user is returned.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Successful enablement only advances to the backup-code screen; its Close button invokes onEnable and resets state, whereas dialog onOpenChange only closes the parent modal without invalidating viewer.me.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:134-136: `if (response.status === 200) { setStep(SetupStep.DisplayBackupCodes); return; }`; :166: `<Dialog open={open} onOpenChange={onOpenChange}>`; :266-269: `e.preventDefault(); resetState(); onEnable();`. apps/web/pages/settings/security/two-factor-auth.tsx:64: `onOpenChange={() => setEnableModalOpen(!enableModalOpen)}`; :65-67: `onEnable={() => { setEnableModalOpen(false); utils.viewer.me.invalidate(); }}`; :29 and :46 read viewer.me and bind the switch to `user?.twoFactorEnabled`.",
+     "reason": "The checked success path, Close handler, dialog callback, and parent query binding support the comment: dismissal bypasses both completion invalidation and setup-state reset.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The handler shows “Backup codes copied!” immediately after calling `navigator.clipboard.writeText`, without awaiting its promise.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:276-279: `onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(backupCodes.map(formatBackupCode).join(\"\\n\")); showToast(t(\"backup_codes_copied\"), \"success\"); }}`; apps/web/public/static/locales/en/common.json:2016: `\"backup_codes_copied\": \"Backup codes copied!\"`; EnableTwoFactorModal.tsx:266-270 provides a close handler calling `resetState()` and `onEnable()`.",
+     "reason": "The clipboard promise is neither awaited nor given a rejection handler, so the success toast is issued regardless of a subsequent rejection and the dialog can be closed independently.",
+     "passos": 3
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The test checks only for a success toast after clicking copy; the implementation does not await or check the clipboard write, so removing the write, writing an empty string, or returning a rejected write promise would not invalidate that assertion.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/playwright/login.2fa.e2e.ts:119-122: `await page.getByTestId(\"backup-codes-copy\").click();` followed by `await page.getByTestId(\"toast-success\").waitFor();` and `// TODO: check clipboard content`. apps/web/components/settings/EnableTwoFactorModal.tsx:276-280: `navigator.clipboard.writeText(backupCodes.map(formatBackupCode).join(\"\\n\"));` followed immediately by `showToast(t(\"backup_codes_copied\"), \"success\");`, without awaiting the promise or checking its result.",
+     "reason": "The cited test never reads the clipboard, and the copy handler shows success independently of the asynchronous clipboard write's result.",
+     "passos": 4
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The download assertion checks only the static filename from the anchor's download attribute. It still passes if the blob contains empty or incorrect backup codes, leaving the essential recovery-code export behavior unverified.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/playwright/login.2fa.e2e.ts:113-117 waits for the download and asserts only `expect(download.suggestedFilename()).toBe(\"cal-backup-codes.txt\");`, followed by `// TODO: check file content`; apps/web/components/settings/EnableTwoFactorModal.tsx:283 uses `<a download=\"cal-backup-codes.txt\" href={backupCodesUrl}>`; lines 95-99 create the blob from formatted backup codes, and line 204 displays formatted codes.",
+     "reason": "The test verifies the static download filename but never reads or compares the downloaded contents, so empty or incorrect blob contents would not fail this assertion.",
+     "passos": 5
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S5",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Backup-code consumption is a non-atomic read/modify/write; concurrent requests can reuse the same code or overwrite different codes' removals.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/auth/lib/next-auth-options.ts:73-102 reads the user and backupCodes before consumption; lines 139-145 decrypt that snapshot and check indexOf; lines 148-156 execute `backupCodes[index] = null; await prisma.user.update({ where: { id: user.id }, data: { backupCodes: symmetricEncrypt(JSON.stringify(backupCodes), process.env.CALENDSO_ENCRYPTION_KEY) } });`; lines 205-214 return the authenticated user without any conditional-update row-count check. packages/prisma/index.ts:15,54 uses the ordinary Prisma client without active client extensions.",
+     "reason": "The checked code writes a modified snapshot using only the user ID, with no transaction or original-value comparison, allowing both same-code reuse and lost removals under concurrent requests.",
+     "passos": 4
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Backup codes are authentication secrets, but indexOf compares their plaintext strings using ordinary equality and stops at the first match.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/auth/lib/next-auth-options.ts:139-145 decrypts and parses the stored codes with `JSON.parse(symmetricDecrypt(user.backupCodes, process.env.CALENDSO_ENCRYPTION_KEY))`, then checks `const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"));` and rejects when `index === -1`; lines 147-154 consume the matched code with `backupCodes[index] = null` and re-encrypt the array.",
+     "reason": "The checked facts hold: authentication uses decrypted backup codes, normalization only removes hyphens without format or length validation, standard array indexOf uses ordinary equality and returns the first match rather than a constant-time full scan, and consumed slots are stored as null.",
+     "passos": 4
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The flex-item styling targets the inner .extra-info-wrapper rather than the outer div generated by header-extra-info's Ember.Component.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/common/base/topic.scss:29-30 applies `.extra-info-wrapper { @include order(2);`; app/assets/javascripts/discourse/templates/components/header-extra-info.hbs:1 nests `<div class=\"extra-info-wrapper\">` inside the component; app/assets/javascripts/discourse/components/header-extra-info.js.es6:1-18 extends Ember.Component without overriding its root tag or assigning that class; app/assets/javascripts/discourse/templates/header.hbs:93-95 invokes the component directly inside .contents; app/assets/stylesheets/common/base/header.scss:14-19 makes .contents flex; app/assets/stylesheets/desktop/topic-post.scss:532-537 applies nowrap, overflow:hidden and text-overflow:ellipsis to .topic-link.",
+     "reason": "The checked code places ordering and overflow rules on descendants rather than the actual flex-item component root, leaving that root's automatic minimum width unconstrained as the comment describes.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The alignment mixin does not match the Mozilla fallback emitted by flexbox(): when display: -moz-box is selected, neither align-items nor the WebKit/MS declarations control its cross-axis alignment.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:100-105 emits `display: -moz-box;` among its fallbacks; lines 117-123 emit `-webkit-box-align`, `-webkit-align-items`, `-ms-flex-align`, `-ms-align-items`, and `align-items`, but no `-moz-box-align`. app/assets/stylesheets/common/base/header.scss:17-18 and app/assets/stylesheets/common/base/topic-post.scss:264-265 both call `@include flexbox();` followed by `@include align-items(center);`.",
+     "reason": "The named callers and fallback exist, and the alignment mixin lacks the Mozilla legacy box alignment property required when that fallback is selected.",
+     "passos": 4
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Uncached retrievals with feed polling configured synchronously poll the feed, and different embed URLs do not share the retrieval throttle.",
+     "claimNoTexto": null,
+     "evidence": "lib/topic_retriever.rb:26-28 uses \"retrieved_key = \\\"retrieved:#{@embed_url}\\\"\" with Redis setnx; lines 40-45 call \"Jobs::PollFeed.new.execute({})\" before fetch_http. app/jobs/scheduled/poll_feed.rb:29-36 parses \"open(SiteSetting.feed_polling_url)\" and iterates \"rss.items.each\", calling TopicEmbed.import for each item. app/models/topic_embed.rb:15 performs \"TopicEmbed.where(embed_url: url).first\" for each valid imported URL.",
+     "reason": "With feed polling enabled, a configured feed URL and importing user, each eligible uncached retrieval directly downloads and processes the feed without a feed-wide throttle, so concurrent retrievals for distinct URLs repeat that work.",
+     "passos": 7
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "%b produces English month abbreviations and the fixed day-month-year order ignores the selected locale, although the neighbouring header and footer labels are translated.",
+     "claimNoTexto": null,
+     "evidence": "app/views/embed/best.html.erb:14 uses `post.created_at.strftime(\"%e %b %Y\")`; lines 3, 5 and 25 use `I18n.t('embed.title')`, `I18n.t('embed.start_discussion')` and `I18n.t('embed.continue')`. app/controllers/application_controller.rb:98-100 sets `I18n.locale = SiteSetting.default_locale`, and EmbedController inherits ApplicationController (app/controllers/embed_controller.rb:1).",
+     "reason": "The view formats dates with Ruby's fixed English abbreviated-month strftime format rather than a locale-aware formatter, while its neighbouring labels use I18n translations.",
+     "passos": 6
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The origin check accepts an origin that is a substring of discourseUrl, allowing forged discourse-resize messages to set the iframe height without checking the sending window.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/embed.js:17: `if (discourseUrl.indexOf(e.origin) === -1) { return; }`; lines 19–21: `if (e.data) { if (e.data.type === 'discourse-resize' && e.data.height) { iframe.height = e.data.height + \"px\"; }`; line 25 registers this handler on window, and lines 15–24 contain no e.source check.",
+     "reason": "The handler uses substring matching, so the example origin passes, and an accepted message with the specified type and a truthy height directly changes iframe.height without verifying e.source.",
+     "passos": 3
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The replacement passes only the title, and TopicEmbed.import_remote/import never forward a timestamp to PostCreator, so newly created initial posts lose the historical thread timestamp while replies retain historical dates.",
+     "claimNoTexto": null,
+     "evidence": "lib/tasks/disqus.thor:148 calls `TopicEmbed.import_remote(user, t[:link], title: t[:title])`; lines 160-174 pass `created_at: Date.parse(p[:created_at])` to PostCreator for replies. app/models/topic_embed.rb:52 calls `TopicEmbed.import(user, url, opts[:title] || doc.title, doc.content)`, and line 22 constructs PostCreator without created_at. lib/post_creator.rb:218 sets `post.created_at = Time.zone.parse(@opts[:created_at].to_s) if @opts[:created_at].present?`. The thread timestamp is parsed at lib/tasks/disqus.thor:60 but not passed at line 148.",
+     "reason": "The current import path demonstrably drops the parsed thread timestamp while explicitly preserving reply timestamps, although the previous revision's PostCreator call is not available in the inspected files.",
+     "passos": 6
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Two workers can both read no embed at line 15 and create posts before attempting the same unique embed_url insert.",
+     "claimNoTexto": null,
+     "evidence": "app/models/topic_embed.rb:15 reads the embed before the transaction; lines 21-28 create the post and then call TopicEmbed.create!, with no conflict rescue. db/migrate/20131217174004_create_topic_embeds.rb:11 adds a unique embed_url index. app/jobs/scheduled/poll_feed.rb:11 schedules hourly polling, and lines 31-36 import feed items without per-item exception handling. lib/topic_retriever.rb:26-28 throttles retrieval by URL, while lines 40-41 invoke Jobs::PollFeed.new.execute({}) directly; the scheduled polling path does not use that throttle.",
+     "reason": "The checked code permits concurrent creation attempts, relies on the unique index to reject the loser inside the transaction, and provides neither uniqueness-conflict recovery nor serialization between scheduled and retrieval-triggered polling.",
+     "passos": 4
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The missing-embed_url test does not establish a valid embeddable host and referer, so ensure_embeddable rejects this request before best reaches params.require(:embed_url). It also only checks non-success despite claiming a 404. Removing the required-parameter check would therefore leave this test green.",
+     "claimNoTexto": null,
+     "evidence": "spec/controllers/embed_controller_spec.rb:8-10 names the example \"is 404 without an embed_url\", calls `get :best`, and asserts only `response.should_not be_success`; host and referer stubs occur only in nested contexts at lines 19-32. config/site_settings.yml:354 sets `embeddable_host: ''`. app/controllers/embed_controller.rb:4 registers `before_filter :ensure_embeddable`; lines 24-26 raise InvalidAccess for a blank host or mismatched referer, before the action's `params.require(:embed_url)` at line 9.",
+     "reason": "The example lacks the setup needed to pass the embeddability filter and asserts only non-success, so its rejection does not depend on the required-parameter check.",
+     "passos": 8
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The URL and username prerequisite tests never enable feed polling (whose configured default is false) or supply the other required setting. execute consequently short-circuits at feed_polling_enabled? and never evaluates the prerequisite each test claims to cover. Both tests still pass if their corresponding presence checks are removed.",
+     "claimNoTexto": null,
+     "evidence": "spec/jobs/poll_feed_spec.rb:18-27 only stubs feed_polling_url or embed_by_username to nil and expects poll_feed never; neither test enables polling or supplies the other setting. config/site_settings.yml:355-357 sets feed_polling_enabled: false, feed_polling_url: '', and embed_by_username: ''. app/jobs/scheduled/poll_feed.rb:14-17: `poll_feed if SiteSetting.feed_polling_enabled? && SiteSetting.feed_polling_url.present? && SiteSetting.embed_by_username.present?`. spec/spec_helper.rb:58-64 removes setting overrides before each example.",
+     "reason": "With polling disabled by default, execute short-circuits before either presence check, so deleting either corresponding guard leaves these negative expectations satisfied.",
+     "passos": 4
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S1",
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The generated ERB Ruby contains an incomplete modifier conditional (`end if` with no condition), so compiling this template raises SyntaxError.",
+     "claimNoTexto": null,
+     "evidence": "app/views/embed/best.html.erb:2 opens `<%- if @topic_view.posts.present? %>`, while line 6 closes it with `<%- end if %>` rather than `end`; app/controllers/embed_controller.rb:12-16 sets @topic_view when topic_id exists and only explicitly renders 'loading' in the else branch, leaving the existing-topic path to render best.",
+     "reason": "The cited template contains a dangling `if` after `end`, which is invalid Ruby, and the existing-topic controller branch uses this template.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "The feed importer unconditionally reads `i.content.scrub`, although RSS entries commonly provide `description` or `content:encoded` instead of Atom `content`. Such an entry raises an exception and aborts the entire poll, including imports of subsequent entries.",
+     "claimNoTexto": null,
+     "evidence": "app/jobs/scheduled/poll_feed.rb:28-37 requires simple-rss, parses the feed, and iterates rss.items with `content = CGI.unescapeHTML(i.content.scrub)` followed by `TopicEmbed.import(user, url, i.title, content)`, without a fallback or per-entry rescue; Gemfile_rails4.lock:344 identifies simple-rss 1.3.1, but its parser implementation is not present in the repository search results, and spec/jobs/poll_feed_spec.rb only tests execute delegation.",
+     "reason": "The unconditional call and lack of per-entry exception handling are verified, but whether description-only or content:encoded entries leave i.content absent cannot be checked without the SimpleRSS implementation, which might normalize those fields.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Feed-provided HTML is persisted with raw_html cooking after only Nokogiri parsing and URL rewriting, which do not sanitize scripts or event-handler attributes.",
+     "claimNoTexto": null,
+     "evidence": "app/jobs/scheduled/poll_feed.rb:35-36 unescapes feed content and passes it to TopicEmbed.import; app/models/topic_embed.rb:22 passes absolutize_urls(url, contents) as raw with cook_method: Post.cook_methods[:raw_html], while lines 61-75 only parse HTML and rewrite relative href/src values; lib/post_creator.rb:216 assigns that cook method and line 105 assigns post.cooked from post.cook; app/models/post.rb:133 says `return raw if cook_method == Post.cook_methods[:raw_html]`; app/views/embed/best.html.erb:19 renders `<div class='cooked'><%= raw post.cooked %></div>`.",
+     "reason": "The checked feed import, cooking, persistence, and embed rendering paths preserve executable HTML without a sanitization step, supporting the comment's factual premise.",
+     "passos": 5
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S4",
+      "S14"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The helper only rewrites leading-slash href/src values, leaves path-relative references unchanged, and incorrectly rewrites protocol-relative URLs using the article's host.",
+     "claimNoTexto": null,
+     "evidence": "app/models/topic_embed.rb:57-65 builds prefix from uri.scheme and uri.host and rewrites only when href.start_with?('/'), using \"#{prefix}/#{href.sub(/^\\/+/, '')}\"; lines 68-72 apply the same logic to img src. Lines 22 and 36 use this helper for imported posts; app/models/post.rb:130-133 returns raw HTML unchanged for raw_html posts.",
+     "reason": "The code leaves 'next' and 'images/photo.jpg' relative and strips both leading slashes from '//cdn.example.com/photo.jpg' before prepending 'http://example.com/', exactly as the comment states.",
+     "passos": 4
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "Consequently these mock expectations are unsatisfied during the controller request under normal asynchronous execution, causing the new controller spec to fail.",
+     "claimNoTexto": null,
+     "evidence": "config/site_settings.yml:348-351: \"queue_jobs:\\n    default:\\n      test: false\\n      default: true\"; app/jobs/base.rb:168-172: \"else\\n      # Otherwise execute the job right away\\n      opts.delete(:delay_for)\\n      opts[:sync_exec] = true\\n      klass.new.perform(opts)\"; app/jobs/regular/retrieve_topic.rb:17: \"TopicRetriever.new(args[:embed_url], no_throttle: user.try(:staff?)).retrieve\"; spec/spec_helper.rb:23: \"ENV[\\\"RAILS_ENV\\\"] ||= 'test'\".",
+     "reason": "Although the controller calls Jobs.enqueue and the retriever calls reside in the job, the test environment disables job queuing by default, so the job executes synchronously during the request and satisfies these mock expectations.",
+     "passos": 7
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Update passes the nullable result of where(...).first directly to save_host, which immediately assigns host.host. Updating a nonexistent or concurrently deleted record returns an internal error instead of a not-found response; destroy has the same lookup failure.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/admin/embeddable_hosts_controller.rb:10-11: `host = EmbeddableHost.where(id: params[:id]).first` followed by `save_host(host)`; :23: `host.host = params[:embeddable_host][:host]`; :15-16: the same lookup followed by `host.destroy`. app/controllers/application_controller.rb:108-109 handles `Discourse::NotFound` as 404, but provides no NoMethodError handler.",
+     "reason": "Both actions dereference a potentially nil lookup without a not-found check, so a record absent when the lookup executes causes NoMethodError rather than the explicit not-found response.",
+     "passos": 4
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "URI parsing preserves hostname case, so an allowed entry such as example.com does not match https://EXAMPLE.com/page even though DNS hostnames are case-insensitive.",
+     "claimNoTexto": null,
+     "evidence": "app/models/embeddable_host.rb:11-17 parses with `uri = URI(host) rescue nil`, assigns `host = uri.host`, and queries `where(\"lower(host) = ?\", host).first` without lowercasing the parameter; lines 20-21 use that result for authorization. app/controllers/embed_controller.rb:61 passes `request.referer` directly to `EmbeddableHost.host_allowed?`. However, app/models/topic_embed.rb:9-10 defines normalization using `url.downcase`, and lines 27 and 36 normalize the URL before category lookup.",
+     "reason": "The mixed-case authorization failure is supported by the code, although the existing topic-creation category lookup already lowercases its URL before calling record_for_host.",
+     "passos": 6
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Creating a host with a missing or null host field reaches this callback from save_host and raises NoMethodError instead of returning a validation error.",
+     "claimNoTexto": null,
+     "evidence": "app/models/embeddable_host.rb:5-7: `before_validation do; self.host.sub!(/^https?:\\/\\//, ''); self.host.sub!(/\\/.*$/, '')`; app/controllers/admin/embeddable_hosts_controller.rb:6 creates via `save_host(EmbeddableHost.new)`, and lines 23-27 assign `host.host = params[:embeddable_host][:host]` and call `host.save` without a nil guard.",
+     "reason": "With an embeddable_host parameter object whose host key is missing or null, save_host assigns nil and validation invokes sub! on nil before the format validator can return an error.",
+     "passos": 4
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The blank-host test builds an ordinary topic without enabling embed_truncate or making has_topic_embed? true, so it passes for reasons unrelated to host availability; expandable_first_post? does not check hosts.",
+     "claimNoTexto": null,
+     "evidence": "spec/models/topic_spec.rb:1401-1404: `let(:topic) { Fabricate.build(:topic) }` and `expect(topic.expandable_first_post?).to eq(false)`; prerequisites are set only in the nested context at lines 1407-1411. config/site_settings.yml:769: `embed_truncate: false`. app/models/topic.rb:864-869: `has_topic_embed?` uses `TopicEmbed.where(topic_id: id).exists?`, and `expandable_first_post?` is `SiteSetting.embed_truncate? && has_topic_embed?`. spec/fabricators/topic_fabricator.rb:1-5 defines only user, title, and category_id, with no topic embed.",
+     "reason": "The test lacks the prerequisites required to isolate missing-host behavior, and the implementation returns false independently of host availability.",
+     "passos": 4
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The test requests fruit 2 but expects fruit 1's colors, and the /fruits/:id handler always returns fruits[0].",
+     "claimNoTexto": null,
+     "evidence": "test/javascripts/models/store-test.js.es6:111 requests `store.find('fruit', 2)`; lines 115-117 assert two colors with IDs 1 and 2. test/javascripts/helpers/create-pretender.js.es6:42-44 defines fruit 1 with `color_ids: [1,2]` and fruit 2 with `color_ids: [3]`; lines 226-228 implements `this.get('/fruits/:id', function() { const fruit = fruits[0]; return response({ __rest_serializer: \"1\", fruit, farmers, colors }); });`.",
+     "reason": "The requested ID and expected colors are inconsistent with the fixtures, and the handler ignores the requested ID by unconditionally returning fruit 1, supporting the reported test-coverage problem.",
+     "passos": 4
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S7",
+      "S8",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The category lookup assumes the SELECT returns a row: `[0]['id']` raises when embed_category has never been configured or its category no longer exists.",
+     "claimNoTexto": null,
+     "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11 executes `SELECT c.id FROM categories AS c INNER JOIN site_settings AS s ON s.value = c.name WHERE s.name = 'embed_category'` and immediately indexes `[0]['id'].to_i`; lines 14-15 only afterward check `if category_id == 0` and index the fallback query with `[0]['value'].to_i`.",
+     "reason": "The inner join returns no rows for a missing setting or unmatched category, and the unconditional first-row access fails before the fallback or the later embeddable-hosts presence check, while the fallback likewise assumes a stored setting row.",
+     "passos": 3
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S10",
+      "S16"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The migration inserts legacy values without normalization; the model strips schemes and paths on validation but matches requests using only their parsed hostname, and both embedding callers use that match.",
+     "claimNoTexto": null,
+     "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:20-25 splits the legacy value on newlines and directly inserts '#{h}'. app/models/embeddable_host.rb:5-8 strips /^https?:\\/\\// and /\\/.*$/ only in before_validation; lines 10-17 parse URI(host), assign host = uri.host, and query where(\"lower(host) = ?\", host). app/controllers/embed_controller.rb:60-61 rejects requests unless EmbeddableHost.host_allowed?(request.referer); lib/topic_retriever.rb:9-16 skips retrieval when that same check fails. spec/controllers/embed_controller_spec.rb:69-70 contains both cited full-URL examples, although at this commit they are model fabrications rather than legacy setting assignments.",
+     "reason": "The checked code supports the reported migration failure for legacy full-URL entries, with no contradictory normalization in the migration, although the previous revision's setting contract cannot be independently established from the current tests.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S14"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Host lookup compares URI.host against a stored value that validation explicitly permits to include a port. Saving example.com:8080 succeeds, but a request from http://example.com:8080 produces URI.host equal to example.com and never matches that record, disabling embedding and retrieval for the configured host.",
+     "claimNoTexto": null,
+     "evidence": "app/models/embeddable_host.rb:2 permits an optional port with `(:[0-9]{1,5})?`; lines 5-8 strip only the scheme and path, preserving the port; lines 14-17 use `host = uri.host` and `where(\"lower(host) = ?\", host).first`. app/controllers/admin/embeddable_hosts_controller.rb:23-27 assigns the submitted host and saves it. app/controllers/embed_controller.rb:61 rejects referers unless `EmbeddableHost.host_allowed?(request.referer)`. lib/topic_retriever.rb:9-16 skips retrieval when `!EmbeddableHost.host_allowed?(@embed_url)`.",
+     "reason": "The stored host retains an allowed port while URI.host excludes it, so the exact lookup cannot match that port-bearing record and both embedding authorization and retrieval depend on this lookup.",
+     "passos": 4
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S4",
+      "S15",
+      "S17"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The save callback overwrites the returned category using categoryId, which remains null for a new host with no category selected, despite the controller saving the uncategorized category ID.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/admin/components/embeddable-host.js.es6:9 initializes `categoryId: null`; lines 37-38 execute `host.save(props).then(() => { host.set('category', Discourse.Category.findById(this.get('categoryId')));`. app/controllers/admin/embeddable_hosts_controller.rb:24-28 assigns the submitted category ID, substitutes `SiteSetting.uncategorized_category_id` when blank, and serializes the saved host. app/serializers/embeddable_host_serializer.rb:2,12-13 includes and returns `category_id`. app/assets/javascripts/discourse/models/category.js:241-243 returns undefined for a null ID. The component's lines 25-26 initialize editing from `host.category.id`, and its template line 14 displays `host.category`.",
+     "reason": "The checked code supports the reported mismatch: saving defaults the category on the server, but the callback clears the client category relationship by looking up the unchanged null categoryId.",
+     "passos": 10
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Passing the multipart tempfile path to downsize prevents animation detection when that path does not end in .gif, even when allow_animated_thumbnails is enabled.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/uploads_controller.rb:58-60 obtains file.tempfile separately from file.original_filename; :67 passes tempfile.path as both input and output to OptimizedImage.downsize with allow_animation. app/models/optimized_image.rb:149-150 delegates downsize to optimize; :153-157 selects animated instructions only when allow_animation is true and from matches /\\.GIF$/i; :126-134 otherwise runs convert with #{from}[0] and writes to the output path.",
+     "reason": "The controller supplies the tempfile path rather than the original filename, and the optimizer uses only that path’s GIF suffix to select animation-preserving processing, otherwise overwriting the upload with its first frame.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The fixed 10 MB client limit is applied to attachments as well as images, replacing max_attachment_size_kb.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/discourse/lib/utilities.js:158-160 classifies uploads as image or attachment and calls validateUploadedFile; lines 181-185 unconditionally set `var maxSizeKB = 10 * 1024;` and return false when exceeded. app/assets/javascripts/discourse/views/composer.js.es6:339-343 calls that validation on fileuploadsubmit and returns its result. lib/validators/upload_validator.rb:37-38 calls `maximum_file_size(upload, \"attachment\")`, and lines 80-86 use `SiteSetting.send(\"max_#{type}_size_kb\")` to enforce the configured limit. config/site_settings.yml:516-518 defines max_attachment_size_kb.",
+     "reason": "The client rejects attachments over 10 MB regardless of their configured attachment limit, while UploadValidator uses that configured limit and therefore permits otherwise authorized attachments within it.",
+     "passos": 9
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The retry loop ignores downsize's false return value and retries failed conversions while the file remains oversized. convert_with returns false on converter failure, so an unsupported or malformed oversized image launches the same failing external conversion up to five times per upload without any changed input.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/uploads_controller.rb:64-69 checks the filename and size, sets `attempt = 5`, calls `OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)` without checking its result, and decrements the counter; app/models/optimized_image.rb:149-157 forwards downsize through optimize to convert_with; app/models/optimized_image.rb:160-168 executes `#{instructions.join(\" \")} &> /dev/null` and `return false if $?.exitstatus != 0`; lib/file_helper.rb:5-6 and 30-35 classify images by filename extension rather than valid image contents.",
+     "reason": "The checked facts hold: a converter failure returning false does not stop the loop, so if the failed conversion leaves the oversized input unchanged, the same conversion is attempted up to five times.",
+     "passos": 4
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The existing consumer in app/jobs/regular/resize_emoji.rb:14 still invokes OptimizedImage.downsize(path, path, 100, 100, opts), so emoji resizing now fails with ArgumentError (five arguments supplied, three to four expected).",
+     "claimNoTexto": null,
+     "evidence": "app/models/optimized_image.rb:145-150 defines self.downsize(from, to, max_width, max_height, opts={}) and then redefines it as self.downsize(from, to, dimensions, opts={}); app/jobs/regular/resize_emoji.rb:14 calls `OptimizedImage.downsize(path, path, 100, 100, opts)`.",
+     "reason": "The later Ruby method definition replaces the earlier one and accepts only three to four arguments, while the existing emoji job supplies five.",
+     "passos": 3
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Removing a member with group.users.delete bypasses the primary_group_id cleanup previously performed by Group#destroy_deletions during usernames updates.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/admin/groups_controller.rb:84-92 finds the group, calls `group.users.delete(user_id)`, and saves without assigning usernames or clearing primary_group_id. app/models/group.rb:244-260 populates @deletions only during usernames assignment; lines 287-294 perform cleanup only for those entries, including `User.where('id = ? AND primary_group_id = ?', gu.user_id, gu.group_id).update_all 'primary_group_id = NULL'`. app/models/group_user.rb:1-4 defines no cleanup callbacks. app/models/user.rb:49 associates primary_group independently; app/serializers/post_serializer.rb:96-102 uses that primary-group association, and app/controllers/admin/users_controller.rb:133-135 manages primary_group_id.",
+     "reason": "The removal path does not populate the deletion list or clear the user's independent primary_group_id, whereas usernames updates explicitly clear it for removed members, so the reported stale primary-group state is supported by the code.",
+     "passos": 4
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The comment relies on findMembers unconditionally applying response metadata and members, next immediately advancing offset without an in-flight navigation guard, and membership changes triggering additional fetches.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/discourse/models/group.js:30-36 unconditionally calls self.setProperties with result.meta.offset and result.members; lines 45-47 and 56-58 call self.findMembers after membership changes. app/assets/javascripts/admin/controllers/admin-group.js.es6:29-37 guards only showingLast, sets offset immediately, and calls group.findMembers. app/assets/javascripts/admin/templates/group.hbs:18 binds next's disabled class only to showingLast.",
+     "reason": "The checked code permits overlapping page and refresh requests and applies their responses without checking whether a newer request has superseded them.",
+     "passos": 5
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The creation form exposes aliasLevelOptions and group.asJSON sends the selected alias_level, but create saves only name and visible.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/admin/groups_controller.rb:23-27 initializes Group.new, assigns only name and visible, and calls group.save; line 37 assigns params[:alias_level] during update. app/assets/javascripts/admin/templates/group.hbs:41-44 exposes the alias_level combo-box without an id guard. app/assets/javascripts/admin/controllers/admin-group.js.es6:74-80 calls group.create() for new groups. app/assets/javascripts/discourse/models/group.js:62-72 includes alias_level in asJSON() and POSTs that data to /admin/groups. db/migrate/20140102104229_add_alias_level_to_groups.rb:3 sets alias_level default: 0.",
+     "reason": "The checked code supports the comment: creation sends the selected alias level but the server does not assign it, leaving the database default, whereas update explicitly assigns it.",
+     "passos": 4
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Math.floor(user_count / limit) + 1 adds a nonexistent page whenever the member count is an exact positive multiple of the limit.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/admin/controllers/admin-group.js.es6:13 computes `Math.floor(this.get(\"user_count\") / this.get(\"limit\")) + 1`; lines 6-8 compute currentPage as 1 at offset 0, line 17 compares currentPage to totalPages, and lines 29-37 advance offset to Math.min(offset + limit, user_count) and call findMembers. app/assets/javascripts/discourse/models/group.js:10-11 defaults limit to 50 and offset to 0; lines 23-35 send the offset and replace members with the response. app/controllers/groups_controller.rb:25-33 counts users and queries `group.users.order(:username_lower).limit(limit).offset(offset)` without correcting the offset. app/assets/javascripts/admin/templates/group.hbs:18-21 binds Next to showingLast and displays members.",
+     "reason": "With 50 members and limit 50, the code reports two pages, permits Next from offset 0 to offset 50, and replaces the displayed members with the empty result returned by that offset.",
+     "passos": 5
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S4",
+      "S9",
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The public member list now renders only the first page.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/groups_controller.rb:22-26 defaults limit to 50 and applies group.users.order(:username_lower).limit(limit).offset(offset); app/assets/javascripts/discourse/models/group.js:10-11 defaults limit to 50 and offset to 0, and :31-35 replaces members with result.members; app/assets/javascripts/discourse/routes/group-members.js.es6:8-11 calls model.findMembers() once during setup; app/assets/javascripts/discourse/templates/group/members.hbs:1-22 only renders members without pagination; app/assets/javascripts/admin/controllers/admin-group.js.es6:28-48 supplies next/previous actions that update offset and fetch again.",
+     "reason": "The checked code supports the reported public pagination regression, with a default 50-member page and no public controls or actions to fetch subsequent pages.",
+     "passos": 4
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The fallback order depends on SiteSetting.default_locale, while the accelerator cache key omits the site and default locale, allowing cached fallback translations to be reused across those contexts.",
+     "claimNoTexto": null,
+     "evidence": "config/initializers/i18n.rb:17: `[locale, SiteSetting.default_locale.to_sym, :en].uniq.compact`; lib/freedom_patches/translate_accelerator.rb:69-75: `return translate_no_cache(key, *args) if args.length > 0`, `@cache ||= LruRedux::ThreadSafeCache.new(LRU_CACHE_SIZE)`, `k = \"#{key}#{config.locale}#{config.backend.object_id}\"`, and `@cache.getset(k) do translate_no_cache(key).freeze`.",
+     "reason": "For translations without extra arguments, the shared cache stores the resolved translation under only the translation key, user locale, and backend identity, although fallback resolution also depends on the site's default locale.",
+     "passos": 9
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Fallback catalogs are ensured loaded only in the controller filter, leaving non-controller translation paths without the catalogs required by the newly enabled fallback backend.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/application_controller.rb:152-159 sets I18n.locale and calls `I18n.fallbacks.ensure_loaded!`; config/initializers/i18n.rb:9 includes `I18n::Backend::Fallbacks`, and :17-21 defines `[locale, SiteSetting.default_locale.to_sym, :en].uniq.compact` and loads that chain only in `ensure_loaded!`. lib/freedom_patches/translate_accelerator.rb:67-75 loads only `config.locale` before `translate_no_cache`, while :25-28 disables implicit loading without explicit filenames. app/jobs/base.rb:151-153 sets `I18n.locale = SiteSetting.default_locale` then executes the job; app/services/post_alerter.rb:138-139 uses `I18n.with_locale(user.effective_locale)` and `I18n.t` without ensuring fallback catalogs are loaded. Repository search finds no other call to `I18n.fallbacks.ensure_loaded!`.",
+     "reason": "The checked code enables fallback lookup but loads the full fallback chain only in the controller, whereas the named non-controller paths reach a translation wrapper that loads only the current locale.",
+     "passos": 5
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The device-limit authentication gate treats requests without X-Grafana-Device-Id as admitted because TagDevice returns nil immediately for an empty header. A client can omit this client-controlled header and obtain an anonymous identity even when the configured device limit is full.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/anonymous/anonimpl/impl.go:26 defines deviceIDHeader = \"X-Grafana-Device-Id\"; lines 118-122 read that header and execute `if deviceID == \"\" { return nil }`. pkg/services/anonymous/anonimpl/client.go:38-46 clones the incoming headers and calls TagDevice, rejecting only ErrDeviceLimitReached; lines 52-58 return an anonymous identity. impl.go:43 and 49-57 wire the configured AnonymousDeviceLimit into the store and register this client when anonymous access is enabled. pkg/services/anonymous/anonimpl/anonstore/database.go:109-116 checks the positive device limit only inside CreateOrUpdateDevice, which the empty-header return bypasses.",
+     "reason": "The checked facts hold: an omitted device header makes TagDevice succeed before any limit check, so the anonymous authentication client returns an identity even when the configured device limit is full.",
+     "passos": 5
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The comment relies on device_limit being absent from defaults.ini, environment overrides visiting only existing INI keys before auth settings are read, the missing key defaulting to zero, and zero disabling device-limit enforcement; all checked statements hold.",
+     "claimNoTexto": null,
+     "evidence": "conf/defaults.ini:581-594 contains auth.anonymous with enabled, org_name, org_role, and hide_version but no device_limit. pkg/setting/setting.go:688-694 iterates file.Sections() and section.Keys() and sets existing keys from os.Getenv; :917 applies these overrides in loadConfiguration, called at :1038 before readAuthSettings at :1108. At :1654, cfg.AnonymousDeviceLimit = anonSection.Key(\"device_limit\").MustInt64(0). pkg/services/anonymous/anonimpl/anonstore/database.go:109 gates enforcement with `if s.deviceLimit > 0 {`.",
+     "reason": "With no device_limit key supplied in an INI file, the environment override cannot populate it, so reading the setting yields zero and skips the enforcement branch.",
+     "passos": 6
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "tagDeviceUI sets the cache entry before CreateOrUpdateDevice runs; a limit error is propagated without removing that entry, and subsequent cache hits bypass the store and allow anonymous authentication.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/anonymous/anonimpl/impl.go:83-95 returns nil on cache hits, calls a.localCache.SetDefault(key, struct{}{}) before CreateOrUpdateDevice, and returns store errors without deleting the entry; lines 144-147 propagate that error. anonstore/database.go:35-36 keys the cache by DeviceID, and lines 95-96 and 115-116 return ErrDeviceLimitReached for a non-admitted device at the limit. client.go:44-58 rejects that error but returns an anonymous identity when tagging returns nil. impl.go:42 configures a 29-minute default cache expiration; pkg/infra/localcache/cache.go:19-22 passes that expiration to go-cache.",
+     "reason": "The checked code retains a pre-admission cache marker after a limit rejection and treats both retries and concurrent hits as successful tagging without another store check.",
+     "passos": 5
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S6",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The count check and subsequent upsert are not an atomic admission operation. With one slot remaining, two concurrent requests for different new device IDs can both read count < deviceLimit and then both insert, exceeding the configured limit. This also occurs across Grafana instances sharing the database.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:109-118 checks CountDevices and only takes the update-only path when count >= s.deviceLimit; lines 124-144 construct unconditional INSERT/upsert statements, executed in a separate WithDbSession at lines 149-153. CountDevices at lines 158-165 uses its own WithDbSession and plain SELECT COUNT(*). pkg/services/sqlstore/session.go:113-114 calls startSessionOrUseExisting(ctx, engine, false, ss.tracer), so WithDbSession does not itself begin a transaction. pkg/services/sqlstore/migrations/anonservice/migrations.go:16-19 defines uniqueness only on device_id, not a capacity constraint. pkg/services/anonymous/anonimpl/impl.go:80-95 uses a per-device cache key and calls CreateOrUpdateDevice without admission serialization.",
+     "reason": "The checked facts hold: the count and insert are separate operations without a shared admission lock or database capacity constraint, so distinct devices can both pass the count check and insert, including from separate instances.",
+     "passos": 4
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The cache is not rechecked after acquiring the write lock, so concurrent production requests that initially observe a nil cache each reload and decode the manifest even after another request has populated it.",
+     "claimNoTexto": null,
+     "evidence": "pkg/api/webassets/webassets.go:41-49 reads the cache under RLock and checks ret only before Lock; lines 59-70 unconditionally load when result is nil and assign the cache without rechecking it. Lines 75-82 open the manifest and lines 104-107 JSON-decode it while the deferred Unlock remains pending. pkg/api/index.go:82 and pkg/api/frontendsettings.go:62 both call GetWebAssets.",
+     "reason": "The checked facts hold: cache inspection precedes the write lock with no subsequent recheck, manifest reads and decoding occur under that global lock, and page and frontend-settings code share this function.",
+     "passos": 4
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The metric help text describes sizes \"returned\", but the observations measure incoming payloads: QueryData sums len(v.JSON) and CallResource uses len(req.Body), both before invoking the plugin.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:48: Help: \"histogram of plugin request sizes returned\"; lines 58–63 register that histogram with Prometheus; line 99 observes requestSize; lines 145–154 sum float64(len(v.JSON)) from req.Queries and instrument the size before m.next.QueryData(ctx, req); lines 161–165 instrument float64(len(req.Body)) before m.next.CallResource(ctx, req, sender).",
+     "reason": "The help text says “returned,” while both named methods observe request payload lengths before forwarding requests to the plugin, so the comment's factual premises hold.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Both millisecond observation paths divide elapsed by time.Millisecond before converting to float64, truncating fractional milliseconds despite fractional histogram buckets.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:121: `elapsed := time.Since(start)`; :129: `float64(elapsed/time.Millisecond), prometheus.Labels{\"traceID\": traceID},`; :136: `pluginRequestDurationWithLabels.Observe(float64(elapsed / time.Millisecond))`; :42: `Buckets: []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100},`.",
+     "reason": "Both paths perform integer time.Duration division before conversion, so 900µs becomes 0ms and 1.9ms becomes 1ms, which can misclassify fractional-bucket observations and understate the histogram sum.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The request-size cases pass an empty Body and no Queries, and subsequently check only that a histogram sample exists. Replacing either size calculation with a constant zero still passes this test.",
+     "claimNoTexto": null,
+     "evidence": "metrics_middleware_test.go:50 and :57 construct requests with only PluginContext, leaving Body and Queries empty; :101-108 check collection count and checkHistogram; :117-163 checkHistogram validates labels, histogram presence, and nonzero SampleCount but never SampleSum. metrics_middleware.go:145-149 sums len(v.JSON), :161 uses len(req.Body), and :99 observes the resulting size.",
+     "reason": "Both test inputs yield zero request bytes and the assertions do not validate the observed byte sum, so replacing either size calculation with zero would leave this test passing.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Both duration metrics are checked only for labels and a nonzero sample count. Observing a constant zero, or feeding seconds into the milliseconds metric, still passes.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:94-100 calls checkHistogram for both duration metrics; lines 157-163 only require a histogram and a nonzero SampleCount after label matching, without checking SampleSum or bucket values. Lines 88-90 additionally check metric collection counts, not duration values. pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:136-138 observes float64(elapsed / time.Millisecond) and elapsed.Seconds() respectively.",
+     "reason": "The test checks metric existence, labels, histogram type, and observation count but never duration values or units, so zero observations or seconds recorded in the milliseconds histogram would satisfy its assertions.",
+     "passos": 3
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Cache publication alone is locked; Search and handleEvent both call getOrCreateIndex, permitting duplicate builds for an uncached NamespacedResource and replacement of an index that has received an event update.",
+     "claimNoTexto": null,
+     "evidence": "pkg/storage/unified/search/bleve.go:126-139 runs builder(idx) and idx.Flush() before locking only around `b.cache[key] = idx`, with no cache recheck or closing of a replaced index; lines 60-68 lock GetIndex only for the cache read. pkg/storage/unified/resource/search.go:148 and 237 call getOrCreateIndex from Search and handleEvent respectively; lines 292-305 perform GetIndex followed by s.build on a miss without a guard; lines 326-356 call BuildIndex; lines 255-266 apply events via index.Write or index.Delete.",
+     "reason": "The checked code permits concurrent cache misses to build independent indexes and unconditionally publish them, so an event applied to the first published index can be lost when a later build replaces it.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The startup log calls TotalDocs after launching the write-event listener; TotalDocs iterates b.cache without cacheMu.RLock; an event for an unindexed resource can reach BuildIndex and write to that cache concurrently; GetIndex uses the read lock.",
+     "claimNoTexto": null,
+     "evidence": "pkg/storage/unified/resource/search.go:207-216 launches a goroutine calling s.handleEvent before calling s.search.TotalDocs(); :237 calls getOrCreateIndex, :292-298 builds on a missing index, and :326 calls s.search.BuildIndex. pkg/storage/unified/search/bleve.go:61-62 uses cacheMu.RLock/RUnlock in GetIndex; :137-139 writes b.cache[key] = idx under cacheMu.Lock; :144-153 iterates `for _, v := range b.cache` without acquiring that lock.",
+     "reason": "The checked call chain permits cache publication by the event listener concurrently with the unlocked startup cache iteration, so the comment's factual premises hold.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new postgres skip bypasses the entire instrumentation-server test for that backend.",
+     "claimNoTexto": null,
+     "evidence": "pkg/server/module_server_test.go:35-38 unconditionally calls t.Skip when dbType == \"postgres\", with the message \"skipping - test not working with postgres in Drone. Works locally.\" This precedes database initialization (line 40), selecting modules.StorageServer (line 45), starting ms.Run (line 51), and checking GET /metrics returns 200 (lines 59-63). pkg/server/module_server.go:113-118 registers the instrumentation service unless All or Core is enabled, while lines 133-135 register the storage-server service.",
+     "reason": "The postgres condition has no CI or environmental restriction and skips before all server startup and HTTP verification, so this case cannot catch an instrumentation startup regression on postgres, including local runs.",
+     "passos": 4
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The test name says creation happens \"only in the unified store\", but this case configures a successful Legacy.Create as well, and Mode3.Create launches that legacy write after the unified write succeeds.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3_test.go:28 names the case \"creating an object only in the unified store\"; lines 30–34 configure Create mocks returning exampleObj, nil for both stores; lines 63–65 invoke Mode3 Create. pkg/apiserver/rest/dualwriter_mode3.go:42–47 calls d.Storage.Create and returns on error; lines 50–57 launch a goroutine calling d.Legacy.Create at line 55 after storage succeeds.",
+     "reason": "The checked facts hold: the case's name says only the unified store, while its setup permits successful writes to both stores and Mode3 asynchronously launches the legacy write after the unified write succeeds.",
+     "passos": 4
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Independent goroutines remove ordering between successful writes to the same resource.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:125-143 calls d.Storage.Update, returns on error, then launches `go func() { ... d.Legacy.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options) ... }()` and returns without waiting. Lines 41-59 do the same for Create, and lines 99-116 do the same for Delete. The struct at lines 15-20 has no sequencing state, and none of these methods coordinates their goroutines.",
+     "reason": "The checked factual premises hold: successful Storage writes launch independent legacy create/update/delete operations with no per-resource ordering, permitting the mirroring operations to execute out of commit order.",
+     "passos": 4
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S8",
+      "S14"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The legacy write is now asynchronous but still inherits the caller's request context. The same lifetime mismatch affects the new Update, Delete, and DeleteCollection goroutines.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:39 derives ctx with klog.NewContext(ctx, log); lines 42-59 perform Storage.Create successfully, then launch `go func() { ctx, cancel := context.WithTimeoutCause(ctx, time.Second*10, errors.New(\"legacy create timeout\")); ... d.Legacy.Create(ctx, obj, createValidation, options) }()` and return without waiting. Lines 108-116, 134-143, and 161-169 use the same inherited-context timeout pattern for Delete, Update, and DeleteCollection respectively; no cancellation detachment is present.",
+     "reason": "All four background legacy writes inherit cancellation from the supplied context, and WithTimeoutCause only adds a timeout rather than shielding them from HTTP request-context cancellation after the handler returns.",
+     "passos": 4
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9",
+      "S16"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "Legacy.Update previously received an updateWrapper containing the object returned by Storage.Update; it now receives the original objInfo.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:126 calls d.Storage.Update with objInfo, and :139 calls d.Legacy.Update with that same objInfo after storage succeeds. pkg/apiserver/rest/dualwriter.go:128-143 defines updateWrapper with upstream and updated fields; UpdatedObject returns u.updated, nil. pkg/registry/apis/playlist/legacy_storage.go:142-149 fetches the legacy object with s.Get and passes it to objInfo.UpdatedObject, propagating any error.",
+     "reason": "The current-code premises and backend-dependent update evaluation are supported, but the available repository inspection cannot verify the claim about the previous implementation or an established canonical-result contract.",
+     "passos": 6
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Successful Storage.Delete measurements pass the object name instead of options.Kind, unlike failed deletes and other operation measurements, splitting successful measurements by object name.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:103 records errors with `d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)`, whereas line 106 records success with `d.recordStorageDuration(false, mode3Str, name, method, startStorage)`; Get, List, Update, and DeleteCollection use options.Kind at lines 73, 89, 132, and 159. pkg/apiserver/rest/metrics.go:23 defines labels as `[]string{\"is_error\", \"mode\", \"kind\", \"method\"}`, and lines 59–61 pass the third argument directly to that kind label via `m.storage.WithLabelValues(strconv.FormatBool(isError), mode, name, method).Observe(duration)`.",
+     "reason": "The checked code confirms that successful deletes populate the kind label with the requested object name while failed deletes and other operations populate it with options.Kind.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The legacy DeleteCollection duration and error status are recorded in the unified-storage histogram.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:159 records the successful storage observation with `d.recordStorageDuration(false, mode3Str, options.Kind, method, startStorage)`; lines 165–166 call `_, err := d.Legacy.DeleteCollection(ctx, deleteValidation, options, listOptions)` followed by `d.recordStorageDuration(err != nil, mode3Str, options.Kind, method, startLegacy)`. pkg/apiserver/rest/metrics.go:43–44 assigns distinct legacy and storage histograms; lines 54–61 show recordLegacyDuration observing m.legacy and recordStorageDuration observing m.storage with the supplied error label.",
+     "reason": "The successful storage path launches a legacy deletion whose elapsed time and error flag are observed in the storage histogram rather than the legacy histogram, exactly as the comment reports.",
+     "passos": 4
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The successful Update case configures a legacy Update expectation but returns after checking only the unified-store result. It neither waits for the asynchronous legacy update nor verifies its expectation, so removing the legacy-update goroutine entirely still passes.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3_test.go:310-315 configures identical Update expectations for storage and legacy; lines 331-334 share one mock; lines 345-354 call Update and only assert the returned object, with no synchronization or expectation verification. pkg/apiserver/rest/dualwriter_mode3.go:126 calls d.Storage.Update, lines 134-141 launch d.Legacy.Update in a goroutine, and line 143 returns the storage result. pkg/apiserver/rest/storage_mocks_test.go:57-62 and 121-126 route both Update methods through m.Called without independent verification.",
+     "reason": "The checked facts hold: the success test sets up legacy Update but neither waits for nor asserts its execution or propagated object, so removing that goroutine leaves all of this test's assertions satisfied.",
+     "passos": 4
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The failing operation is d.Storage.Create, but its duration/error is recorded through recordLegacyDuration.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:42-48 calls d.Storage.Create, then on error calls d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage) and returns before recordStorageDuration; pkg/apiserver/rest/metrics.go:54-61 records recordLegacyDuration observations in m.legacy and recordStorageDuration observations in m.storage, with isError as a label.",
+     "reason": "The storage-create error branch records an error-labelled legacy observation and returns without recording a storage observation, exactly as the comment states.",
+     "passos": 4
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The exception assertion runs without waiting for the reader thread to finish.",
+     "claimNoTexto": null,
+     "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-149 starts an unretained thread with `new Thread(() -> { while (!deletedAll.get()) { ... managedRealm.admin().groups().groups(null, 0, Integer.MAX_VALUE, true); ... caughtExceptions.add(e); } }).start();`; lines 152-157 delete the groups, call `deletedAll.set(true);`, and immediately execute `assertThat(caughtExceptions, Matchers.empty());` without joining the reader or coordinating its startup.",
+     "reason": "The code has neither startup coordination nor a completion wait, so the reader may perform no reads or append an in-flight request's exception after the assertion, allowing the regression test to miss the failure.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The reader's stop flag is set only after every deletion succeeds, with no finally block.",
+     "claimNoTexto": null,
+     "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:136-149 initializes deletedAll to false and starts an unretained Thread looping on !deletedAll.get(), issuing group requests and adding caught exceptions; lines 152-155 call remove() in forEach and only then execute deletedAll.set(true), without finally or thread termination/join. integration/admin-client/src/main/java/org/keycloak/admin/client/resource/GroupResource.java:85-86 declares remove() as an @DELETE operation.",
+     "reason": "If remove() throws, execution skips the sole stop signal, leaving the reader loop running with no cleanup or explicit daemon setting.",
+     "passos": 4
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new grant metadata falls back to 'na' for client-credentials and UMA tokens because their issuance paths never set Constants.GRANT_TYPE on their fresh ClientSessionContext.",
+     "claimNoTexto": null,
+     "evidence": "DefaultTokenContextEncoderProvider.java:33,57-60 defines UNKNOWN = \"na\" and uses it when the grant attribute is null; ClientCredentialsGrantType.java:122,140-141 obtains a context and directly calls generateAccessToken without setting the grant attribute; PermissionGrantType.java:187 delegates to AuthorizationTokenService.instance().authorize; AuthorizationTokenService.java:329-358 creates a fresh context and directly generates the access token without setting the grant attribute; DefaultClientSessionContext.java:71,75-80,99 initializes an empty attributes map for each new context.",
+     "reason": "The checked issuance paths bypass createTokenResponse and leave the fresh context's grant attribute unset, matching the comment's factual premises and the encoder's null-to-'na' fallback.",
+     "passos": 6
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The test catches RuntimeException; its fixture omits postInit and leaves sessionFactory null; looking up the absent ac shortcut dereferences sessionFactory before the decoder can throw its unknown-grant IllegalArgumentException.",
+     "claimNoTexto": null,
+     "evidence": "DefaultTokenContextEncoderProviderTest.java:38-49 constructs the factory, calls init(null), and registers only ro, cc, and na; lines 77-83 decode \"ofrtac:5678\" and catch RuntimeException. services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:38 declares sessionFactory without initialization, lines 65-66 assign it in postInit, and lines 121-125 execute `sessionFactory.getProviderFactoriesStream(OAuth2GrantType.class)` when the shortcut is absent. services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:91-94 perform the lookup before checking `if (gt == null)` and throwing IllegalArgumentException.",
+     "reason": "The fixture's missing sessionFactory causes a NullPointerException during ac lookup, which the broad RuntimeException catch accepts before the intended unknown-grant validation is reached.",
+     "passos": 3
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Lazy registration overwrites an existing shortcut mapping while retaining both forward entries; colliding concurrent registrations can both succeed, and previously issued tokens decode using the replacement grant.",
+     "claimNoTexto": null,
+     "evidence": "DefaultTokenContextEncoderProviderFactory.java:106-118 checks only grantsToShortcuts.get(grantType), then executes \"grantsByShortcuts.put(shortcut, grantType);\" and \"grantsToShortcuts.put(grantType, shortcut);\" without collision validation; lines 67-68 initialize both maps as ConcurrentHashMap. Its lines 121-136 decode shortcuts through grantsByShortcuts. DefaultTokenContextEncoderProvider.java:109-117 encodes the grant shortcut into the token ID, and lines 81-96 recover the grant using \"factory.getGrantTypeByShortcut(gtShortcut)\". The size-based collision check at factory lines 81-85 runs only in postInit.",
+     "reason": "The checked registration, map, encoding, and decoding behavior supports the reported collision and concurrency scenario, and the initialization-only validation does not protect lazy registration.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S5",
+      "S7",
+      "S8",
+      "S10",
+      "S11",
+      "S12",
+      "S18"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The encoder places the grant shortcut at indices [4, 6), but this consumer reads [3, 5) and returns false when it equals the expected shortcut rather than when it differs.",
+     "claimNoTexto": null,
+     "evidence": "DefaultTokenContextEncoderProvider.java:78-81 defines two characters each for session, token, and grant and reads the grant with `encodedContext.substring(4, 6)`; lines 114-117 encode in that order. AssertEvents.java:480-484 splits on ':', executes `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`, and otherwise returns `isUUID().matches(items[1])`, without checking prefix length. AssertEvents.java:142-145 passes AuthorizationCodeGrantTypeFactory.GRANT_SHORTCUT to this matcher; AuthorizationCodeGrantTypeFactory.java:32 defines it as \"ac\", while RefreshTokenGrantTypeFactory.java:33 defines \"rt\".",
+     "reason": "The checked facts hold: for `onrtrt:<valid UUID>`, the matcher compares \"tr\" with \"ac\", does not reject it, and accepts the UUID despite the encoded grant shortcut being \"rt\".",
+     "passos": 4
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S3",
+      "S6",
+      "S14",
+      "S15",
+      "S19"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The contract describes usually three-letter shortcuts; the decoder requires a six-character prefix and extracts a two-character grant shortcut; a registered three-letter shortcut is encoded unchanged and therefore cannot round-trip.",
+     "claimNoTexto": null,
+     "evidence": "OAuth2GrantTypeFactory.java:30-33 documents \"usually like 3-letters shortcut\". services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:74-81 checks `encodedContext.length() != 6` and uses `encodedContext.substring(4, 6)`; lines 109-117 append `grantShort` unchanged. AccessTokenContext.java:36-56 defines two-character session and token shortcuts. DefaultTokenContextEncoderProviderFactory.java:70-85 registers shortcuts without length validation (only duplicate-map validation), and lines 106-118 return the registered shortcut unchanged.",
+     "reason": "The checked facts hold: a three-character grant shortcut produces a seven-character context prefix that the decoder rejects.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13",
+      "S17"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The rawTokenId null check validates grantType a second time instead of rawTokenId. A context constructed with a null raw ID is accepted and encodeTokenId serializes it as the literal 'null', violating the constructor's non-null invariant and losing the token identifier.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java:72-77: `Objects.requireNonNull(grantType, \"Null grantType not allowed\"); Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\"); ... this.rawTokenId = rawTokenId;` services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:114-117: `return tokenContext.getSessionType().getShortcut() + tokenContext.getTokenType().getShortcut() + grantShort + ':' + tokenContext.getRawTokenId();`",
+     "reason": "The constructor checks grantType twice and accepts null rawTokenId, which the encoder's string concatenation renders as literal \"null\" when the other context values are valid.",
+     "passos": 4
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The English multivalued-size message uses Java MessageFormat syntax, while PersonalInfo routes server-error parameters to i18next using its default double-brace interpolation; the admin bundle contains the same syntax.",
+     "claimNoTexto": null,
+     "evidence": "Account messages_en.properties:188 and admin messages_en.properties:3138 contain `Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}.`; PersonalInfo.tsx:85-89 calls setUserProfileServerError with a wrapper around t(key, param); ui-shared/src/user-profile/utils.ts:74-86 creates numerically keyed params and spreads them into t(); account-ui/src/i18n.ts:25-41 and admin-ui/src/i18n/i18n.ts:13-32 configure only escapeValue for interpolation and copy backend message values unchanged; ThemeResource.java:153-154 returns message values without MessageFormat processing.",
+     "reason": "The checked message strings, caller, parameter mapping, and translation configurations support the reported incompatible syntax, with no contradictory code found.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Choice normalization removes all branch content before HTML validation, allowing prohibited markup to bypass the new translation policy.",
+     "claimNoTexto": null,
+     "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:124-126 selects error-invalid-multivalued-size and executes `value = value.replaceAll(\"\\\\{[0-9]+,choice,[^}]*}\", \"...\");`; lines 83-92 normalize before anchor checks and HTML sanitization. The example contains no inner closing brace, so the entire choice, including the anchor, is replaced. Lines 58-63 do not permit anchors in either HTML policy. themes/src/main/resources/theme/base/login/messages/messages_en.properties:530 defines error-invalid-multivalued-size with the stated choice pattern. services/src/main/java/org/keycloak/forms/login/freemarker/FreeMarkerLoginFormsProvider.java:831 formats bundle values using `new MessageFormat(messagesBundle.getProperty(message.getMessage()), locale).format(message.getParameters())`.",
+     "reason": "The checked facts hold: the specified key exists, its choice branches are discarded before validation, and runtime MessageFormat consumers expand the original translation rather than the verifier's normalized string.",
+     "passos": 4
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The prefix and suffix scans can overlap, causing the diagnostic substring call to throw an uncaught StringIndexOutOfBoundsException for a redundant closing tag.",
+     "claimNoTexto": null,
+     "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:58-61 allows b elements; :90-92 selects POLICY_SOME_HTML when the English value contains HTML; :139-142 recognizes <b>; :103-109 independently scans prefix and suffix without limiting the suffix by start; :111 calls sanitized.substring(start, sanitized.length() - end); :46-54 catches only IOException. misc/theme-verifier/pom.xml:75-79 supplies the OWASP HTML sanitizer.",
+     "reason": "For <b>x</b></b>, sanitization retains <b>x</b>, the independent scans yield start=8 and end=4, and the resulting substring(8, 4) throws before an Illegal HTML message can be added.",
+     "passos": 4
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The OTP setup instruction is Italian in both Lithuanian message bundles, while the surrounding setup steps are Lithuanian.",
+     "claimNoTexto": null,
+     "evidence": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101: `totpStep1=Installa una delle seguenti applicazioni sul tuo cellulare:`; lines 102–103 contain Lithuanian instructions. themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71: `loginTotpStep1=Installa una delle seguenti applicazioni sul tuo cellulare:`; lines 72–73 contain Lithuanian instructions. themes/src/main/resources/theme/base/login/login-config-totp.ftl:10 renders `<p>${msg(\"loginTotpStep1\")}</p>`.",
+     "reason": "Both cited Lithuanian bundles contain the identical Italian first-step instruction, so the reported translation error is supported by the code.",
+     "passos": 5
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "canView() omits the all-clients MANAGE permission, whereas canView(client) accepts management through canConfigure(client); when listing is authorized and global VIEW is absent, getClients uses an unpaginated client stream and applies pagination after client authorization.",
+     "claimNoTexto": null,
+     "evidence": "ClientPermissionsV2.java:86-87 returns canViewClientDefault() || hasPermission(AdminPermissionsSchema.VIEW); lines 58-68 and 77-82 grant client viewing through configure/manage, and lines 214-217 fall back to the all-clients resource only if no client-specific resource exists. ClientPermissions.java:271-272 checks admin roles, not fine-grained MANAGE. ClientsResource.java:122,130-133 selects realm.getClientsStream() when canView is false; lines 145-162 authorize representations before paginatedStream. ClientPermissions.java:241-254 additionally requires listing authorization (for example QUERY_CLIENTS).",
+     "reason": "The checked permission and pagination paths support the reported issue for administrators allowed to list clients, while client-specific resources prevent the global MANAGE fallback from overriding their denial.",
+     "passos": 6
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The expected ForbiddenException can come from getDefaultClientScopes(), before removeDefaultClientScope() is invoked.",
+     "claimNoTexto": null,
+     "evidence": "PermissionClientTest.java:147-152 calls clientResource.getDefaultClientScopes().get(1) before removeDefaultClientScope() within the same try/catch accepting ForbiddenException; lines 155-156 grant MANAGE only afterward, and lines 170-175 perform the granted removal. services/src/main/java/org/keycloak/services/resources/admin/ClientResource.java:381-384 calls auth.clients().requireView(client) before returning scopes, while lines 418-425 separately call auth.clients().requireManage(client) before removing the scope.",
+     "reason": "The denied read precedes and masks the removal call, so deleting the removal's manage check would not invalidate either the initial forbidden assertion or the later authorized removal.",
+     "passos": 4
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "A global fine-grained VIEW grant short-circuits client-specific VIEW evaluation, and client listing can use that global result to return the client's representation despite a specific denial.",
+     "claimNoTexto": null,
+     "evidence": "ClientPermissionsV2.java:77-87: `if (canView() || canConfigure(client)) { return true; }` precedes `return hasPermission(client, AdminPermissionsSchema.VIEW);`, while parameterless canView returns `canViewClientDefault() || hasPermission(AdminPermissionsSchema.VIEW)`. Lines 244-249 evaluate the global clients resource. ClientsResource.java:122 and 148-149 cache `auth.clients().canView()` and use `if (canView || auth.clients().canView(c))` before constructing the representation. UserPermissionsV2.java:47-52 and 117-126 instead check administrative roles separately and select the individual resource before falling back to all-users.",
+     "reason": "The checked code supports the reported global-grant bypass and the contrast with user resource precedence, although the specific PR test mentioned in the comment was not located.",
+     "passos": 6
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new Javadoc says requireView() returns true, but its declaration returns void.",
+     "claimNoTexto": null,
+     "evidence": "ClientPermissionEvaluator.java:95-98 documents “Returns {@code true} if {@link #canView()} returns {@code true}.” followed by `void requireView();`; neighbouring requireList() documentation at lines 83-86 says “Throws ForbiddenException if {@link #canList()} returns {@code false}.”; ClientPermissions.java:292-296 implements `public void requireView() { if (!canView()) { throw new ForbiddenException(); } }`.",
+     "reason": "The checked facts hold: the Javadoc promises a boolean result for a void method, whose implementation completes normally when canView() succeeds and throws ForbiddenException otherwise, consistent with neighbouring require-method documentation.",
+     "passos": 4
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "PasswordForm.configuredFor accepts passkey-only users, while the base login-password.ftl lacks passkeys UI and is inherited by the legacy keycloak theme.",
+     "claimNoTexto": null,
+     "evidence": "PasswordForm.java:61-64 accepts isConditionalPasskeysEnabled(user) as an alternative to a password; UsernamePasswordForm.java:160-162 checks passkeys enablement and the user's WebAuthn credential. PasswordForm.java:51-57 fills WebAuthn form data but renders createLoginPassword(). themes/src/main/resources/theme/base/login/login-password.ftl:1-52 contains only the password form and passwordVisibility.js, with no passkeys import or conditionalUIData invocation. themes/src/main/resources/theme/keycloak/login/theme.properties:1 says parent=base, and that directory has no template override. themes/src/main/resources/theme/keycloak.v2/login/login-password.ftl:4,18 imports passkeys.ftl and invokes conditionalUIData.",
+     "reason": "The checked code supports the comment's factual premises: passkey credentials can satisfy configuredFor, but the legacy theme inherits a password template without the passkey UI present in keycloak.v2.",
+     "passos": 4
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The menu requires a Grafana ruler rule to render MenuItemPauseRule, while GrafanaRuleListItem supplies only promRule, so Pause/Resume is absent for those list-view rules even when permitted.",
+     "claimNoTexto": null,
+     "evidence": "AlertRuleMenu.tsx:123-124 gates MenuItemPauseRule on `canPause && rulerRuleType.grafana.rule(rulerRule)`. GrafanaRuleListItem.tsx:47 passes `<RuleActionsButtons promRule={rule} groupIdentifier={groupIdentifier} compact />`; RuleActionsButtons.V2.tsx:95-96 forwards `rulerRule={rule}` and `promRule={promRule}` without loading a ruler rule. utils/rules.ts:58-59 returns false for an undefined ruler rule. MenuItemPauseRule.tsx:12 and 28-30 requires a RulerGrafanaRuleDTO to choose Pause/Resume.",
+     "reason": "The checked caller provides no ruler rule, so the rendering guard remains false regardless of the Prometheus-based pause ability.",
+     "passos": 7
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new Prometheus-based delete ability is still gated by `canDelete && rulerRule` when rendering the Delete item. Both Grafana list-view paths now omit rulerRule, so users with delete permission lose the Delete action entirely.",
+     "claimNoTexto": null,
+     "evidence": "AlertRuleMenu.tsx:85-87 combines ruler and Prometheus delete abilities, but :165 renders deletion only with `{canDelete && rulerRule && (` and :172 calls `handleDelete(rulerRule, groupIdentifier)`. rule-list/GrafanaRuleListItem.tsx:47 supplies `<RuleActionsButtons promRule={rule} groupIdentifier={groupIdentifier} compact />`; both GrafanaGroupLoader.tsx:70 and FilterView.tsx:157 use this list item. rule-list/components/RuleActionsButtons.V2.tsx:95-99 forwards `rulerRule={rule}` (undefined for that caller) and already supplies an identifier-based delete handler.",
+     "reason": "The checked Grafana grouped and filtered list paths supply only the Prometheus rule, so the menu's explicit rulerRule rendering guard hides Delete even when its Prometheus-based permission check succeeds.",
+     "passos": 7
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The named test never opens the menu or asserts options, checks only the More button's presence, aria-label, and text, and a separate menu-click test checks options.",
+     "claimNoTexto": null,
+     "evidence": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:85-102 renders the loader and asserts only toBeInTheDocument(), toHaveAttribute('aria-label', 'More'), and toHaveTextContent('More'); lines 171-207 contain a separate test that clicks More and asserts Silence, Copy link, Duplicate, Export, and four menu items. public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:180-182 renders the dropdown overlay separately from its MoreButton.",
+     "reason": "The cited test makes no menu interaction or menu-item assertions, so an empty dropdown retaining the More button would satisfy its checks, while the separate click test covers the options.",
+     "passos": 4
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "skipToken is forwarded as undefined; the undefined-rule path grants Duplicate support and Grafana create permission; AlertRuleMenu passes skipToken for non-Grafana rules and ORs the Grafana Duplicate ability with the ruler ability.",
+     "claimNoTexto": null,
+     "evidence": "useAbilities.ts:401 forwards `rule === skipToken ? undefined : rule`; lines 354-355 return loading:false for an absent rule; lines 309-318 compute Duplicate support from loading/plugin origin and call `toAbility(duplicateSupported, rulesPermissions.create)` with Grafana permissions; lines 611-615 check ctx.hasPermission. AlertRuleMenu.tsx:73 passes skipToken for non-Grafana rules, and lines 91-92 compute `(duplicateSupported && duplicateAllowed) || (grafanaDuplicateSupported && grafanaDuplicateAllowed)`.",
+     "reason": "The checked code supports the comment's factual premises: the skipped Grafana branch can independently enable Duplicate despite an unsupported or denied ruler ability.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The caller passes only promRule; the menu can enable Silence for a Grafana Prometheus alerting rule; clicking it sets showSilenceDrawer, but drawer rendering requires an alerting ruler rule; the drawer uses only grafana_alert.uid from that rule.",
+     "claimNoTexto": null,
+     "evidence": "GrafanaRuleListItem.tsx:47 passes `<RuleActionsButtons promRule={rule} groupIdentifier={groupIdentifier} compact />`. RuleActionsButtons.V2.tsx:100 sets `handleSilence={() => setShowSilenceDrawer(true)}`, while lines 104-105 render the drawer only under `rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer`. AlertRuleMenu.tsx:94-96 combines ruler and Prometheus silence abilities and lines 126-130 render Silence notifications with that handler. hooks/useAbilities.ts:323 permits Silence via `[silenceSupported, canSilenceInFolder && isAlertingRule]`. SilenceGrafanaRuleDrawer.tsx:21 reads `const { uid } = rulerRule.grafana_alert`, passes `ruleUid={uid}` at line 33, and compares only that UID at line 44.",
+     "reason": "The checked code supports all factual premises: an authorized Prometheus alerting-rule path can show the Silence action while its undefined ruler rule prevents the drawer from rendering.",
+     "passos": 6
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The CombinedRule wrapper delegates without preserving federation state, and the delegated ability calculation hardcodes isFederated=false, allowing update/delete abilities for otherwise mutable federated rules when ruler availability and permissions permit.",
+     "claimNoTexto": null,
+     "evidence": "public/app/features/alerting/unified/hooks/useAbilities.ts:179-191: both useAlertRuleAbility and useAlertRuleAbilities call useAllAlertRuleAbilities; :227-228: `const groupIdentifierV2 = useMemo(() => groupIdentifier.fromCombinedRule(rule), [rule]); return useAllRulerRuleAbilities(rule.rulerRule, groupIdentifierV2);`; :243-250: `const isFederated = false;` and `const immutableRule = isProvisioned || isFederated || isPluginProvided;`; :264-265: update/delete use `MaybeSupportedUnlessImmutable` with isEditable/isRemovable. public/app/features/alerting/unified/utils/groupIdentifier.ts:12-28 passes group name and origin but not source_tenants. public/app/features/alerting/unified/utils/rules.ts:373-374: `return Array.isArray(group.source_tenants);`. public/app/features/alerting/unified/hooks/useIsRuleEditable.ts:78-87 checks datasource ruler availability and permissions without a federation check.",
+     "reason": "The current code confirms the reported loss of federation-aware ability restrictions, although the assertion about the previous implementation cannot independently be verified from these current-commit files.",
+     "passos": 4
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The early return compares the original IDP's organization-aware enabled state rather than the persisted enabled state used to populate the login cache.",
+     "claimNoTexto": null,
+     "evidence": "InfinispanIdentityProviderStorageProvider.java:91-94 loads the original with getById and passes it to registerIDPLoginInvalidationOnUpdate; lines 135-141 wrap getById results in createOrganizationAwareIdentityProviderModel; lines 436-441 override isEnabled to require an enabled organization; lines 405-406 return when both login predicates are false; lines 229 and 238 populate cached IDs from idpDelegate.getForLogin. IdentityProviderStorageProvider.java:220 and 252-255 make the predicate check isEnabled and BROKER_PUBLIC, while lines 169-181 query persisted login fields and BROKER_PUBLIC. OrganizationAwareIdentityProviderBean.java:74-80 rechecks isEnabled and the existing alias, not BROKER_PUBLIC.",
+     "reason": "The checked code supports the stated mismatch between organization-aware invalidation and persisted login-cache membership, allowing the described public-to-private update to leave a stale cached ID.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "All calls in this test discard the returned stream and assert only IdentityProviderListQuery contents. The implementation populates that query before reconstructing the returned models, so returning an empty stream (or the wrong providers) at line 254 would still pass the entire test.",
+     "claimNoTexto": null,
+     "evidence": "OrganizationCacheTest.java:401-414, 483-496, and 519-532 discard every getForLogin return value and assert cached query existence and ID counts; the subsequent repeated searches occur after explicit cache-invalidation checks at 475-479 and 511-515. model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:229-231 collects provider IDs and caches IdentityProviderListQuery before lines 244-251 reconstruct the models and line 254 returns identityProviders.stream().",
+     "reason": "The checked code supports the comment: no returned provider identities are asserted, no same-key cache-hit query is exercised, and changing only the final returned stream would leave the tested cache contents unchanged.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The branch obtains a fresh revision, copies previously cached organization results into the new query without validating their revision, and can republish stale membership that the null-ID fallback does not repair.",
+     "claimNoTexto": null,
+     "evidence": "InfinispanIdentityProviderStorageProvider.java:236-240 invalidates the key, obtains getCurrentRevision(cacheKey), constructs IdentityProviderListQuery(..., query), and calls addRevisioned(query, cache.getCurrentCounter()); IdentityProviderListQuery.java:39-44 assigns the new revision and executes this.searchKeys.putAll(previous.searchKeys) without checking the previous revision. CacheManager.java:165-172 checks only the supplied startupRevision and new object's revision, then cache.putForExternalRead(id, object). InfinispanIdentityProviderStorageProvider.java:403-417 invalidates login keys on qualifying enabled/organization changes, while lines 244-251 fall back only when getById(id) returns null and otherwise add the provider without membership validation.",
+     "reason": "The checked facts support the reported race because invalidation after reading the old query but before obtaining the replacement revision allows old results to be copied into an entry that passes the cache's new-revision checks.",
+     "passos": 7
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Both creation sites register deletion of the literal alias \"alias\" rather than the created provider alias, and TestCleanup suppresses deletion exceptions.",
+     "claimNoTexto": null,
+     "evidence": "OrganizationCacheTest.java:374 sets \"idp-alias-\" + i, but :381 registers get(\"alias\")::remove; :419 sets \"idp-alias-\" + 20, but :425 again registers get(\"alias\")::remove. testsuite/integration-arquillian/tests/base/src/main/java/org/keycloak/testsuite/util/TestCleanup.java:65-72 wraps c.close() in catch (Exception ex) { // ignore }; :129 executes these callbacks. Its :81-83 and :142-150 implement addIdentityProviderAlias and deletion by the registered alias. OrganizationCacheTest.java:428 explicitly removes only idp-alias-1.",
+     "reason": "The checked code supports the alias mismatch and exception suppression, so these callbacks do not clean up the newly created providers and can leave them affecting later tests or repeated runs.",
+     "passos": 4
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "test_from_dict_empty_array passes {} rather than an empty array. It therefore only tests missing required dictionary keys and would still pass if rejection of an array input were broken.",
+     "claimNoTexto": null,
+     "evidence": "tests/sentry/integrations/services/test_assignment_source.py:8-11: `def test_from_dict_empty_array(self):`; `data: dict[str, Any] = {}`; `result = AssignmentSource.from_dict(data)`; `assert result is None`. src/sentry/integrations/services/assignment_source.py:16-17 defines required `source_name` and `integration_id` fields, and :31-35 implements `from_dict` via `return cls(**input_dict)` with `except (ValueError, TypeError): return None`.",
+     "reason": "The test supplies an empty dictionary, whose missing required constructor arguments produce a caught TypeError, and never exercises an empty list input.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "`timezone.now()` is evaluated once when this module is imported, so every AssignmentSource created without an explicit `queued` value carries the worker's import timestamp rather than the assignment's queue time.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/services/assignment_source.py:14-18 defines a dataclass with `queued: datetime = timezone.now()`; lines 21-25 construct AssignmentSource without queued in from_integration(); lines 27-28 return `asdict(self)` in to_dict(). src/sentry/integrations/utils/sync.py:136-145 calls `sync_assignee_outbound.apply_async` with `\"assignment_source_dict\": assignment_source.to_dict() if assignment_source else None`.",
+     "reason": "The dataclass default is evaluated at class definition during module import, from_integration leaves that default unchanged, and outbound task serialization includes it, confirming the stale timestamp problem.",
+     "passos": 4
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The loop calls get_memory_info once per flusher buffer, and each call queries the same Redis cluster without restricting queries to assigned_shards.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/consumers/process/flusher.py:297-301 enables the memory check when max_memory_percentage < 1.0 and iterates self.buffers.values(), extending results from buffer.get_memory_info(); lines 93 and 124-125 create and store one SpansBuffer per process. src/sentry/spans/buffer.py:161-163 obtains the client through get_redis_client() without shard arguments, and lines 375-376 return iter_cluster_memory_usage(self.client). src/sentry/processing/backpressure/memory.py:86-95 calls cluster.info(), or client.info() within cluster.all(), without shard filtering.",
+     "reason": "The checked code performs one synchronous cluster-wide INFO query per process buffer during submit when memory backpressure is enabled and execution reaches that check, supporting the reported redundant Redis traffic.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The docstring claims one process per shard; actual workers are capped by max_processes, shards are distributed across workers, and the CLI default is 1.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/consumers/process/flusher.py:32 says \"Creates one process per shard for parallel processing.\" Lines 60-66 use \"self.num_processes = min(self.max_processes, len(buffer.assigned_shards))\" and assign shards via \"process_index = i % self.num_processes\"; lines 83-84 create one worker for each mapped shard list. src/sentry/consumers/__init__.py:433-436 defines --flusher-processes with default=1; src/sentry/spans/consumers/process/factory.py:74 passes it as max_processes=self.flusher_processes.",
+     "reason": "The checked code supports all factual premises of the comment: the docstring promises per-shard processes while the implementation permits multiple assigned shards per capped worker, including one worker with the CLI default.",
+     "passos": 5
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "An explicit max_processes=0 is treated as an omitted limit by `or`, so passing `--flusher-processes 0` starts one process per assigned shard instead of respecting or rejecting the supplied zero limit. The CLI accepts zero as an integer and the factory forwards it unchanged.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/consumers/process/flusher.py:51 sets `self.max_processes = max_processes or len(buffer.assigned_shards)`; lines 60–66 construct one process mapping per assigned shard for zero, and lines 79–84 and 123 create and start those processes. src/sentry/consumers/__init__.py:432–436 declares `--flusher-processes` with `type=int` and no positive-value validation. src/sentry/spans/consumers/process/factory.py:52 stores `self.flusher_processes = flusher_processes`, and lines 71–75 forward it as `max_processes=self.flusher_processes`.",
+     "reason": "The checked code accepts and forwards zero without validation, then replaces it with the assigned-shard count through the `or` expression.",
+     "passos": 4
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "A broken distribution such as {0: [0, 1], 1: [0, 1]} still passes all assertions in this test while shards 2 and 3 are never flushed.",
+     "claimNoTexto": null,
+     "evidence": "tests/sentry/spans/consumers/process/test_consumer.py:115-121 checks only process counts and sum(len(shards) for shards in flusher.process_to_shards_map.values()) == 4; no shard identities or worker buffers are asserted. src/sentry/spans/consumers/process/flusher.py:83-93 creates each worker from its mapped shards using shard_buffer = SpansBuffer(shards), and lines 107-119 pass that buffer and shard list to the worker.",
+     "reason": "The hypothetical duplicate mapping satisfies every assertion in the test, while workers created from it receive only shards 0 and 1, so the claimed test coverage gap holds even though the current distribution algorithm assigns shards correctly.",
+     "passos": 4
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Workers created by multiprocessing.get_context(\"spawn\").Process are SpawnProcess instances, not instances of the separate multiprocessing.Process class. Consequently this guard skips kill() for production workers.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/consumers/process/flusher.py:53 sets `self.mp_context = mp_context = multiprocessing.get_context(\"spawn\")`; lines 96-105 select `make_process = self.mp_context.Process` for production. Lines 254-255 guard `process.kill()` with `if isinstance(process, multiprocessing.Process):`. Lines 231-236 classify live workers exceeding the unhealthy threshold as hung; line 259 calls `self._create_process_for_shards(process_index, shards)`, whose lines 123-124 start the replacement and overwrite `self.processes[process_index]`. Lines 166-169 show workers repeatedly flushing their assigned buffer until the shared stopped flag is set.",
+     "reason": "SpawnProcess and multiprocessing.Process are separate BaseProcess subclasses, so the guard does not kill production workers before their replacements are started and their handles overwritten, allowing hung workers that resume to run alongside replacements.",
+     "passos": 3
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The cleanup loop breaks when its shared join deadline expires, skipping termination cleanup for remaining workers; the stopped flag does not interrupt in-progress Redis or producer operations, and workers are created using the spawn context.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/consumers/process/flusher.py:337-347: `for process_index, process in self.processes.items():` computes `remaining_time = deadline - time.time()` and executes `if remaining_time <= 0: break` before the wait loop and `if isinstance(process, multiprocessing.Process): process.terminate()`. Lines 53 and 105 select `multiprocessing.get_context(\"spawn\")` and `self.mp_context.Process`. Lines 166-169 check `stopped.value` only at the outer loop boundary before `buffer.flush_segments(now=now)`; lines 197-201 call `produce(kafka_payload)` and `future.result()` without another stopped check. Lines 318-320 implement terminate by setting the stopped flag and terminating only the next step.",
+     "reason": "The deadline break demonstrably skips subsequent workers' cleanup, while the shared stop flag is only cooperative and does not interrupt ongoing operations, so the reported problem rests on facts supported by the code.",
+     "passos": 3
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Zipping error_ids with events.values() assumes nodestore.get_multi preserves request order, but its implementation builds uncached results first and then merges cached results.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:107-118 generates node_ids, calls nodestore.backend.get_multi(node_ids), and uses `for event_id, data in zip(error_ids, events.values())`. src/sentry/nodestore/base.py:194 selects `uncached_ids = [id for id in id_list if id not in cache_items]`; lines 199-205 build `items` from `_get_bytes_multi(uncached_ids).items()` and then call `items.update(cache_items)`; line 210 returns `items`.",
+     "reason": "The checked facts hold: the caller pairs IDs with dictionary values positionally, while get_multi inserts uncached entries before cached entries, so a cached ID preceding an uncached ID in the request can receive the other event's details.",
+     "passos": 4
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new Snuba replay lookup executes even when enable_error_context=false.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:70-77 calls query_replay_instance unconditionally before lines 87-94 evaluate enable_error_context and skip only fetch_error_details; src/sentry/replays/query.py:97-108 calls execute_query; src/sentry/replays/usecases/query/__init__.py:447-463 executes raw_snql_query and propagates errors.",
+     "reason": "The flag disables error-detail fetching but not the preceding Snuba query, whose result is unnecessary when error_events is set to an empty list and whose failures can propagate.",
+     "passos": 10
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The numeric test matches query.query rather than substringMatch; removing the numeric guard would issue a request that does not invoke searchQueryMock, unlike the string test's matching mock.",
+     "claimNoTexto": null,
+     "evidence": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx:117-120 matches `query.query === 'search-query'`, while lines 70-73 of the string test match `query.substringMatch === 'search-query'`. static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx:52-54 assigns `query.substringMatch = search`; lines 91-94 return early for numbers, and lines 96-109 otherwise pass the search into the query key and issue the request. static/app/__mocks__/api.tsx:178 requires all matchers to pass; lines 233-258 record an unmatched-request error and invoke `mock(url, options)` only for a matching response.",
+     "reason": "The checked code supports the parameter mismatch and shows that a forbidden numeric request would not call this mock, leaving unmatched-request handling rather than the mock-call assertion to detect the regression.",
+     "passos": 7
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The shared prop documentation says the endpoint supports only LOGS, while TransactionNameSearchBar actively uses the shared hook with TraceItemDataset.SPANS, which the endpoint supports.",
+     "claimNoTexto": null,
+     "evidence": "static/app/views/explore/types.tsx:10 says \"The trace item type supported by the endpoint, currently only supports LOGS.\" static/app/views/insights/pages/transactionNameSearchBar.tsx:54-57 calls useGetTraceItemAttributeValues({traceItemType: TraceItemDataset.SPANS, type: 'string'}), and lines 138-144 invoke the returned fetcher. static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx:25 extends UseTraceItemAttributeBaseProps and lines 47-49 pass traceItemType as itemType. src/sentry/api/endpoints/organization_trace_item_attributes.py:124-126 accepts SupportedTraceItemType values; lines 138-139 and 150-154 explicitly handle SPANS column definitions and attribute-value referrers.",
+     "reason": "The documentation's LOGS-only claim conflicts with both the named caller's actual SPANS usage and the endpoint's explicit SPANS support.",
+     "passos": 8
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Invalid report validation attaches the complete raw report to a warning, including URL and body data, whereas the existing request logging is info-level.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:39-41 defines `body = serializers.DictField()` and `url = serializers.URLField()`; line 93 logs `logger.info(\"browser_report_received\", extra={\"request_body\": request.data})`; lines 108-114 pass each original report to the serializer and, on validation failure, call `logger.warning(\"browser_report_validation_failed\", extra={\"validation_errors\": serializer.errors, \"raw_report\": report})`.",
+     "reason": "The code attaches the original, unredacted report to the validation warning, so filtering out info-level request logs does not prevent this warning-level disclosure.",
+     "passos": 3
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S1",
+      "S19"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The feature-enabled branch ignores `result.data`, `result.meta`, and the computed fields and instead passes empty columns and empty data. TableWidgetVisualization consumes these props directly, so every dashboard table becomes empty for organizations with `use-table-widget-visualization`, even when the query returned rows.",
+     "claimNoTexto": null,
+     "evidence": "static/app/views/dashboards/widgetCard/chart.tsx:164-173 selects TableWidgetVisualization when the feature is enabled and supplies `columns={[]}` and `tableData={{ data: [], meta: { fields: {}, units: {} } }}`; the actual `result.meta` and `result.data` are passed only to the alternative branch at lines 186-187. static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.tsx:92-104 uses `columns ?? Object.keys(tableData?.meta.fields).map(...)` and passes `data={tableData?.data ?? []}` and `columnOrder={columnOrder}` to GridEditable.",
+     "reason": "The enabled branch supplies empty arrays regardless of returned rows, and the visualization forwards those arrays directly to the table without fetching or substituting the actual query results.",
+     "passos": 3
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13",
+      "S14"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "Those accesses now produce undefined rather than the selected aggregate fields, breaking construction of saved Explore parameters.",
+     "claimNoTexto": null,
+     "evidence": "static/app/views/explore/savedQueries/exploreParams.tsx:17-20: `type SingleQueryProps = { query: string; visualizes: BaseVisualize[]; ... };`; static/app/views/explore/contexts/pageParamsContext/visualizes.tsx:32-35: `export interface BaseVisualize { yAxes: readonly string[]; chartType?: ChartType; }`; lines 66-69: `toJSON(): BaseVisualize { const json: BaseVisualize = { yAxes: [this.yAxis], };`; static/app/views/explore/savedQueries/savedQueriesTable.tsx:213-216: `<StyledExploreParams query={query.query[0].query} visualizes={query.query[0].visualize} groupBys={query.query[0].groupby} />`.",
+     "reason": "The comment correctly observes the instance field change and the flatMap expression, but incorrectly treats this consumer's serialized BaseVisualize objects, which retain yAxes arrays, as Visualize instances.",
+     "passos": 7
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S17",
+      "S20"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The query key omits organization identity even though the request endpoint includes organization.slug, allowing identical filters across organizations to share a cache entry.",
+     "claimNoTexto": null,
+     "evidence": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:39-42 defines the key as ['use-trace-item-attribute-keys', queryOptions], and lines 50-54 pass it to useQuery; static/app/views/explore/hooks/useGetTraceItemAttributeKeys.tsx:42-48 builds options only from itemType, attributeType, project, substringMatch, and normalized datetime, while lines 77-82 request `/organizations/${organization.slug}/trace-items/attributes/`; static/app/utils/queryClient.tsx:10 imports useQuery directly from @tanstack/react-query, and static/app/appQueryClient.tsx:20 defines a shared appQueryClient.",
+     "reason": "The checked code confirms that organization-specific requests use an organization-independent query key, so equal filter options can collide across organizations.",
+     "passos": 6
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S5",
+      "S10",
+      "S16",
+      "S21"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Both fields permit 0, so a report with age=0 and timestamp=0 passes both validators even though both fields are present; a zero-valued counterpart also bypasses the corresponding check.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:47-48 declares age = serializers.IntegerField(required=False) and timestamp = serializers.IntegerField(required=False, min_value=0); lines 52-54 use `if self.initial_data.get(\"age\"):` before returning value, and lines 58-60 use `if self.initial_data.get(\"timestamp\"):` before returning value; there is no object-level validation override in the serializer.",
+     "reason": "Both integer fields accept zero, and both mutual-exclusion checks test the raw counterpart's truthiness rather than its presence, so numeric zeros bypass the checks.",
+     "passos": 4
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The documented custom-renderer contract says fallback runs when the callback returns undefined, but `if (cell)` also falls back for valid ReactNode results such as `0`, an empty string, or `null`.",
+     "claimNoTexto": null,
+     "evidence": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx:70-73 calls the body callback and uses `if (cell) { return cell; }`, then falls through to default rendering at lines 75-91; lines 31-41 use the same truthiness check for the header callback. static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.stories.tsx:110-114 documents that custom callbacks replace cell rendering and that `undefined` triggers fallback. tableWidgetVisualization.tsx:44-59 types both callbacks as returning React.ReactNode | undefined and lines 107-117 pass them into these default renderers.",
+     "reason": "The documented fallback behavior and both truthiness checks are present, so valid falsy ReactNode results are discarded in favor of default rendering as the comment reports.",
+     "passos": 5
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": []
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "evaluate returns a dictionary keyed by DetectorGroupKey, its caller consumes .values(), and its adjacent docstring still describes a list of DetectorEvaluationResult.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/workflow_engine/processors/detector.py:226-244 declares dict[DetectorGroupKey, DetectorEvaluationResult], initializes `results = {}`, assigns `results[result.group_key] = result`, and returns `results`; line 230 says `Evaluates a given data packet and returns a list of `DetectorEvaluationResult`.`; lines 58-60 call `handler.evaluate(data_packet)` and iterate `detector_results.values()`.",
+     "reason": "The return implementation and caller confirm the dictionary contract while the docstring still promises a list, so direct iteration would yield group keys rather than evaluation results.",
+     "passos": 4
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The class now inherits StatefulDetectorHandler, so the comment describes already-completed work as a future migration and misleads maintainers about which abstraction this handler uses.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/incidents/grouptype.py:10: \"# TODO: This will be a stateful detector when we build that abstraction\"; lines 11-12: \"class MetricAlertDetectorHandler(StatefulDetectorHandler[QuerySubscriptionUpdate]):\" followed by \"pass\". src/sentry/workflow_engine/processors/detector.py:135 defines \"class StatefulDetectorHandler(DetectorHandler[T], abc.ABC):\", with state-update storage initialized at lines 138-140.",
+     "reason": "The cited TODO anticipates an abstraction that already exists and is already the handler's direct base class, so the comment's factual premises hold.",
+     "passos": 4
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new occurrence builder accepts `value` but never incorporates or asserts it, so the occurrence tests cannot detect incorrect forwarding of the measured value to `build_occurrence_and_event_data`.",
+     "claimNoTexto": null,
+     "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:244-275 accepts `value: int` but never uses it; the occurrence has `evidence_data={}` and the returned event data contains no measurement. Lines 36-39 delegate the hook directly to this helper. Lines 177 and 190-191 supply `\"group_2\": 10` in the input but construct its expected occurrence with `\"group_2\", 6, PriorityLevel.HIGH`; lines 200-221 compare results and producer calls, not hook arguments. src/sentry/workflow_engine/processors/detector.py:299-301 calls `self.build_occurrence_and_event_data(group_key, value, PriorityLevel(new_status))`.",
+     "reason": "The helper discards the measurement and the tests assert only its measurement-independent outputs, so an incorrect value forwarded at the production hook would not be detected by these occurrence assertions.",
+     "passos": 4
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "MetricAlertDetectorHandler becomes abstract when switched to StatefulDetectorHandler: it implements neither the stateful extraction methods nor the newly required build_occurrence_and_event_data hook.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/incidents/grouptype.py:11-12 defines `class MetricAlertDetectorHandler(StatefulDetectorHandler[QuerySubscriptionUpdate]): pass`; src/sentry/workflow_engine/processors/detector.py:142-170 marks counter_names, get_dedupe_value, get_group_key_values, and build_occurrence_and_event_data abstract; src/sentry/incidents/grouptype.py:27 assigns this handler to MetricAlertFire; src/sentry/issues/grouptype.py:163-165 registers GroupType subclasses; src/sentry/workflow_engine/models/detector.py:86 constructs it with `return group_type.detector_handler(self)`; src/sentry/workflow_engine/processors/detector.py:53-58 accesses the handler before evaluation.",
+     "reason": "The empty subclass inherits unimplemented abstract methods, so constructing its registered handler raises TypeError before evaluation, although the previous implementation cannot be verified from the current snapshot.",
+     "passos": 7
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The token request is executed outside the try block; transport failures from safe_urlopen escape before response parsing and do not produce the installation-failed response.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/github/integration.py:423 calls `req = safe_urlopen(url=ghip.get_oauth_access_token_url(), data=data)` before the `try:` at line 425; lines 426-429 guard only response reading/parsing, and lines 431-432 return `error(...)` only after parsing. src/sentry/http.py:106-116 calls `session.request(...)` without catching exceptions. src/sentry/net/http.py:192-199 delegates to `_Session.request(...)` without catching transport exceptions; lines 88-95 explicitly raise connection timeout/connection errors. src/sentry/integrations/github/integration.py:135-146 renders `sentry/integrations/github-integration-failed.html`; src/sentry/pipeline/base.py:196 directly dispatches the step.",
+     "reason": "The checked code places the network request outside its exception handler and propagates connection/timeout failures rather than reaching the installation-failed response.",
+     "passos": 6
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The test accepts a shared OAuth-validation error without verifying that the nonexistent installation lookup is reached and rejected.",
+     "claimNoTexto": null,
+     "evidence": "tests/sentry/integrations/github/test_integration.py:388-396 sends a hardcoded state and asserts only `assert b\"Invalid installation request.\" in resp.content`. src/sentry/integrations/github/integration.py:412-413 returns `error(request, self.active_organization)` on state mismatch; lines 431-436 do likewise for missing access token or login. The error helper at lines 129-133 defaults to `error_short=\"Invalid installation request.\"`; lines 343-344 put OAuthLoginView before GitHubInstallation. The actual installation-not-found handling at lines 353-356 raises `IntegrationError(\"The GitHub installation could not be found.\")`.",
+     "reason": "The assertion can be satisfied by OAuth validation failure before the installation lookup, and the test does not assert that the mocked 404 lookup occurred.",
+     "passos": 4
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The short-message default and both call-site arguments are plain strings passed to a dynamic gettext invocation, leaving no literal gettext extraction sites for those messages.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/github/integration.py:12 imports gettext_lazy as _; line 132 defines error_short=\"Invalid installation request.\"; line 141 uses \"data\": {\"error\": _(error_short)}; lines 471 and 488 pass error_short=\"GitHub installation pending deletion.\" and error_short=\"Github installed on another Sentry organization.\" respectively. Repository-wide Python search found no literal gettext calls for these three strings.",
+     "reason": "The current code supports the reported extraction problem because all three short-message literals are unmarked and gettext receives only a variable, although the historical claim about their previous locations cannot be verified from the current file.",
+     "passos": 5
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "pipeline.signature is a deterministic MD5 of the pipeline identifiers rather than a random per-authorization state, and GitHub OAuth uses it as its state check.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/pipeline/base.py:132-133: `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" for v in self.pipeline_views]`; `self.signature = md5_text(*pipe_ids).hexdigest()`. src/sentry/integrations/github/integration.py:401-413 assigns `state = pipeline.signature`, includes it in the authorization URL, and checks `request.GET.get(\"state\") != pipeline.signature`; lines 416-438 exchange the submitted code and bind the returned GitHub login. tests/sentry/integrations/github/test_integration.py:235,242,338,445,707,737 repeatedly use the fixed state `9cae5e88803f35ed7970fc131e6e65d3`.",
+     "reason": "The OAuth state is derived solely from pipeline view class names, not the user or authorization attempt, so the inspected code supports the predictable-state concern rather than contradicting it.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The missing Integration branch advances the pipeline without verifying that github_authenticated_user installed the supplied installation_id.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/github/integration.py:481-482 returns pipeline.next_step() on Integration.DoesNotExist; the ownership comparison occurs only at lines 500-505. Lines 343-344 make GitHubInstallation the final pipeline view, and lines 346-379 build integration data from /app/installations/{installation_id} without checking github_authenticated_user. src/sentry/integrations/github/client.py:123-131 authenticates that endpoint with an app JWT. src/sentry/integrations/pipeline.py:91-115 calls build_integration, lines 126-132 ensure the integration, and lines 225-227 attach it to the organization.",
+     "reason": "The checked code skips the OAuth-user ownership check when the local Integration is missing and subsequently builds and attaches the installation using app-authenticated data without another ownership check.",
+     "passos": 7
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new check treats `metadata['sender']` as required, but the integration producer still only adds it when `state.get('sender')` is present, and the existing installation code explicitly supports metadata without sender.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/github/integration.py:376-377 conditionally sets sender: `if state.get(\"sender\"):` then `integration[\"metadata\"][\"sender\"] = state[\"sender\"]`. Lines 475-498 allow an existing active Integration with no OrganizationIntegration to reach lines 501-504, which directly evaluate `integration.metadata[\"sender\"][\"login\"]` without a missing-key guard. src/sentry/integrations/github/installation.py:44-45 explicitly handles absence: `if \"sender\" not in integration.metadata: return HttpResponse(status=404)`.",
+     "reason": "The producer permits missing sender and the existing endpoint handles that case, whereas the cited branch directly indexes it and therefore raises KeyError for the described active, unassociated integration.",
+     "passos": 7
+    }
+   ]
+  }
+ }
+}

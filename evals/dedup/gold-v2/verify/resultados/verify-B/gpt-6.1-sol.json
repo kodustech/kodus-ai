@@ -1,0 +1,2544 @@
+{
+ "model": "gpt-6.1-sol",
+ "verificador": "gpt-6.1-sol@sub",
+ "versao": "B",
+ "versaoDedup": "v9-cobertura",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "An authenticated user with an accepted ADMIN (not OWNER) membership in team T calls bookings.addGuests with an existing bookingId for T and guests ['new@example.com']; the booking organizer is another user and the admin's email is not among its attendees. The authenticated mutation forwards the call to the handler (packages/trpc/server/routers/viewer/bookings/_router.tsx:79-94), which loads the booking by ID (addGuests.handler.ts:26-44). isTeamAdmin returns a truthy membership for accepted ADMIN roles (packages/lib/server/queries/teams/index.ts:264-283), but isTeamOwner returns false because i"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "An authenticated attendee B (not organizer A) adds a new valid, non-blacklisted guest to A's booking. The booking has a google_calendar reference with credentialId=null (permitted by packages/prisma/schema.prisma:504-518), and A has a connected Google calendar but B has no credentials. B is expressly authorized by the attendee-email check in packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:50-56. The guest passes filtering and is persisted at :74-106. However, :158-163 loads B's credentials and constructs EventManager with them; packages/lib/server/getUsersCredentials.ts:8-18 "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "An authenticated organizer of a non-seated booking with no calendar references can repeatedly call addGuests with batches of, for example, 1,000 distinct valid addresses (emails enabled). The server schema has no array limit (packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-5); organizer authorization passes (addGuests.handler.ts:50-56). Filtering only excludes existing/blacklisted addresses, not counts (74-81), and all new rows are persisted (92-106). The entire accumulated attendee list becomes evt.attendees (108-136). With no references calendar updating simply returns (pa"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "A user with a non-English locale opens AddGuestsDialog and hovers the email row's removal button. The dialog initializes one email row (apps/web/components/dialog/AddGuestsDialog.tsx:32) and supplies it to MultiEmail with readOnly=false (lines 69-73). MultiEmail renders the row and removal tooltip (packages/ui/form/MultiEmail.tsx:19-46), but passes the literal English 'Remove email' at line 46, despite translating the neighboring add-another control at line 69. Tooltip renders content unchanged (packages/ui/components/tooltip/Tooltip.tsx:26-38) and exposes it through its trigger (lines 43-49)."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8",
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "An authenticated organizer calls viewer.bookings.addGuests with their existing bookingId and guests [\"new@example.com\", \"new@example.com\"], where that email is not already an attendee and is not blacklisted. The route accepts the array and invokes the handler (_router.tsx:79-94); server validation checks email format but not uniqueness (addGuests.schema.ts:3-6). Ownership passes authorization (addGuests.handler.ts:50-56). Both entries survive filtering against the same original attendee snapshot (addGuests.handler.ts:26-31,74-78), and the nonempty check passes (80-81). Both are mapped to atten"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6",
+      "S11"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Set BLACKLISTED_GUEST_EMAILS=blocked@example.com. An authenticated organizer of an existing booking, with no attendee having email Blocked@Example.com, calls viewer.bookings.addGuests with that bookingId and guests: [\"Blocked@Example.com\"]. The route forwards validated input (_router.tsx:79-94); the schema accepts this valid mixed-case email without normalization (addGuests.schema.ts:3-6). Organizer authorization passes (addGuests.handler.ts:50-56). The blacklist becomes [\"blocked@example.com\"] (lines 70-72), but the case-sensitive includes check against \"Blocked@Example.com\" is false (lines 7"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S12"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "An authenticated organizer adds guests to an existing ordinary booking whose attendees include alice@example.com, submitting guests=[\"alice@example.com\", \"bob@example.com\"] with Bob not already attending and neither address blacklisted. This input is accepted by addGuests.schema.ts:3-6, and organizer authorization passes at addGuests.handler.ts:50-56. The filter at addGuests.handler.ts:74-78 removes Alice, leaving Bob, so the nonempty guard passes and only Bob is inserted at :83-106. The updated attendee list still includes Alice and is used in evt at :108-120,136. With a booking having no cal"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Reschedule a booking whose Google event is on configured non-primary calendar 'secondary@example.com', with a nonempty reference uid, valid Google credential, and externalCalendarId=null (allowed by packages/prisma/schema.prisma:340). Supply event.destinationCalendar containing that configured externalId. EventManager selects the reference and leaves calenderExternalId=null at packages/core/EventManager.ts:495-509, then calls updateEvent with it at :542 (or :548 for a legacy reference without credentialId). CalendarManager forwards null without a destination fallback at packages/core/CalendarM"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Start with a booking having a valid google_calendar reference (uid='event-A', credentialId=42, externalCalendarId='secondary-A'), and edit its location to a physical location. editLocationHandler calls updateLocation (packages/trpc/server/routers/viewer/bookings/editLocation.handler.ts:94-104). updateAllCalendarEvents routes the existing reference using credential 42 and secondary-A (packages/core/EventManager.ts:504-542); a successful CalendarManager.updateEvent returns success and updatedEvent but neither externalId nor credentialId (packages/core/CalendarManager.ts:287-322). updateLocation "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "On a self-hosted instance without Stripe keys, IS_TEAM_BILLING_ENABLED is false (packages/lib/constants.ts:82-88). Call createHandler with an unused slug 'acme', name 'Acme', unused adminEmail, adminUsername, and check:false (valid under packages/trpc/server/routers/viewer/organizations/create.schema.ts:5-10); assume DNS notification succeeds or there are no instance admins. Collision checks pass (create.handler.ts:68-86), and check:false enters creation (99). The nested organization create omits both slug and metadata.requestedSlug when billing is disabled (148-158). Team.slug is nullable wit"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S1",
+      "S10",
+      "S14",
+      "S17",
+      "S18"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Create a new, free booking that does not require confirmation, selecting Google Meet (MeetLocationType is \"integrations:google:meet\", packages/app-store/locations.ts:54), with neither an event-type nor organizer destination calendar. handleNewBooking constructs evt with location: bookingLocation and destinationCalendar: null (packages/features/bookings/lib/handleNewBooking.ts:1061-1067), then calls eventManager.create(evt) for this non-reschedule/free/unconfirmed path (2110-2114). processLocation preserves the integration location and does not supply a destination calendar (packages/core/Event"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S2",
+      "S13"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Create a booking using a connected dedicated video integration (e.g. Zoom). EventManager selects its credential by conferenceCredentialId or integration name (packages/core/EventManager.ts:425-433), calls createMeeting with that credential (:452-456), and createMeeting returns credential.id (packages/core/videoClient.ts:78). The create path includes that video result (:126-136), but maps its reference credentialId to undefined because its type is not _calendar (:149,163-170). handleNewBooking takes those references (packages/features/bookings/lib/handleNewBooking.ts:2121) and persists them (:2"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S3",
+      "S9",
+      "S11",
+      "S15",
+      "S16",
+      "S19"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Book a collective event with organizer A and host B, each with an Office365 credential and a distinct private destination calendar (Acal belongs only to A, Bcal only to B). handleNewBooking collects B's destination at packages/features/bookings/lib/handleNewBooking.ts:990-994, initializes the array with A's destination at :1063-1067, and appends B's at :1077-1078. EventManager iterates both destinations, resolves their respective credentials, and passes the entire unchanged event to createEvent at packages/core/EventManager.ts:338-370. CalendarManager constructs the service from the current cr"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S5",
+      "S12"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Create a free, confirmation-free COLLECTIVE booking (not a reschedule), with users ordered A then B, neither the event type nor organizer A having a destination calendar, while B has a configured Google destination with its credentialId. Use a non-Meet location, e.g. an in-person address. A is the organizer (packages/features/bookings/lib/handleNewBooking.ts:916); B's destination is collected at :990-994. However, evt.destinationCalendar becomes null at :1063-1067, and the optional push at :1077-1078 discards B's destination. The ordinary booking path calls eventManager.create(evt) at :2112-21"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S7",
+      "S20"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Cancel a future recurring collective booking with allRemainingBookings=true, organizer A having only Google credential 11 and cohost B having Google credential 22. Each remaining booking has ordered calendar references [A's event uid aN/calendar A/credential 11, B's event uid bN/calendar B/credential 22]. The handler accepts this future booking (handleCancelBooking.ts:132-148), loads only the booking owner's credentials (44-48) and all references (56-62). It marks all future instances CANCELLED and loads their references into updatedBookings (333-371). The outer loop visits both references (41"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Instantiate SalesforceCalendarService with a valid Salesforce credential and configured consumer key/secret, with credential sharing disabled. The constructor invokes getClient (packages/app-store/salesforce/lib/CalendarService.ts:55-58), whose configuration guards pass at lines 65-71 and which exchanges the refresh token at lines 75-84. Let Salesforce return statusText 'OK' and JSON containing string id, issued_at, instance_url, signature, access_token, scope and token_type, satisfying the schema at lines 39-47 and status guard at line 86. parseRefreshTokenResponse uses that schema and return"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Use a saved Salesforce credential with a still-valid access_token and valid app keys, while the Salesforce OAuth token endpoint temporarily returns 503 Service Unavailable (the instance API remains available). Construct SalesforceCalendarService and call deleteEvent for an existing event. The constructor starts getClient unconditionally (packages/app-store/salesforce/lib/CalendarService.ts:55-57); after validating app keys (65-71), getClient always POSTs the refresh token (75-84), without checking whether the access token is usable. The 503 causes an exception at line 86, so no jsforce.Connect"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Configure nonempty CALCOM_WEBHOOK_SECRET and a valid encryption key, enabling sharing (packages/lib/constants.ts:103-104). Start with an existing user and registered app with metadata, but no credential for that user/app. Send two concurrent authorized webhook requests with the same userId/appSlug and valid encrypted JSON keys: they pass authentication, existence checks and decryption (apps/web/pages/api/webhook/app-credential.ts:23-59). Schedule both findFirst calls to finish before either insert; both return null (lines 62-70). Both then take the create branch and insert separate rows for th"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "On a deployment with both CALCOM_WEBHOOK_SECRET and CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY set, credential sharing is enabled (packages/lib/constants.ts:103-104), so unauthenticated requests reach the secret check (apps/web/pages/api/webhook/app-credential.ts:19-27). An attacker repeatedly sends requests with equal-length candidate strings in the configured webhook header, varying the matching prefix. Lines 25-26 use ordinary JavaScript string inequality, whose string-content comparison is not constant-time and can terminate at a differing portion of the string. Timing repeated rejected requests"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S24",
+     "membros": [
+      "S1",
+      "S13",
+      "S16",
+      "S19",
+      "S24"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Set nonempty CALCOM_WEBHOOK_SECRET and CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY (enabling sharing in packages/lib/constants.ts:103-104) and CALCOM_CREDENTIAL_SYNC_ENDPOINT to a working endpoint returning HTTP 200 JSON with fresh tokens. Instantiate BiginCalendarService with a positive credential.id, configured app keys, and an expired credential.key.expiryDate (packages/app-store/zoho-bigin/lib/CalendarService.ts:43-45,51-62). Contact creation calls auth.getToken at line 123, which invokes refreshAccessToken for the expired credential. That method supplies an Axios callback but passes the positive"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11",
+      "S20",
+      "S23"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Configure nonempty CALCOM_WEBHOOK_SECRET and CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY (enables sharing at packages/lib/constants.ts:103-104) and CALCOM_CREDENTIAL_SYNC_ENDPOINT. An Office365 user credential with expired expires_in reaches refreshAccessToken through getToken (packages/app-store/office365calendar/lib/CalendarService.ts:275-281). The sync helper POSTs to that endpoint and returns its response (_utils/oauth/refreshOAuthTokens.ts:5-15). Let the endpoint return HTTP 200 JSON {\"access_token\":\"new-token\",\"expires_in\":2000000000,\"refresh_token\":\"real-refresh-token\"}. The caller parses this"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S3",
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "With credential sharing disabled, construct Office365CalendarService with a stored key containing a valid refresh_token R and expires_in=0, then call auth.getToken(). The constructor installs o365Auth (packages/app-store/office365calendar/lib/CalendarService.ts:68-71), and the expiry check triggers refresh (234-241, 276-281). refreshOAuthTokens invokes the provider callback when sharing is disabled (packages/app-store/_utils/oauth/refreshOAuthTokens.ts:16-18), sending R to Microsoft (CalendarService.ts:248-256). A successful JSON response {access_token:'new-access', expires_in:3600} is accepte"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S18",
+      "S22"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "With sharing disabled, start with a valid Google credential key containing scope, token_type='Bearer', access_token, refresh_token and an expired expiry_date (required by packages/app-store/googlecalendar/lib/googleCredentialSchema.ts:3-9). Construct GoogleCalendarService: CalendarService.ts:66-75 parses this key successfully. A calendar operation reaching authedCalendar (e.g. CalendarService.ts:207) calls getToken (130-131), which detects expiry and refreshes (122-125). refreshOAuthTokens.ts:16-18 invokes the normal Google refresh callback; a successful response supplies res.data.access_token"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S5",
+      "S14",
+      "S17",
+      "S21"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Configure nonempty CALCOM_WEBHOOK_SECRET and CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY (sharing enabled at packages/lib/constants.ts:103-104) and CALCOM_CREDENTIAL_SYNC_ENDPOINT. Instantiate BiginCalendarService with credential id=42, userId=7 and an expired Bigin token, plus valid app keys. The constructor initializes auth (packages/app-store/zoho-bigin/lib/CalendarService.ts:43-45); updateEvent calls getToken (:243-245), which detects expiry and passes credential.id=42 to refreshAccessToken (:51-62). After loading app keys (:74-76), that method passes 42 as the helper's userId (:85-94). The helpe"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": []
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The comment at packages/features/ee/workflows/api/scheduleSMSReminders.ts:28 is indeed narrower than the query: lines 31–43 delete either past-dated SMS reminders or any reminder with retryCount > 1. However, the finding asks only to update that comment. No caller executes or depends on the comment; deletion is determined by the Prisma predicate at lines 29–45. Updating the comment would not prevent any deletion or change any user-visible result. This is a documentation mismatch, not a demonstrated functional failure caused by the cited comment."
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The comment is indeed narrower than the query: scheduleSMSReminders.ts:28 describes expired SMS cleanup, whereas :38-42 matches any row with retryCount > 1. But this finding requests only a comment update, and the inaccurate comment causes no runtime wrong result. The actual retry-exhaustion behavior is explicit in :29-45: failed SMS scheduling increments retryCount at :178-186 or :189-197, and a later authenticated invocation (:22-26) deletes exhausted reminders, including future-dated ones. That implements the new retry limit rather than demonstrating a defect caused by the comment. No calle"
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "The claimed sequential retryCount=2 success is prevented by cleanup before selection, but overlapping invocations allow the same harmful outcome. Start with a future unscheduled SMS reminder created by smsReminderManager.ts:228-238, now within seven days. One failed scheduling attempt sets retryCount from 0 to 1 (scheduleSMSReminders.ts:158-166,189-197). Two authenticated cron requests overlap: both pass cleanup because count=1 (21-45), and both select the same unscheduled reminder with retryCount=1 (48-60). Request A's Twilio scheduling fails transiently and its catch writes retryCount=2 (189"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "An authenticated cron call has two unscheduled SMS reminders A and B with future scheduledDate within seven days, retryCount=0, valid booking/workflowStep, message and recipient. They survive cleanup and are loaded into memory (packages/features/ee/workflows/api/scheduleSMSReminders.ts:22-60); the loop starts processing A (67-74). A awaits Twilio scheduling (158-166), which awaits the external messages.create call (packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts:104-111). While that request is pending, cancellation of A's booking invokes deleteScheduledSMSReminder for "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Create an unscheduled SMS reminder with retryCount=0, scheduledDate tomorrow, valid booking/workflowStep, recipient and nonempty reminder message. Send two overlapping POST requests with the valid CRON_API_KEY (scheduleSMSReminders.ts:21-26,204-206). Both run cleanup before either updates; the future date and zero count survive deletion (29-45), and both findMany calls select the same row and snapshot retryCount=0 (48-60). Both pass the relation/message checks (68-70,158) and call scheduleSMS (159-166). For example, with Twilio credentials missing, scheduleSMS calls createTwilioClient, which t"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Take an existing non-admin CAL password account with twoFactorEnabled=true and an unused encrypted backup code, with the encryption key configured. Submit credentials to the credentials provider with that account's email, an incorrect password, totpCode='garbage', and the valid backupCode (all are exposed provider fields at packages/features/auth/lib/next-auth-options.ts:57–67). The lookup loads the account and its password/backup codes at :73–89; assuming the request is within the rate limit (:109–111), the nonempty totpCode makes the password-verification condition false at :121, so verifyPa"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "A CAL user whose viewer.me reports twoFactorEnabled=false opens setup using the switch (apps/web/pages/settings/security/two-factor-auth.tsx:29,43-49), completes setup and submits a valid TOTP. The enable endpoint persists twoFactorEnabled=true and returns success (apps/web/pages/api/auth/two-factor/totp/enable.ts:51-65), but the modal only advances to DisplayBackupCodes (apps/web/components/settings/EnableTwoFactorModal.tsx:130-136). Press Escape on that screen: the UI uses Radix Root/Content with no dismissal-prevention handler (packages/ui/components/dialog/Dialog.tsx:70,89-104), and the mo"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "A user successfully enables 2FA: the enable request returns 200 and moves the modal to DisplayBackupCodes (apps/web/components/settings/EnableTwoFactorModal.tsx:130-136). In a browser where clipboard-write permission is denied, the user clicks the visible Copy button (same file:261-281). navigator.clipboard.writeText at line 278 returns a promise that rejects with NotAllowedError and leaves the clipboard unchanged; the handler neither awaits nor catches it, and unconditionally shows the success toast at line 279. Thus the UI falsely reports that recovery codes were copied despite no copy occur"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "With the backup-code dialog open, let the browser deny clipboard writes (navigator.clipboard.writeText returns a rejected Promise, e.g. NotAllowedError). The test clicks the copy button at apps/web/playwright/login.2fa.e2e.ts:119-120. Its handler calls writeText without awaiting it at apps/web/components/settings/EnableTwoFactorModal.tsx:276-278 and immediately emits the success toast at line 279, even though the clipboard remains unchanged. The test's only copy assertion waits for that toast at apps/web/playwright/login.2fa.e2e.ts:121; line 122 explicitly leaves clipboard verification as a TO"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "The assertion indeed checks only the filename (apps/web/playwright/login.2fa.e2e.ts:113-117), but this is a coverage improvement rather than a demonstrated wrong outcome. The actual export uses the setup response's backupCodes for both UI state and the formatted newline-separated text Blob (apps/web/components/settings/EnableTwoFactorModal.tsx:91-99), and the download anchor points to that Blob URL (283-286). No concrete input or execution here produces incorrect exported codes; making the hypothetical empty/incorrect Blob requires assuming another defect or changing the implementation. The mi"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "The test indeed only asserts the filename (apps/web/playwright/login.2fa.e2e.ts:113-117), but no concrete incorrect export follows from the current code. Setup generates ten 10-character hex codes, stores them, and returns that same array (apps/web/pages/api/auth/two-factor/totp/setup.ts:61-78). The UI puts that array in state and creates the download blob by mapping formatBackupCode and joining with newlines (apps/web/components/settings/EnableTwoFactorModal.tsx:92-99); the displayed codes use exactly the same formatter (lines 163, 203-204). The download anchor points to that blob URL (lines "
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S5",
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Take a CAL user with a valid password, twoFactorEnabled=true, and encrypted backupCodes containing unused codes A and B, with CALENDSO_ENCRYPTION_KEY configured. Submit two concurrent credentials logins with the correct email/password, no totpCode, and backupCode=A. Both authorize calls can finish findUnique before either writes, so both obtain the same original backupCodes (packages/features/auth/lib/next-auth-options.ts:73-102). Password verification succeeds (121-129); rate limiting does not serialize consumption and permits these requests, e.g. without Upstash variables it returns remainin"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The code does use ordinary equality, but I could not demonstrate the claimed security exposure from it. authorize loads the stored codes (packages/features/auth/lib/next-auth-options.ts:73-102), applies rate limiting (109-111; packages/lib/checkRateLimitAndThrowError.ts:10-18), and decrypts them (139-141). For an incorrect normalized string, indexOf scans all slots and returns -1, producing IncorrectBackupCode (144-145); the code does not implement a prefix comparison or reveal how many characters matched. Early termination occurs only when the caller already supplies an entire valid secret, w"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The code does use non-constant-time string equality, but the claimed security exposure is not demonstrated by this code. Setup generates ten fixed-length, 10-character hex strings (apps/web/pages/api/auth/two-factor/totp/setup.ts:60-68). In authorize, every incorrect normalized string scans the entire array and produces the same IncorrectBackupCode error (packages/features/auth/lib/next-auth-options.ts:139-145); early termination occurs only for a fully correct code, whose validity is already intentionally disclosed by authentication success and consumption (147-156, 205). Consumed null slots "
+     }
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "On a desktop viewport wider than 570px, open a loaded topic with a title whose rendered nowrap width exceeds the header's available width, and scroll until showExtraInfo becomes true (app/assets/javascripts/discourse/views/topic.js.es6:114). header.hbs:93-94 inserts header-extra-info into .contents alongside the logo and navigation panel (lines 2-6). The component extends Ember.Component without overriding its root tag or adding root sizing classes (components/header-extra-info.js.es6:1-18), so its default outer div is the flex item; the .extra-info-wrapper is a nested div (templates/component"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Render a small-action on a legacy Gecko browser (e.g. Firefox 17) that supports -moz-box but not display:flex, with a one-line description and no custom message. Its template supplies an icon and description as sibling divs (app/assets/javascripts/discourse/templates/components/small-action.hbs:1-2,14-17). The small-action rule requests flex layout and center alignment (app/assets/stylesheets/common/base/topic-post.scss:263-265); the icon is 35px with 5px vertical container padding, while the description has smaller 0.9em text and no paragraph margins (267-283,301-302), so their natural height"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "An authenticated admin sends PUT /admin/embeddable_hosts/999999 with embeddable_host: {host: 'example.com', category_id: 1}, where ID 999999 does not exist (or another admin deleted it before the request). The resource route permits this update (config/routes.rb:153), and the controller's filters only check login/staff (app/controllers/admin/embeddable_hosts_controller.rb:3; app/controllers/admin/admin_controller.rb:3-4). The lookup returns nil at app/controllers/admin/embeddable_hosts_controller.rb:10 and passes it to save_host at line 11. Assigning host.host at line 23 raises NoMethodError r"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "With an allowed EmbeddableHost row host='example.com', a production embedding comments request sends Referer: https://EXAMPLE.com/page. EmbedController's before_filter runs ensure_embeddable (app/controllers/embed_controller.rb:3), which passes request.referer directly to host_allowed? (lines 60-61). record_for_host parses the URL (app/models/embeddable_host.rb:11), extracts the case-preserving URI hostname 'EXAMPLE.com' (line 14), and compares lower(host) to that unnormalized value (line 17). The stored row's 'example.com' does not equal 'EXAMPLE.com', so no row is returned and host_allowed? "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "An authenticated admin POSTs /admin/embeddable_hosts with {\"embeddable_host\":{\"category_id\":1}} (valid category, host key omitted). The resource route exists at config/routes.rb:153 and the login/staff filters permit this admin (app/controllers/admin/embeddable_hosts_controller.rb:3). create constructs a new record and calls save_host (lines 5-6); save_host assigns nil from the missing nested host key (line 23), then calls host.save (line 27). The before_validation callback invokes nil.sub! at app/models/embeddable_host.rb:5-6, raising NoMethodError before the format validator at line 2 can re"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The assertion is under-specified, but the finding demonstrates no wrong result for a caller or user. The example builds an ordinary topic and expects false (spec/models/topic_spec.rb:1401-1404); expandable_first_post? explicitly requires embed_truncate? and an existing TopicEmbed (app/models/topic.rb:864-869). Returning false for that topic is correct under the implemented contract. The prerequisites are explicitly enabled only in the separate nested context (spec/models/topic_spec.rb:1407-1411). The misleading test name does not establish that host availability is still a required production "
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "The observation about weak coverage is correct, but no wrong outcome is demonstrated. The case builds an ordinary topic and expects false (spec/models/topic_spec.rb:1401-1404); its fabricator creates no TopicEmbed (spec/fabricators/topic_fabricator.rb:1-5), and embed_truncate defaults to false (config/site_settings.yml:769). Thus false is the correct result of the current predicate (app/models/topic.rb:864-869), irrespective of host availability. The host-present setup belongs only to the nested examples (spec/models/topic_spec.rb:1407-1411). Calling this test misleading does not establish tha"
+     }
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "In the 'find embedded' test, store.find('fruit', 2) is called (test/javascripts/models/store-test.js.es6:111). The matching Pretender endpoint ignores :id and returns fruits[0] (test/javascripts/helpers/create-pretender.js.es6:226-228). Store hydrates the returned singular payload rather than checking its ID (app/assets/javascripts/discourse/models/store.js.es6:70). Consequently the test receives fruit 1, not the requested fruit 2, yet passes because it asserts the returned two colors with IDs 1 and 2 and never asserts the fruit ID (test/javascripts/models/store-test.js.es6:112-119). This is a"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S7",
+      "S8",
+      "S13"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Run CreateEmbeddableHosts#change on an installation whose site_settings has no row named embed_category (or a row whose value is no longer any category name). After creating the table at db/migrate/20150818190757_create_embeddable_hosts.rb:3-7, the unconditional INNER JOIN query at lines 9-11 returns zero rows. Indexing that empty result with [0]['id'] raises before .to_i can provide zero, aborting the migration. The category_id == 0 fallback at lines 14-15 is therefore never reached, and even an installation with no embeddable_hosts configured fails before the conditional host migration at li"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S10",
+      "S16"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Upgrade a production installation whose site_settings contains embeddable_hosts='https://example.com/1234' and embed_category matching an existing category (so the category lookup succeeds). The migration reads the legacy value and splits it into entries (db/migrate/20150818190757_create_embeddable_hosts.rb:9-11,18-22), then inserts the literal full URL into host via SQL (24-25), bypassing the scheme/path normalization in app/models/embeddable_host.rb:5-7. It deletes the old settings at migration line 31. Subsequently a comments request with Referer https://example.com/1234 runs ensure_embedda"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S14"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "An administrator creates an allowed host with host='example.com:8080' and a valid category. Admin::EmbeddableHostsController#create delegates to save_host, which assigns those values and saves (app/controllers/admin/embeddable_hosts_controller.rb:5-6,22-28). The model's normalization removes only schemes and paths, leaving the port intact, and its regex explicitly accepts :8080 (app/models/embeddable_host.rb:2,5-7). With this as the only allowed-host record, a production comments request with Referer http://example.com:8080/article hits ensure_embeddable (app/controllers/embed_controller.rb:3,"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S4",
+      "S15",
+      "S17"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "An admin adds a new host and enters example.com without choosing a category. The component starts with categoryId=null (app/assets/javascripts/admin/components/embeddable-host.js.es6:9), allows saving any nonempty host (19-21), and sends category_id=null (33-37). The chooser supports a no-ID Uncategorized option for staff (app/assets/javascripts/discourse/components/category-chooser.js.es6:48-54,64-68). Creation assigns that blank category to SiteSetting.uncategorized_category_id and saves successfully (app/controllers/admin/embeddable_hosts_controller.rb:5-6,23-28). RestModel applies the retu"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Configure embeddable_host=blog.example, enable feed polling with a valid feed URL and existing embed_by_username user, and use a feed with M already-imported entries. Send N simultaneous anonymous embed/best requests with a blog.example referer for distinct, not-yet-imported blog.example article URLs outside that feed. The referer passes app/controllers/embed_controller.rb:24-26 and each cache miss enqueues a retrieval at :9-16. Each job calls TopicRetriever.retrieve (app/jobs/regular/retrieve_topic.rb:9-17); the host check passes and distinct Redis keys allow all N jobs through (lib/topic_ret"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Set SiteSetting.default_locale to French and embeddable_host to blog.example, with an existing TopicEmbed and a visible reply created on February 10, 2013. Request /embed/best with that embed_url and Referer https://blog.example/article. EmbedController inherits ApplicationController (app/controllers/embed_controller.rb:1), whose set_locale selects the configured French locale (app/controllers/application_controller.rb:98-100). The referer passes the host checks (app/controllers/embed_controller.rb:24-28), and the existing mapping creates the topic view (lines 9-13). For each visible reply, ap"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "An embedding page sets discourseUrl = 'https://forum.example.com/' and includes this script with a discourse-comments element. The script creates and appends the forum iframe (app/assets/javascripts/embed.js:5-12) and installs a window-wide message listener (line 25). An attacker controlling https://forum.example.co opens the embedding page in a popup (thus retaining a window reference), then calls popup.postMessage({type: 'discourse-resize', height: 1}, '*'). The resulting e.origin is 'https://forum.example.co', which is a substring of 'https://forum.example.com/', so the guard at line 17 acc"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Run the non-dry-run Disqus importer with an existing post_as user and an export containing a thread created in 2010, one reply created in 2011, and a reachable HTTP article URL with no existing TopicEmbed. The parser captures both historical timestamps (lib/tasks/disqus.thor:56,60), and the thread survives normalization because it has a reply (81-91). The import loop calls import_remote with only title, discarding the thread timestamp (148). import_remote forwards only user, URL, title and content (app/models/topic_embed.rb:44-52); the new-embed branch constructs PostCreator without created_at"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Enable feed polling, configure a valid feed and existing embed_by_username user, with two new feed entries U and V. The hourly PollFeed executes its import loop (app/jobs/scheduled/poll_feed.rb:11,14-17,25-36). Concurrently retrieve U on the configured embeddable host with no Redis throttle key: TopicRetriever passes the host/throttle checks (lib/topic_retriever.rb:8-9,14-15,26-29), sees no embed, and directly executes another PollFeed (35-42). Both loops can read no embed for U at app/models/topic_embed.rb:15 before either commits. Both enter the transaction and create a post (20-23; lib/post"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test does have the stated coverage gap: spec/controllers/embed_controller_spec.rb:8-10 sends a request without configuring the host/referer and asserts only non-success; ensure_embeddable runs before the action (app/controllers/embed_controller.rb:4) and rejects a blank host or mismatched referer (lines 25-26). However, this establishes no incorrect runtime outcome in the submitted code. For an allowed host/referer, best still unconditionally requires embed_url at app/controllers/embed_controller.rb:9. Removing that check is a hypothetical code modification, not an input or state that bypa"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "The test indeed does not exercise the required-parameter check: spec/controllers/embed_controller_spec.rb:8-10 sends an unconfigured request, while the host/referer setup is confined to later contexts at lines 19-32. With the default empty host (config/site_settings.yml:354), the before-filter (app/controllers/embed_controller.rb:4,25) raises before best reaches params.require at line 9. However, this is a coverage weakness, not a demonstrated wrong application outcome: an allowed request missing embed_url still encounters the existing params.require check at line 9. Removing that check is a h"
+     }
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The coverage observation is correct: feed_polling_enabled defaults to false (config/site_settings.yml:355), and the tests only stub the absent URL or username (spec/jobs/poll_feed_spec.rb:18-27), so execute short-circuits at app/jobs/scheduled/poll_feed.rb:15 without evaluating lines 16-17. However, no wrong runtime result follows in the code under review: those presence guards are present and execute correctly avoids polling when any prerequisite is absent (app/jobs/scheduled/poll_feed.rb:15-17). The described passing result after removing a guard requires a hypothetical additional code chang"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The coverage observation is correct: with feed_polling_enabled defaulting to false (config/site_settings.yml:355), the examples at spec/jobs/poll_feed_spec.rb:18-27 leave polling disabled, so execute short-circuits at app/jobs/scheduled/poll_feed.rb:15 and their never expectations pass without exercising either presence check. However, this does not demonstrate a wrong result in the submitted code: execute actually retains both presence guards at app/jobs/scheduled/poll_feed.rb:16-17, preventing polling with missing settings. Removing a guard would be a hypothetical further code change, not an"
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S1",
+      "S11"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Set embeddable_host to blog.example and have a TopicEmbed for https://blog.example/article pointing to a publicly accessible topic. GET /embed/best?embed_url=https%3A%2F%2Fblog.example%2Farticle with Referer https://blog.example/article reaches embed#best (config/routes.rb:245) and passes the host checks (app/controllers/embed_controller.rb:24-28). The lookup returns the existing topic ID (app/models/topic_embed.rb:78-79), so the controller builds @topic_view and implicitly renders best rather than the loading template (app/controllers/embed_controller.rb:9-20). The template opens an if at app"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Enable feed_polling_enabled, set feed_polling_url to an RSS feed, and set embed_by_username to an existing user. These settings pass execute's checks (app/jobs/scheduled/poll_feed.rb:14-17) and the user lookup (lines 25-26). Have the feed's first item contain <title>First article</title>, <link>https://example.com/first</link>, and <description>Article body</description>, but no content element; include a second valid article after it. The feed is parsed at line 29 and iteration reaches the first item's valid link at lines 31-33. Its absent content cannot supply a string to i.content.scrub at "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Enable feed polling, configure a reachable feed and an existing embed_by_username user. The feed supplies a new http(s) article link and content containing <img src=\"x\" onerror=\"alert(document.domain)\"> (e.g. in a CDATA content field). Jobs::PollFeed passes its settings/user guards, parses the feed, unescapes its content and calls TopicEmbed.import (app/jobs/scheduled/poll_feed.rb:14-17,24-36). For this new URL, import passes the scheme check and creates a post with skip_validations and raw_html cooking (app/models/topic_embed.rb:11,20-23). absolutize_urls only parses the fragment and rewrites"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S4",
+      "S14"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Configure feed polling with an existing import user and a feed item whose link is http://example.com/blog/article and content includes <a href='next'>Next</a><img src='images/photo.jpg'><img src='//cdn.example.com/photo.jpg'>. PollFeed reads that link and passes the content to TopicEmbed.import (app/jobs/scheduled/poll_feed.rb:25-36). With no existing embed, import passes absolutize_urls output as raw HTML to PostCreator (app/models/topic_embed.rb:20-23). absolutize_urls leaves 'next' and 'images/photo.jpg' unchanged because they do not start with '/' (app/models/topic_embed.rb:62-71), and rew"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "The controller spec does not fail for the claimed reason in its normal test configuration. config/site_settings.yml:348-351 sets queue_jobs to false in test (true otherwise). The example supplies an allowed host/referer and a nil embed lookup (spec/controllers/embed_controller_spec.rb:21,32,41), so EmbedController#best enqueues retrieval at app/controllers/embed_controller.rb:15. But Jobs.enqueue executes klass.new.perform(opts) synchronously when queue_jobs is false (app/jobs/base.rb:162-172). Jobs::RetrieveTopic#execute then calls TopicRetriever.new(...).retrieve (app/jobs/regular/retrieve_t"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "The alleged default controller-spec failure is prevented by synchronous job execution in tests. config/site_settings.yml:348-351 sets queue_jobs to false for test (true by default elsewhere). EmbedController#best does enqueue at app/controllers/embed_controller.rb:15, but Jobs.enqueue executes klass.new.perform(opts) immediately when queue_jobs is false (app/jobs/base.rb:162-172). Jobs::RetrieveTopic#execute then constructs TopicRetriever and calls retrieve (app/jobs/regular/retrieve_topic.rb:17), satisfying the expectations at spec/controllers/embed_controller_spec.rb:43-44 during the request"
+     }
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "A logged-in user submits a multipart post upload with original_filename='animation.gif', an extensionless multipart tempfile path (e.g. /tmp/RackMultipart123), and a valid multi-frame GIF larger than max_image_size_kb but below 10 MB; enable allow_animated_thumbnails and choose frames whose first-frame 80% resize fits the configured limit. create obtains the multipart file and invokes create_upload (app/controllers/uploads_controller.rb:5-21). create_upload keeps the original filename separately from file.tempfile (58-60), recognizes the image and oversized file (64-66), then downsizes the tem"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "Configure max_attachment_size_kb=20480 and authorized_extensions to include pdf (both configurable client settings at config/site_settings.yml:516-523), with an established user permitted to upload attachments. Select one 12 MiB report.pdf in the composer. The composer submit handler calls validateUploadedFiles and returns its boolean, cancelling submission on false (app/assets/javascripts/discourse/views/composer.js.es6:339-344). A single file passes the count check and is classified as an attachment and passed to validateUploadedFile (app/assets/javascripts/discourse/lib/utilities.js:143-160"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "A logged-in user submits type=composer and a 2 MiB file named broken.png containing non-image bytes, with max_image_size_kb=1024. UploadsController#create accepts the file and schedules create_upload (app/controllers/uploads_controller.rb:2,6-7,19-21); create_upload obtains its tempfile and original filename (58-60). Image detection checks only the filename extension, including png (lib/file_helper.rb:5-6,30-35), so this invalid file enters the oversized-image loop (app/controllers/uploads_controller.rb:64-66). downsize constructs an external `convert tempfile[0] ... -resize 80% ... tempfile` "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Create a custom emoji from a valid image larger than 100x100 via Emoji.create_for: app/models/emoji.rb:63-69 writes the image to disk and :73 enqueues resize_emoji with that existing path. Jobs::ResizeEmoji#execute passes the existence guard at app/jobs/regular/resize_emoji.rb:6-7, builds opts at :9-12, and calls OptimizedImage.downsize(path, path, 100, 100, opts) at :14. Ruby's later definition at app/models/optimized_image.rb:149-151 replaces the width/height definition at :145-147, leaving a method accepting only three required arguments and one optional argument. The five-argument job call"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Take an existing nonautomatic group G and member U with U.primary_group_id = G.id (the admin primary_group action assigns and saves this value at app/controllers/admin/users_controller.rb:133-137; User belongs_to :primary_group at app/models/user.rb:49). An admin sends DELETE /admin/groups/G.id/members with user_id=U.id, routed by config/routes.rb:45-50. remove_member loads G and U's id, permits nonautomatic G, and deletes the membership through group.users.delete at app/controllers/admin/groups_controller.rb:84-90, then saves and returns success at :92-93. This never assigns @deletions: that "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "An admin views an existing named group with 125 users, limit=50 and offset=0. The next link dispatches next and the displayed list iterates members (app/assets/javascripts/admin/templates/group.hbs:16-21). currentPage=1 and totalPages=3, so showingLast is false (app/assets/javascripts/admin/controllers/admin-group.js.es6:6-17). First click sets offset=50 immediately and calls findMembers; a second click before completion sees currentPage=2, still not showingLast, sets offset=100 and calls findMembers again (same controller:29-37). findMembers independently issues requests with those offsets (a"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "An administrator creates a new group named 'team' and selects 'everyone' (99), an offered option at app/assets/javascripts/admin/controllers/admin-group.js.es6:19-25. The creation form binds that selection to alias_level and invokes save (app/assets/javascripts/admin/templates/group.hbs:43-47). With no group id, save calls group.create() (app/assets/javascripts/admin/controllers/admin-group.js.es6:74-80), which POSTs name, visible, and alias_level:99 to /admin/groups (app/assets/javascripts/discourse/models/group.js:62-73). The server constructs Group.new, assigns only name and visible, and sa"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "An admin viewing an existing group with exactly 50 members has user_count=50, limit=50, offset=0 after a successful member fetch (app/assets/javascripts/discourse/models/group.js:10-11,25-35; app/controllers/groups_controller.rb:22-34). currentPage is 1 but totalPages is 2, so showingLast is false (app/assets/javascripts/admin/controllers/admin-group.js.es6:6-17). The template displays 1/2 and offers Next (app/assets/javascripts/admin/templates/group.hbs:17-18). Clicking Next passes the guard, sets offset to min(0+50,50)=50 and fetches members (admin-group.js.es6:29-37). findMembers permits of"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S4",
+      "S9",
+      "S10"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Take a visible custom group with 51 users and open its public members tab in a fresh session. The public group route loads the group (app/assets/javascripts/discourse/routes/group.js.es6:3-5); the members route uses that group and calls findMembers once (app/assets/javascripts/discourse/routes/group-members.js.es6:4-11). A fresh Group has limit=50 and offset=0 (app/assets/javascripts/discourse/models/group.js:10-11), and findMembers sends those values to the members endpoint (same file:23-29). After visibility authorization (app/controllers/groups_controller.rb:40-44), the endpoint orders the "
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "A concrete cache-staleness sequence is a logged-in user with a fixed locale L and allow_user_locale enabled (app/models/user.rb:154-158), with a translation key K missing in L but present with different values in the site's default locale and English. set_locale selects L and loads the fallback locales (app/controllers/application_controller.rb:152-159; config/initializers/i18n.rb:20-21). I18n.t(K) without options caches the default-locale translation: fallbacks are enabled at config/initializers/i18n.rb:8-9 and ordered [L, default_locale, en] at line 17, but the cache key contains only K, L a"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "In a background worker with catalogs cleared by I18n.reload! (lib/freedom_patches/translate_accelerator.rb:39-43), set the site default locale to uk and process a post-alert job for a user using that default, with two unread replies and no existing matching notification. Jobs::Base sets I18n.locale directly to the site default before execute (app/jobs/base.rb:148-153); Jobs::PostAlert invokes PostAlerter (app/jobs/regular/post_alert.rb:4-8). The user's effective locale is uk (app/models/user.rb:154-159). For the collapsed reply notification PostAlerter calls I18n.t('embed.replies', count: 2) w"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Configure anonymous access enabled, a valid anonymous organization, and AnonymousDeviceLimit=1, with one recently active device already stored. The service passes that limit to the store and registers the anonymous client (pkg/services/anonymous/anonimpl/impl.go:43,49-58); the client's Test accepts requests unconditionally (pkg/services/anonymous/anonimpl/client.go:61-63). A second client sends an anonymous HTTP request omitting X-Grafana-Device-Id (the header name is defined at impl.go:26). Authenticate resolves the configured organization and copies the request headers (client.go:30-42), the"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Start Grafana with GF_AUTH_ANONYMOUS_ENABLED=true and GF_AUTH_ANONYMOUS_DEVICE_LIMIT=1, with no device_limit key in a custom INI or command-line overrides. conf/defaults.ini:581-592 contains enabled but no device_limit. Defaults are loaded at pkg/setting/setting.go:879-906 and environment overrides run at :917; applyEnvVariableOverrides only iterates existing section.Keys() (:688-695), so the enabled override applies but the device-limit variable is never read. The subsequent auth-settings read at :1654 defaults the missing device_limit to zero. That zero is passed into the anonymous store at "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Enable anonymous authentication with a valid anonymous organization and device_limit=1; have one recently active device A in anon_device and no row/cache entry for device B. The service registers the anonymous client and passes the configured limit to the store (pkg/services/anonymous/anonimpl/impl.go:40-58). Send an anonymous request with X-Grafana-Device-Id: B and a valid RemoteAddr. Authenticate copies those fields and calls TagDevice (client.go:30-44); TagDevice constructs B (impl.go:118-144). tagDeviceUI caches B before calling the store (impl.go:80-94). The active count is 1, so CreateOr"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S6",
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Set AnonymousDeviceLimit=1 on a service with an empty shared PostgreSQL database (impl.go:40-44 wires the configured limit into the store). Two concurrent TagDevice calls carry distinct X-Grafana-Device-Id values A and B and valid remote addresses. TagDevice constructs current timestamps and invokes tagDeviceUI (pkg/services/anonymous/anonimpl/impl.go:118-144); distinct uncached keys both pass the cache check and reach CreateOrUpdateDevice (impl.go:80-94). Schedule both count queries before either insert: each independently SELECTs COUNT(*)=0 in its own session (pkg/services/anonymous/anonimpl"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Cold-start production state: cache is nil (pkg/api/webassets/webassets.go:35-38), and concurrent page requests reach GetWebAssets through pkg/api/index.go:82. Schedule requests A and B both to read nil and release their read locks before either obtains the write lock (webassets.go:41-48). A obtains the lock, opens and decodes the valid manifest (60, 73-82, 104-108), populates the cache (69), and releases the lock (49). B then obtains the lock but never rechecks that populated cache: it opens and decodes the manifest again (48-60). With a burst of similarly scheduled requests, all these redunda"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "With a registered plugin (registry lookup succeeds at pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:85-90), call CallResource with a 10-byte req.Body and a plugin that returns a 1 MiB response. CallResource observes 10 before calling the plugin (lines 160-165), and instrumentPluginRequestSize records that value in the histogram (line 99); the response size is never observed. The histogram is nevertheless registered with public Help metadata 'histogram of plugin request sizes returned' (lines 44-61). Thus operators receive metadata describing returned sizes alongside an"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "With a registered plugin ID (so pluginTarget succeeds at pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:85-90), call QueryData with a background context and a fast successful downstream client. QueryData invokes the timed downstream call at :153-155; timing starts at :111 and elapsed is measured at :121. If that elapsed duration is 900µs, the ordinary observation at :136 performs integer time.Duration division before float conversion and records 0 rather than 0.9 milliseconds. Consequently the registered grafana_plugin_request_duration_milliseconds histogram (:38-43, :5"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test indeed supplies no Body or Queries (pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:50,57) and checks histogram existence rather than its sum (lines 101-108). However, there is no demonstrated wrong outcome in the submitted code: QueryData sums the actual JSON byte lengths (pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:145-149), and CallResource observes the actual body length (line 161). For these empty test inputs, zero is the correct size. Replacing those calculations with constant zero would introduce a hypothetical defect, not "
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test coverage limitation is real, but no wrong outcome in the current code is demonstrated. The resource and query cases supply empty payloads (pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:50,57), for which zero bytes is correct. Production code sums len(v.JSON) for all queries (pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:145-149) and uses len(req.Body) for resources (same file:160-161), so nonempty payloads are not recorded as a constant zero. The assertions at metrics_middleware_test.go:101-108 could be strengthened, but replacing"
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test does only validate labels and a nonzero histogram sample count (pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:94-100,117-163), but no incorrect duration outcome follows in the code as written. The producer measures the actual downstream call using time.Now and time.Since (pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:111-121), then records elapsed/time.Millisecond for the milliseconds metric and elapsed.Seconds() for the seconds metric in both exemplar and ordinary paths (128-138). A constant-zero observation or seconds supplied t"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test does only verify labels and a nonzero sample count (pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:94-100,157-163), but no actual incorrect duration outcome is demonstrated by the current code. The middleware measures elapsed time around the downstream call (pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:111-121) and observes elapsed/time.Millisecond for the milliseconds histogram and elapsed.Seconds() for the seconds histogram in both branches (128-138). Constant-zero observations or feeding seconds into the milliseconds metric wou"
+     }
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Configure a memory-backed index (FileThreshold >= 10) and a valid resource key K not indexed at startup. Two concurrent Search calls for K both enter getOrCreateIndex (pkg/storage/unified/resource/search.go:142-148,287-305). GetIndex only locks during lookup and returns nil for the uncached key (pkg/storage/unified/search/bleve.go:60-68), so both calls start builds; each creates its own memory index (bleve.go:104,112-119), populated from ListIterator (resource/search.go:326-354). Let both builds read document D with old contents; pause build B after its builder completes but before publication"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Initialize with Bleve, at least one prebuilt namespace/resource index, and another supported namespace/resource absent from the startup stats (search.go:181-198). After WatchWriteEvents starts its SQL poller (sql/backend.go:558-567), a writer adds a resource in that unindexed namespace; a subsequent poll delivers its new event (sql/backend.go:579-599). Schedule the initialization goroutine to pause after launching the event listener (search.go:207-213). The listener accepts the ADDED event and calls getOrCreateIndex (search.go:225-237); GetIndex returns nil for the missing key (bleve.go:60-68)"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "With GRAFANA_TEST_DB=postgres and short mode disabled, the test does indeed skip at pkg/server/module_server_test.go:28-38, before server initialization at lines 40-48 and the /metrics checks at lines 58-63. However, this demonstrates reduced test coverage, not a broken instrumentation server or an incorrect test assertion: the result is explicitly reported as skipped, not passed. The claimed server regression is hypothetical; no input or sequence in the cited code causes that regression. Thus the finding describes disabling verification rather than a demonstrated wrong runtime outcome."
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "With GRAFANA_TEST_DB=postgres and short mode disabled, this test indeed exits via t.Skip at pkg/server/module_server_test.go:28-38, before configuring and starting the storage-server target (lines 40-55) or asserting the /metrics response (lines 58-63). However, that demonstrates reduced test coverage, not an actual instrumentation-server failure or an incorrect test assertion: the result is explicitly skipped, not passed. The claimed wrong outcome depends on a hypothetical future regression ('stops starting'); no such regression is demonstrated by this code. Isolating the environmental prereq"
+     }
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The wording is inaccurate but this finding only requests a naming change, not a defect with a wrong functional outcome. The string at pkg/apiserver/rest/dualwriter_mode3_test.go:28 is used solely as the subtest label by t.Run at line 48; setup independently configures Create success at lines 30–35 and the test invokes Mode3.Create at lines 63–65. Production code writes Storage at pkg/apiserver/rest/dualwriter_mode3.go:42 and launches Legacy.Create asynchronously at lines 50–57 regardless of that label. Renaming it would improve descriptive test output but would not change execution, assertions"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The label is inaccurate but causes no wrong functional outcome. The string at pkg/apiserver/rest/dualwriter_mode3_test.go:28 is used only as the subtest name by t.Run at line 48; mock setup is independently executed at lines 56-60 and assertions at lines 72-75 do not depend on that name. Mode3.Create writes to Storage at pkg/apiserver/rest/dualwriter_mode3.go:42 and launches Legacy.Create asynchronously at lines 50-57 regardless of the label. Renaming improves description, but the finding identifies no crash, wrong value, data loss, or broken feature."
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Start with playlist P present in both stores, and use live contexts with a valid organization namespace. Submit two successful Mode3 updates to P, first setting its name to A, then B (UpdatedObjectInfo returning the respective playlist). Storage.Update commits A then B at pkg/apiserver/rest/dualwriter_mode3.go:126; each call launches an independent legacy goroutine at :134-141 and returns at :143 without waiting. Schedule A's goroutine only after B's legacy write completes, within the timeout. The playlist legacy implementation fetches P and obtains the supplied updated object at pkg/registry/"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S8",
+      "S14"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "A valid playlist Create in mode 3 uses a cancelable request context. Storage.Create succeeds (pkg/apiserver/rest/dualwriter_mode3.go:42-48), and Create launches the legacy goroutine then returns success without waiting (:50-59). An allowed scheduling sequence is that the caller completes and cancels its context before that goroutine runs. The goroutine derives WithTimeoutCause from the same parent (:51), so its context is already canceled despite the ten-second timeout. The concrete playlist legacy implementation passes that context to service.Create (pkg/registry/apis/playlist/legacy_storage."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9",
+      "S16"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Concrete input: a valid Mode3 Update for an existing playlist, using an UpdatedObjectInfo whose UpdatedObject deep-copies oldObj and changes only Spec.Title to \"Renamed\" (no preconditions), with successful validation and a live namespaced context. Initially unified storage has Spec.Interval=\"30s\" while legacy has the stale interval \"10s\". Such divergence is permitted: legacy updates run asynchronously and their errors are only recorded, while the successful unified result is returned (pkg/apiserver/rest/dualwriter_mode3.go:126-143). Storage.Update receives this transformer and successfully ret"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Call Mode3.Delete for two existing objects named 'playlist-a' and 'playlist-b', with DeleteOptions.Kind='Playlist', and let Storage.Delete succeed (pkg/apiserver/rest/dualwriter_mode3.go:94-100). Each success passes the object name as the third metric argument (line 106). That argument is directly observed as the third label by metrics.go:59-61, while the histogram defines that label as 'kind' (metrics.go:18-23). Consequently the exported delete latency observations have kind='playlist-a' and kind='playlist-b', rather than kind='Playlist'; a query filtering kind='Playlist' misses both successf"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Call Mode3.DeleteCollection with nonnil options (Kind=\"Playlist\") and listOptions, with Storage.DeleteCollection succeeding and Legacy.DeleteCollection returning an error. The unified call succeeds at pkg/apiserver/rest/dualwriter_mode3.go:153 and records a storage observation with is_error=false at :159. Once the goroutine executes, it calls legacy deletion at :165, then records that legacy error and elapsed duration via recordStorageDuration at :166. That helper observes m.storage, not m.legacy (pkg/apiserver/rest/metrics.go:59-61); initialization binds these to distinct exported storage and"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "The successful test has a concrete false-green scenario: remove the legacy-update goroutine at pkg/apiserver/rest/dualwriter_mode3.go:134-141, leaving the storage update at line 126 and return at line 143. TestMode3_Update still passes although no legacy update occurs. It creates a single shared mock (pkg/apiserver/rest/dualwriter_mode3_test.go:331-334), registers identical unrestricted Update expectations returning exampleObj (lines 310-315, 336-340), and calls Update for 'foo' (line 345). storageMock.Update uses that mock and returns exampleObj (pkg/apiserver/rest/storage_mocks_test.go:121-1"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S11"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Call Mode3.Create with nonnil CreateOptions (e.g. Kind=\"Playlist\") and a storage backend whose Create returns an error. The storage operation and timer occur at pkg/apiserver/rest/dualwriter_mode3.go:41-42; the error branch records recordLegacyDuration(true,\"3\",\"Playlist\",\"create\",startStorage) and immediately returns at lines 43-46, without invoking legacy Create (lines 50-55) or recordStorageDuration (line 48). metrics.go:43-47 initializes and registers separate legacy/storage histograms; metrics.go:54-61 shows that this call increments only the legacy histogram with is_error=\"true\". Consequ"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "For a non-provisioned Grafana alerting rule with a valid UID and folder granting update permission, open its list-view More menu (the rule may be running or paused). GrafanaRuleListItem supplies only promRule to RuleActionsButtons at public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:45-47. RuleActionsButtons constructs the Grafana identifier from that Prometheus UID at public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:139-143 and renders AlertRuleMenu with rulerRule={rule}, which is undefined, at :92-98. Even if the new Prometheus ability "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Take a non-provisioned, non-plugin Grafana alert rule with a valid folderUid, after its folder has loaded, and a user with delete permission in that folder. useAbilities.ts:349-375 sets isRemovable=true, and :295-321 returns Delete=[true,true]. In the grouped list GrafanaGroupLoader.tsx:68-77 passes only the Prometheus rule into GrafanaRuleListItem; the filtered list does the same at FilterView.tsx:154-162. GrafanaRuleListItem.tsx:47 supplies promRule but no rule to RuleActionsButtons. RuleActionsButtons.V2.tsx:139-143 successfully constructs the UID identifier, and :92-101 renders AlertRuleMe"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The cited case only checks button presentation (public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:85-102), but this does not demonstrate a wrong outcome. The same file already renders the same group, clicks More, and asserts the menu and its options at lines 171-207: silence, copy link, duplicate, export, and an exact count of four. An empty dropdown would fail those assertions. Renaming the earlier test or duplicating these assertions is a test-description/organization preference, not a demonstrated functional defect or missing coverage of the claimed empty-menu regre"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The observation is true but does not demonstrate a wrong outcome: GrafanaGroupLoader.test.tsx:85-101 tests the More button's presence and accessibility. The same fixture is exercised by the separate test at :171-185, which clicks More, then asserts the menu and Silence, Copy link, Duplicate, and Export options at :188-203 and exactly four items at :205-207. An empty dropdown would therefore fail the existing suite. Renaming the narrower test or duplicating these assertions is a test-description/organization preference, not a demonstrated feature failure."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "A user has AlertingRuleCreate and external-rule read permission, but lacks AlertingRuleExternalWrite, and opens the menu of an ordinary datasource rule. RuleActionsButtons passes that rule to AlertRuleMenu (public/app/features/alerting/unified/components/rules/RuleActionsButtons.tsx:110-114). The external ruler Duplicate ability is denied: useAbilities.ts:259-262 uses the source's create permission, which is AlertingRuleExternalWrite (utils/access-control.ts:77-80). AlertRuleMenu.tsx:73-79 passes skipToken for the non-Grafana prom rule. useAbilities.ts:401-404 converts this to undefined and re"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Render a Grafana Prometheus alerting rule in GrafanaRuleListItem with a valid UID, with Grafana Alertmanager configuration loaded and not External-only, and a user with AlertingInstanceCreate (or folder AlertingSilenceCreate). GrafanaRuleListItem.tsx:47 passes only promRule to RuleActionsButtons. The prom rule supplies a valid editable identifier at rule-list/components/RuleActionsButtons.V2.tsx:139-143, so the component renders its menu. hooks/useAbilities.ts:583-602 permits silencing under this state, and :292-293,323 assigns the Prometheus alerting rule a supported/allowed Silence ability. "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7",
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Render RuleActionsButtons with a CombinedRule for a Mimir datasource, an ordinary datasource ruler alert rule, and group.source_tenants=['tenant-a'], with discovery completed and rulerConfig present and the user granted datasource update/delete permissions. source_tenants makes this a federated group (public/app/features/alerting/unified/utils/rules.ts:367-374). useIsRuleEditable nevertheless returns isRulerAvailable=true and isEditable/isRemovable=true for that datasource and permission state (public/app/features/alerting/unified/hooks/useIsRuleEditable.ts:78-87). useAlertRuleAbility calls th"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "A permitted schedule makes this regression test pass without exercising concurrent reads: creation succeeds (tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:122-134), the main thread starts the reader at line 149, but the reader is not scheduled yet. The main thread deletes every group at lines 152-154 and sets deletedAll=true at line 155. caughtExceptions, initialized empty at line 137, is still empty, so the assertion at line 157 passes. When the reader is finally scheduled, its first condition at line 140 is false and it never executes the read at line 143. Thus even "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "After the 100 successful creations (tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:122-134), the test starts a reader with an initially false stop flag (136-149). Suppose the server becomes unavailable during deletion: remove() is an HTTP DELETE admin-client operation (integration/admin-client/src/main/java/org/keycloak/admin/client/resource/GroupResource.java:85-86), so a connection failure throws from the call at GroupTest.java:153. That exception escapes the forEach and test; there is no finally, and the only stop-flag write at line 155 is skipped. The already-starte"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "A valid client_credentials request for a confidential, non-bearer-only client with service accounts enabled and an enabled service-account user passes ClientCredentialsGrantType.java:63-95 (services/src/main/java/org/keycloak/protocol/oidc/grants/). With refresh tokens disabled it creates a transient session at :111-118, attaches a fresh context at :122, and directly calls generateAccessToken at :140-141 without setting the grant attribute. TokenManager.java:661 returns DefaultClientSessionContext.fromClientSessionAndClientScopes; services/src/main/java/org/keycloak/services/util/DefaultClient"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Running testIncorrectGrantType produces a false-positive passing test. The @Before fixture constructs the factory, calls only init, and registers ro/cc/na, not ac (services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java:38-49). sessionFactory is therefore null: it is declared at services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:38 and assigned by postInit at :65-66, not init (:50-62). The test decodes ofrtac:5678 (test file:79-80); its six-character context and valid of/rt types reach the grant l"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Start with grant A registered with unique shortcut 'ac'. DefaultTokenContextEncoderProviderFactory.java:70-85 initializes both maps and passes startup validation. Encode an ONLINE/REGULAR A context with raw ID 'id1': DefaultTokenContextEncoderProvider.java:109-117 produces 'onrtac:id1'. Hot-deploy a distinct grant B whose getShortcut() also returns 'ac': services/src/main/java/org/keycloak/services/DefaultKeycloakSessionFactory.java:184-213 adds providers by grant ID, so B can coexist with A, and line 222 initializes the deployed factories. On encoding a B context, DefaultTokenContextEncoderPr"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S5",
+      "S7",
+      "S8",
+      "S10",
+      "S11",
+      "S12",
+      "S18"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Construct a CODE_TO_TOKEN EventRepresentation with all expected fields matching expectCodeToToken(codeId, sessionId), but set Details.TOKEN_ID to onrtrt:12345678-1234-1234-1234-123456789abc. expectCodeToToken installs the authorization-code token-ID matcher at testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:142-149 (expected shortcut ac). assertEvent applies that matcher to the actual detail at :437-443. isAccessTokenId splits the ID into two items (:480-481), then extracts substring(3,5), which is 'tr', not 'ac', so its equality-based rejecti"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S3",
+      "S6",
+      "S14",
+      "S15",
+      "S19"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Register a custom OAuth2GrantTypeFactory with ID 'custom_grant' and unique shortcut 'abc', following the documented three-letter guidance (server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:29-33). DefaultTokenContextEncoderProviderFactory.postInit stores that mapping without length validation; its only validation checks map sizes for duplicates (services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:70-85). Construct AccessTokenContext(ONLINE, REGULAR, 'custom_grant', 'id123'), which is accepted by Ac"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13",
+      "S17"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "With the default encoder factory initialized, a caller constructs new AccessTokenContext(SessionType.ONLINE, TokenType.REGULAR, \"na\", null). AccessTokenContext.java:70-73 checks the non-null enums and grant twice, never the raw ID, and line 77 stores null. The factory explicitly registers the valid \"na\" grant shortcut at DefaultTokenContextEncoderProviderFactory.java:78-79. Calling encodeTokenId on this context passes the enum checks and grant lookup (DefaultTokenContextEncoderProvider.java:102-112), then concatenates the null raw ID at lines 114-117, returning \"onrtna:null\" rather than reject"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "An English account user submits an editable multivalued attribute with three nonblank values when its multivalued validator has min=1, max=2. MultiValueValidator counts those values and rejects the size (services/src/main/java/org/keycloak/userprofile/validator/MultiValueValidator.java:59-75), using the error-invalid-multivalued-size key (line 46). PersonalInfo saves the submission and passes the returned errors to setUserProfileServerError on failure (js/apps/account-ui/src/personal-info/PersonalInfo.tsx:64-90). For an error with field 'tags', errorMessage 'error-invalid-multivalued-size', an"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Put a unique entry `error-invalid-multivalued-size={2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}` in a translated messages_de.properties resource with its normal messages_en.properties counterpart. ThemeVerifierMojo scans resource files and calls verify() (misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:43-51). verify() runs duplicate checking and HTML checking (VerifyMessageProperties.java:46-55), which loads the translation and English bundles (:67-86). For this key normalizeValue replaces the ENTIRE choice expression, includ"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "Create /tmp/messages_en.properties containing key=<b>x</b></b> and call new VerifyMessageProperties(file).verify() (misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:42-51). The bundle and English bundle both load this file (67-77); normalization and anchor handling leave this key unchanged (117-136,145-161). Its <b> tag selects POLICY_SOME_HTML (58-61,91,139-142), whose sanitizer removes the unmatched closing </b>, yielding <b>x</b> (92). The unequal values enter the diagnostic (99): the prefix scan sets start=8 (103-105), and the independent suffix sca"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "With community Lithuanian translations installed and Lithuanian selected, a user opening OTP configuration sees an Italian first instruction: themes/src/main/resources/theme/base/login/login-config-totp.ftl:8-10 renders msg(\"loginTotpStep1\"), whose Lithuanian bundle value is \"Installa una delle seguenti applicazioni sul tuo cellulare:\" at themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71. The subsequent instructions in that bundle are Lithuanian (:72-73), so the user receives mixed-language setup instructions rather than a Lithuanian first step. The cited "
+     },
+     "v2": null
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "In V2, use a same-realm administrator granted an all-Clients MANAGE permission but no VIEW permission and none of manage-clients, view-clients, query-clients or query-users. The global resource evaluation matches only the requested scope (ClientPermissionsV2.java:237-255), so canManage() succeeds (72-74), while canView() returns false (86-87; default roles checked in ClientPermissions.java:271-272). Individual clients without specific resources are nevertheless viewable: their evaluation falls back to the all-Clients resource (ClientPermissionsV2.java:214-229), and MANAGE implies configure and"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "In testManageOnlyOneClient, the restricted client is obtained at PermissionClientTest.java:131 and no permission is granted until lines 155-156. The negative removal assertion first calls getDefaultClientScopes at line 148. That GET invokes requireView(client) (services/src/main/java/org/keycloak/services/resources/admin/ClientResource.java:377-382), which throws ForbiddenException when viewing is denied (services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissions.java:480-482). Thus the catch at PermissionClientTest.java:151-152 passes without ever executing rem"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "In a V2 realm with its authorization resource server configured, a same-realm administrator without view-clients/manage-clients has an allowing VIEW permission on the Clients (all-clients) resource, but a denying VIEW permission on the resource named for client C's internal ID, and no configure/manage grant for C. The code explicitly supports selecting C's resource before falling back to the global resource (ClientPermissionsV2.java:214-224), so evaluation of C would yield no VIEW grant. However, canView(C) first calls global canView() (ClientPermissionsV2.java:77-82). That method evaluates th"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "The Javadoc is inaccurate, but it produces no demonstrated wrong runtime outcome. ClientPermissionEvaluator.java:95-98 explicitly declares requireView() as void, so callers cannot consume a boolean result (Java rejects such code). The implementation at ClientPermissions.java:292-296 checks canView(), throws ForbiddenException on false, and completes normally otherwise. The finding is a documentation correction rather than a reachable failure."
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "The Javadoc is inaccurate (ClientPermissionEvaluator.java:95-98), but it does not produce a wrong runtime outcome: the declared return type is void, so Java callers cannot consume a nonexistent boolean result. The implementation at services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissions.java:292-296 completes normally when canView() succeeds and throws ForbiddenException otherwise. This is a documentation correction, not a demonstrated failure of a caller or feature."
+     }
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Configure a username-first browser flow with required PasswordForm, the legacy keycloak login theme, passkeys enabled, and a user with a passwordless WebAuthn credential but no password. Submit that user's username (without having authenticated with WebAuthn). UsernamePasswordForm.java:160-162 considers this user passkey-enabled, so PasswordForm.configuredFor returns true at PasswordForm.java:61-64. DefaultAuthenticationFlow.java:441-466 consequently passes the configuredFor guard and invokes authenticate. Since no passwordless authentication has yet occurred (UsernamePasswordForm.java:79-82),"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "With ORGANIZATION enabled, create an enabled, visible, non-link-only public IDP linked to enabled organization O, and populate getForLogin(ALL, null). The delegate searches persisted enabled/public fields (server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:165-181,218-224), and its ID is cached (model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:229-231). Disable O and commit: OrganizationAdapter.setEnabled updates through organization invalidation (model/infinispan/src/main/java/org/keycloak/mod"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test does discard returned streams and checks only cached counts (OrganizationCacheTest.java:401-414), so additional result assertions would improve coverage. However, the claimed empty/wrong return is hypothetical, not a failure demonstrated by this code: InfinispanIdentityProviderStorageProvider.java:229-231 collects delegate IDs into the query, then lines 244-251 resolve every ID and add each model to the returned set; if a model is missing, lines 247-249 invalidate and fall back to the delegate instead. Line 254 returns that populated set's stream. No concrete wrong outcome follows fro"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test does discard the streams and assert only cached counts (OrganizationCacheTest.java:401-414), but the claimed empty/wrong returned stream is hypothetical, not an outcome demonstrated by the current code. On these cache misses, getForLogin collects the delegate's provider IDs and stores the query (InfinispanIdentityProviderStorageProvider.java:226-231), then resolves each ID, adds each resolved provider to the returned set, and returns its stream (:244-254). If resolution fails it falls back to the delegate rather than returning an empty set (:247-249). On a cache hit it uses the stored"
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Concrete interleaving: initially the ORG_ONLY login query contains organization A -> {P}, where P is an enabled public provider belonging to A, and has no result for B. Reader R calls getForLogin(ORG_ONLY, B), passes the session-local invalidation check (InfinispanIdentityProviderStorageProvider.java:217-218,428-429), and obtains that query at line 222; pause R. Another transaction disables P and commits: the update invalidation logic registers the login keys when login eligibility changes (same file:403-417), and RealmCacheSession.java:352-355 removes the key and bumps its revision through Ca"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Run testCacheIDPForLogin with the normal per-object cleanup path (AbstractKeycloakTest.java:240-254). It creates idp-alias-0 through idp-alias-19 but registers deletion of literal \"alias\" (OrganizationCacheTest.java:372-381); it likewise creates idp-alias-20 and registers the same incorrect deletion (419-425). Only idp-alias-1 is explicitly removed (428). At teardown executeCleanup runs the callbacks (TestCleanup.java:126-129), and addCleanup catches and ignores their deletion exceptions (65-72). Thus, for example, the realm-level idp-alias-0 remains in the realm after cleanup instead of being"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Configure flusher_processes=4 with four assigned Kafka partitions and spans.buffer.max-memory-percentage=0.9, with healthy flushers and Redis below the limit. The factory builds a buffer from partition indices and passes the process limit to SpanFlusher (src/sentry/spans/consumers/process/factory.py:67-75); batching feeds the flusher through RunTask (89-98). SpanFlusher creates four shard buffers and stores each in self.buffers (src/sentry/spans/consumers/process/flusher.py:60-84,93,123-125). Each buffer resolves the same configured Redis client, independently of assigned shards (src/sentry/sp"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The docstring at src/sentry/spans/consumers/process/flusher.py:31-32 is inaccurate, but the finding only requests a documentation correction and establishes no wrong runtime outcome. With four assigned shards and max_processes=1, line 60 explicitly caps the worker count to one, lines 64-66 assign all four shards to that worker, and lines 81-84 create the worker for that shard group. This is the implemented, intentional capped-worker behavior, not a failure caused by the docstring; no caller or user relying on per-shard isolation with a resulting wrong outcome is demonstrated."
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The docstring at src/sentry/spans/consumers/process/flusher.py:31-32 is inaccurate for capped configurations, but this finding demonstrates no wrong runtime outcome. For example, with four assigned shards and max_processes=1, lines 51 and 60 select one worker, and lines 64-66 assign all four shards to it; lines 81-84 create workers from that explicit mapping. The docstring does not control this behavior or promise isolation used by any demonstrated caller. Changing its wording would clarify documentation, not fix a crash, incorrect result, or broken feature."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Construct ProcessSpansStrategyFactory(max_batch_size=100, max_batch_time=1, num_processes=1, input_block_size=None, output_block_size=None, flusher_processes=0) and call create_with_partitions with four assigned partitions (indices 0–3), leaving produce_to_pipe=None. The factory stores zero without validation (src/sentry/spans/consumers/process/factory.py:34-55), builds a four-shard buffer (factory.py:67), and forwards zero as max_processes (factory.py:71-75). SpanFlusher replaces that explicit zero with 4 via `max_processes or len(buffer.assigned_shards)` (src/sentry/spans/consumers/process/f"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The assertion is weaker than the suggested assertion, but no incorrect assignment or lost flushing follows in the code under test. The test supplies partitions 0–3 and flusher_processes=2 (tests/sentry/spans/consumers/process/test_consumer.py:94–111). The factory passes exactly those partition indices to SpansBuffer (src/sentry/spans/consumers/process/factory.py:67–75), whose constructor copies them (src/sentry/spans/buffer.py:153–154). The flusher enumerates every assigned shard once and appends it to worker i % 2 (src/sentry/spans/consumers/process/flusher.py:60–66), yielding {0: [0, 2], 1: "
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The assertion is weaker than an exact membership check, but the proposed broken assignment is not produced by this code. The test supplies four distinct partition indices 0–3 (tests/sentry/spans/consumers/process/test_consumer.py:109–111); the factory passes those indices into SpansBuffer (src/sentry/spans/consumers/process/factory.py:67–75). The flusher enumerates each assigned shard once and appends that very shard to exactly one worker using i % num_processes (src/sentry/spans/consumers/process/flusher.py:60–66), producing {0: [0, 2], 1: [1, 3]}, not the hypothetical duplicated mapping. Eac"
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "Create the production factory with flusher_processes=1, produce_to_pipe=None, and one assigned partition. factory.py:67-76 constructs the flusher for that shard; flusher.py:53,96-105,110-124 starts a spawn-context SpawnProcess. Python's multiprocessing.context.SpawnProcess and multiprocessing.Process are separate subclasses of BaseProcess, so this worker fails the isinstance check at flusher.py:254. Suppose its Kafka future stalls at flusher.py:199-201 longer than max-unhealthy-seconds, while ingestion delivers another batch to the flusher (factory.py:89-92). submit calls the health check (flu"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Create a factory with flusher_processes=2 and two assigned partitions: factory.py:67-75 constructs the flusher with those shards and limit. With produce_to_pipe=None, workers are spawn-context processes started and retained at flusher.py:95-125. Suppose both workers have flushed segments and are waiting on Kafka producer futures that remain unresolved for longer than a shutdown timeout (flusher.py:197-201). Call flusher.join(timeout=0.1). It sets stopped and computes the deadline (331-332), but workers waiting in future.result() do not inspect stopped; that flag is checked only at the next loo"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test does use {} despite its name (tests/sentry/integrations/services/test_assignment_source.py:8-11), but this produces no demonstrated wrong outcome. AssignmentSource.from_dict expands the input as keyword arguments inside a try block and catches TypeError (src/sentry/integrations/services/assignment_source.py:31-35): {} returns None because required arguments are missing, and [] also returns None because it is not a mapping. Array rejection is not broken in the actual code; the finding concerns test naming or hypothetical future coverage rather than an existing failure."
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test is misnamed: tests/sentry/integrations/services/test_assignment_source.py:8-11 passes {} and checks rejection of missing required fields. This causes no demonstrated wrong runtime outcome. AssignmentSource.from_dict is explicitly typed for dictionary input (src/sentry/integrations/services/assignment_source.py:31); even if [] is supplied, cls(**input_dict) at line 33 raises TypeError because a list is not a mapping, and lines 34-35 catch it and return None. Thus array rejection is not broken; the finding describes a test naming/coverage preference rather than an actual failure."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "A worker imports AssignmentSource at 09:00 and handles an inbound user assignment at 15:00, with issue sync enabled and a linked external issue. The dataclass default is evaluated at import (src/sentry/integrations/services/assignment_source.py:18). Inbound assignment constructs its source via from_integration (src/sentry/integrations/utils/sync.py:112-116), which supplies only name and ID and therefore uses that 09:00 default (src/sentry/integrations/services/assignment_source.py:21-25). GroupAssignee forwards the source to outbound sync (src/sentry/models/groupassignee.py:189-194). That func"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "A replay query returns error_ids [A, B], and error context is enabled (src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:84-94). Both nodes exist, but node A is cached (for example from a previous get, which populates cache at src/sentry/nodestore/base.py:150-154), while node B is not. fetch_error_details generates [node_A, node_B] and calls get_multi (project_replay_summarize_breadcrumbs.py:107-108). get_multi excludes cached A from uncached_ids (src/sentry/nodestore/base.py:188-194), builds items containing B first (199-202), then appends cached A with items.update(cache_i"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "An authorized GET summary request with enable_error_context=false, valid filter parameters, and all three organization features enabled passes the guards (src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:54-67). It nevertheless calls query_replay_instance at lines 70-77 before inspecting the opt-out flag at lines 87-92. That function unconditionally constructs and executes the replay aggregation query (src/sentry/replays/query.py:97-108), using execute_query imported from the query usecase (lines 29-35). Thus every opted-out request still executes the database lookup althou"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "The matcher is indeed inconsistent, but there is no demonstrated wrong outcome. The number test invokes the hook with type='number' (static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx:125-144), which returns [] before constructing or issuing any request (static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx:91-94). Even in the proposed guard-removal mutation, the request uses substringMatch (:52-54, :96-109), so the mock predicate (spec.tsx:117-121) does not match; the mock client records an unmatched-request error rather than returning the mocked data (static/a"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The matcher is indeed inconsistent (static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx:120 versus useGetTraceItemAttributeValues.tsx:52-54), but it does not produce a demonstrated false-negative test. In the actual numeric test, type='number' (spec.tsx:127-129) makes the hook return [] before any request (useGetTraceItemAttributeValues.tsx:91-94). Even under the proposed hypothetical removal of that guard, the unmatched request would reject, and the hook rethrows the error (useGetTraceItemAttributeValues.tsx:106-115). The test awaits that call without catching it (spec.tsx:"
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "The inaccurate documentation does not produce a wrong runtime outcome. The comment at static/app/views/explore/types.tsx:9-11 does not constrain the prop: traceItemType is typed as TraceItemDataset at line 12, whose enum explicitly includes SPANS at lines 3-5. The values hook accepts that shared interface (static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx:25,78-83), forwards traceItemType unchanged into the query builder (96-104), and sends it as itemType (47-50,107-110). Thus SPANS remains accepted and sent regardless of the comment; the finding is a documentation correction, "
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "The wording is stale, but it causes no incorrect runtime outcome. It is only a documentation comment (static/app/views/explore/types.tsx:9-11); the actual prop accepts TraceItemDataset (line 12), whose enum explicitly includes both LOGS and SPANS (lines 3-6). Thus SPANS callers remain supported by the type regardless of the comment. The finding requests a documentation correction, not a demonstrated crash, wrong value, or broken feature."
+     }
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Enable issues.browser_reporting.collector_endpoint_enabled and configure WARNING logging (supported via SENTRY_LOG_LEVEL, src/sentry/conf/server.py:1748-1750). POST application/reports+json containing [{\"type\":\"deprecation\",\"url\":\"https://example.com/reset?token=secret123\",\"body\":{\"email\":\"private@example.com\"},\"user_agent\":\"Chrome\",\"destination\":\"default\",\"attempts\":0,\"age\":10}]. The endpoint accepts this parser (src/sentry/issues/endpoints/browser_reporting_collector.py:63-69,80-82), passes the enabled guard (90-91), and accepts the array (97-109). attempts=0 fails the min_value=1 constraint"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S1",
+      "S19"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "Render a dashboard WidgetCardChart with widget.displayType='table', loading=false, no errorMessage, organization.features containing 'use-table-widget-visualization', and tableResults containing a successful result with data=[{'count()':42}] and meta.fields={'count()':'integer'}, with the query fields including 'count()'. chart.tsx:305-318 reaches tableResultComponent; chart.tsx:142-158 accepts the defined results and computes the fields. The feature check at static/app/views/dashboards/widgetCard/chart.tsx:164 selects TableWidgetVisualization, but lines 165-173 replace the returned rows and m"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13",
+      "S14"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "The cited consumer receives serialized visualizations, not Visualize instances. savedQueriesTable.tsx:213-216 passes query.query[0].visualize; hooks/useGetSavedQueries.tsx:17-19 and 50-52 define those as RawVisualize objects with yAxes arrays, and its constructor retains the raw objects (lines 68-69), filtering aggregateField entries using the yAxes-array check at lines 22-27. The instance class still explicitly serializes yAxis into {yAxes: [this.yAxis]} in contexts/pageParamsContext/visualizes.tsx:66-75. Consequently a saved visualization {yAxes: ['count(span.duration)']} reaches explorePara"
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "The cited consumer does not consume Visualize instances or construct saved parameters. ExploreParams explicitly accepts BaseVisualize[] (static/app/views/explore/savedQueries/exploreParams.tsx:13-20), whose yAxes array remains defined (static/app/views/explore/contexts/pageParamsContext/visualizes.tsx:32-35). Its caller passes saved query.query[0].visualize directly (static/app/views/explore/savedQueries/savedQueriesTable.tsx:213-216). Serialization of an instance still produces {yAxes: [this.yAxis]} (visualizes.tsx:66-75), so a selected aggregate such as count() reaches exploreParams.tsx:29 a"
+     }
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S17",
+      "S20"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "Mount two enabled useTraceItemAttributeKeys consumers under the shared query client (static/app/appQueryClient.tsx:20,37-44), with organization contexts A and B and identical filters: projects=[], datetime={period:'14d'}, traceItemType='spans', type='string'. The hook derives project IDs from selection at static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:24-36. Its options contain only itemType, attributeType, project, substringMatch and normalized datetime (static/app/views/explore/hooks/useGetTraceItemAttributeKeys.tsx:42-52), so both consumers have the identical query key at useT"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S5",
+      "S10",
+      "S16",
+      "S21"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "With issues.browser_reporting.collector_endpoint_enabled enabled (src/sentry/issues/endpoints/browser_reporting_collector.py:90-91), POST a JSON array containing {\"body\":{},\"type\":\"deprecation\",\"url\":\"https://example.com/page\",\"user_agent\":\"Browser\",\"destination\":\"default\",\"attempts\":1,\"age\":0,\"timestamp\":0}. The array reaches BrowserReportSerializer and is_valid() at lines 99-110. All ordinary fields satisfy lines 39-44, and both zero integers are allowed by lines 47-48. validate_age sees timestamp=0 as false (lines 56-60), and validate_timestamp sees age=0 as false (lines 50-54), so neither "
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S11"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "A caller supplies renderTableHeadCell={() => null} to intentionally hide a header, or renderTableBodyCell={() => 0} to override a nonzero cell. Both are allowed ReactNode results by tableWidgetVisualization.tsx:44-59, and the props are passed without validation to the default renderers at :107-117. The header callback returns null at defaultTableCellRenderers.tsx:31, fails the truthiness check at :32, and instead displays the column name at :37-40, so the header is not hidden. Likewise the body callback's zero at :70 fails :71 and is replaced by the underlying row value (:75-77 when metadata i"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": []
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "The docstring is stale (src/sentry/workflow_engine/processors/detector.py:230), but there is no demonstrated wrong outcome. evaluate explicitly declares a dictionary return type at lines 226-228 and builds and returns that dictionary at lines 237-244. Its production caller consumes detector_results.values() at lines 58-62, correctly receiving evaluation results rather than keys, and declares the corresponding dictionary result contract at lines 47-49. The finding proposes documentation cleanup, not a failure reachable in the code; a hypothetical reader writing an incompatible future caller is "
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "The docstring is stale (src/sentry/workflow_engine/processors/detector.py:230), but no demonstrated wrong outcome follows. The method explicitly annotates a dictionary return at lines 226-228 and constructs and returns that dictionary at lines 237-244. Its processing caller consumes detector_results.values() at lines 58-62 and returns the dictionary under an accurate return annotation at lines 47-49, 64-70. No caller found relies on the stale list wording; the finding is a documentation correction rather than a demonstrated functional failure."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The TODO at src/sentry/incidents/grouptype.py:10 is outdated: the class explicitly inherits StatefulDetectorHandler at lines 11-12. However, the comment is not executable and does not change handler selection, inheritance, or any result for callers. Removing or revising it is a documentation preference, not a demonstrated failure; no wrong runtime outcome follows from the cited comment."
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 2,
+      "leuCitado": true,
+      "rationale": "The TODO at src/sentry/incidents/grouptype.py:10 is stale: the class explicitly inherits StatefulDetectorHandler at line 11 (imported at line 7). However, that comment does not affect execution, inheritance, or the handler assignment at line 27. The finding only requests documentation cleanup; it supplies no input or call sequence that causes a wrong runtime or user outcome."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "v1": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test does ignore the measurement: input group_2=10 at tests/sentry/workflow_engine/processors/test_detector.py:177 is compared with an expected occurrence built using 6 at :190-192, and the helper uses neither value in its occurrence nor event data (:244-275). However, this produces no incorrect measurement forwarding in the actual code: evaluate passes each group's own group_value at src/sentry/workflow_engine/processors/detector.py:238-240, evaluates that value at :278, and forwards exactly value to the occurrence hook at :299-300. The proposed constant/other-group forwarding requires a "
+     },
+     "v2": {
+      "keep": false,
+      "temVeredito": true,
+      "passos": 3,
+      "leuCitado": true,
+      "rationale": "The test does ignore value: its packet contains group_2=10 (tests/sentry/workflow_engine/processors/test_detector.py:177), while the expected helper call uses 6 (:190-192), and the helper's evidence is empty (:244-275). However, this produces no incorrect outcome in the current code. Production iterates each group's actual value and passes it to evaluate_group_key_value (src/sentry/workflow_engine/processors/detector.py:238-240), which forwards that same value to build_occurrence_and_event_data (:299-301). Thus group_2 correctly receives 10. The finding demonstrates a coverage gap for a hypoth"
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 5,
+      "leuCitado": true,
+      "rationale": "Given a Detector whose type is 'metric_alert_fire' and the metric-alert GroupType is loaded in the registry, calling process_detectors(packet, [detector]) fails for any packet. MetricAlertFire defines that slug and assigns MetricAlertDetectorHandler (src/sentry/incidents/grouptype.py:18-27). process_detectors accesses detector.detector_handler before evaluation (src/sentry/workflow_engine/processors/detector.py:52-58); the property resolves the registered type and constructs its handler with group_type.detector_handler(self) (src/sentry/workflow_engine/models/detector.py:58-86). MetricAlertDet"
+     },
+     "v2": null
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "A user has a valid GitHub installation pipeline at OAuthLoginView and returns from authorization with code and state equal to pipeline.signature. PipelineAdvancerView accepts the valid pipeline and calls current_step (src/sentry/web/frontend/pipeline_advancer.py:50-64), which dispatches the step without an exception guard (src/sentry/pipeline/base.py:173-196). The matching state passes validation and the code is included in the token request (src/sentry/integrations/github/integration.py:411-423). If the connection to GitHub times out, safe_urlopen calls SafeSession.request with a 30-second ti"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 7,
+      "leuCitado": true,
+      "rationale": "The test initializes a pipeline and saves its session (src/sentry/testutils/cases.py:1183-1198), stubs the installation endpoint to return 404 (tests/sentry/integrations/github/test_integration.py:381-383), then sends installation_id without state (385-387). OAuthLoginView stores that ID and redirects without advancing (src/sentry/integrations/github/integration.py:397-409). The callback supplies a hard-coded state (test_integration.py:392), without checking it against the redirect's actual state. If that state differs from pipeline.signature, OAuthLoginView returns immediately at integration."
+     },
+     "v2": null
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "A user using a non-English locale opens the GitHub integration popup and returns with a nonempty incorrect OAuth state. src/sentry/integrations/github/integration.py:412-413 calls error() with its default short message. That literal is defined without gettext at integration.py:132, while the only gettext call uses a variable at :141; message extraction therefore cannot add this new message to translation catalogs (repository search finds no other extraction site or catalog entry for it). The resulting English 'Invalid installation request.' is serialized and posted to the opener by src/sentry/"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "Victim has a valid GitHub integration pipeline waiting at OAuthLoginView in their Sentry session. Attacker obtains an unused OAuth code by authorizing the same GitHub OAuth client as the attacker's GitHub account, and causes the victim to navigate to /extensions/github/setup/?state=<known signature>&code=<attacker code>&installation_id=<attacker installation>. The signature is computable and identical across attempts because it hashes only pipeline view class names (src/sentry/pipeline/base.py:129-133), not the user or session. The callback endpoint explicitly disables CSRF protection and load"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 6,
+      "leuCitado": true,
+      "rationale": "An attacker who can install integrations in their own Sentry organization supplies the ID of a victim's valid installation of the same GitHub app while its local Integration record is absent (for example before its installation webhook is processed). Their organization has no pending deletion. OAuthLoginView stores the supplied ID (src/sentry/integrations/github/integration.py:397-399); the attacker completes OAuth with their own GitHub account and the correct pipeline state, which stores their login and advances (412-439). GitHubInstallation retrieves/binds the victim ID (448-454), finds no I"
+     },
+     "v2": null
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false,
+     "v1": {
+      "keep": true,
+      "temVeredito": true,
+      "passos": 4,
+      "leuCitado": true,
+      "rationale": "An ACTIVE GitHub Integration with external_id I, metadata lacking sender, and no OrganizationIntegration triggers a crash during setup. This is a supported metadata shape: build_integration constructs metadata without sender and only adds it if state.get('sender') is present (src/sentry/integrations/github/integration.py:351-379); the existing installation endpoint explicitly handles an active, unlinked integration missing sender by returning 404 (src/sentry/integrations/github/installation.py:32-45). Start setup with installation_id=I: OAuthLoginView stores I (integration.py:397-399). Complet"
+     },
+     "v2": null
+    }
+   ]
+  }
+ }
+}
