@@ -1,0 +1,105 @@
+{
+ "model": "gpt-6.1-sol",
+ "verificador": "gpt-6.1-sol@sub",
+ "versao": "e2e-h1t10",
+ "versaoDedup": "e2e-v9",
+ "prs": {
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The backup-code branch accepts credentials with a nonempty totpCode without validating that TOTP or the password.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/auth/lib/next-auth-options.ts:121-128 gates verifyPassword behind `if (user.password && !credentials.totpCode)`; lines 131-157 enter `if (user.twoFactorEnabled && credentials.backupCode)`, validate and consume the backup code, and place TOTP validation in the mutually exclusive `else if (user.twoFactorEnabled)` branch (lines 157-186); lines 205-214 return the authenticated user; lines 526-528 allow credentials sign-in with `return true`.",
+     "reason": "For a CAL user with two-factor authentication enabled and a valid backup code, a nonempty arbitrary totpCode skips password verification and bypasses the mutually exclusive TOTP-validation branch, allowing authentication without knowing the password.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Successful enablement no longer calls onEnable until the backup screen's explicit Close button is clicked.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:134-136 changes only the step on success; :166 passes onOpenChange directly to Dialog; :266-269 calls resetState() and onEnable() only from Close. apps/web/pages/settings/security/two-factor-auth.tsx:64 only toggles modal visibility on dismissal, whereas :65-68 invalidates viewer.me in onEnable; :47-49 selects setup versus disable using user.twoFactorEnabled. packages/ui/components/dialog/Dialog.tsx:70,89-104 delegates to Radix Root/Content without preventing outside-click or Escape dismissal.",
+     "reason": "The checked code leaves completion notification, cache invalidation, and state reset out of the generic dismissal path, so dismissing the backup screen can retain the disabled cached value and reopen the enable modal.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "This passes if the clipboard write is removed or writes incorrect codes: the component emits the success toast independently of writeText's result.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/playwright/login.2fa.e2e.ts:119-122 clicks backup-codes-copy and waits for toast-success, with only a TODO for checking clipboard content. apps/web/components/settings/EnableTwoFactorModal.tsx:278-279: `navigator.clipboard.writeText(backupCodes.map(formatBackupCode).join(\"\\n\"));` followed immediately by `showToast(t(\"backup_codes_copied\"), \"success\");`.",
+     "reason": "The test does not inspect clipboard contents, and the component shows the success toast without awaiting or checking the clipboard write result, so removing the write or writing incorrect codes would not fail this assertion.",
+     "passos": 4
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The download filename is fixed by the anchor's download attribute, independently of the Blob contents. An empty file or incorrect codes would still pass this test.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/playwright/login.2fa.e2e.ts:113-117 waits for a download and asserts only `expect(download.suggestedFilename()).toBe(\"cal-backup-codes.txt\");`, followed by `// TODO: check file content`. apps/web/components/settings/EnableTwoFactorModal.tsx:95-99 creates a Blob from the formatted backup codes and its object URL; line 283 independently sets `<a download=\"cal-backup-codes.txt\" href={backupCodesUrl}>`.",
+     "reason": "The test checks only the fixed suggested filename and never reads the downloaded contents, so empty or incorrect exported contents would not fail that assertion.",
+     "passos": 6
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The backup-code component is named TwoFactor, registers only backupCode, has a separate TwoFactor counterpart for authenticator digits, and is used by callers as BackupCode.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/components/auth/BackupCode.tsx:7: `export default function TwoFactor({ center = true })`; lines 17–25 render one TextField with `id=\"backup-code\"` and `...methods.register(\"backupCode\")`. apps/web/components/auth/TwoFactor.tsx:8 defines another `TwoFactor`; lines 13–18 configure six numeric digits, and lines 33–46 register totpCode and render the digit inputs. apps/web/pages/auth/login.tsx:32 imports BackupCode from the backup-code file and line 221 renders `<BackupCode center />`; apps/web/components/settings/DisableTwoFactorModal.tsx:8,104 likewise imports and renders BackupCode.",
+     "reason": "The checked definitions and callers support the comment’s factual premises, with no contradictory code found.",
+     "passos": 3
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Both the backup-code login path and the disable endpoint compare the supplied backup code against stored codes using indexOf rather than constant-time verification.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/auth/lib/next-auth-options.ts:139-145 decrypts and parses stored backup codes, then executes `const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"));`. apps/web/pages/api/auth/two-factor/totp/disable.ts:58-63 likewise executes `const index = backupCodes.indexOf(req.body.backupCode.replaceAll(\"-\", \"\"));` on decrypted stored codes and rejects index -1.",
+     "reason": "Both named paths use the stated indexOf checks, whose search stops at the first match and provides no constant-time comparison guarantee, so the checked factual premises hold.",
+     "passos": 4
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7",
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Backup-code consumption is a read/check/write operation without concurrency protection.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/auth/lib/next-auth-options.ts:73-102 reads the user including backupCodes; lines 139-145 decrypt and check that snapshot; lines 148-156 set backupCodes[index] = null and call prisma.user.update({ where: { id: user.id }, data: { backupCodes: symmetricEncrypt(JSON.stringify(backupCodes), process.env.CALENDSO_ENCRYPTION_KEY) } }); lines 205 onward return the authenticated user. packages/prisma/index.ts:15-22,54-63 uses a standard Prisma client with BookingReference-only middleware (packages/prisma/middleware/bookingReference.ts:10-46), not user-update concurrency protection. apps/web/public/static/locales/en/common.json:2015 says \"Each backup code can be used exactly once to grant access without your authenticator.\"",
+     "reason": "The code checks a previously read backup-code snapshot and overwrites it using only the user ID, so concurrent valid requests can reuse the same code or overwrite each other's consumption without any conflict check.",
+     "passos": 6
+    }
+   ]
+  }
+ }
+}

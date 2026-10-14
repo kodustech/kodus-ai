@@ -1,0 +1,100 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "e2e-h1t10f",
+ "versaoDedup": "e2e-v9",
+ "prs": {
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S11"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "apps/web/pages/auth/login.tsx:65-66 — `// Passthrough other fields like totpCode` / `.passthrough();` (inside `const formSchema = z.object({...}).passthrough()`)",
+       "reason": "The formSchema is a `.passthrough()` object, so zod does not strip unknown keys like `backupCode`; the comment's premise that the parsed values lack `backupCode` is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes the actual definition in the same file (apps/web/pages/auth/login.tsx:65-66), which shows `formSchema` is a `z.object({...}).passthrough()`. This directly falsifies the comment's factual premise that the resolver is a plain stripped object whose parse drops unknown keys like `backupCode`. Since zod's `.passthrough()` preserves unknown keys, `handleSubmit` would still yield `backupCode`, so the claimed bug (`credentials.backupCode` undefined) does not follow. This is a statement about what this repository's code contains (the same file and the exact schema definition the comment mischaracterizes), not merely a claim about library behavior."
+     }
+    }
+   ]
+  }
+ },
+ "sobre": "e2e-h1t10",
+ "prompt": "c3"
+}

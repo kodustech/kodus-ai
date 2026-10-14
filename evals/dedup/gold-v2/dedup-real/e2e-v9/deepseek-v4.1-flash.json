@@ -1,0 +1,129 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "dedupModel": "deepseek-v4.1-flash@together",
+ "fonte": "gold",
+ "prs": {
+  "feat-2fa-backup-codes-cal-com": {
+   "n": 12,
+   "camposFinder": {
+    "producedBy": 12,
+    "label": 12,
+    "relevantFile": 12,
+    "relevantLinesStart": 12,
+    "relevantLinesEnd": 12,
+    "suggestionContent": 12
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 12,
+    "language": 12,
+    "suggestionContent": 12,
+    "oneSentenceSummary": 12,
+    "relevantLinesStart": 12,
+    "relevantLinesEnd": 12,
+    "label": 12,
+    "severity": 12,
+    "llmPrompt": 12
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 2,
+   "camposDedup": {
+    "label": 12,
+    "relevantFile": 12,
+    "relevantLinesStart": 12,
+    "relevantLinesEnd": 12,
+    "suggestionContent": 12,
+    "llmPrompt": 12
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 12,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12"
+   ],
+   "groups": [
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S2"
+     ]
+    },
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S8"
+     ]
+    },
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S10"
+     ]
+    },
+    {
+     "keep": "S9",
+     "duplicates": [
+      "S11"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S5",
+    "S12"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S6",
+     "lex": 0.35789473684210527,
+     "cos": 0.8911115361806423,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S7",
+     "lex": 0.44594594594594594,
+     "cos": 0.7987109715958152,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S1",
+     "lex": 0.3333333333333333,
+     "cos": 0.8059074953255813,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S9",
+     "lex": 0.22522522522522523,
+     "cos": 0.814661188201693,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ]
+  }
+ }
+}

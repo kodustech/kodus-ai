@@ -1,0 +1,148 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "fonte": "dedup-real/e2e-v9",
+ "prs": {
+  "feat-2fa-backup-codes-cal-com": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "relevantLinesStart": 134,
+    "relevantLinesEnd": 137,
+    "suggestionContent": "WHAT: On a successful 2FA enable the modal now advances to the backup-codes step instead of calling onEnable(), and onEnable() is only reachable through the 'Close' button, so dismissing the dialog (Escape/onOpenChange) on that step never calls onEnable() or resetState(). WHY: the parent's onEnable() runs utils.viewer.me.invalidate() (apps/web/pages/settings/security/two-factor-auth.tsx:65-68); skipping it leaves the 'two-factor-switch' rendering as disabled even though 2FA was enabled server-side, and the stale `step` state remains DisplayBackupCodes. HOW: invoke the same close/invalidate logic from onOpenChange when the dialog is dismissed while step === SetupStep.DisplayBackupCodes (or call onEnable() from the escape path).",
+    "grupo": "S1"
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+    "relevantLinesStart": 147,
+    "relevantLinesEnd": 156,
+    "suggestionContent": "WHAT: Backup-code consumption is a non-atomic read-modify-write (decrypt -> indexOf -> backupCodes[index]=null -> re-encrypt) with no locking. WHY: two concurrent login attempts using the same backup code can both decrypt the list, both pass the indexOf check, and both persist, so a code advertised as usable 'exactly once' can be replayed to open multiple sessions concurrently (TOCTOU). HOW: consume the code atomically, e.g. a conditional update keyed on the still-present code (or a transaction/unique constraint on the consumed code) so only the first request can null it out, and reject the second.",
+    "grupo": "S6"
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "micro-exp-p3-text-that-ships",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "apps/web/components/auth/BackupCode.tsx",
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "suggestionContent": "The default export is named `TwoFactor`, but the file is `BackupCode.tsx`, every importer aliases it as `BackupCode`, and the component body renders the backup-code field/label/instructions — not the TOTP two-factor input. The identifier disagrees with what the component actually is, which is misleading for callers and for anyone reading stack traces/React DevTools. Rename it to `BackupCode` to match the file and its usage."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "micro-exp-p3-test-does-not-verify",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "apps/web/playwright/login.2fa.e2e.ts",
+    "relevantLinesStart": 50,
+    "relevantLinesEnd": 53,
+    "suggestionContent": "This assertion can never fail. `locator.isChecked()` returns a Promise, and the generic `expect(promise).toBeTruthy()` treats the Promise object itself as truthy (hence the author's own FIXME: \"this passes even when switch is not checked\"). After this PR, EnableTwoFactorModal.handleEnable sets step to SetupStep.DisplayBackupCodes instead of calling onEnable(), so the switch is not checked until the user closes the backup-codes modal — and this test never clicks backup-codes-close. The \"Enable 2FA\" step therefore no longer verifies that 2FA was enabled, yet still passes. Use the web-first assertion `await expect(locator).toBeChecked()` (and/or complete the flow by clicking backup-codes-close) so the test fails when the switch is unchecked."
+   },
+   "S5": {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "micro-exp-p3-test-does-not-verify",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "apps/web/playwright/login.2fa.e2e.ts",
+    "relevantLinesStart": 119,
+    "relevantLinesEnd": 122,
+    "suggestionContent": "The copy step does not verify the behaviour it names. It only asserts a success toast is shown, but the component fires `navigator.clipboard.writeText(...)` without awaiting it and shows the toast unconditionally afterwards, so the test passes even if the clipboard write fails (missing permission, rejected promise) or is removed entirely. Assert the actual clipboard content instead, e.g. grant clipboard permissions and read `await page.evaluate(() => navigator.clipboard.readText())` and check it equals the displayed codes."
+   },
+   "S6": {
+    "id": "S6",
+    "finderIndex": 5,
+    "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+    "technique": "M3",
+    "label": "security",
+    "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+    "relevantLinesStart": 131,
+    "relevantLinesEnd": 156,
+    "suggestionContent": "Backup codes are documented as single-use (\"Each backup code can be used exactly once\"), but consuming one is a non-atomic read-modify-write: decrypt `user.backupCodes`, `indexOf` the submitted code, set `backupCodes[index] = null`, re-encrypt and write. Two concurrent logins presenting the same backup code both read the still-unconsumed array before either write lands, both find the index, and both persist — the code is accepted twice and the single-use invariant is violated. Serialize the consume (e.g. re-check-and-update in a transaction/conditional update on the current stored blob, or store per-code rows with a unique constraint on the consumed flag) so a code can only be matched and nulled once.",
+    "grupo": "S6"
+   },
+   "S7": {
+    "id": "S7",
+    "finderIndex": 6,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "security",
+    "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+    "relevantLinesStart": 144,
+    "relevantLinesEnd": 145,
+    "suggestionContent": "The new backup-code check authenticates a user by comparing the submitted credential against stored secrets with `backupCodes.indexOf(...)`, i.e. ordinary string equality that short-circuits on the first differing character. This is a non-constant-time comparison of an authentication credential and can leak, through response timing, how many leading characters of a stored backup code match. Use a constant-time comparison (iterate the codes and compare each with `crypto.timingSafeEqual` over equal-length buffers) so the match position is not observable via timing.",
+    "grupo": "S7"
+   },
+   "S8": {
+    "id": "S8",
+    "finderIndex": 7,
+    "producedBy": "micro-exp-p3-secret-and-identity",
+    "technique": "M3",
+    "label": "security",
+    "relevantFile": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+    "relevantLinesStart": 61,
+    "relevantLinesEnd": 63,
+    "suggestionContent": "Same root cause on the 2FA-disable endpoint: the submitted backup code is matched against the decrypted array with `backupCodes.indexOf(req.body.backupCode.replaceAll(\"-\", \"\"))`, a non-constant-time comparison of an authentication credential. Timing differences in this equality check can reveal how many leading characters of a stored code matched. Replace it with a constant-time comparison over equal-length buffers (e.g. `crypto.timingSafeEqual` inside a `findIndex`) so the matched code position is not timing-observable.",
+    "grupo": "S7"
+   },
+   "S9": {
+    "id": "S9",
+    "finderIndex": 8,
+    "producedBy": "micro-exp-p3-says-one-thing-does-another",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "apps/web/pages/auth/login.tsx",
+    "relevantLinesStart": 40,
+    "relevantLinesEnd": 46,
+    "suggestionContent": "The login form registers and clears a `backupCode` field (BackupCode.tsx `register(\"backupCode\")`, and `methods.setValue(\"backupCode\", \"\")` in TwoFactorFooter), and `onSubmit` forwards `...values` to `signIn`, but the resolver used by `useForm({ resolver: zodResolver(formSchema) })` is built from `formSchema`, which this PR does not extend — it declares email/password/totpCode/csrfToken only (mirrored by the LoginValues interface that was extended here). zod's object parse returns a stripped object, so react-hook-form's handleSubmit yields values without `backupCode`; `credentials.backupCode` is then undefined in next-auth-options.ts and the request falls into the TOTP branch, returning `SecondFactorRequired` with an empty totpCode. Add `backupCode: z.string().optional()` to `formSchema` so the writer's field name reaches the validator and the backup-code login path is actually exercised.",
+    "grupo": "S9"
+   },
+   "S10": {
+    "id": "S10",
+    "finderIndex": 9,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "relevantLinesStart": 132,
+    "relevantLinesEnd": 136,
+    "suggestionContent": "`handleEnable` previously called the `onEnable` prop on a 200 response. This PR replaced that call with `setStep(SetupStep.DisplayBackupCodes)`, so `onEnable` (the consumer's callback that closes the dialog and refreshes the parent's 2FA-enabled state) now only fires if the user clicks the new Close button. Dismissing the dialog any other way (Escape, the Dialog X -> onOpenChange) leaves 2FA enabled server-side while the parent UI never receives onEnable. Either call onEnable when the modal is dismissed from the backup-codes step, or make that step's dismissal route through onEnable.",
+    "grupo": "S1"
+   },
+   "S11": {
+    "id": "S11",
+    "finderIndex": 10,
+    "producedBy": "micro-exp-p3-contract-not-followed",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "apps/web/pages/auth/login.tsx",
+    "relevantLinesStart": 40,
+    "relevantLinesEnd": 45,
+    "suggestionContent": "`backupCode` was added to `LoginValues` and the field is registered in the form, but the submit values flow through `zodResolver(formSchema)` (line 67). `useForm` returns the resolver's parsed object, and zod strips keys not declared in the schema. Since the schema was not updated to include `backupCode`, the registered value is dropped and never reaches `signIn('credentials', {...values})`, so the new 'Lost access' backup-code login path can never send a code and the server always reports IncorrectBackupCode/MissingBackupCodes. Add `backupCode` to the form schema (or read the value via getValues) so it is preserved on submit.",
+    "grupo": "S9"
+   },
+   "S12": {
+    "id": "S12",
+    "finderIndex": 11,
+    "producedBy": "micro-exp-p3-changed-files-disagree",
+    "technique": "M3",
+    "label": "bug",
+    "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+    "relevantLinesStart": 143,
+    "relevantLinesEnd": 148,
+    "suggestionContent": "The generated backup codes are lowercase hex (`crypto.randomBytes(5).toString(\"hex\")` in setup.ts), but this validator matches the user input case-sensitively via `backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"))`. A code entered with uppercase hex letters (A–F), as users commonly type when reading a downloaded/saved code, will never match the stored lowercase value and is rejected as IncorrectBackupCode. The same case-sensitive comparison exists in apps/web/pages/api/auth/two-factor/totp/disable.ts (`backupCodes.indexOf(req.body.backupCode.replaceAll(\"-\", \"\"))`). Normalize case before comparing (e.g. `.replaceAll(\"-\", \"\").toLowerCase()` and/or lowercase the input field) so the producer's lowercase codes and the validator agree."
+   }
+  }
+ }
+}

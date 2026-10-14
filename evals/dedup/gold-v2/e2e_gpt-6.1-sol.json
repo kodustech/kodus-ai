@@ -1,0 +1,110 @@
+{
+ "model": "gpt-6.1-sol",
+ "sourcePool": "15.10.26_e2e_gpt",
+ "labelVersion": "v2",
+ "prs": {
+  "feat-2fa-backup-codes-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+     "relevantLinesStart": 131,
+     "relevantLinesEnd": 131,
+     "suggestionContent": "The backup-code branch accepts credentials with a nonempty totpCode without validating that TOTP or the password. The preceding password check runs only when totpCode is empty, so submitting a valid backupCode plus an arbitrary totpCode authenticates a CAL user without knowing their password. Require password verification for CAL backup-code authentication regardless of whether totpCode is supplied."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+     "relevantLinesStart": 149,
+     "relevantLinesEnd": 156,
+     "suggestionContent": "Backup-code consumption writes the entire decrypted list using only the user ID after validation against a prior snapshot. Concurrent requests can authenticate with the same one-time code, and requests consuming different codes can overwrite each other's changes and restore a consumed code. Use an atomic compare-and-swap against the original encrypted backupCodes value and reject or retry when no row matches, or serialize validation and consumption with a database row lock."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+     "relevantLinesStart": 134,
+     "relevantLinesEnd": 136,
+     "suggestionContent": "Successful enablement no longer calls onEnable until the backup screen's explicit Close button is clicked. Dismissing that screen with Escape or an outside click invokes only the parent's onOpenChange, leaving viewer.me cached as disabled even though 2FA is enabled; the switch then reopens setup instead of the disable flow. Ensure every dismissal after successful enablement performs the completion notification and resets the modal state, while keeping the backup codes visible until dismissal."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "apps/web/playwright/login.2fa.e2e.ts",
+     "relevantLinesStart": 119,
+     "relevantLinesEnd": 122,
+     "suggestionContent": "This passes if the clipboard write is removed or writes incorrect codes: the component emits the success toast independently of writeText's result. Verify clipboard contents against the displayed backup codes after clicking Copy, so a broken copy operation fails the test."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "micro-exp-p3-test-does-not-verify",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "apps/web/playwright/login.2fa.e2e.ts",
+     "relevantLinesStart": 113,
+     "relevantLinesEnd": 117,
+     "suggestionContent": "The download filename is fixed by the anchor's download attribute, independently of the Blob contents. An empty file or incorrect codes would still pass this test. Read the downloaded file and compare its contents with the displayed backup codes to validate the recovery-code export rather than just the download filename."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "micro-exp-p3-text-that-ships",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "apps/web/components/auth/BackupCode.tsx",
+     "relevantLinesStart": 7,
+     "relevantLinesEnd": 7,
+     "suggestionContent": "This new component is named TwoFactor even though it renders and registers only a backup-code input, and a separate TwoFactor component renders the authenticator digits. The duplicate identifier misidentifies the component in React diagnostics and to readers of its definition. Name this component BackupCode to match its actual role and its callers."
+    },
+    {
+     "id": "S7",
+     "finderIndex": 6,
+     "producedBy": "micro-exp-p3-invalid-state-and-concurrency",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+     "relevantLinesStart": 147,
+     "relevantLinesEnd": 156,
+     "suggestionContent": "Backup-code consumption is a read/check/write operation without concurrency protection. Two login requests can both read the same user.backupCodes, find the same code, and both perform this unconditional update and authenticate successfully. If they use different codes, the last write restores the code consumed by the other request. This breaks the advertised exactly-once constraint. Make consumption atomic, for example by conditionally updating where both id and the original encrypted backupCodes match, and only authenticating when that update affects one row (retry against fresh state on conflicts)."
+    },
+    {
+     "id": "S8",
+     "finderIndex": 7,
+     "producedBy": "micro-exp-p3-secret-and-identity",
+     "technique": "M3",
+     "label": "security",
+     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+     "relevantLinesStart": 143,
+     "relevantLinesEnd": 145,
+     "suggestionContent": "The new backup-code login path uses indexOf to compare the supplied authentication secret with stored codes. String equality and indexOf are not constant-time: comparisons can stop on a mismatch and the search stops at the first matching entry. Use fixed-length byte comparisons with crypto.timingSafeEqual, validating input length first, and scan every stored slot without stopping on a match. Apply the same verification helper to the disable endpoint, which introduces the identical indexOf check."
+    },
+    {
+     "id": "S9",
+     "finderIndex": 8,
+     "producedBy": "micro-exp-p3-says-one-thing-does-another",
+     "technique": "M3",
+     "label": "bug",
+     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+     "relevantLinesStart": 147,
+     "relevantLinesEnd": 156,
+     "suggestionContent": "Backup codes are advertised as usable exactly once, but this update writes a list derived from an earlier read without checking whether another request has consumed a code meanwhile. Two concurrent requests using the same code can both pass indexOf and both return successful authentication. Requests using different codes can also overwrite each other's updates, restoring one consumed code. Consume with an atomic compare-and-swap against the encrypted value that was verified, and reject or retry verification if that update affects no rows."
+    }
+   ]
+  }
+ }
+}

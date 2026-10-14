@@ -1,0 +1,120 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "e2e-h1t10",
+ "versaoDedup": "e2e-v9",
+ "prs": {
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The default export in BackupCode.tsx is named `TwoFactor`, importers alias it as `BackupCode`, and the body renders the backup-code field, not the TOTP input.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/components/auth/BackupCode.tsx:7 `export default function TwoFactor({ center = true }) {`; body renders backup_code label/instructions and TextField id=\"backup-code\" registered as \"backupCode\"; importers apps/web/pages/auth/login.tsx:32 and apps/web/components/settings/DisableTwoFactorModal.tsx:8 both `import BackupCode from \"@components/auth/BackupCode\";`.",
+     "reason": "Every factual claim the comment relies on matches the code at the cited lines and its importers.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "`expect(locator.isChecked()).toBeTruthy()` at apps/web/playwright/login.2fa.e2e.ts:53 can never fail; EnableTwoFactorModal.handleEnable sets step to DisplayBackupCodes instead of calling onEnable(), so the switch is unchecked until the user closes the backup-codes modal, which this test never does.",
+     "claimNoTexto": null,
+     "evidence": "login.2fa.e2e.ts:52-53 \"await page.waitForSelector(`[data-testid=two-factor-switch]`); await expect(page.locator(`[data-testid=two-factor-switch]`).isChecked()).toBeTruthy();\" with FIXME at :50-51; components/settings/EnableTwoFactorModal.tsx:135 \"setStep(SetupStep.DisplayBackupCodes); return;\" (no onEnable call in handleEnable); onEnable only invoked at :269 on the backup-codes-close button; the enable test never clicks backup-codes-close (the disable test does, at :125, and only then sees data-state=\"checked\" at :127). The page /settings/security/two-factor-auth.tsx:43-50 binds the switch to user?.twoFactorEnabled, invalidated only via onEnable.",
+     "reason": "All facts the comment relies on hold: the assertion compares a Promise with toBeTruthy (always truthy, as the in-file FIXME admits), the settings modal's handleEnable only moves to DisplayBackupCodes, and the enable test never closes that modal.",
+     "passos": 10
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "It only asserts a success toast is shown, but the component fires `navigator.clipboard.writeText(...)` without awaiting it and shows the toast unconditionally afterwards.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/playwright/login.2fa.e2e.ts:120-122 click backup-codes-copy, wait for toast-success, and comment \"// TODO: check clipboard content\"; apps/web/components/settings/EnableTwoFactorModal.tsx:278-279 `navigator.clipboard.writeText(backupCodes.map(formatBackupCode).join(\"\\n\"));` followed by unconditional `showToast(t(\"backup_codes_copied\"), \"success\");`.",
+     "reason": "The cited test asserts only the success toast and the named handler calls writeText without awaiting then shows the toast unconditionally, so every fact the comment depends on is accurate.",
+     "passos": 3
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The generated backup codes are lowercase hex (`crypto.randomBytes(5).toString(\"hex\")` in setup.ts), but this validator matches the user input case-sensitively via `backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"))`. The same case-sensitive comparison exists in apps/web/pages/api/auth/two-factor/totp/disable.ts.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/pages/api/auth/two-factor/totp/setup.ts:61 `const backupCodes = Array.from(Array(10), () => crypto.randomBytes(5).toString(\"hex\"));` (lowercase hex producer); packages/features/auth/lib/next-auth-options.ts:144 `const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"));` (case-sensitive, no toLowerCase); apps/web/pages/api/auth/two-factor/totp/disable.ts:61 `const index = backupCodes.indexOf(req.body.backupCode.replaceAll(\"-\", \"\"));` (same case-sensitive comparison). Grep for any toLowerCase/normalize on the backupCode path returned nothing.",
+     "reason": "Every factual statement the comment relies on is borne out by the code: codes are produced as lowercase hex and both validators compare case-sensitively with no normalization anywhere.",
+     "passos": 7
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "On a successful 2FA enable the modal advances to the backup-codes step (setStep(DisplayBackupCodes)) instead of calling onEnable(); onEnable() is only reachable through the 'Close' button, so dismissing the dialog via Escape/onOpenChange never calls onEnable() or resetState(), skipping the parent's utils.viewer.me.invalidate() and leaving the two-factor-switch disabled with stale step state.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:134-137 (setStep(SetupStep.DisplayBackupCodes); return;), :263-272 (only onEnable() call, in the Close button), :166 (onOpenChange passed through) with apps/web/pages/settings/security/two-factor-auth.tsx:64-68 (onOpenChange only toggles; onEnable runs utils.viewer.me.invalidate()) and :37,43-45 (disabled={canSetupTwoFactor}, canSetupTwoFactor = !isCalProvider && !user?.twoFactorEnabled)",
+     "reason": "Every fact the comment relies on checks out: the success path sets the backup-codes step, onEnable is invoked solely by the Close button, and neither onOpenChange nor resetState runs on Escape/overlay dismissal, so the parent's invalidate is skipped and the switch remains disabled with stale step state.",
+     "passos": 7
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Backup-code consumption at packages/features/auth/lib/next-auth-options.ts:131-156 is a non-atomic read-modify-write (decrypt, indexOf, null out, re-encrypt, update), so concurrent logins with the same single-use code can both persist it as consumed.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/auth/lib/next-auth-options.ts:139-156 decrypts user.backupCodes, does indexOf (144), sets backupCodes[index]=null (148), and calls prisma.user.update unconditionally by id (149-156), with the user read at line 73; apps/web/public/static/locales/en/common.json:2015 documents \"Each backup code can be used exactly once\".",
+     "reason": "The cited code is exactly the non-atomic read-modify-write described and the single-use documentation exists, so the reported issue's factual basis holds.",
+     "passos": 5
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Lines 144-145 authenticate via backupCodes.indexOf(credentials.backupCode...) i.e. non-constant-time string comparison of a credential.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/auth/lib/next-auth-options.ts:144 `const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"));` and :139-141 show backupCodes = JSON.parse(symmetricDecrypt(user.backupCodes, ...)); no timingSafeEqual/constant-time comparison exists in the repo.",
+     "reason": "The cited code performs the credential comparison with Array.prototype.indexOf over the stored backup codes, exactly as the comment states, so the reported non-constant-time comparison is a real property of the code.",
+     "passos": 4
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S11"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "zod's object parse returns a stripped object, so react-hook-form's handleSubmit yields values without `backupCode`",
+     "claimNoTexto": null,
+     "evidence": "apps/web/pages/auth/login.tsx:65-66 — `// Passthrough other fields like totpCode` / `.passthrough();` (inside `const formSchema = z.object({...}).passthrough()`)",
+     "reason": "The formSchema is a `.passthrough()` object, so zod does not strip unknown keys like `backupCode`; the comment's premise that the parsed values lack `backupCode` is false.",
+     "passos": 4
+    }
+   ]
+  }
+ }
+}

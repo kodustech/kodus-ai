@@ -1,0 +1,66 @@
+{
+ "model": "gpt-6.1-sol",
+ "verificador": "gpt-6.1-sol@sub",
+ "versao": "v3d",
+ "versaoDedup": "e2e-v9",
+ "prs": {
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete authentication bypass in which a valid backup code and arbitrary TOTP skip password verification, creating a security hole rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete dismissal path that leaves cached 2FA status incorrect and causes the switch to reopen setup instead of the disable flow.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage for clipboard copying without identifying an actual incorrect clipboard result in the current implementation.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage for export contents without identifying an actual defect in the exported file, so ignoring it does not cause a concrete failure.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "Renaming this default-exported component improves naming and diagnostic readability but does not change its behavior or break callers, so this is an optional naming nit.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete security weakness in authentication-secret verification—data-dependent comparison timing leaking information—and requests constant-time verification rather than an optional stylistic improvement.",
+     "passos": 1
+    }
+   ]
+  }
+ }
+}

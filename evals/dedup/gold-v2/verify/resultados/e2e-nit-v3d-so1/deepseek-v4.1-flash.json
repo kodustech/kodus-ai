@@ -1,0 +1,48 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "v3d",
+ "versaoDedup": "e2e-v9",
+ "prs": {
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment only flags a misleading component name versus file/usage; nothing breaks or returns wrong results if it is ignored, so it is a naming/style nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment accurately identifies a concrete bug: the assertion always passes because isChecked() returns a Promise, so the test silently stops verifying that 2FA was enabled, producing a misleading false-positive result rather than being a mere test-coverage nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment asks for a stronger test assertion (checking clipboard content instead of only the toast), which is a test-coverage request that doesn't affect production behavior, so it fits the definition of a nit.",
+     "passos": 2
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete producer/validator mismatch (lowercase hex codes vs. a case-sensitive indexOf), so uppercase backup-code input is wrongly rejected — a described failure, not a speculative nit.",
+     "passos": 2
+    }
+   ]
+  }
+ }
+}
