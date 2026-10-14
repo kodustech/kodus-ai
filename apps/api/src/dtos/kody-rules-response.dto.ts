@@ -14,6 +14,12 @@ export class KodyRulesLimitResponseDto extends ApiResponseBaseDto {
 export class KodyRulesSyncStatusDto {
     @ApiProperty()
     kodyRulesGeneratorEnabledFirstTime: boolean;
+
+    @ApiProperty({
+        description:
+            'Rules the onboarding import made from coding-agent files that were removed when those files stopped becoming rules.',
+    })
+    removedOnboardingImports: number;
 }
 
 export class KodyRulesSyncStatusResponseDto extends ApiResponseBaseDto {

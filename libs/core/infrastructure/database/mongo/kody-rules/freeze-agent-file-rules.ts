@@ -3,11 +3,15 @@
  * over the embedded `rules[]` of every `kodyRules` document:
  *
  *   1. Rules the onboarding import created (origin `repo_file_sync`, stored at
- *      `repositoryId: "global"`, no `sourceRepositoryId`) that are ACTIVE go
- *      back to PENDING, unless they came from a Kody rule template file. They
- *      were imported from coding-agent files or inferred from dependency
- *      manifests, and "approval" was a pre-checked box nobody unchecked.
- *      Re-approving is one click in the Pending area.
+ *      `repositoryId: "global"`, no `sourceRepositoryId`) that are active,
+ *      pending or paused are DELETED, unless they came from a Kody rule
+ *      template file. They were imported from coding-agent files or inferred
+ *      from dependency manifests, "approval" was a pre-checked box nobody
+ *      unchecked, each repository's copy of a file became its own org-wide
+ *      rule, and the source repository was never stored to scope them back.
+ *      The coding-agent instructions setting reads the same files per
+ *      repository instead. Each one keeps `reason` and `previousStatus`, so
+ *      `restoreAgentFileRules` can put it back.
  *   2. `pinnedSync` is cleared everywhere: `@kody-sync` no longer does
  *      anything.
  *
@@ -20,8 +24,10 @@
  */
 import { Db } from 'mongodb';
 
-export const ONBOARDING_IMPORT_REASON =
-    'Imported during onboarding from coding-agent files or dependency manifests; awaiting approval.';
+export const ONBOARDING_IMPORT_REMOVED_REASON =
+    'Imported during onboarding from coding-agent files or dependency manifests; removed when those files stopped becoming rules.';
+
+const REMOVABLE_STATUSES = new Set(['active', 'pending', 'paused']);
 
 // A Kody rule template location, at any depth (`.agents/rules/` is a
 // coding-agent location even though it ends in `rules/`).
@@ -56,29 +62,41 @@ export function freezeAgentFileRule(rule: any): any | null {
 
     if (
         isOnboardingImport(rule) &&
-        rule.status === 'active' &&
+        REMOVABLE_STATUSES.has(rule.status) &&
         !isKodyRuleFile(rule.sourcePath)
     ) {
-        next.status = 'pending';
-        next.reason = ONBOARDING_IMPORT_REASON;
+        next.status = 'deleted';
+        next.previousStatus = rule.status;
+        next.reason = ONBOARDING_IMPORT_REMOVED_REASON;
         changed = true;
     }
-
     if (rule.pinnedSync === true) {
         next.pinnedSync = false;
         changed = true;
     }
-
     return changed ? next : null;
+}
+
+/** The rule as it was before `freezeAgentFileRule` removed it, or null. */
+export function restoreAgentFileRule(rule: any): any | null {
+    if (
+        rule?.status !== 'deleted' ||
+        rule.reason !== ONBOARDING_IMPORT_REMOVED_REASON ||
+        !REMOVABLE_STATUSES.has(rule.previousStatus)
+    ) {
+        return null;
+    }
+    const { previousStatus, reason: _reason, ...rest } = rule;
+    return { ...rest, status: previousStatus };
 }
 
 export type FreezeAgentFileRulesResult = {
     docsScanned: number;
     docsUpdated: number;
-    movedToPending: number;
+    removed: number;
     pinsCleared: number;
-    /** Organizations that now have onboarding imports awaiting approval. */
-    orgsWithPending: string[];
+    /** Organizations whose onboarding imports were removed. */
+    orgsWithRemoved: string[];
 };
 
 export async function freezeAgentFileRules(
@@ -92,9 +110,9 @@ export async function freezeAgentFileRules(
     const result: FreezeAgentFileRulesResult = {
         docsScanned: 0,
         docsUpdated: 0,
-        movedToPending: 0,
+        removed: 0,
         pinsCleared: 0,
-        orgsWithPending: [],
+        orgsWithRemoved: [],
     };
 
     for await (const doc of collection.find({})) {
@@ -102,21 +120,21 @@ export async function freezeAgentFileRules(
         const rules: any[] = Array.isArray(doc.rules) ? doc.rules : [];
 
         let docChanged = false;
-        let movedInDoc = 0;
+        let removedInDoc = 0;
         const nextRules = rules.map((rule) => {
             const next = freezeAgentFileRule(rule);
             if (!next) return rule;
             docChanged = true;
-            if (next.status !== rule.status) movedInDoc += 1;
+            if (next.status !== rule.status) removedInDoc += 1;
             if (rule.pinnedSync === true) result.pinsCleared += 1;
             return next;
         });
 
         if (!docChanged) continue;
         result.docsUpdated += 1;
-        result.movedToPending += movedInDoc;
-        if (movedInDoc > 0 && doc.organizationId) {
-            result.orgsWithPending.push(String(doc.organizationId));
+        result.removed += removedInDoc;
+        if (removedInDoc > 0 && doc.organizationId) {
+            result.orgsWithRemoved.push(String(doc.organizationId));
         }
 
         if (!dryRun) {
@@ -130,9 +148,47 @@ export async function freezeAgentFileRules(
     log(
         `[freeze-agent-file-rules]${dryRun ? ' [DRY RUN]' : ''} scanned ${result.docsScanned} org doc(s); ` +
             `${result.docsUpdated} doc(s) ${dryRun ? 'would be ' : ''}updated; ` +
-            `${result.movedToPending} onboarding import(s) moved to pending across ${result.orgsWithPending.length} org(s); ` +
+            `${result.removed} onboarding import(s) removed across ${result.orgsWithRemoved.length} org(s); ` +
             `${result.pinsCleared} @kody-sync pin(s) cleared.`,
     );
 
     return result;
+}
+
+/**
+ * Undoes the removal half of `freezeAgentFileRules`, for every organization
+ * or one (`organizationId`). Cleared pins stay cleared.
+ */
+export async function restoreAgentFileRules(
+    db: Db,
+    opts: { organizationId?: string; log?: (msg: string) => void } = {},
+): Promise<{ restored: number }> {
+    const log = opts.log ?? (() => {});
+    const collection = db.collection('kodyRules');
+    const filter = opts.organizationId
+        ? { organizationId: opts.organizationId }
+        : {};
+    let restored = 0;
+
+    for await (const doc of collection.find(filter)) {
+        const rules: any[] = Array.isArray(doc.rules) ? doc.rules : [];
+        let restoredInDoc = 0;
+        const nextRules = rules.map((rule) => {
+            const next = restoreAgentFileRule(rule);
+            if (!next) return rule;
+            restoredInDoc += 1;
+            return next;
+        });
+        if (restoredInDoc === 0) continue;
+        restored += restoredInDoc;
+        await collection.updateOne(
+            { _id: doc._id },
+            { $set: { rules: nextRules } },
+        );
+    }
+
+    log(
+        `[freeze-agent-file-rules] restored ${restored} onboarding import(s)${opts.organizationId ? ` for org ${opts.organizationId}` : ''}.`,
+    );
+    return { restored };
 }

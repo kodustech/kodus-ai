@@ -54,16 +54,6 @@ export function isAgentInstructionSource(
     );
 }
 
-/** A Kody rule template file (.kody/rules, rules/*.md, ...). */
-export function isKodyRuleFileSource(
-    sourcePath: string | null | undefined,
-): boolean {
-    if (!sourcePath || isAgentInstructionSource(sourcePath)) return false;
-    return KODY_RULE_SOURCE_PATTERNS.some((pattern) =>
-        pattern.test(sourcePath),
-    );
-}
-
 /** Any file the repo sync has ever imported (agent files included). */
 export function isIdeRuleSource(
     sourcePath: string | null | undefined,

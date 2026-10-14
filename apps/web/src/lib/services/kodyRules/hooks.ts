@@ -50,6 +50,7 @@ export const useSuspenseKodyRulesCheckSyncStatus = (params: {
 }) => {
     return useSuspenseFetch<{
         kodyRulesGeneratorEnabledFirstTime: boolean;
+        removedOnboardingImports?: number;
     }>(KODY_RULES_PATHS.CHECK_SYNC_STATUS, { params });
 };
 

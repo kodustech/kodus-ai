@@ -20,7 +20,10 @@ import {
 } from './token-usage/ensure-indexes';
 import { backfillTokenUsageTu } from './token-usage/backfill-tu';
 import { migrateKodyRulesOriginRequestType } from './kody-rules/migrate-origin-request-type';
-import { freezeAgentFileRules } from './kody-rules/freeze-agent-file-rules';
+import {
+    freezeAgentFileRules,
+    restoreAgentFileRules,
+} from './kody-rules/freeze-agent-file-rules';
 
 const TEST_DB = 'kodus_migration_it';
 const TELEMETRY = 'observability_telemetry';
@@ -201,7 +204,7 @@ describe('kody-rules migration (integration)', () => {
 });
 
 describe('kody-rules agent-file freeze (integration)', () => {
-    it('moves onboarding imports to pending, clears pins, and is idempotent', async () => {
+    it('deletes onboarding imports, clears pins, is idempotent and restorable', async () => {
         if (!available) return;
         const c = db.collection('kodyRules');
         await c.deleteMany({});
@@ -234,14 +237,17 @@ describe('kody-rules agent-file freeze (integration)', () => {
         });
 
         const first = await freezeAgentFileRules(db);
-        expect(first.movedToPending).toBe(1);
+        expect(first.removed).toBe(1);
         expect(first.pinsCleared).toBe(1);
 
         const doc = await c.findOne({ organizationId: 'org-it' });
         const byUuid = Object.fromEntries(
             (doc!.rules as any[]).map((r) => [r.uuid, r]),
         );
-        expect(byUuid['onboarding-claude'].status).toBe('pending');
+        expect(byUuid['onboarding-claude']).toMatchObject({
+            status: 'deleted',
+            previousStatus: 'active',
+        });
         expect(byUuid['onboarding-template'].status).toBe('active');
         expect(byUuid['synced-on-purpose']).toMatchObject({
             status: 'active',
@@ -250,5 +256,13 @@ describe('kody-rules agent-file freeze (integration)', () => {
 
         const second = await freezeAgentFileRules(db);
         expect(second.docsUpdated).toBe(0);
+
+        expect((await restoreAgentFileRules(db)).restored).toBe(1);
+        const restored = await c.findOne({ organizationId: 'org-it' });
+        expect(
+            (restored!.rules as any[]).find(
+                (r) => r.uuid === 'onboarding-claude',
+            ),
+        ).toMatchObject({ status: 'active' });
     });
 });

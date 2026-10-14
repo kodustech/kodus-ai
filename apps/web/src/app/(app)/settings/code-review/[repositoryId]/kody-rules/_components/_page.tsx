@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { planCtaTarget } from "@components/system/plan-cta-target";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GateCtaLink } from "@components/system/gate-cta-link";
@@ -76,6 +76,7 @@ import { KodyRulesList } from "./list";
 import { KodyRulesNoMatches } from "./no-matches";
 import { KodyRulesPageSkeleton } from "./page-skeleton";
 import { PendingSection } from "./pending-section";
+import { RemovedOnboardingImportsNotice } from "./removed-onboarding-imports-notice";
 import { KodyRuleDetailSheet } from "./rule-detail-sheet";
 import { useKodyRulesHealth } from "./rule-health";
 import { SeverityHeatmap } from "./severity-heatmap";
@@ -998,6 +999,13 @@ const KodyRulesPageContent = () => {
                             className="shrink-0"
                         />
                     </Card>
+                )}
+                {(isRepoView || isGlobalView) && (
+                    <Suspense fallback={null}>
+                        <RemovedOnboardingImportsNotice
+                            onOpenConfiguration={() => setConfigOpen(true)}
+                        />
+                    </Suspense>
                 )}
                 <PendingSection
                     pendingRules={pendingRules}

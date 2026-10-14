@@ -1,8 +1,13 @@
 import { KodyRulesOrigin } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { ONBOARDING_IMPORT_REMOVED_REASON } from '@libs/core/infrastructure/database/mongo/kody-rules/freeze-agent-file-rules';
 
 import { CheckSyncStatusUseCase } from './check-sync-status.use-case';
 
-function build(opts: { repoConfig?: unknown; rules?: unknown[] }) {
+function build(opts: {
+    repoConfig?: unknown;
+    rules?: unknown[];
+    orgRules?: unknown[] | Error;
+}) {
     const parametersService = {
         findByKey: jest.fn().mockResolvedValue({
             configValue: {
@@ -16,6 +21,14 @@ function build(opts: { repoConfig?: unknown; rules?: unknown[] }) {
     const request = {
         user: { organization: { uuid: 'org-1' } },
     } as any;
+    const kodyRulesService = {
+        findByOrganizationId:
+            opts.orgRules instanceof Error
+                ? jest.fn().mockRejectedValue(opts.orgRules)
+                : jest
+                      .fn()
+                      .mockResolvedValue({ rules: opts.orgRules ?? [] }),
+    } as any;
 
     return {
         useCase: new CheckSyncStatusUseCase(
@@ -23,6 +36,7 @@ function build(opts: { repoConfig?: unknown; rules?: unknown[] }) {
             {} as any,
             parametersService,
             findRules,
+            kodyRulesService,
             request,
         ),
         findRules,
@@ -98,5 +112,37 @@ describe('CheckSyncStatusUseCase — kodyRulesGeneratorEnabledFirstTime', () => 
         const res = await useCase.execute('team-1', 'repo-1');
 
         expect(res).not.toHaveProperty('ideRulesSyncEnabledFirstTime');
+    });
+});
+
+describe('CheckSyncStatusUseCase — removedOnboardingImports', () => {
+    const removed = (over: Record<string, unknown> = {}) => ({
+        status: 'deleted',
+        reason: ONBOARDING_IMPORT_REMOVED_REASON,
+        ...over,
+    });
+
+    it('counts the onboarding imports the migration removed, for any scope', async () => {
+        const { useCase } = build({
+            orgRules: [
+                removed(),
+                removed(),
+                removed({ status: 'active' }),
+                { status: 'deleted', reason: 'user deleted it' },
+                { status: 'active' },
+            ],
+        });
+
+        const res = await useCase.execute('team-1', 'global');
+
+        expect(res.removedOnboardingImports).toBe(2);
+    });
+
+    it('is 0 when the rules cannot be read', async () => {
+        const { useCase } = build({ orgRules: new Error('mongo down') });
+
+        const res = await useCase.execute('team-1', 'repo-1');
+
+        expect(res.removedOnboardingImports).toBe(0);
     });
 });
