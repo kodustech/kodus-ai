@@ -17,6 +17,7 @@
 // counts (`hits` of `total`): the known bugs found, the violation sites flagged.
 // `detail` lists those items when the eval knows them.
 const fs = require('fs');
+const Module = require('module');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -81,4 +82,51 @@ function signalCases(cases = []) {
     }));
 }
 
-module.exports = { evalQuestion, resultProblems, poolCases, signalCases, MAX_DETAIL };
+// A TypeScript data file (test fixtures, E2E scenarios) loaded as plain node,
+// for catalogs whose cases live there. Its own imports must resolve without
+// path aliases.
+function requireTs(file) {
+    const esbuild = require('esbuild');
+    const abs = path.resolve(ROOT, file);
+    const { code } = esbuild.transformSync(fs.readFileSync(abs, 'utf8'), { loader: 'ts', format: 'cjs', target: 'node18' });
+    const m = new Module(abs, module);
+    m.filename = abs;
+    m.paths = Module._nodeModulePaths(path.dirname(abs));
+    m._compile(code, abs);
+    return m.exports;
+}
+
+// What an eval tests, without running it: every case it runs, each with one
+// sentence on what it checks. Each stage with an eval names a catalog module
+// (evals/stages.js `catalog`) exporting `catalog()`; it reads the eval's own
+// data, so the list cannot drift from the cases. Large evals return one entry
+// per group of cases.
+const MAX_CATALOG = 60;
+function loadCatalog(catalogPath) {
+    if (!catalogPath) return null;
+    // eslint-disable-next-line global-require, import/no-dynamic-require
+    const entries = require(path.join(ROOT, catalogPath)).catalog();
+    return entries;
+}
+
+function catalogProblems(entries) {
+    if (!Array.isArray(entries) || !entries.length) return ['no entries'];
+    const problems = [];
+    const ids = new Set();
+    for (const e of entries) {
+        if (!e || !e.id) problems.push('an entry without id');
+        else if (ids.has(e.id)) problems.push(`duplicate id ${e.id}`);
+        else ids.add(e.id);
+        if (!e || typeof e.checks !== 'string' || !e.checks.trim()) problems.push(`entry ${e && e.id}: no checks sentence`);
+        else if (e.checks.length > MAX_TEXT) problems.push(`entry ${e.id}: checks longer than ${MAX_TEXT} characters`);
+    }
+    if (entries.length > MAX_CATALOG) problems.push(`${entries.length} entries; group them (at most ${MAX_CATALOG})`);
+    return problems;
+}
+
+// The catalog as the stage signal carries it.
+function signalCatalog(entries = []) {
+    return entries.slice(0, MAX_CATALOG).map((e) => ({ id: String(e.id), checks: String(e.checks).slice(0, MAX_TEXT), ...(e.group ? { group: String(e.group) } : {}), ...(Number.isInteger(e.count) ? { count: e.count } : {}) }));
+}
+
+module.exports = { evalQuestion, resultProblems, poolCases, signalCases, requireTs, loadCatalog, catalogProblems, signalCatalog, MAX_DETAIL, MAX_CATALOG, MAX_TEXT };

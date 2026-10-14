@@ -16,7 +16,7 @@
 // it never fails a job over a result, only over bad arguments (exit 2).
 const fs = require('fs');
 const path = require('path');
-const { evalQuestion, signalCases } = require('./shared/eval-result');
+const { evalQuestion, signalCases, loadCatalog, catalogProblems, signalCatalog } = require('./shared/eval-result');
 const { STAGES } = require('./stages');
 const { tier0 } = require('./shared/tier0-models');
 
@@ -40,6 +40,30 @@ function fridayMeta(stage) {
     return stage.friday ? { friday: { models: tier0(), result: stage.friday } } : {};
 }
 
+// Where a stage's catalog lives: `catalog.js` in the eval's folder under
+// evals/, or `evals/catalogs/<stage id>.js` for an eval that lives elsewhere
+// (a unit-suite test, an E2E scenario, one script inside another eval).
+function catalogPath(stage) {
+    if (!stage.eval) return null;
+    const abs = path.join(__dirname, '..', stage.eval);
+    const ownFolder = stage.eval.startsWith('evals/') && fs.existsSync(abs) && fs.statSync(abs).isDirectory();
+    return ownFolder ? path.join(stage.eval, 'catalog.js') : path.join('evals', 'catalogs', `${stage.id}.js`);
+}
+
+// What the stage's eval tests, for the panel. Telemetry: a catalog that fails to
+// load is reported in the row, never fails the job (the spec catches it first).
+function catalogMeta(stage) {
+    const file = catalogPath(stage);
+    if (!file) return {};
+    try {
+        const entries = loadCatalog(file);
+        const problems = catalogProblems(entries);
+        return problems.length ? { catalog_error: problems.slice(0, 3).join('; ') } : { case_catalog: signalCatalog(entries) };
+    } catch (error) {
+        return { catalog_error: `${file}: ${String(error.message || error).slice(0, 160)}` };
+    }
+}
+
 function baseMeta(stage) {
     // order: position in the review, so the panel lists stages as they run.
     const index = STAGES.findIndex((s) => s.id === stage.id);
@@ -58,6 +82,7 @@ function baseMeta(stage) {
         ...(stage.caveat ? { caveat: stage.caveat } : {}),
         ...(stage.history ? { history: stage.history } : {}),
         ...fridayMeta(stage),
+        ...catalogMeta(stage),
     };
 }
 
@@ -234,4 +259,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { wiringRows, nightlyRows, READERS, NAME_PREFIX };
+module.exports = { wiringRows, nightlyRows, READERS, NAME_PREFIX, catalogPath };

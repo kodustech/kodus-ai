@@ -60,7 +60,9 @@ function missingHeaderFields(markdown) {
 }
 
 // Folders under evals/ that are helpers, not evals, and have no README.
-const NOT_AN_EVAL = new Set(['shared']);
+// Folders under evals/ that hold no eval: shared code, and the catalogs of evals
+// that live outside evals/ (evals/stage-signals.js catalogPath).
+const NOT_AN_EVAL = new Set(['shared', 'catalogs']);
 
 // Which eval folders exist, according to git rather than to the working tree:
 // an untracked leftover (one stray .DS_Store is enough) would otherwise fail

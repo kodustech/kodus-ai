@@ -35,7 +35,8 @@ if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
     const m = a.match(/^--([^=]+)(?:=(.*))?$/); return m ? [m[1], m[2] ?? true] : [a, true];
 }));
-const LIMIT = +(args.limit || 8);
+const { DATASETS_DIR, DEFAULT_LIMIT, datasetFiles } = require('./selection');
+const LIMIT = +(args.limit || DEFAULT_LIMIT);
 const MODELKEY = args.model || 'gpt-5.4-mini';
 const TOL = +(args.tol || 2); // a drop within TOL lines of a hunk = recoverable near-miss
 // CI gate: regression guard for the anchor-fix. The fix keeps anchoring drops at
@@ -179,8 +180,8 @@ async function main() {
         model = await buildModel(spec);
     }
 
-    const dsDir = path.join(__dirname, '../investigation/datasets');
-    const files = fs.readdirSync(dsDir).filter((f) => f.endsWith('.json') && !f.startsWith('.')).slice(0, LIMIT);
+    const dsDir = DATASETS_DIR;
+    const files = datasetFiles(LIMIT);
 
     let total = 0, kept = 0, dropped = 0, nearMiss = 0, farOff = 0, noFile = 0;
     const dropDist = {};
