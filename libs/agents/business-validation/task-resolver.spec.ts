@@ -105,6 +105,28 @@ describe('resolveTasks', () => {
         expect(result.kind).toBe('tracker_unavailable');
     });
 
+    it('treats a plugin with no read tool as unreadable, not as an outage to retry', async () => {
+        const plugin: TaskTracker = {
+            name: 'Acme',
+            canRead: () => true,
+            read: async () => ({
+                status: 'error',
+                message: 'Acme has no tool that reads one task by its id',
+                setup: true,
+            }),
+            close: async () => undefined,
+        };
+        const result = await resolveTasks(
+            refs('Closes AB#12'),
+            [plugin],
+            context,
+        );
+        expect(result.kind).toBe('no_capable_tracker');
+        expect(result.attempts).toEqual([
+            expect.objectContaining({ tracker: 'Acme', setup: true }),
+        ]);
+    });
+
     it('says no connected tracker reads a git issue when only Linear is connected (UC-11)', async () => {
         const result = await resolveTasks(
             refs('Closes #183'),

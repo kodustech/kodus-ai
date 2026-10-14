@@ -80,6 +80,13 @@ ${listReferences(references)} can't be read by this repository's task source (${
 ${listReferences(references)} can't be read by the connected task tools (${trackers.join(', ')}). Connect the tracker where it lives, or reference a task from one of these.`;
 }
 
+export function noReadToolMessage(trackers: string[]): string {
+    const names = trackers.join(', ');
+    return `## 🤔 ${names} can't read a task yet
+
+Kody reads tasks from ${names}, but no tool that reads one task by its id is picked. In the Business Logic settings, choose which ${names} tool reads a task, then comment ${RERUN}.`;
+}
+
 export function taskNotFoundMessage(attempts: ResolutionAttempt[]): string {
     const tried = [
         ...new Set(attempts.map((a) => `${a.reference} in ${a.tracker}`)),

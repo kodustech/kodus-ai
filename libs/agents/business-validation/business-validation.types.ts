@@ -90,8 +90,12 @@ export interface FoundTask {
 export type TrackerLookup = (
     | { status: 'found'; task: Task }
     | { status: 'not_found' }
-    /** The tracker could not be reached or failed: outage, auth, timeout. */
-    | { status: 'error'; message: string }
+    /**
+     * The tracker could not be reached or failed: outage, auth, timeout.
+     * `setup`: it answers, but is set up so no task can be read (a plugin
+     * with no tool that reads one by id); retrying won't help.
+     */
+    | { status: 'error'; message: string; setup?: boolean }
 ) & {
     /** The MCP tools called for this read, in order. */
     tools?: string[];
@@ -102,6 +106,8 @@ export interface ResolutionAttempt {
     tracker: string;
     status: TrackerLookup['status'];
     message?: string;
+    /** A setup problem, not an outage: see {@link TrackerLookup}. */
+    setup?: boolean;
     /** The MCP tools called to read it, so a team can see how it was found. */
     tools?: string[];
 }

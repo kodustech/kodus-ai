@@ -1,5 +1,9 @@
 import type { TaskReference } from './business-validation.types';
-import { noCapableTrackerMessage, noTrackerMessage } from './messages';
+import {
+    noCapableTrackerMessage,
+    noReadToolMessage,
+    noTrackerMessage,
+} from './messages';
 
 const issue: TaskReference = {
     kind: 'git_issue',
@@ -36,5 +40,15 @@ describe('noTrackerMessage', () => {
         expect(noTrackerMessage()).toContain(
             'is connected for this organization',
         );
+    });
+});
+
+describe('noReadToolMessage', () => {
+    it('asks to pick the read tool instead of blaming an outage', () => {
+        const text = noReadToolMessage(['Acme Tracker']);
+        expect(text).toContain(
+            'no tool that reads one task by its id is picked',
+        );
+        expect(text).not.toContain("didn't answer");
     });
 });

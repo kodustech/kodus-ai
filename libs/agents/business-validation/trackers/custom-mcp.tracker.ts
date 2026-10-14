@@ -99,6 +99,7 @@ export class CustomMcpTracker extends McpTaskTracker {
             return {
                 status: 'error',
                 message: `${this.name} has no tool that reads one task by its id`,
+                setup: true,
             };
         }
 

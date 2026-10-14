@@ -296,15 +296,25 @@ export class BusinessValidationService {
                         settings.taskSource !== AUTO_TASK_SOURCE,
                     ),
                 );
-            case 'no_capable_tracker':
+            case 'no_capable_tracker': {
+                const unset = [
+                    ...new Set(
+                        resolution.attempts
+                            .filter((a) => a.setup)
+                            .map((a) => a.tracker),
+                    ),
+                ];
                 return skip(
                     'no_capable_tracker',
-                    messages.noCapableTrackerMessage(
-                        references,
-                        trackerNames,
-                        settings.taskSource !== AUTO_TASK_SOURCE,
-                    ),
+                    unset.length
+                        ? messages.noReadToolMessage(unset)
+                        : messages.noCapableTrackerMessage(
+                              references,
+                              trackerNames,
+                              settings.taskSource !== AUTO_TASK_SOURCE,
+                          ),
                 );
+            }
             case 'not_found':
                 if (resolution.intended) {
                     const { reference, tracker, nearby } = resolution.intended;
@@ -576,7 +586,9 @@ export class BusinessValidationService {
                             ? settings.taskSource !== AUTO_TASK_SOURCE
                                 ? 'The chosen task source is not connected. Reconnect it, or pick another one above.'
                                 : 'No task tracker is connected. Connect one in Plugins.'
-                            : "The chosen task source can't read this kind of reference.",
+                            : resolution.attempts.some((a) => a.setup)
+                              ? 'The chosen task source has no tool picked to read a task. Pick one above.'
+                              : "The chosen task source can't read this kind of reference.",
                 };
             case 'tracker_unavailable':
                 return {

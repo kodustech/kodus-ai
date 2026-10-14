@@ -44,7 +44,6 @@ export async function resolveTasks(
         { reference: TaskReference; tracker: TaskTracker } | undefined;
     for (const reference of selected) {
         const capable = trackers.filter((t) => t.canRead(reference));
-        readable ||= capable.length > 0;
         let missingFrom: TaskTracker[] = [];
         for (const tracker of capable) {
             const read = await tracker.read(reference, context);
@@ -58,7 +57,10 @@ export async function resolveTasks(
                 tracker: tracker.name,
                 status: lookup.status,
                 ...(lookup.status === 'error'
-                    ? { message: lookup.message }
+                    ? {
+                          message: lookup.message,
+                          ...(lookup.setup ? { setup: true } : {}),
+                      }
                     : {}),
                 ...(lookup.tools?.length ? { tools: lookup.tools } : {}),
             });
@@ -67,8 +69,10 @@ export async function resolveTasks(
                 missingFrom = [];
                 break;
             }
+            // A tracker set up so it can't read a task is not one that can.
+            readable ||= !(lookup.status === 'error' && lookup.setup);
             if (lookup.status === 'error') {
-                failed = true;
+                failed ||= !lookup.setup;
             } else {
                 missingFrom.push(tracker);
             }
