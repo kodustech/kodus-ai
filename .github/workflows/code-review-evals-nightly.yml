@@ -143,7 +143,7 @@ jobs:
                   if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
                       git diff --name-only "$base" HEAD > changed-files.txt
                       node evals/shared/engine-files.js changed engine-files.txt changed-files.txt > engine-changes.txt
-                      node evals/shared/engine-files.js changed kody-rules-files.txt changed-files.txt > kody-rules-changes.txt
+                      node evals/shared/engine-files.js changed kody-rules-files.txt changed-files.txt --runner=evals/kody-rules/real-agent.js > kody-rules-changes.txt
                   fi
                   if [ "$FORCE" = "true" ] || [ -z "$base" ] || [ -s kody-rules-changes.txt ]; then
                       echo "kody_rules_run=true" >> "$GITHUB_OUTPUT"
