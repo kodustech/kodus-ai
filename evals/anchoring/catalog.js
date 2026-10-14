@@ -1,9 +1,9 @@
-// Cases come from evals/investigation/datasets/*.json, the files anchor-eval.js reads (first test case of each, in the name order it takes its --limit prefix from).
+// Cases come from evals/investigation/datasets/*.json as anchor-eval.js selects them (selection.js): the first test case of each.
 const fs = require('fs');
 const path = require('path');
-const { MAX_TEXT, MAX_CATALOG } = require('../shared/eval-result');
+const { MAX_TEXT } = require('../shared/eval-result');
+const { DATASETS_DIR, DEFAULT_LIMIT, datasetFiles } = require('./selection');
 
-const DATA = path.join(__dirname, '../investigation/datasets');
 
 // head + middle + tail in at most MAX_TEXT characters, trimming the middle.
 function fit(head, middle, tail) {
@@ -24,37 +24,33 @@ const parseMaybe = (v) => {
     }
 };
 
-// What anchor-eval.js runs per file: `[0].vars` of each dataset, sorted by name.
-function cases() {
-    return fs
-        .readdirSync(DATA)
-        .filter((f) => f.endsWith('.json') && !f.startsWith('.'))
-        .sort()
+// The cases a default run covers (the first DEFAULT_LIMIT datasets, sorted,
+// selection.js), then the rest as one group a larger --limit reaches. A dataset
+// that does not parse is skipped, as recall-tests.js does.
+function cases(files) {
+    return files
         .map((f) => {
-            const vars = JSON.parse(fs.readFileSync(path.join(DATA, f), 'utf8'))[0].vars;
-            const files = parseMaybe(vars.changedFiles);
+            let vars;
+            try {
+                vars = JSON.parse(fs.readFileSync(path.join(DATASETS_DIR, f), 'utf8'))[0].vars;
+            } catch {
+                return null;
+            }
+            if (!vars) return null;
+            const changed = parseMaybe(vars.changedFiles);
             return {
                 id: f.replace(/\.json$/, ''),
                 repo: vars.repositoryFullName || 'eval/repo',
                 title: String(vars.prTitle || vars.caseId || f).trim(),
-                files: Array.isArray(files) ? files.length : 0,
+                files: Array.isArray(changed) ? changed.length : 0,
             };
-        });
+        })
+        .filter(Boolean);
 }
 
 function catalog() {
-    const all = cases();
-    if (all.length > MAX_CATALOG) {
-        const byRepo = new Map();
-        for (const c of all) byRepo.set(c.repo, (byRepo.get(c.repo) || 0) + 1);
-        return [...byRepo].map(([repo, count]) => ({
-            id: repo,
-            group: repo,
-            count,
-            checks: `Checks the finder's findings on ${count} ${repo} PRs anchor onto diff lines, with no near-miss drop.`,
-        }));
-    }
-    return all.map((c) => ({
+    const all = datasetFiles();
+    const run = cases(all.slice(0, DEFAULT_LIMIT)).map((c) => ({
         id: c.id,
         checks: fit(
             'Checks findings on "',
@@ -62,6 +58,12 @@ function catalog() {
             `" (${c.repo}, ${c.files} changed file${c.files === 1 ? '' : 's'}) anchor onto diff lines, no near-miss drop.`,
         ),
     }));
+    const rest = all.length - DEFAULT_LIMIT;
+    if (rest <= 0) return run;
+    return [
+        ...run,
+        { id: 'with-larger-limit', group: 'with --limit', count: rest, checks: `Checks the same on ${rest} more PRs when run with a larger --limit (the next datasets by name).` },
+    ];
 }
 
 module.exports = { catalog };
