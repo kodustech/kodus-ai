@@ -2,6 +2,10 @@
  * Centralized RabbitMQ Topology Configuration.
  * This file serves as the single source of truth for ALL exchanges in the application.
  * Queues are defined directly in the @RabbitSubscribe decorators of their respective consumers.
+ *
+ * No `x-delayed-message` exchange is declared: declaring one fails on a broker
+ * without the unmaintained delayed-message plugin, which RabbitMQ >= 4.3
+ * cannot run (#1663). Delayed retries go through rabbitmq-retry-topology.ts.
  */
 export const RABBITMQ_TOPOLOGY_CONFIG = {
     exchanges: [
@@ -14,14 +18,12 @@ export const RABBITMQ_TOPOLOGY_CONFIG = {
             durable: true,
         },
         {
-            name: 'orchestrator.exchange.delayed',
-            type: 'x-delayed-message',
+            // Used to be `orchestrator.exchange.delayed` (x-delayed-type
+            // direct), which consumers bound to directly with no base
+            // exchange behind it.
+            name: 'orchestrator.exchange',
+            type: 'direct',
             durable: true,
-            options: {
-                arguments: {
-                    'x-delayed-type': 'direct',
-                },
-            },
         },
 
         // =================================================================
@@ -38,20 +40,6 @@ export const RABBITMQ_TOPOLOGY_CONFIG = {
             durable: true,
         },
         {
-            // Delayed exchange for retry with backoff
-            // Requires: rabbitmq_delayed_message_exchange plugin
-            // Messages published here with x-delay header will be held and then
-            // forwarded to the bound queues after the delay expires.
-            name: 'workflow.exchange.delayed',
-            type: 'x-delayed-message',
-            durable: true,
-            options: {
-                arguments: {
-                    'x-delayed-type': 'topic',
-                },
-            },
-        },
-        {
             name: 'workflow.events',
             type: 'topic',
             durable: true,
@@ -60,18 +48,6 @@ export const RABBITMQ_TOPOLOGY_CONFIG = {
             name: 'workflow.events.dlx',
             type: 'topic',
             durable: true,
-        },
-        {
-            // Delayed exchange for retry with backoff (events)
-            // Requires: rabbitmq_delayed_message_exchange plugin
-            name: 'workflow.events.delayed',
-            type: 'x-delayed-message',
-            durable: true,
-            options: {
-                arguments: {
-                    'x-delayed-type': 'topic',
-                },
-            },
         },
 
         // =================================================================
