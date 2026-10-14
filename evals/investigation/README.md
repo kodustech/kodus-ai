@@ -84,6 +84,10 @@ so a call outside the recording gets the answer the repository would give. Needs
 `~/projects/benchmark`, one folder per repo, names in `prepare-repo.js`); with
 none there, only the PR's head is fetched, shallow. A case whose commit can't be
 fetched falls back to the replay; `repoPrepared` in its row says which one ran.
+Neither mode gives the agent `exec`, so the tools production registers only with
+it (`checkTypes`, `findNearestProjectFile`, `findFile`'s fd/find path) are
+missing: a smaller tool set than production's, shown as `sandboxExec: false` in
+each row. Not a production-parity run until that changes.
 
 ### Execution-based replays (`extract-replay-from-trace.js`)
 

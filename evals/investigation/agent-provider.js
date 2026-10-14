@@ -518,10 +518,12 @@ function buildCurrentPrompts(caseData) {
 
 // The grep, read and listDir production's local sandbox (the self-hosted path)
 // hands the agent, over a prepared worktree: the same output and the same
-// errors. Built by the sandbox's own method, so they cannot drift from
-// production. exec is left out for now, so the tools take their no-exec path.
-// Wrapped only to count calls for the fidelity metric: a real answer, empty or
-// not, is never an unserved call.
+// errors for those three. Built by the sandbox's own method, so they cannot
+// drift from production. exec is left out for now, as in the replay, so the
+// exec-gated tools (checkTypes, findNearestProjectFile, findFile's fd/find
+// path) are not registered: a smaller tool set than production's, recorded as
+// `sandboxExec` in each row. Wrapped only to count calls for the fidelity
+// metric: a real answer, empty or not, is never an unserved call.
 function sandboxCommands(repoDir) {
     const { LocalSandboxService } = require(
         path.join(
@@ -572,6 +574,8 @@ function serializeResult(caseId, agentResult, remoteCommands, repoHandle) {
                 : null,
             repoPrepared: !!repoHandle,
             headSha: repoHandle ? repoHandle.sha : null,
+            // false: the exec-gated tools were not registered for this case.
+            sandboxExec: typeof remoteCommands.exec === 'function',
         },
     };
 }
