@@ -4,7 +4,9 @@ import * as path from 'path';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { STAGES, GROUPS, PLUMBING } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { wiringRows, nightlyRows, READERS } = require('./stage-signals');
+const { wiringRows, nightlyRows, READERS, catalogPath } = require('./stage-signals');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { loadCatalog, catalogProblems } = require('./shared/eval-result');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { tier0 } = require('./shared/tier0-models');
 
@@ -72,6 +74,17 @@ describe('evals/stages.js', () => {
         const keys = (STAGES as Stage[]).filter((s) => s.friday).map((s) => s.friday as string);
         expect(keys.sort()).toEqual(['pr_summary', 'review']);
         for (const key of keys) expect(tier0Meta).toContain(`${key}:`);
+    });
+
+    // The panel's "What it tests": every eval lists its cases, each with what it checks.
+    it('gives every stage with an eval a catalog of its cases, read from its own data', () => {
+        for (const stage of (STAGES as Stage[]).filter((s) => s.eval)) {
+            const file = catalogPath(stage);
+            expect([stage.id, fs.existsSync(path.join(__dirname, '..', file))]).toEqual([stage.id, true]);
+            expect([stage.id, catalogProblems(loadCatalog(file))]).toEqual([stage.id, []]);
+        }
+        const posting = wiringRows(allOk(wiringSteps)).find((r: Row) => r.name === 'evals.stage.posting');
+        expect(posting?.meta.case_catalog).toBeUndefined();
     });
 
     it('points every eval at a path that exists, and only "none" at no eval', () => {

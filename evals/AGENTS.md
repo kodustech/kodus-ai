@@ -10,6 +10,8 @@ What runs when, and what each eval answers: [README.md](README.md). These rules 
 
 ## Writing or editing an eval
 
+- Start a new eval with `pnpm eval:new <name>`: it creates the README header, cases with a control pair, the catalog, the floors file and a runner that already writes the shared result, counts tokens and exits 0/1/2. Fill in what it marks TODO.
+- Every eval has a catalog (`catalog.js` in its folder under `evals/`, or `evals/catalogs/<stage>.js` for an eval that lives elsewhere, such as a unit-suite test or an E2E scenario) listing each case with one sentence on what it checks, read from the eval's own data, never a hand-kept list. The quality panel shows it under "What it tests"; `evals/stage-signals.spec.ts` fails when a stage's eval has none.
 - Drive the engine through its real entry points. To run without a vendor, use `--model=eval-fake` (`evals/shared/fake-llm-server.js`). Don't hand-write a stub of an engine service: stubs are what drifted (`permissionService.resolveTaskSlot`).
 - Route every model through `evals/shared/tier0-models.js` (`applyModelEnv`). An eval never reads vendor keys itself.
 - End every runner with an explicit `process.exit`: 0 pass, 1 quality or gate failure, 2 infra. The engine leaves handles open, so a runner that just returns from `main()` can hang CI after it has finished.
@@ -34,7 +36,9 @@ What runs when, and what each eval answers: [README.md](README.md). These rules 
 - `evals/investigation/run-recall.js`: finder-recall runner, used by the nightly
 - `evals/tier0-smoke.js`: the Friday per-model check
 - `evals/stages.js` + `evals/stage-signals.js`: one quality signal per review stage, every night
-- `evals/shared/eval-result.js`: the result shape every eval writes, and the question each README answers
+- `evals/shared/eval-result.js`: the result shape every eval writes, the question each README answers, and the catalogs
+- `evals/shared/eval-kit.js`: what every runner shares (TypeScript loading, token count)
+- `evals/shared/new-eval.js`: `pnpm eval:new`
 - `evals/ci-report.js`: Actions job summary and Discord message (English, like every other notification here; facts first, the agent's reading only on red nights)
 - `evals/investigation/gate.js` + `evals/investigation/confirm-gate.js`: the floor check, and the second run that confirms a drop before anyone is alerted
 - `evals/kody-rules/nightly-verdict.js`: the same for kody-rules in the nightly — pools a confirming run with the first and decides who is mentioned
