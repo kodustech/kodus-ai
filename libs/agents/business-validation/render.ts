@@ -3,6 +3,7 @@ import type {
     TaskCheck,
 } from './business-validation.types';
 import { countBlockers } from './check-policy';
+import type { FailOnState } from './settings';
 import type {
     CodeLocation,
     OutOfScopeChange,
@@ -39,7 +40,22 @@ export interface RenderContext {
     headSha?: string;
     /** Why this run happened, when it wasn't the first review. */
     trigger?: 'command' | 'push' | 'force' | 'accepted' | 'recheck';
+    /** Earlier commits this PR was checked at, oldest first. */
+    history?: CheckedCommit[];
+    /** The team's "fails on" choice, so only what fails the check reads as "to merge". */
+    failOn?: readonly FailOnState[];
 }
+
+/** One earlier commit and how it stood, for the comment's trail. */
+export interface CheckedCommit {
+    headSha: string;
+    met: number;
+    total: number;
+    passed?: boolean;
+}
+
+/** How many earlier commits the comment lists; the Cockpit keeps the rest. */
+const MAX_HISTORY = 5;
 
 /** The PR comment for a judged outcome, in English; the caller translates. */
 export function renderComment(
@@ -59,15 +75,30 @@ export function renderComment(
         '',
         sections.join('\n\n---\n\n'),
         '',
+        ...historyLine(context.history),
         `<sub>Disagree with a line? Reply here and mention @kody. Fixed it? Comment \`${RERUN_COMMAND}\` and this comment is updated.</sub>`,
     ].join('\n');
+}
+
+function historyLine(history: CheckedCommit[] | undefined): string[] {
+    const shown = (history ?? []).slice(-MAX_HISTORY);
+    if (!shown.length) {
+        return [];
+    }
+    const steps = shown.map(
+        (c) =>
+            `\`${c.headSha.slice(0, 7)}\` ${c.met}/${c.total} met${
+                c.passed === false ? ' ✗' : c.passed ? ' ✓' : ''
+            }`,
+    );
+    return [`<sub>Earlier checks: ${steps.join(' → ')}</sub>`, ''];
 }
 
 function renderTaskSection(check: TaskCheck, context: RenderContext): string {
     const { task, verdict } = check;
     const lines: string[] = [
         `**${taskTitle(task.id, task.title, task.url)}**`,
-        headline(check),
+        headline(check, context.failOn),
     ];
     const meta = [`Task read ${formatDate(check.readAt)}`];
     if (context.headSha) {
@@ -111,29 +142,63 @@ function renderTaskSection(check: TaskCheck, context: RenderContext): string {
     return lines.join('\n');
 }
 
-function headline(check: TaskCheck): string {
+/**
+ * Which open findings keep the check from passing under the team's "fails
+ * on" choice. Without it, every kind counts, as before the choice existed.
+ */
+function blocking(check: TaskCheck, failOn?: readonly FailOnState[]) {
+    const slice = check.reference?.intent === 'part_of';
+    const on = (state: FailOnState) => !failOn || failOn.includes(state);
+    return {
+        missing: on('missing') && !slice,
+        partial: on('partial') && !slice,
+        notInTask: on('not_in_task'),
+    };
+}
+
+function headline(check: TaskCheck, failOn?: readonly FailOnState[]): string {
     const blockers = countBlockers(check.verdict);
     const manual = (check.verdict.requirements ?? []).filter(
         (r) => r.state === 'check_manually',
     ).length;
-    const parts = [
-        blockers.missing && plural(blockers.missing, 'missing requirement'),
-        blockers.partial && `${blockers.partial} partial`,
-        manual && `${manual} to check manually`,
-        blockers.notInTask &&
-            plural(
+    const blocks = blocking(check, failOn);
+    const found = [
+        {
+            n: blockers.missing,
+            text: plural(blockers.missing, 'missing requirement'),
+            blocks: blocks.missing,
+        },
+        {
+            n: blockers.partial,
+            text: `${blockers.partial} partial`,
+            blocks: blocks.partial,
+        },
+        { n: manual, text: `${manual} to check manually`, blocks: false },
+        {
+            n: blockers.notInTask,
+            text: plural(
                 blockers.notInTask,
                 'change not in the task',
                 'changes not in the task',
             ),
-    ].filter(Boolean) as string[];
+            blocks: blocks.notInTask,
+        },
+    ].filter((f) => f.n);
 
     if (!blockers.missing && !blockers.partial && !blockers.notInTask) {
         return manual
             ? `All requirements met · ${manual} to check manually`
             : 'All requirements met';
     }
-    return check.passed ? parts.join(' · ') : `To merge: ${parts.join(' · ')}`;
+    const toMerge = found.filter((f) => f.blocks).map((f) => f.text);
+    const rest = found.filter((f) => !f.blocks).map((f) => f.text);
+    if (check.passed || !toMerge.length) {
+        return found.map((f) => f.text).join(' · ');
+    }
+    // Only what fails the check is "to merge"; the rest is still listed.
+    return rest.length
+        ? `To merge: ${toMerge.join(' · ')} · also open: ${rest.join(' · ')}`
+        : `To merge: ${toMerge.join(' · ')}`;
 }
 
 function requirementRow(requirement: RequirementVerdict): string {
@@ -239,8 +304,25 @@ function formatDate(iso: string): string {
 /** The check run's title: one line saying what blocks the merge, or that nothing does. */
 export function renderCheckTitle(
     outcome: Extract<BusinessValidationOutcome, { kind: 'validated' }>,
+    failOn?: readonly FailOnState[],
 ): string {
     const failing = outcome.checks.filter((c) => !c.passed);
+    const open = outcome.checks
+        .map((c) => {
+            const b = countBlockers(c.verdict);
+            const what = [
+                b.missing && plural(b.missing, 'requirement') + ' missing',
+                b.partial && `${b.partial} partial`,
+                b.notInTask &&
+                    plural(b.notInTask, 'change') + ' not in the task',
+            ].filter(Boolean);
+            return what.length ? `${c.task.id}: ${what.join(', ')}` : '';
+        })
+        .filter(Boolean);
+    if (!failing.length && open.length) {
+        // Passing with findings the team chose not to fail on: never "met".
+        return `Passes · open: ${open.join(' · ')}`;
+    }
     if (!failing.length) {
         const manual = outcome.checks.reduce(
             (n, c) =>
@@ -258,10 +340,14 @@ export function renderCheckTitle(
     return failing
         .map((c) => {
             const b = countBlockers(c.verdict);
+            const blocks = blocking(c, failOn);
             const what = [
-                b.missing && plural(b.missing, 'requirement') + ' missing',
-                b.partial && `${b.partial} partial`,
-                b.notInTask &&
+                blocks.missing &&
+                    b.missing &&
+                    plural(b.missing, 'requirement') + ' missing',
+                blocks.partial && b.partial && `${b.partial} partial`,
+                blocks.notInTask &&
+                    b.notInTask &&
                     plural(b.notInTask, 'change') + ' not in the task',
             ].filter(Boolean);
             return `${c.task.id}: ${what.join(', ') || 'scope mismatch'}`;

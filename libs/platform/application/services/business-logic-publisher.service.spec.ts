@@ -47,7 +47,7 @@ const request = {
     diff: '',
 };
 
-function build(previous: { verdict?: any; comment?: any } = {}) {
+function build(previous: { verdict?: any; comment?: any; runs?: any[] } = {}) {
     const service = {
         commentFor: jest.fn(async () => '<!-- kody-business-logic -->\nbody'),
     };
@@ -63,12 +63,15 @@ function build(previous: { verdict?: any; comment?: any } = {}) {
     };
     const runs = {
         latestForPullRequest: jest.fn(
-            async (params: { outcome?: string; withComment?: boolean }) =>
-                params.outcome
-                    ? previous.verdict
-                    : params.withComment
-                      ? previous.comment
-                      : undefined,
+            async (params: { withComment?: boolean }) =>
+                params.withComment ? previous.comment : undefined,
+        ),
+        forPullRequest: jest.fn(
+            async () =>
+                previous.runs ??
+                (previous.verdict
+                    ? [{ outcome: 'validated', ...previous.verdict }]
+                    : []),
         ),
         create: jest.fn(async () => 'run-1'),
         clearPendingRecheck: jest.fn(async () => undefined),
@@ -194,6 +197,24 @@ describe('BusinessLogicPublisher', () => {
         expect(preview.check.conclusion).toBe(CheckConclusion.SUCCESS);
     });
 
+    it('never promises a green check on a platform without checks', async () => {
+        const { publisher } = build();
+
+        const preview = await publisher.preview({
+            request: { ...request, platformType: PlatformType.GITLAB },
+            result: {
+                outcome: validated('met'),
+                references: [],
+                attempts: [],
+                trackers: [],
+            },
+        });
+
+        expect(preview.check.supported).toBe(false);
+        expect(preview.comment.reason).toMatch(/Kody stays quiet/);
+        expect(preview.comment.reason).not.toMatch(/check turns green/);
+    });
+
     it('leaves only the green check when every requirement is met (UC-26)', async () => {
         const { publisher, code, adapter } = build();
 
@@ -254,6 +275,51 @@ describe('BusinessLogicPublisher', () => {
         expect(code.updateIssueComment).toHaveBeenCalledWith(
             expect.objectContaining({ commentId: 501 }),
             PlatformType.GITHUB,
+        );
+    });
+
+    it('lists the commits checked before this one, oldest first, one line per commit', async () => {
+        const run = (headSha: string, state: string, passed: boolean) => ({
+            outcome: 'validated',
+            headSha,
+            passed,
+            tasks: [
+                {
+                    requirements: [{ state }, { state: 'met' }],
+                },
+            ],
+        });
+        const { publisher, service } = build({
+            // Newest first, as the repository returns them.
+            runs: [
+                run('ccc3333aaaa', 'met', true),
+                { outcome: 'skipped', headSha: 'bbb2222aaaa', tasks: [] },
+                run('aaa1111bbbb', 'met', true),
+                run('aaa1111aaaa', 'missing', false),
+            ],
+        });
+
+        await publisher.publish({
+            request,
+            result: {
+                outcome: validated('missing'),
+                references: [],
+                attempts: [],
+                trackers: [],
+            },
+            headSha: 'ccc3333aaaa',
+            trigger: 'push',
+        });
+
+        expect(service.commentFor).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.anything(),
+            expect.objectContaining({
+                history: [
+                    { headSha: 'aaa1111aaaa', met: 1, total: 2, passed: false },
+                    { headSha: 'aaa1111bbbb', met: 2, total: 2, passed: true },
+                ],
+            }),
         );
     });
 

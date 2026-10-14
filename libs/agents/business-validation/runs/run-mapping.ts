@@ -4,8 +4,12 @@ import type {
     BusinessValidationResult,
 } from '../business-validation.types';
 import { deriveStatus } from '../judge/validation-verdict';
+import type { CheckedCommit } from '../render';
 import type { RunAuthor, RunTask } from './validation-run.model';
-import type { NewValidationRun } from './validation-run.repository';
+import type {
+    NewValidationRun,
+    ValidationRunRecord,
+} from './validation-run.repository';
 
 /** Coding agents, by what they leave in commits: author names, emails and trailers. */
 const AGENTS: Array<{ name: string; pattern: RegExp }> = [
@@ -167,4 +171,41 @@ export function outcomeFromRun(
         passed: checks.every((c) => c.passed),
         unseenFiles,
     };
+}
+
+/**
+ * The commits a PR was checked at before `currentSha`, oldest first, one per
+ * commit (its latest check), so the comment can show how the PR got here.
+ * `runs` come newest first, as the repository returns them.
+ */
+export function checkedCommits(
+    runs: Array<
+        Pick<ValidationRunRecord, 'outcome' | 'headSha' | 'passed' | 'tasks'>
+    >,
+    currentSha: string | undefined,
+): CheckedCommit[] {
+    const seen = new Set<string>(currentSha ? [currentSha] : []);
+    const commits: CheckedCommit[] = [];
+    for (const run of runs) {
+        if (
+            run.outcome !== 'validated' ||
+            !run.headSha ||
+            seen.has(run.headSha)
+        ) {
+            continue;
+        }
+        seen.add(run.headSha);
+        const requirements = run.tasks.flatMap((t) => t.requirements ?? []);
+        if (!requirements.length) {
+            continue;
+        }
+        commits.push({
+            headSha: run.headSha,
+            met: requirements.filter((r) => r.state === 'met' || r.accepted)
+                .length,
+            total: requirements.length,
+            ...(run.passed !== undefined ? { passed: run.passed } : {}),
+        });
+    }
+    return commits.reverse();
 }

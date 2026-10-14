@@ -45,6 +45,8 @@ export interface JudgeInput {
     unseenFiles?: string[];
     pullRequestBody?: string;
     userLanguage: string;
+    /** What the team asked Kody to follow when it judges (settings page). */
+    teamGuidance?: string;
 }
 
 export interface JudgeTelemetry {

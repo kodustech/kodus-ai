@@ -14,7 +14,7 @@ const RERUN = '`@kody -v business-logic`';
 export function taskTooThinMessage(tasks: Task[]): string {
     const task = tasks[0];
     const others = tasks.slice(1).map((t) => `**${t.id}**`);
-    return `## 🤔 ${task.id} has only a title
+    return `## 🤔 ${task.id} ${task.description?.trim() ? 'says too little to check against' : 'has only a title'}
 
 I read **${task.id}** in ${task.tracker}${task.title ? ` (“${task.title}”)` : ''}, but it doesn't say what "done" means, so there is nothing to compare this pull request with.${others.length ? ` The same goes for ${others.join(', ')}.` : ''}
 
@@ -52,14 +52,29 @@ export function noReferenceMessage(): string {
 This pull request doesn't reference a task. Reference it in the title, description or branch (\`PROJ-123\`, \`#123\` or a link), or run ${RERUN} followed by the task id or link. A \`#123\` the description only mentions isn't read as the task: write \`Closes #123\`.`;
 }
 
-export function noTrackerMessage(): string {
+export function noTrackerMessage(
+    /** The repository reads tasks from one chosen source, and it is gone. */
+    sourceChosen = false,
+): string {
+    if (sourceChosen) {
+        return `## 🤔 This repository's task source isn't connected
+
+The Business Logic settings read tasks only from one source, and it is no longer connected (switching the Git provider removes Git Issues, for example). Reconnect it, or pick another source or "Every connected tracker" in the Business Logic settings.`;
+    }
     return 'No task-management MCP (Jira, Git Issues, Linear, Notion, ClickUp, etc.) is connected for this organization, so business rules validation has nothing to compare the PR against. Connect one in the Kodus settings to use this command.';
 }
 
 export function noCapableTrackerMessage(
     references: TaskReference[],
     trackers: string[],
+    /** The repository reads tasks from one chosen source, not every tracker. */
+    sourceChosen = false,
 ): string {
+    if (sourceChosen) {
+        return `## 🤔 I can't read the referenced task
+
+${listReferences(references)} can't be read by this repository's task source (${trackers.join(', ')}), and Kody asks no other tracker. In the Business Logic settings, pick the tracker where it lives or "Every connected tracker", or reference a task from ${trackers.join(', ')}.`;
+    }
     return `## 🤔 I can't read the referenced task
 
 ${listReferences(references)} can't be read by the connected task tools (${trackers.join(', ')}). Connect the tracker where it lives, or reference a task from one of these.`;

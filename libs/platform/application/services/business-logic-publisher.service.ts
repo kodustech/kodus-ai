@@ -14,6 +14,7 @@ import {
 } from '@libs/agents/business-validation/render';
 import {
     buildRun,
+    checkedCommits,
     type CommitInfo,
     detectAuthor,
 } from '@libs/agents/business-validation/runs/run-mapping';
@@ -163,12 +164,13 @@ export class BusinessLogicPublisher {
     async preview(input: PublishInput): Promise<PublishPreview> {
         const { request } = input;
         const settings = input.settings ?? DEFAULT_BUSINESS_LOGIC_SETTINGS;
-        const { outcome, previousComment } = await this.carriedOver(input);
+        const { outcome, previousComment, history } =
+            await this.carriedOver(input);
         const posted = this.shouldComment(outcome, settings, previousComment);
         const body = await this.businessValidationService.commentFor(
             outcome,
             request,
-            { headSha: input.headSha },
+            { headSha: input.headSha, history, failOn: settings.failOn },
         );
         const platform = request.platformType as PlatformType | undefined;
         return {
@@ -183,12 +185,14 @@ export class BusinessLogicPublisher {
                           reason:
                               outcome.kind === 'skipped'
                                   ? 'Nothing was checked, so nothing is posted.'
-                                  : 'Every requirement is met: only the check turns green. Turn on "Comment when every requirement is met" to post it anyway.',
+                                  : hasChecks(platform)
+                                    ? 'Every requirement is met: only the check turns green. Turn on "Comment when every requirement is met" to post it anyway.'
+                                    : 'Every requirement is met, so Kody stays quiet: this platform has no check to turn green. Turn on "Comment when every requirement is met" to post it anyway.',
                       }),
             },
             check: {
                 supported: hasChecks(platform),
-                ...checkFor(outcome),
+                ...checkFor(outcome, settings.failOn),
             },
         };
     }
@@ -208,28 +212,28 @@ export class BusinessLogicPublisher {
                       pullRequestNumber: pr.number,
                   }
                 : undefined;
-        const [previousVerdict, previousComment] = scope
+        const [earlier, previousComment] = scope
             ? await Promise.all([
-                  this.runs
-                      .latestForPullRequest({ ...scope, outcome: 'validated' })
-                      .catch(() => undefined),
+                  this.runs.forPullRequest(scope).catch(() => []),
                   this.runs
                       .latestForPullRequest({ ...scope, withComment: true })
                       .catch(() => undefined),
               ])
-            : [undefined, undefined];
+            : [[], undefined];
+        const previousVerdict = earlier.find((r) => r.outcome === 'validated');
         const outcome = carryOver(
             input.result.outcome,
             previousVerdict?.tasks,
             settings.failOn,
         );
-        return { scope, outcome, previousComment };
+        const history = checkedCommits(earlier, input.headSha);
+        return { scope, outcome, previousComment, history };
     }
 
     async publish(input: PublishInput): Promise<PublishResult> {
         const { request } = input;
         const settings = input.settings ?? DEFAULT_BUSINESS_LOGIC_SETTINGS;
-        const { scope, outcome, previousComment } =
+        const { scope, outcome, previousComment, history } =
             await this.carriedOver(input);
         const result = { ...input.result, outcome };
 
@@ -245,6 +249,8 @@ export class BusinessLogicPublisher {
                 request,
                 {
                     headSha: input.headSha,
+                    history,
+                    failOn: settings.failOn,
                     trigger:
                         input.trigger === 'auto' ? undefined : input.trigger,
                 },
@@ -260,7 +266,12 @@ export class BusinessLogicPublisher {
 
         const checkRunId =
             scope && !input.dryRun && input.headSha
-                ? await this.writeCheck(request, outcome, input.headSha)
+                ? await this.writeCheck(
+                      request,
+                      outcome,
+                      input.headSha,
+                      settings.failOn,
+                  )
                 : undefined;
 
         const runId = await this.runs.create({
@@ -415,6 +426,7 @@ export class BusinessLogicPublisher {
         request: BusinessValidationRequest,
         outcome: BusinessValidationOutcome,
         headSha: string,
+        failOn?: BusinessLogicSettings['failOn'],
     ): Promise<string | undefined> {
         const platform = request.platformType as PlatformType;
         if (!hasChecks(platform)) {
@@ -424,7 +436,7 @@ export class BusinessLogicPublisher {
         if (!owner) {
             return undefined;
         }
-        const { conclusion, title } = checkFor(outcome);
+        const { conclusion, title } = checkFor(outcome, failOn);
         try {
             const adapter = this.checksAdapterFactory.getAdapter(platform);
             const target = {
@@ -487,7 +499,10 @@ export class BusinessLogicPublisher {
     }
 }
 
-export function checkFor(outcome: BusinessValidationOutcome): {
+export function checkFor(
+    outcome: BusinessValidationOutcome,
+    failOn?: BusinessLogicSettings['failOn'],
+): {
     conclusion: CheckConclusion;
     title: string;
 } {
@@ -497,7 +512,7 @@ export function checkFor(outcome: BusinessValidationOutcome): {
                 conclusion: outcome.passed
                     ? CheckConclusion.SUCCESS
                     : CheckConclusion.FAILURE,
-                title: renderCheckTitle(outcome),
+                title: renderCheckTitle(outcome, failOn),
             };
         case 'task_too_thin':
             return {
@@ -536,7 +551,7 @@ function commentIds(
 }
 
 /** GitHub and Forgejo have checks; elsewhere the comment is the whole signal. */
-function hasChecks(platform: PlatformType | undefined): boolean {
+export function hasChecks(platform: PlatformType | undefined): boolean {
     return (
         platform === PlatformType.GITHUB || platform === PlatformType.FORGEJO
     );

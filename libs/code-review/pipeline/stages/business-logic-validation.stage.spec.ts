@@ -7,7 +7,10 @@ import { BusinessLogicValidationStage } from './business-logic-validation.stage'
 const ORG = { organizationId: 'org-1', teamId: 'team-1' };
 const TASK = { tracker: 'Linear', id: 'PLAT-41', title: 'Scale servings' };
 
-function build(outcome: BusinessValidationOutcome | Error) {
+function build(
+    outcome: BusinessValidationOutcome | Error,
+    wholeDiff?: Array<{ filename: string; status: string; patch: string }>,
+) {
     const service = {
         validate: jest.fn(async () => {
             if (outcome instanceof Error) {
@@ -22,13 +25,18 @@ function build(outcome: BusinessValidationOutcome | Error) {
             comment: 'created',
         })),
     };
+    const pullRequests = {
+        getChangedFilesMetadata: jest.fn(async () => wholeDiff ?? []),
+    };
     return {
         stage: new BusinessLogicValidationStage(
             service as any,
             publisher as any,
+            pullRequests as any,
         ),
         service,
         publisher,
+        pullRequests,
     };
 }
 
@@ -92,6 +100,42 @@ const validated = (passed: boolean) =>
     }) as BusinessValidationOutcome;
 
 describe('BusinessLogicValidationStage', () => {
+    it('judges the whole PR after a push, not only the files of that push', async () => {
+        const { stage, service, pullRequests } = build(validated(true), [
+            { filename: 'filter.ts', status: 'added', patch: '+filter' },
+            { filename: 'a.ts', status: 'modified', patch: '+x' },
+        ]);
+
+        await stage.execute(
+            context({
+                lastExecution: { lastAnalyzedCommit: 'old1234' },
+                codeReviewConfig: {
+                    reviewOptions: { business_logic: true },
+                    businessLogic: { recheckOnPush: true },
+                },
+            } as any),
+        );
+
+        expect(pullRequests.getChangedFilesMetadata).toHaveBeenCalledWith(
+            ORG,
+            expect.objectContaining({ id: 'repo-1' }),
+            expect.objectContaining({ number: 42 }),
+        );
+        expect(service.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                diff: expect.stringContaining('filter.ts'),
+            }),
+        );
+    });
+
+    it('uses the files it already has on the first review', async () => {
+        const { stage, pullRequests } = build(validated(true));
+
+        await stage.execute(context());
+
+        expect(pullRequests.getChangedFilesMetadata).not.toHaveBeenCalled();
+    });
+
     it('sends the PR, its diff, the model override and the settings to the service', async () => {
         const { stage, service } = build(validated(true));
 

@@ -99,13 +99,25 @@ describe('applyCriteriaLocation (UC-05, UC-23)', () => {
         ).toEqual(['Logs every export', 'Limits to 10k rows']);
     });
 
-    it('leaves the task as is when that place is empty', () => {
+    it('detects the criteria as "Detect automatically" does when that place is not on the task', () => {
+        const auto = applyCriteriaLocation(task, { location: 'auto' });
         expect(
             applyCriteriaLocation(task, {
                 location: 'heading',
                 heading: 'Definition of done',
-            }),
-        ).toBe(task);
+            }).acceptanceCriteria,
+        ).toEqual(auto.acceptanceCriteria);
+        expect(
+            applyCriteriaLocation(
+                { ...task, fields: undefined },
+                { location: 'field', field: 'Acceptance Criteria' },
+            ).acceptanceCriteria,
+        ).toEqual(
+            applyCriteriaLocation(
+                { ...task, fields: undefined },
+                { location: 'auto' },
+            ).acceptanceCriteria,
+        );
     });
 
     describe('detected automatically', () => {

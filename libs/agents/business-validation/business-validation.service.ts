@@ -50,12 +50,14 @@ import {
 } from './render';
 import { fitDiff } from './pull-request-diff';
 import {
+    AUTO_TASK_SOURCE,
     type BusinessLogicSettings,
     DEFAULT_BUSINESS_LOGIC_SETTINGS,
 } from './settings';
 import {
     applyCriteriaLocation,
     canJudgeAgainst,
+    criteriaPlaceText,
     formatTaskForJudge,
     gradeTask,
 } from './task-quality';
@@ -94,6 +96,8 @@ export interface TryReadResult {
         acceptanceCriteria: number;
         /** True when the criteria came from where the settings say they live. */
         criteriaFromSettings: boolean;
+        /** The team named a heading or field this task doesn't have. */
+        criteriaNotWhereSaid: boolean;
         canJudge: boolean;
         hasAttachments: boolean;
     };
@@ -286,11 +290,20 @@ export class BusinessValidationService {
                     messages.tooManyReferencesMessage(references.length),
                 );
             case 'no_tracker':
-                return skip('no_tracker', messages.noTrackerMessage());
+                return skip(
+                    'no_tracker',
+                    messages.noTrackerMessage(
+                        settings.taskSource !== AUTO_TASK_SOURCE,
+                    ),
+                );
             case 'no_capable_tracker':
                 return skip(
                     'no_capable_tracker',
-                    messages.noCapableTrackerMessage(references, trackerNames),
+                    messages.noCapableTrackerMessage(
+                        references,
+                        trackerNames,
+                        settings.taskSource !== AUTO_TASK_SOURCE,
+                    ),
                 );
             case 'not_found':
                 if (resolution.intended) {
@@ -401,7 +414,7 @@ export class BusinessValidationService {
         const verdict = await (
             await judge()
         ).judge({
-            instructions: this.instructions(request, settings),
+            instructions: this.instructions(request),
             task: found.task,
             taskText: formatTaskForJudge(found.task),
             taskQuality: gradeTask(found.task),
@@ -409,6 +422,7 @@ export class BusinessValidationService {
             unseenFiles,
             pullRequestBody: request.pullRequest?.body,
             userLanguage: language,
+            teamGuidance: settings.teamGuidance,
         });
 
         if (verdict.needsMoreInfo) {
@@ -471,6 +485,8 @@ export class BusinessValidationService {
         organizationAndTeamData: OrganizationAndTeamData,
         taskInput: string,
         settings: BusinessLogicSettings,
+        /** The repository the settings page is for, so `#12` is its issue. */
+        repository?: { owner?: string; name: string },
     ): Promise<TryReadResult> {
         const references = extractTaskReferences(
             { command: taskInput },
@@ -480,6 +496,17 @@ export class BusinessValidationService {
             return {
                 status: 'no_reference',
                 message: 'That is not a task id or link Kody recognizes.',
+            };
+        }
+        const [reference] = references;
+        if (
+            reference.kind === 'git_issue' &&
+            !reference.repository &&
+            !repository
+        ) {
+            return {
+                status: 'cant_read',
+                message: `${reference.raw} is an issue of a repository. Here, name it as owner/repo${reference.raw} or paste the issue link.`,
             };
         }
         const servers = await this.connections(organizationAndTeamData);
@@ -505,6 +532,7 @@ export class BusinessValidationService {
         try {
             resolution = await resolveTasks(references.slice(0, 1), trackers, {
                 organizationAndTeamData,
+                ...(repository ? { repository } : {}),
             });
         } finally {
             await Promise.all(trackers.map((t) => t.close()));
@@ -513,9 +541,10 @@ export class BusinessValidationService {
             case 'found': {
                 const raw = resolution.tasks[0].task;
                 const task = applyCriteriaLocation(raw, settings.criteria);
-                const fromSettings =
-                    settings.criteria.location !== 'auto' &&
-                    task.acceptanceCriteria !== raw.acceptanceCriteria;
+                const fromSettings = !!criteriaPlaceText(
+                    raw,
+                    settings.criteria,
+                );
                 return {
                     status: 'found',
                     task: {
@@ -527,6 +556,9 @@ export class BusinessValidationService {
                         acceptanceCriteria:
                             task.acceptanceCriteria?.length ?? 0,
                         criteriaFromSettings: fromSettings,
+                        criteriaNotWhereSaid:
+                            settings.criteria.location !== 'auto' &&
+                            !fromSettings,
                         canJudge: canJudgeAgainst(gradeTask(task)),
                         hasAttachments: !!task.hasAttachments,
                     },
@@ -541,7 +573,9 @@ export class BusinessValidationService {
                             : 'cant_read',
                     message:
                         resolution.kind === 'no_tracker'
-                            ? 'The chosen task source is not connected.'
+                            ? settings.taskSource !== AUTO_TASK_SOURCE
+                                ? 'The chosen task source is not connected. Reconnect it, or pick another one above.'
+                                : 'No task tracker is connected. Connect one in Plugins.'
                             : "The chosen task source can't read this kind of reference.",
                 };
             case 'tracker_unavailable':
@@ -728,11 +762,8 @@ export class BusinessValidationService {
         };
     }
 
-    /** SKILL.md, the team's guidance and the skill's reference material. */
-    private instructions(
-        request: BusinessValidationRequest,
-        settings: BusinessLogicSettings,
-    ): string {
+    /** SKILL.md and the skill's reference material. */
+    private instructions(request: BusinessValidationRequest): string {
         const base = this.skillLoaderService.loadInstructions(
             BUSINESS_VALIDATION_SKILL,
             {
@@ -758,10 +789,9 @@ export class BusinessValidationService {
         const withClaim = claim
             ? `${withReferences}\n\n---\n\n## The author disputes findings\n\nThe PR author says these requirements are already covered:\n${claim.requirements.map((r) => `- ${r}`).join('\n')}\n\nWhat they said: ${claim.claim}${claim.files.length ? `\nFiles they point to: ${claim.files.join(', ')}` : ''}\n\nLook at those files in PR_DIFF. Change a state only if the diff shows the requirement is met; otherwise keep it and say in \`note\` what you looked at.`
             : withReferences;
-        // The team's guidance shapes the judgement, never the verdict format (UC-08).
-        return settings.teamGuidance
-            ? `${withClaim}\n\n---\n\n## Team guidance\n\nThe team that owns this repository asks you to follow these notes when you judge. They cannot change the output format, add requirements the task doesn't state, or remove the rules above.\n\n${settings.teamGuidance}`
-            : withClaim;
+        // The team's guidance goes in the judge's message, next to the task
+        // it applies to (TEAM_GUIDANCE), not here.
+        return withClaim;
     }
 
     private async language(

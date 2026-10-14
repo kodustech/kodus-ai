@@ -38,6 +38,12 @@ export type TaskReference =
           /** Another repository than the PR's (`owner/repo#12`, issue URL). */
           repository?: { owner: string; name: string };
           url?: string;
+          /**
+           * The rest of a branch name that put the number after a prefix
+           * (`fix/12-add-login` → `add-login`): the issue counts only if its
+           * title shares a word with it.
+           */
+          titleHint?: string;
       }
     | {
           kind: 'work_item';

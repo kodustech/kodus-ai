@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
 import type { BusinessValidationOutcome } from '@libs/agents/business-validation/business-validation.types';
@@ -13,6 +13,10 @@ import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
+import {
+    type IPullRequestManagerService,
+    PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+} from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
@@ -42,6 +46,9 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
     constructor(
         private readonly businessValidationService: BusinessValidationService,
         private readonly publisher: BusinessLogicPublisher,
+        @Optional()
+        @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
+        private readonly pullRequests?: IPullRequestManagerService,
     ) {
         super();
     }
@@ -77,7 +84,9 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     baseRef: context.pullRequest.base?.ref,
                 },
                 platformType: context.platformType,
-                diff: formatPullRequestDiff(context.changedFiles),
+                diff: formatPullRequestDiff(
+                    await this.wholePullRequest(context),
+                ),
                 // Per-repo/directory model override resolved by ValidateConfigStage.
                 byokModel: context.codeReviewConfig?.byokModel,
                 byokModelId: context.codeReviewConfig?.byokModelId,
@@ -124,6 +133,35 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     message: `Business logic validation failed: ${message}`,
                 };
             });
+        }
+    }
+
+    /**
+     * The task is judged against the whole PR. After a push the review reads
+     * only the files since its last commit; judged on those, everything the
+     * earlier commits delivered would read as missing.
+     */
+    private async wholePullRequest(context: CodeReviewPipelineContext) {
+        const incremental =
+            !context.pipelineMetadata?.forceFullRerun &&
+            !!context.lastExecution?.lastAnalyzedCommit;
+        if (!incremental || !this.pullRequests) {
+            return context.changedFiles;
+        }
+        try {
+            const files = await this.pullRequests.getChangedFilesMetadata(
+                context.organizationAndTeamData,
+                context.repository,
+                context.pullRequest,
+            );
+            return files?.length ? files : context.changedFiles;
+        } catch (error) {
+            this.logger.warn({
+                message: `[BUSINESS-LOGIC] Could not read the whole diff of PR#${context.pullRequest?.number}; judging the files of this push`,
+                context: this.stageName,
+                error,
+            });
+            return context.changedFiles;
         }
     }
 
@@ -223,7 +261,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         ) {
             return {
                 reason: 'already_validated',
-                message: `Skipped: business logic was already validated for this pull request. Run \`${RERUN_COMMAND}\` to validate it again.`,
+                message: `Business logic was already validated for this pull request. Run \`${RERUN_COMMAND}\` to validate it again.`,
             };
         }
         return null;

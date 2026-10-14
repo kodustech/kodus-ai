@@ -1,4 +1,5 @@
 import { taskPasses } from './check-policy';
+import { FAIL_ON_STATES, type FailOnState } from './settings';
 import type {
     RequirementVerdict,
     ValidationResult,
@@ -74,4 +75,69 @@ describe('taskPasses (UC-09, UC-18)', () => {
             ),
         ).toBe(false);
     });
+});
+
+describe('taskPasses for every "fails on" choice on the settings page', () => {
+    const choices: FailOnState[][] = [[]];
+    for (const state of FAIL_ON_STATES) {
+        for (const choice of [...choices]) {
+            choices.push([...choice, state]);
+        }
+    }
+
+    // One finding per case, and the box that would make it fail, if any.
+    const findings: Array<{
+        name: string;
+        verdict: ValidationResult;
+        failsWith?: FailOnState;
+        slicesOut?: boolean;
+    }> = [
+        { name: 'MET', verdict: verdict([req('met')]) },
+        {
+            name: 'CHECK MANUALLY',
+            verdict: verdict([req('check_manually')]),
+        },
+        {
+            name: 'MISSING a reviewer accepted',
+            verdict: verdict([
+                req('missing', { accepted: { by: 'ana', at: 'x' } }),
+            ]),
+        },
+        {
+            name: 'MISSING',
+            verdict: verdict([req('missing')]),
+            failsWith: 'missing',
+            slicesOut: true,
+        },
+        {
+            name: 'PARTIAL',
+            verdict: verdict([req('partial')]),
+            failsWith: 'partial',
+            slicesOut: true,
+        },
+        {
+            name: 'NOT IN TASK',
+            verdict: verdict(
+                [req('met')],
+                [{ change: 'Export ungated', evidence: [] }],
+            ),
+            failsWith: 'not_in_task',
+        },
+    ];
+
+    for (const failOn of choices) {
+        for (const finding of findings) {
+            for (const intent of ['closes', 'part_of'] as const) {
+                const fails =
+                    !!finding.failsWith &&
+                    failOn.includes(finding.failsWith) &&
+                    !(intent === 'part_of' && finding.slicesOut);
+                it(`[${failOn.join('+') || 'nothing'}] ${finding.name}, ${intent} → ${fails ? 'fails' : 'passes'}`, () => {
+                    expect(taskPasses(finding.verdict, failOn, intent)).toBe(
+                        !fails,
+                    );
+                });
+            }
+        }
+    }
 });
