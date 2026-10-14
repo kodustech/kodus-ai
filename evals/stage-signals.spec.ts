@@ -58,6 +58,7 @@ describe('stage-signals', () => {
         const posting = rows.find((r) => r.name === 'evals.stage.posting');
         expect(posting?.status).toBe('skipped');
         expect(posting?.meta.note).toBe('no eval for this stage');
+        expect(posting?.meta.order).toBe(STAGES.findIndex((s: Stage) => s.id === 'posting') + 1);
     });
 
     it('turns a failed step red and a step that did not run into infra', () => {

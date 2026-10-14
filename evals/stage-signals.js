@@ -29,7 +29,9 @@ const VERDICT_STATUS = {
 };
 
 function baseMeta(stage) {
-    return { stage: stage.label, eval: stage.eval, measured: stage.model, wiring: stage.wiring, note: stage.note };
+    // order: position in the review, so the panel lists stages as they run.
+    const index = STAGES.findIndex((s) => s.id === stage.id);
+    return { stage: stage.label, order: index >= 0 ? index + 1 : null, eval: stage.eval, measured: stage.model, wiring: stage.wiring, note: stage.note };
 }
 
 function wiringRows(results, stages = STAGES) {
