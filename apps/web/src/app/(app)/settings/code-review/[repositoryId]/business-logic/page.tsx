@@ -31,7 +31,6 @@ import { useCodeReviewRouteParams } from "../../../_hooks";
 import { PrOptions } from "./_components/pr-options";
 import { StatusStrip } from "./_components/status-strip";
 import { TaskSource } from "./_components/task-source";
-import { TestOnPr } from "./_components/test-on-pr";
 import { TryIt } from "./_components/try-it";
 import { Tune } from "./_components/tune";
 
@@ -161,9 +160,15 @@ function BusinessLogicContent() {
                     isLoading={status.isLoading}
                 />
                 <TaskSource teamId={teamId} canEdit={canEdit} />
-                <TryIt teamId={teamId} />
-                <TestOnPr teamId={teamId} canEdit={canEdit} />
-                <PrOptions canEdit={canEdit} />
+                <TryIt
+                    teamId={teamId}
+                    repositoryId={repositoryId}
+                    canEdit={canEdit}
+                />
+                <PrOptions
+                    canEdit={canEdit}
+                    platformHasChecks={platformHasChecks}
+                />
                 <Tune canEdit={canEdit} platformHasChecks={platformHasChecks} />
             </Page.Content>
         </Page.Root>

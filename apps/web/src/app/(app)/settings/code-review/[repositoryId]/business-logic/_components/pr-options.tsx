@@ -13,6 +13,8 @@ const OPTIONS = [
         name: "commentWhenMet",
         label: "Comment when every requirement is met",
         off: "Off: only the kody/business-logic check turns green.",
+        offWithoutChecks:
+            "Off: when every requirement is met, Kody posts nothing; this platform has no checks.",
     },
     {
         name: "recheckOnPush",
@@ -22,7 +24,13 @@ const OPTIONS = [
 ] as const;
 
 /** What Kody does on the pull request (UC-26, UC-35). */
-export const PrOptions = ({ canEdit }: { canEdit: boolean }) => {
+export const PrOptions = ({
+    canEdit,
+    platformHasChecks,
+}: {
+    canEdit: boolean;
+    platformHasChecks: boolean;
+}) => {
     const form = useFormContext<CodeReviewFormType>();
     return (
         <section className="flex flex-col gap-3">
@@ -55,7 +63,10 @@ export const PrOptions = ({ canEdit }: { canEdit: boolean }) => {
                                         />
                                     </span>
                                     <span className="text-text-secondary text-xs">
-                                        {option.off}
+                                        {!platformHasChecks &&
+                                        "offWithoutChecks" in option
+                                            ? option.offWithoutChecks
+                                            : option.off}
                                     </span>
                                 </div>
                             </div>

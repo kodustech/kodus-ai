@@ -212,60 +212,60 @@ export const TaskSource = ({
                         tools that write are never used. Check it with Try it
                         below.
                     </p>
-
-                    <div className="border-card-lv3/60 flex flex-col gap-2 border-t pt-3">
-                        <span className="text-text-primary text-sm font-medium">
-                            How your task ids look{" "}
-                            <span className="text-text-secondary font-normal">
-                                (optional)
-                            </span>
-                        </span>
-                        <p className="text-text-secondary text-xs">
-                            Kody already finds keys like SAA-96, AB#8, #12 and
-                            tracker links. For another shape, write a regular
-                            expression; its first group, when it has one, is the
-                            id. For example <code>sc-(\d+)</code> reads 123 from
-                            the branch <code>nina/sc-123-gift-cards</code>.
-                        </p>
-                        <Controller
-                            name={"businessLogic.taskIdPattern.value" as never}
-                            control={form.control}
-                            render={({ field }) => (
-                                <Input
-                                    placeholder="e.g. sc-(\d+)"
-                                    value={(field.value as string) ?? ""}
-                                    onChange={field.onChange}
-                                    maxLength={MAX_PATTERN}
-                                    disabled={!canEdit || field.disabled}
-                                />
-                            )}
-                        />
-                        {pattern.trim() && (
-                            <>
-                                <Input
-                                    placeholder="Paste a title, branch or description to preview"
-                                    value={sample}
-                                    onChange={(e) => setSample(e.target.value)}
-                                />
-                                <span
-                                    className={
-                                        preview === "invalid"
-                                            ? "text-danger text-xs"
-                                            : "text-text-secondary text-xs"
-                                    }>
-                                    {preview === "invalid"
-                                        ? "Not a valid regular expression."
-                                        : !sample.trim()
-                                          ? "Kody drops a pattern that could take too long to run, like (a+)+."
-                                          : preview.length
-                                            ? `Reads: ${preview.join(", ")}`
-                                            : "No id in this text."}
-                                </span>
-                            </>
-                        )}
-                    </div>
                 </Card>
             )}
+
+            <Card color="lv1" className="flex flex-col gap-2 px-5 py-4">
+                <span className="text-text-primary text-sm font-medium">
+                    How your task ids look{" "}
+                    <span className="text-text-secondary font-normal">
+                        (optional)
+                    </span>
+                </span>
+                <p className="text-text-secondary text-xs">
+                    Kody already finds keys like SAA-96, AB#8, #12 and tracker
+                    links. For another shape, write a regular expression; its
+                    first group, when it has one, is the id. For example{" "}
+                    <code>sc-(\d+)</code> reads 123 from the branch{" "}
+                    <code>nina/sc-123-gift-cards</code>.
+                </p>
+                <Controller
+                    name={"businessLogic.taskIdPattern.value" as never}
+                    control={form.control}
+                    render={({ field }) => (
+                        <Input
+                            placeholder="e.g. sc-(\d+)"
+                            value={(field.value as string) ?? ""}
+                            onChange={field.onChange}
+                            maxLength={MAX_PATTERN}
+                            disabled={!canEdit || field.disabled}
+                        />
+                    )}
+                />
+                {pattern.trim() && (
+                    <>
+                        <Input
+                            placeholder="Paste a title, branch or description to preview"
+                            value={sample}
+                            onChange={(e) => setSample(e.target.value)}
+                        />
+                        <span
+                            className={
+                                preview === "invalid"
+                                    ? "text-danger text-xs"
+                                    : "text-text-secondary text-xs"
+                            }>
+                            {preview === "invalid"
+                                ? "Not a valid regular expression."
+                                : !sample.trim()
+                                  ? "Kody drops a pattern that could take too long to run, like (a+)+."
+                                  : preview.length
+                                    ? `Reads: ${preview.join(", ")}`
+                                    : "No id in this text."}
+                        </span>
+                    </>
+                )}
+            </Card>
         </section>
     );
 };

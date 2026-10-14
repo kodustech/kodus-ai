@@ -1,20 +1,15 @@
 "use client";
 
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Button } from "@components/ui/button";
 import { Card } from "@components/ui/card";
-import { Heading } from "@components/ui/heading";
-import { Input } from "@components/ui/input";
 import { Link } from "@components/ui/link";
 import { Markdown } from "@components/ui/markdown";
-import { useTestOnPullRequest } from "@services/business-logic/hooks";
 import type {
     BusinessLogicTestResult,
     RequirementState,
 } from "@services/business-logic/types";
 import { cn } from "src/core/utils/components";
-
-import { useScreenSettings } from "./use-screen-settings";
 
 const SOURCE: Record<string, string> = {
     command: "the task you named",
@@ -42,105 +37,9 @@ const LOOKUP: Record<string, { label: string; tone: string }> = {
     error: { label: "failed", tone: "text-danger" },
 };
 
-const errorMessage = (error: unknown) =>
+export const errorMessage = (error: unknown) =>
     (error as { body?: { message?: string } })?.body?.message ??
     "Couldn't run the test. Check the link and try again.";
-
-/**
- * Runs Business Logic on a real pull request with the settings on screen,
- * saved or not, and shows every step and what would land on the PR. Nothing
- * is written until "Post to the pull request".
- */
-export const TestOnPr = ({
-    teamId,
-    canEdit,
-}: {
-    teamId: string;
-    canEdit: boolean;
-}) => {
-    const settings = useScreenSettings();
-    const [prUrl, setPrUrl] = useState("");
-    const [task, setTask] = useState("");
-    const test = useTestOnPullRequest();
-    const post = useTestOnPullRequest();
-    const result = test.data;
-
-    const canRun = !!prUrl.trim() && canEdit;
-    const payload = () => ({
-        teamId,
-        prUrl: prUrl.trim(),
-        taskInput: task.trim() || undefined,
-        settings: settings(),
-    });
-    const run = () => {
-        post.reset();
-        test.mutate(payload());
-    };
-    const runOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter" && canRun) run();
-    };
-
-    return (
-        <section className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-                <Heading variant="h3">Test on a pull request</Heading>
-                <p className="text-text-secondary text-sm">
-                    Runs on a real pull request with the settings on this page,
-                    saved or not. Nothing is posted until you choose to. Name a
-                    task to check the pull request against it instead of the one
-                    it references.
-                </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-                <Input
-                    className="min-w-60 flex-1"
-                    placeholder="Pull request link, e.g. https://github.com/acme/web/pull/47"
-                    value={prUrl}
-                    onChange={(e) => setPrUrl(e.target.value)}
-                    onKeyDown={runOnEnter}
-                />
-                <Input
-                    className="w-56"
-                    placeholder="Task (optional), e.g. #245"
-                    value={task}
-                    onChange={(e) => setTask(e.target.value)}
-                    onKeyDown={runOnEnter}
-                />
-                <Button
-                    size="md"
-                    variant="secondary"
-                    disabled={!canRun}
-                    loading={test.isPending}
-                    onClick={run}>
-                    Run test
-                </Button>
-            </div>
-
-            {test.isPending && (
-                <p className="text-text-secondary text-sm">
-                    Reading the task and checking the pull request. This takes
-                    up to a minute.
-                </p>
-            )}
-            {test.isError && (
-                <p className="text-danger text-sm">
-                    {errorMessage(test.error)}
-                </p>
-            )}
-
-            {result && !test.isPending && (
-                <TestResult
-                    result={result}
-                    canEdit={canEdit}
-                    posting={post.isPending}
-                    posted={post.data?.posted}
-                    postError={post.isError ? errorMessage(post.error) : null}
-                    onPost={() => post.mutate({ ...payload(), post: true })}
-                />
-            )}
-        </section>
-    );
-};
 
 const Step = ({
     n,
@@ -166,7 +65,8 @@ const Step = ({
     </div>
 );
 
-const TestResult = ({
+/** Every step of a test on a pull request, and what would land on it. */
+export const TestResult = ({
     result,
     canEdit,
     posting,
@@ -183,6 +83,7 @@ const TestResult = ({
 }) => {
     const { pullRequest, references, attempts, tasks, verdict } = result;
     const judged = verdict.tasks.length > 0;
+    const named = references.some((r) => r.source === "command");
 
     return (
         <Card color="lv1" className="flex flex-col gap-5 px-5 py-4">
@@ -198,7 +99,9 @@ const TestResult = ({
                     references.map((r) => (
                         <span key={`${r.kind}:${r.id}`}>
                             <code>{r.raw}</code> in {SOURCE[r.source]} ·{" "}
-                            {INTENT[r.intent]}
+                            {named && r.source !== "command"
+                                ? "not used: you named the task"
+                                : INTENT[r.intent]}
                         </span>
                     ))
                 ) : (
@@ -312,7 +215,7 @@ const TestResult = ({
 
             <Step n={judged ? 5 : 4} title="On the pull request">
                 <span>
-                    Check <code>kody/business-logic</code>:{" "}
+                    Check <code>kody/business-logic</code> would be:{" "}
                     {result.check.supported
                         ? `${result.check.conclusion} · ${result.check.title}`
                         : "not written: this platform has no checks"}
@@ -321,9 +224,9 @@ const TestResult = ({
                     Comment:{" "}
                     {result.comment.posted
                         ? result.comment.editsExisting
-                            ? "edits the existing comment"
-                            : "posted"
-                        : `not posted. ${result.comment.reason ?? ""}`}
+                            ? "would edit the existing comment"
+                            : "would be posted"
+                        : `wouldn't be posted. ${result.comment.reason ?? ""}`}
                 </span>
                 {result.comment.body && (
                     <div className="border-card-lv3/60 bg-background mt-2 rounded-lg border px-4 py-3">

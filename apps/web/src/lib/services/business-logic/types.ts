@@ -54,6 +54,8 @@ export type TryReadResult = {
         descriptionLength: number;
         acceptanceCriteria: number;
         criteriaFromSettings: boolean;
+        /** The heading or field named in the settings isn't on this task. */
+        criteriaNotWhereSaid?: boolean;
         canJudge: boolean;
         hasAttachments: boolean;
     };

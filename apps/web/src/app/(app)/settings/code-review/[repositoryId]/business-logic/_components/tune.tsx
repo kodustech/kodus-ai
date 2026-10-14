@@ -131,7 +131,9 @@ export const Tune = ({
                     <div className="flex flex-col gap-3">
                         <span className="flex items-center gap-2">
                             <span className="text-text-primary text-sm font-medium">
-                                The kody/business-logic check fails on
+                                {platformHasChecks
+                                    ? "The kody/business-logic check fails on"
+                                    : "The comment lists as “To merge”"}
                             </span>
                             <OverrideIndicatorForm fieldName="businessLogic.failOn" />
                         </span>

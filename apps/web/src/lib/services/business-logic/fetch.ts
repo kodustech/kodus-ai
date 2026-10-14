@@ -48,6 +48,7 @@ export const tryReadTask = (body: {
     teamId: string;
     task: string;
     settings?: BusinessLogicSettingsValue;
+    repositoryId?: string;
 }) =>
     authorizedFetch<TryReadResult>(BUSINESS_LOGIC_PATHS.TRY, {
         method: "POST",

@@ -10,9 +10,6 @@ import {
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
-const percent = (value?: number) =>
-    value === undefined ? "—" : `${Math.round(value * 100)}%`;
-
 const ago = (iso: string) => {
     const minutes = Math.max(
         0,
@@ -25,14 +22,18 @@ const ago = (iso: string) => {
 };
 
 const REASONS: Record<string, string> = {
-    task_not_found: "the referenced task doesn't exist",
-    task_missing: "the reference looks like a typo",
-    tracker_unavailable: "the tracker didn't answer",
-    no_capable_tracker: "no connected tracker reads that kind of reference",
-    task_too_thin: "the task has too little in it",
+    task_not_found: "task doesn't exist",
+    task_missing: "typo in the reference",
+    tracker_unavailable: "tracker didn't answer",
+    no_capable_tracker: "no connected tracker reads the reference",
+    task_too_thin: "task too thin to check",
 };
 
-/** Is it working, and what happened in the last 30 days (UC-06, UC-07). */
+/**
+ * Is it working, and why a PR wasn't read (UC-06, UC-07). How PRs did
+ * against their tasks is the Cockpit's; this card answers the admin
+ * setting it up.
+ */
 export const StatusStrip = ({
     status,
     isLoading,
@@ -41,26 +42,28 @@ export const StatusStrip = ({
     isLoading: boolean;
 }) => {
     if (isLoading) {
-        return <Skeleton className="h-24 w-full rounded-xl" />;
+        return <Skeleton className="h-14 w-full rounded-xl" />;
     }
     if (!status) {
         return null;
     }
     const paused = status.state === "paused";
     const idle = status.state === "idle";
-    const why = Object.entries(status.stats.couldntReadByReason)
+    const { pullRequestsChecked, couldntRead, couldntReadByReason } =
+        status.stats;
+    const why = Object.entries(couldntReadByReason)
         .sort((a, b) => b[1] - a[1])
-        .map(([reason, count]) => `${count}: ${REASONS[reason] ?? reason}`)
+        .map(([reason, count]) => `${count} ${REASONS[reason] ?? reason}`)
         .join(" · ");
 
     return (
         <Card
             color="lv1"
             className={cn(
-                "flex flex-col gap-3 px-5 py-4",
+                "flex flex-col gap-1.5 px-5 py-3.5",
                 paused && "ring-warning/40 ring-1",
             )}>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                 {paused ? (
                     <PauseCircleIcon className="text-warning size-4" />
                 ) : idle ? (
@@ -75,12 +78,6 @@ export const StatusStrip = ({
                           ? "No pull request checked in the last 30 days"
                           : "Working"}
                 </span>
-                {!paused && status.lastTaskRead && (
-                    <span className="text-text-secondary">
-                        · last task read {ago(status.lastTaskRead.at)} (
-                        {status.lastTaskRead.id})
-                    </span>
-                )}
                 {paused && (
                     <span className="text-text-secondary">
                         · {status.paused?.uncheckedPullRequests} PRs
@@ -88,56 +85,29 @@ export const StatusStrip = ({
                         answers.
                     </span>
                 )}
+                {!paused && !idle && (
+                    <span className="text-text-secondary">
+                        {status.lastTaskRead &&
+                            `· last task read ${ago(status.lastTaskRead.at)} (${status.lastTaskRead.id}) `}
+                        · {pullRequestsChecked}{" "}
+                        {pullRequestsChecked === 1 ? "PR" : "PRs"} in 30 days
+                    </span>
+                )}
             </div>
 
-            {idle ? (
-                <p className="text-text-secondary text-sm">
+            {idle && (
+                <p className="text-text-secondary pl-6 text-sm">
                     Kody checks a pull request when its title, branch or
                     description names a task, e.g. SAA-96. Try one below, or
                     comment <code>@kody -v business-logic</code> on a pull
                     request.
                 </p>
-            ) : (
-                <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
-                    <div>
-                        <dt className="text-text-secondary text-xs">
-                            PRs checked
-                        </dt>
-                        <dd className="text-text-primary text-lg font-semibold">
-                            {status.stats.pullRequestsChecked}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt className="text-text-secondary text-xs">
-                            Met their task
-                        </dt>
-                        <dd className="text-text-primary text-lg font-semibold">
-                            {percent(status.stats.metRate)}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt className="text-text-secondary text-xs">
-                            Findings devs agreed with
-                        </dt>
-                        <dd className="text-text-primary text-lg font-semibold">
-                            {percent(status.stats.agreedRate)}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt className="text-text-secondary text-xs">
-                            Couldn&apos;t read
-                        </dt>
-                        <dd
-                            className="text-text-primary text-lg font-semibold"
-                            title={why || undefined}>
-                            {status.stats.couldntRead}
-                        </dd>
-                    </div>
-                </dl>
             )}
-            {why && <p className="text-text-secondary text-xs">Why: {why}</p>}
-            {!idle && (
-                <p className="text-text-tertiary text-xs">Last 30 days</p>
+            {couldntRead > 0 && (
+                <p className="text-text-secondary pl-6 text-xs">
+                    {couldntRead} couldn&apos;t be read
+                    {why ? `: ${why}` : ""}
+                </p>
             )}
         </Card>
     );
