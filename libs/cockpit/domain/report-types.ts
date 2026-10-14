@@ -112,6 +112,7 @@ export interface MonthlyRatePoint {
 /** A repo row in the org report's intra-org ranking. */
 export interface RepoRankingRow {
     rank: number;
+    repositoryId: string | null;
     repository: string;
     reviews: number;
     implementationRate: number; // 0..1
@@ -120,6 +121,7 @@ export interface RepoRankingRow {
 /** A period highlight (e.g. biggest implementation-rate growth). */
 export interface ReportHighlight {
     kind: 'impl_rate_growth';
+    repositoryId: string | null;
     repository: string;
     detail: string;
 }

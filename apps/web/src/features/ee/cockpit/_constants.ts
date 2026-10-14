@@ -13,6 +13,7 @@ export const tabs = {
 // only provide the cross-session default when a param is absent.
 export const COCKPIT_PARAM = {
     repository: "repository",
+    repositoryId: "repositoryId",
     start: "start",
     end: "end",
     tab: "tab",
