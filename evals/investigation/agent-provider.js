@@ -516,6 +516,35 @@ function buildCurrentPrompts(caseData) {
     };
 }
 
+// The commands production's local sandbox (the self-hosted path) hands the
+// agent, over a prepared worktree: the same grep, read and listDir output, the
+// same errors, the same exec whitelist. Built by the sandbox's own method, so
+// they cannot drift from production. Wrapped only to count calls for the
+// fidelity metric: a real answer, empty or not, is never an unserved call.
+function sandboxCommands(repoDir) {
+    const { LocalSandboxService } = require(
+        path.join(
+            __dirname,
+            '../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts',
+        ),
+    );
+    // buildRemoteCommands is private in TypeScript; it reads no instance
+    // state, and the constructor ignores its ConfigService.
+    const inner = new LocalSandboxService(undefined).buildRemoteCommands(
+        repoDir,
+    );
+    const commands = { calls: [], unexpectedCalls: [] };
+    for (const [name, fn] of Object.entries(inner)) {
+        if (typeof fn !== 'function') continue;
+        const kind = name === 'read' ? 'readFile' : name;
+        commands[name] = (...args) => {
+            commands.calls.push({ kind, actual: args, matched: true });
+            return fn(...args);
+        };
+    }
+    return commands;
+}
+
 function serializeResult(caseId, agentResult, remoteCommands, repoHandle) {
     return {
         caseId,
@@ -639,18 +668,17 @@ class InvestigationAgentProvider {
             const { input, systemPrompt, userPrompt } =
                 buildCurrentPrompts(caseData);
             stage = 'build-replay-commands';
-            // RECALL_REAL_REPO=1: search a real git worktree at the PR's head
-            // instead of replaying recorded tool calls. The replay only answers
-            // calls captured when the dataset was built; any other call gets an
-            // empty answer the real repository would not give. Falls back to
-            // replay when the clone or the commit isn't available locally;
+            // RECALL_REAL_REPO=1: answer the tools from a git worktree at the
+            // PR's head instead of replaying recorded tool calls. The replay
+            // only answers calls captured when the dataset was built; any other
+            // call gets an empty answer the real repository would not give.
+            // Falls back to replay when the commit can't be fetched;
             // `repoPrepared` in the trace says which one ran.
             let remoteCommands;
             if (process.env.RECALL_REAL_REPO === '1') {
                 const { prepareRepo } = require('./prepare-repo');
-                const { LocalRepoCommands } = require('./local-repo-commands');
                 repoHandle = await prepareRepo(caseData, caseData.caseId);
-                if (repoHandle) remoteCommands = new LocalRepoCommands(repoHandle.dir);
+                if (repoHandle) remoteCommands = sandboxCommands(repoHandle.dir);
             }
             if (!remoteCommands) {
                 remoteCommands = new ReplayRemoteCommands(
