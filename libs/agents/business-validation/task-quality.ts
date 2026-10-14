@@ -55,19 +55,21 @@ export function applyCriteriaLocation(
     if (!text) {
         return detectCriteria(task);
     }
+    return { ...task, acceptanceCriteria: criteriaIn(text) };
+}
+
+/** The criteria a field or section holds: its list, else one per line. */
+function criteriaIn(text: string): string[] {
     const items = listItems(text);
     if (items.length) {
-        return { ...task, acceptanceCriteria: items };
+        return items;
     }
     // A field with one criterion per line and no bullets (a Notion property).
     const lines = text
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line.length > 3);
-    if (lines.length >= 2) {
-        return { ...task, acceptanceCriteria: lines };
-    }
-    return { ...task, acceptanceCriteria: [text.trim()] };
+    return lines.length >= 2 ? lines : [text.trim()];
 }
 
 /** What sits where the team said criteria live, when that place is on the task. */
@@ -107,6 +109,15 @@ const CRITERIA_HEADINGS = [
 function detectCriteria(task: Task): Task {
     if (task.acceptanceCriteria?.length) {
         return task;
+    }
+    // A field named for criteria (a Jira "Acceptance Criteria" field) beats
+    // a list in the description, which is as often context as criteria.
+    const field = Object.entries(task.fields ?? {}).find(
+        ([name, text]) =>
+            CRITERIA_HEADINGS.includes(normalize(name)) && text.trim(),
+    );
+    if (field) {
+        return { ...task, acceptanceCriteria: criteriaIn(field[1]) };
     }
     const description = task.description ?? '';
     for (const heading of CRITERIA_HEADINGS) {
