@@ -1,0 +1,2381 @@
+{
+ "model": "gpt-6.1-sol",
+ "verificador": "gpt-6.1-sol@sub",
+ "versao": "imp1",
+ "sobre": "h1t10f",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The handler combines the awaited isTeamAdmin and isTeamOwner results with &&. isTeamAdmin returns an accepted ADMIN or OWNER membership (or false), while isTeamOwner requires an OWNER membership. The handler throws FORBIDDEN if this conjunction, isOrganizer, and isAttendee are all false.",
+      "consequences": [
+       {
+        "consequence": "An accepted team ADMIN who is neither the booking organizer nor an attendee fails the combined authorization check and receives FORBIDDEN when attempting to add guests.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "An accepted team member with role ADMIN, rather than OWNER, who is neither organizer nor attendee is denied permission to add guests: the ADMIN membership satisfies isTeamAdmin but not isTeamOwner, so the conjunction is false and the handler throws FORBIDDEN.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The handler gets the requesting user from ctx, loads credentials by that user's ID, and constructs EventManager with that user and those credentials. EventManager derives calendarCredentials from those credentials and calls updateAllCalendarEvents. For a reference without credentialId, it filters those caller credentials by the reference's type. The handler permits an attendee different from the organizer.",
+      "consequences": [
+       {
+        "consequence": "When a distinct attendee adds guests and the calendar reference lacks credentialId, the update credential selection uses the caller's calendar credentials by type rather than the organizer's credentials.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A team owner can trigger the same behavior when adding guests to another user's booking.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "The organizer's calendar event is not updated.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "The update targets the wrong account.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When an authorized attendee distinct from the booking organizer adds guests to a booking with a calendar reference lacking credentialId, EventManager selects update credentials by type from the attendee's credentials instead of the booking organizer's credentials. This is a concrete credential-selection mismatch; the notes do not establish whether the downstream update fails or affects another account.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The schema accepts an email-address array with no guest-count maximum, and the handler likewise has no count limit. The handler inserts the guests, builds the full attendee list, and calls sendAddGuestsEmails. That function immediately starts a send for every attendee and awaits Promise.all. For non-seated bookings, each attendee email generates an ICS containing the full event.attendees list.",
+      "consequences": [
+       {
+        "consequence": "Guest additions are accepted and persisted without a server-side guest-count limit.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Notifications fan out concurrently to every attendee, including existing attendees; repeated additions notify existing attendees again.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Adding N guests results in O(N) concurrent sends when the existing attendee count is fixed; more generally the send count is proportional to the resulting total attendee count.",
+        "status": "supported"
+       },
+       {
+        "consequence": "For non-seated bookings, serializing the full attendee list in every attendee's ICS produces quadratic aggregate attendee-serialization work in the total attendee count.",
+        "status": "supported"
+       },
+       {
+        "consequence": "This unbounded fan-out actually causes resource exhaustion, delivery failure, or service disruption.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "A large valid guest array is inserted without a count cap and triggers concurrent notification sends to the entire resulting attendee list. For non-seated bookings, each send also serializes that entire list into its ICS, yielding quadratic aggregate serialization work. Repeated additions trigger the same full-list notification fan-out again. The notes establish this unbounded resource-amplification path, but do not establish an actual crash, failed delivery, wrong result, data loss, security exploit, or caller breakage.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "MultiEmail obtains t from useLocale and uses t(\"add_another\") for the adjacent control, but passes the literal \"Remove email\" as the removal tooltip content. Tooltip renders that content directly without translating it.",
+      "consequences": [
+       {
+        "consequence": "Users in non-English locales see the English text \"Remove email\" in the removal tooltip rather than localized text.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When a user using a non-English locale displays the email-removal tooltip, its content remains the hard-coded English \"Remove email\" instead of being localized.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8",
+      "S10"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6",
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S12"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "After successful token-response validation, the code attempts to await prisma.credential.update for credential.id, storing the parsed access-token data along with the existing refresh token. The file has no import or declaration for prisma; its sole occurrence is this update. @calcom/prisma exports prisma as its default export.",
+      "consequences": [
+       {
+        "consequence": "The unbound prisma identifier causes TypeScript checking to fail.",
+        "status": "supported"
+       },
+       {
+        "consequence": "When execution reaches the update after a successful token exchange and response validation, evaluating prisma raises a ReferenceError.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "A successful token exchange whose response passes validation reaches an update using an undeclared prisma identifier. This produces a TypeScript unresolved-name error and, if executed, a ReferenceError instead of persisting the refreshed credentials.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "julgado": {
+      "behavior": "The constructor starts asynchronous getClient initialization. For every normally configured construction, getClient unconditionally awaits a refresh-token POST without checking whether the saved access token is valid, then awaits a credential database update before returning the jsforce connection. Salesforce operations await that initialization. The connection still receives both access and refresh tokens; jsforce's internal refresh behavior was not inspected.",
+      "consequences": [
+       {
+        "consequence": "Every normally configured service construction performs a refresh-token exchange, including when the saved access token is valid.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Successful initialization adds an OAuth network round trip and credential database write to the path that Salesforce operations must await.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The constructor itself synchronously blocks on the network exchange and database write, if 'blocking' is intended in that sense.",
+        "status": "contradicted"
+       },
+       {
+        "consequence": "This replaces or disables jsforce's existing internal on-demand refresh behavior.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Constructing a normally configured service when its saved access token is still valid nevertheless initiates an unnecessary token exchange and credential write, and Salesforce operations must wait for them. This adds initialization latency and external work. Whether jsforce's internal on-demand refresh is replaced or disabled remains unverified; no crash, incorrect result, data loss, security hole, or caller breakage is established by the notes.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The webhook separately looks up a credential using findFirst filtered by userId and appId, updates only the returned credential by id if found, and otherwise creates a credential without a transaction or lock. Credential has a unique id but no unique constraint on the userId/appId pair; those fields have ordinary indexes.",
+      "consequences": [
+       {
+        "consequence": "Concurrent deliveries for the same user/app pair can both find no existing credential and insert duplicate credentials for that pair.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Once duplicate credentials exist, a subsequent delivery updates only one matching credential, leaving other matching credentials stale.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When concurrent deliveries for the same user/app pair both complete their lookup before either inserts, both can create credentials. Subsequent deliveries update just one duplicate, leaving inconsistent credential records for that pair.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S24",
+     "membros": [
+      "S1",
+      "S13",
+      "S16",
+      "S19",
+      "S24"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11",
+      "S20",
+      "S23"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S3",
+      "S10"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S18",
+      "S22"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S5",
+      "S14",
+      "S17",
+      "S21"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "For updates, the code selects externalCalendarId or the externalId of a destinationCalendar entry whose externalId equals that same reference value, then passes the selection as calendarId. Deletion uses the same lookup but defaults to \"primary\" when it produces no value. Cancellation callers pass the booking reference's externalCalendarId to these methods.",
+      "consequences": [
+       {
+        "consequence": "When the booking reference lacks externalCalendarId, the destination lookup yields no usable configured calendar and update receives an undefined calendarId.",
+        "status": "supported"
+       },
+       {
+        "consequence": "With the same missing reference field, deletion uses \"primary\" instead of the configured destination calendar.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When a booking reference has no externalCalendarId and the event has a configured destination with a valid externalId, the fallback compares destination IDs against the missing value instead of selecting that destination. Update is consequently passed an undefined calendarId, and deletion targets \"primary\", which is incorrect when the configured destination is not primary. The notes establish these incorrect request parameters, but do not establish the downstream API outcome.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "updateLocation constructs replacement calendar references with externalCalendarId from result.externalId and credentialId from result.credentialId ?? undefined. The checked CalendarManager.updateEvent return object contains neither field, and EventManager passes those results through without restoring routing fields from existing booking references, even though it reads those existing fields earlier.",
+      "consequences": [
+       {
+        "consequence": "Calendar references produced by the checked location-editing calendar-update path lose their existing calendar and credential routing information.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The loss breaks subsequent updates.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "The loss breaks subsequent cancellation.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Secondary collective hosts are particularly affected by subsequent update or cancellation failures.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When location editing updates an existing calendar booking reference with calendar and credential routing fields through the checked updateEvent path, replacement references are built from results lacking those fields rather than preserving the existing values. The replacement externalCalendarId and credentialId are therefore undefined, losing routing metadata. Downstream update/cancellation failures and special impact on secondary collective hosts have not been checked.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Creation includes slug and requestedSlug only when IS_TEAM_BILLING_ENABLED is true. When it is false, both are omitted; the nullable database slug has no default. The non-billing publication path checks metadata.data?.requestedSlug and throws BAD_REQUEST with \"Can't publish organization without `requestedSlug`\" when it is absent.",
+      "consequences": [
+       {
+        "consequence": "Organizations created with team billing disabled have neither an assigned slug nor requestedSlug at creation.",
+        "status": "supported"
+       },
+       {
+        "consequence": "New self-hosted organizations in this non-billing state are rejected on publication because requestedSlug is missing.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "With IS_TEAM_BILLING_ENABLED false, creating an organization omits slug and requestedSlug. Attempting to publish that organization while requestedSlug remains absent fails with BAD_REQUEST, preventing publication. The notes support this failure, but do not establish that restoring slug alone would fix the requestedSlug check.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S1",
+      "S10",
+      "S14",
+      "S17",
+      "S18"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S2",
+      "S13"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S3",
+      "S9",
+      "S11",
+      "S15",
+      "S16",
+      "S19"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S5",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S7",
+      "S20"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": []
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "deleteMany deletes records matching either (method is SMS and scheduledDate is at or before the current time) or (retryCount is greater than 1). The retry-count alternative has no date or method restriction. The accompanying comment describes only past-dated SMS reminders.",
+      "consequences": [
+       {
+        "consequence": "The retry-exhaustion branch also deletes future-dated reminders with retryCount > 1.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The retry-exhaustion branch also deletes non-SMS reminders with retryCount > 1.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The cleanup comment does not fully describe the deletion scope.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The source comment omits the independent retryCount > 1 deletion alternative and thus incompletely describes cleanup when reminders exceed that retry count, including future-dated or non-SMS records. The notes do not establish that those deletions are unintended or incorrect; the requested change is documentation only.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Password verification occurs only when user.password is set and credentials.totpCode is absent or falsy. For a two-factor-enabled user, supplying a backupCode selects the backup-code branch, which checks the normalized backup code. TOTP verification is in the mutually exclusive else-if branch, so it is not performed when the backup-code branch is selected. After successful backup-code checking, the authenticated user is returned.",
+      "consequences": [
+       {
+        "consequence": "A holder of a valid backup code for a two-factor-enabled password account can authenticate without knowing the password by submitting the backup code together with an arbitrary nonempty totpCode; neither password nor TOTP verification is performed.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "For a two-factor-enabled account with a password, a login request containing a valid backupCode and an arbitrary nonempty totpCode skips password verification and selects the backup-code branch, bypassing TOTP verification as well. The request returns an authenticated user without verifying the account password, creating an authentication bypass for a holder of a valid backup code.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "On an HTTP 200 enablement response, the modal advances to DisplayBackupCodes and returns without calling onEnable. The backup-code Close handler prevents the default action, resets setup state, and calls onEnable. The dialog instead forwards onOpenChange to the parent, whose handler only toggles enableModalOpen. The parent's onEnable closes the modal and invalidates viewer.me; the settings switch reads user.twoFactorEnabled from that query.",
+      "consequences": [
+       {
+        "consequence": "Dismissing the backup-code screen through dialog onOpenChange bypasses the onEnable completion callback and viewer.me invalidation.",
+        "status": "supported"
+       },
+       {
+        "consequence": "After successful server-side enablement, that dismissal leaves the settings switch displaying the cached disabled state rather than the enabled state.",
+        "status": "supported"
+       },
+       {
+        "consequence": "That dismissal also bypasses setup-state reset.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "After successful 2FA enablement advances to the backup-code screen, dismissing the dialog through onOpenChange rather than its explicit Close button closes the parent modal without invalidating viewer.me or resetting setup state. The settings switch consequently remains bound to the stale disabled value even though 2FA has been enabled on the server.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The click handler prevents the default event, calls navigator.clipboard.writeText with the formatted backup codes joined by newlines, and immediately displays the translated success toast. It neither awaits the clipboard promise nor handles its rejection. A separate close handler resets state and calls onEnable().",
+      "consequences": [
+       {
+        "consequence": "If the clipboard write rejects, including because access is denied, the handler still displays “Backup codes copied!” despite the failed write.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The user can close the dialog independently of whether the clipboard write succeeds.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A user may close the dialog believing their recovery codes were saved.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When the clipboard write rejects, the handler has already reported that the backup codes were copied and supplies no rejection feedback. This is an incorrect success indication for a failed copy operation; the dialog can also be closed independently of the write outcome.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test clicks backup-codes-copy and then waits for toast-success; it never reads or compares clipboard contents. The handler calls navigator.clipboard.writeText with newline-separated formatted backup codes and immediately shows a success toast, without awaiting or checking the write promise.",
+      "consequences": [
+       {
+        "consequence": "Removing the clipboard write would still satisfy the test's success-toast assertion.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Writing an empty string instead of the backup codes would still satisfy the test's success-toast assertion.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A rejected clipboard-write promise would not invalidate the success-toast assertion, since the toast is shown independently of the write result.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When the copy action fails asynchronously or is changed to omit the write or write empty content, the test still accepts the success toast without detecting that the displayed backup codes were not copied. In the existing handler, a rejected write also results in a misleading success toast. The notes establish the assertion's blind spot, not whether an unhandled rejection would cause some separate test-runner failure.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test waits for a download and checks only that its suggested filename is cal-backup-codes.txt; it does not read the file contents and includes a TODO to check them. The component sets that static filename on the download anchor, builds the blob from formatted backup codes, and displays formatted codes.",
+      "consequences": [
+       {
+        "consequence": "Empty or incorrect backup-code contents would not cause this filename assertion to fail, provided the download occurs with the expected filename.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test leaves the correctness and formatting of exported recovery codes unverified.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The remaining issue is a coverage gap: if the download contains empty or incorrect codes but retains the expected filename, this assertion still passes. The notes do not establish an actual faulty export; they show that the component builds its blob from formatted backup codes.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S5",
+      "S8"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The header's .contents is a flex container. header-extra-info creates a default Ember.Component root div directly inside it, and the template nests .extra-info-wrapper within that root. The order(2) rule therefore targets a descendant, not the actual flex item. The root has no explicit minimum-width constraint. Desktop truncation rules (nowrap, overflow:hidden, and text-overflow:ellipsis) target the descendant .topic-link.",
+      "consequences": [
+       {
+        "consequence": "The order(2) styling does not apply to the actual header flex item because its class is on the inner wrapper.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The component root retains its automatic minimum width rather than being explicitly allowed to shrink with min-width:0.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A long nowrap topic title cannot shrink to the available header space.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "A long title pushes the navigation panel outside the header instead of being ellipsized by the desktop truncation rules.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The order rule targets a nested wrapper rather than the component root that participates in header flex layout, so it does not set that item's flex order. With a long nowrap topic title, the comment also alleges that the unconstrained automatic minimum width prevents shrinking and displaces navigation rather than truncating the title; the notes establish the structural preconditions but do not verify that visible outcome.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "When feed polling is enabled and a feed URL and importing user are configured, each eligible uncached article retrieval synchronously executes PollFeed before fetch_http. PollFeed opens and parses the configured feed and iterates its items, calling TopicEmbed.import; each valid imported URL causes a TopicEmbed database lookup. The Redis setnx retrieval throttle is keyed by the individual embed URL, so distinct article URLs do not share it.",
+      "consequences": [
+       {
+        "consequence": "Eligible uncached retrievals synchronously download and process the configured feed before fetching the article.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Concurrent retrievals for distinct embed URLs repeat feed downloads and per-item import processing and database lookups rather than sharing a feed-wide throttle.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Repeated processing multiplies feed-related work with the number of eligible requests and the number of feed items (with database lookups for valid imported URLs).",
+        "status": "supported"
+       },
+       {
+        "consequence": "This repeated work causes operational worker overload or breaks article retrieval for callers.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "With feed polling configured and an importing user present, concurrent eligible uncached retrievals for different embed URLs each synchronously download and process the same feed, duplicating feed-related work before article fetching. The notes establish redundant work, but not crashes, incorrect results, data loss, security exposure, or caller breakage.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The embed view renders post.created_at with strftime(\"%e %b %Y\"), giving a fixed day–English abbreviated month–year format. Nearby title and discussion labels use I18n.t. The inherited application controller sets I18n.locale to SiteSetting.default_locale; the notes do not establish an individually selected user locale.",
+      "consequences": [
+       {
+        "consequence": "Month abbreviations in the embedded dates remain English rather than following the active locale.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The day-month-year date order is fixed rather than following the active locale.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The neighbouring header and footer labels use translations while the date formatting does not.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Users with other individually selected locales see English-formatted dates rather than dates formatted for their personal locale.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "When the site default locale is non-English, embedded dates still use English abbreviated months and the fixed day-month-year order.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "With a non-English site default locale, the embedded date remains in the fixed English-month format despite the surrounding labels using I18n. No incorrect timestamp, crash, data loss, security issue, or caller breakage is established. Personal user-locale selection is not established by the notes.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The example named \"is 404 without an embed_url\" calls get :best without establishing an allowed embeddable host and referer and asserts only that the response is not successful. The default embeddable_host is blank. The ensure_embeddable before-filter therefore raises InvalidAccess before the action reaches params.require(:embed_url). Host/referer setup exists only in nested contexts, not for this example.",
+      "consequences": [
+       {
+        "consequence": "This example is rejected by ensure_embeddable rather than exercising the missing-embed_url parameter check.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The assertion does not establish the 404 response advertised by the example name; it establishes only non-success.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Removing the required-parameter check would leave this example passing because the before-filter would still reject the request.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "With the default blank embeddable_host and no allowed host/referer setup, the missing-embed_url example passes on an unrelated access rejection. It therefore fails to detect removal of the required-parameter check or establish the intended missing-parameter response. This is a concrete test-coverage gap, not evidence of an existing incorrect production response.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The two examples set only feed_polling_url or embed_by_username to nil and expect poll_feed never to be called. Setting overrides are cleared before each example; polling therefore remains disabled by its default, and the other setting remains empty. execute uses a left-to-right && chain beginning with feed_polling_enabled?, so neither presence check is reached in these examples.",
+      "consequences": [
+       {
+        "consequence": "The URL and username examples do not evaluate the prerequisite guards they purport to test because polling is disabled.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Removing the corresponding URL or username presence guard still leaves each example passing, so these examples fail to detect those regressions.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When either prerequisite example runs with its current setup, disabled polling prevents execution from reaching the guard under test. Thus these negative tests pass even if that guard is deleted. This is a demonstrated test-coverage gap, not evidence of an existing production failure.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S1",
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S4",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Update obtains EmbeddableHost.where(id: params[:id]).first and passes it to save_host, which assigns host.host. Destroy uses the same lookup and calls host.destroy. If no record exists at lookup time, the result is nil and either dereference raises NoMethodError. ApplicationController handles Discourse::NotFound as 404 but has no NoMethodError handler.",
+      "consequences": [
+       {
+        "consequence": "Updating a nonexistent record raises NoMethodError and produces an internal error rather than a not-found response.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Updating a concurrently deleted record produces an internal error rather than a not-found response when deletion makes the record absent before the lookup executes.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Destroying a record absent at lookup time has the same nil-dereference failure rather than returning a not-found response.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Concurrent deletion after the lookup has already returned a record causes the claimed lookup failure.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "An update or destroy request whose id has no matching EmbeddableHost when the lookup executes—including deletion before lookup—dereferences nil and raises NoMethodError instead of returning the intended 404 not-found response.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test builds a topic whose fabricator sets only user, title, and category_id, and expects expandable_first_post? to be false. embed_truncate defaults to false, and no TopicEmbed is created. expandable_first_post? is SiteSetting.embed_truncate? && has_topic_embed?, where has_topic_embed? checks for an existing TopicEmbed by topic_id. It does not inspect host availability. The other prerequisites are enabled only in a nested test context.",
+      "consequences": [
+       {
+        "consequence": "The blank-host test returns false because other prerequisites are absent, rather than isolating missing-host behavior.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test passes with an implementation that never checks host availability, so it does not protect a blank-host requirement.",
+        "status": "supported"
+       },
+       {
+        "consequence": "If blank-host rejection remains the intended contract, the implementation fails that contract when embed_truncate is enabled and a TopicEmbed exists but the host is unavailable.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The concrete supported issue is a misleading, non-isolating test: with an ordinary built topic and embed_truncate disabled, the blank-host assertion passes regardless of host availability. The notes do not establish that host rejection is still a required contract or that any runtime result is incorrect.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test calls store.find('fruit', 2) and asserts two hydrated colors with IDs 1 and 2. The fixtures give fruit 1 color_ids [1,2] and fruit 2 color_ids [3]. The /fruits/:id Pretender handler ignores the URL ID and always responds with fruits[0] (fruit 1), alongside farmers and colors.",
+      "consequences": [
+       {
+        "consequence": "The test requests fruit 2 but checks fruit 1's colors, so the mocked response hydrates the wrong record for the requested ID.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test passes despite that requested-record mismatch.",
+        "status": "supported"
+       },
+       {
+        "consequence": "This test would not catch a find implementation that ignores the requested ID and obtains fruit 1 instead.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When the test requests fruit ID 2, the mock returns fruit ID 1 and the assertions validate that record's colors 1 and 2 rather than fruit 2's color 3. The test therefore accepts an incorrect record for this request and fails to cover requested-ID correctness. This is a concrete test/mock defect; the notes do not establish a production find defect.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S7",
+      "S8",
+      "S13"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S10",
+      "S16"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S4",
+      "S15",
+      "S17"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The controller obtains the multipart tempfile separately from the original filename and passes tempfile.path as both the input and output to OptimizedImage.downsize, along with allow_animation. Downsize delegates to optimize, which selects animation-preserving instructions only if allow_animation is true and the input path ends in .gif (case-insensitively). Otherwise it invokes convert on input[0] and writes the result back to the same path.",
+      "consequences": [
+       {
+        "consequence": "A multipart tempfile path without a .gif suffix fails to select animation-preserving processing even when allow_animated_thumbnails is enabled.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Oversized animated GIF uploads processed through that non-GIF-suffixed tempfile path are overwritten with their first frame, losing their animation rather than merely producing a static thumbnail.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When an oversized animated GIF upload reaches downsize with animation enabled but its multipart tempfile path does not end in .gif, optimize takes the nonanimated convert input[0] branch and overwrites that same upload tempfile with a single frame. The uploaded image therefore loses its animation despite the enabled setting.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The upload validation classifies files as images or attachments, but then unconditionally uses a maximum size of 10 * 1024 KB and returns false for larger files. The composer returns that validation result on fileuploadsubmit. Server-side UploadValidator instead checks attachments against SiteSetting.max_attachment_size_kb.",
+      "consequences": [
+       {
+        "consequence": "The fixed client-side 10 MB ceiling applies to attachments as well as images instead of using the configured attachment size limit.",
+        "status": "supported"
+       },
+       {
+        "consequence": "On sites whose configured attachment limit exceeds 10 MB, attachments larger than 10 MB but within that configured limit are rejected through the composer even though the server-side size validator permits them.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When max_attachment_size_kb exceeds 10 * 1024, submitting an otherwise valid attachment larger than 10 * 1024 KB but no larger than the configured attachment limit causes client validation to return false and blocks the composer upload despite the server-side validator allowing its size.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "For a file classified as an image by its filename extension and still oversized, the controller sets a five-attempt counter and repeatedly calls OptimizedImage.downsize on the same input/output path at 80%, decrementing the counter without checking the return value. downsize delegates through optimize to convert_with, which runs an external conversion and returns false on a nonzero exit status. If a failed conversion leaves the oversized file unchanged, the loop can invoke the same failing conversion five times.",
+      "consequences": [
+       {
+        "consequence": "A false return from downsize does not stop further attempts while the file remains oversized and attempts remain.",
+        "status": "supported"
+       },
+       {
+        "consequence": "An unsupported or malformed file classified as an image can cause up to five identical failing external conversions per upload, provided failures leave the oversized input unchanged.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The upload must return an error on the first failed conversion rather than proceeding with its existing handling.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When an extension-classified, oversized image fails conversion and remains unchanged and oversized, the controller needlessly repeats the same failed external conversion up to five times instead of stopping on false. The notes establish redundant conversion work, but do not establish a crash, incorrect upload result, data loss or corruption, security hole, or broken caller; downstream error handling is not checked.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The member-removal action finds the group, calls group.users.delete(user_id), and saves it without assigning usernames or clearing primary_group_id. Usernames assignment populates @deletions, and Group#destroy_deletions clears primary_group_id for removed users when it matches the removed group. The direct deletion path does not populate that list, and GroupUser has no cleanup callbacks. The user's primary_group association is independent of membership.",
+      "consequences": [
+       {
+        "consequence": "Removing a user whose primary_group_id equals the group's id leaves that primary_group_id set after group membership has been removed.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The stale primary-group association remains available to post serialization and user administration, which use or manage that independent primary-group state.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When the removal endpoint removes a member whose primary_group_id equals the removed group's id, it deletes membership but leaves the user pointing to that group as their primary group. This creates stale primary-group state consumed by post serialization and managed by user administration, unlike the usernames-update removal path, which clears it.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S2",
+      "S4",
+      "S9",
+      "S10"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The fallback list is [locale, SiteSetting.default_locale.to_sym, :en].uniq.compact. Calls with extra arguments bypass the accelerator cache. Calls without extra arguments cache the resolved, frozen translation using the translation key, config.locale, and config.backend.object_id; the key does not explicitly include the site, default locale, or effective fallback list.",
+      "consequences": [
+       {
+        "consequence": "Two sites with the same user locale and different default locales reuse the first site's cached fallback translation in a multisite process.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Changing the default locale leaves previously cached fallback translations stale.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "For a no-extra-arguments translation that requires fallback, a cached result can be returned for an outdated default locale when the default locale changes while the translation key, user locale, backend identity, and cache entry remain unchanged, and the new fallback chain would resolve to a different translation. Cross-site incorrect reuse is likewise possible if sites share the same backend identity and cache entry, but the notes do not establish that multisite backend sharing actually occurs or rule out external invalidation.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The initializer enables I18n::Backend::Fallbacks and defines the chain [locale, SiteSetting.default_locale.to_sym, :en].uniq.compact. Its ensure_loaded! loads that chain; the only call found is in the controller filter after setting I18n.locale. The translation accelerator explicitly loads only the current locale before translate_no_cache and disables implicit loading without explicit filenames. Jobs::Base sets the site default locale before executing a job, and PostAlerter translates within the user's effective locale without calling ensure_loaded!.",
+      "consequences": [
+       {
+        "consequence": "Non-controller translation paths do not ensure that the full fallback chain's catalogs are loaded, so fallback catalogs can be unavailable when those paths translate.",
+        "status": "supported"
+       },
+       {
+        "consequence": "When a key is missing in the current locale and exists in a fallback catalog that has not been loaded, fallback lookup cannot find that translation, resulting in a missing translation or skipping the configured site fallback.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The failure necessarily persists until another request loads the catalogs.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "A non-controller translation, such as PostAlerter translating in a user's locale, can run with a fallback catalog still unloaded. If the current locale lacks the key but the unloaded site-default or English catalog contains it, the accelerator loads only the current locale and fallback lookup does not load the missing catalog. The translation can therefore report a missing translation or use a later fallback instead of the configured site fallback. Jobs using the site default locale can similarly miss an unloaded English fallback when the default locale lacks a key.",
+      "remainingIsOptional": false
+     }
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "When anonymous access is enabled, the registered authentication client clones the request headers and calls TagDevice. TagDevice reads X-Grafana-Device-Id and returns nil immediately if it is empty. This bypasses CreateOrUpdateDevice, where the positive configured device limit is checked. The client rejects ErrDeviceLimitReached but proceeds to return an anonymous identity for the empty-header case.",
+      "consequences": [
+       {
+        "consequence": "A request omitting X-Grafana-Device-Id passes the device-limit authentication gate without a device-limit check.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A client can obtain an anonymous identity by omitting the header even when the configured positive device limit is full, bypassing the configured anonymous-device access restriction.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "With anonymous access enabled and a positive configured device limit already full, a request without X-Grafana-Device-Id causes TagDevice to return nil before checking the limit, and the authentication client grants an anonymous identity rather than enforcing the device-limit restriction.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "conf/defaults.ini has no device_limit key in auth.anonymous. applyEnvVariableOverrides iterates only keys already present in the loaded INI and runs before readAuthSettings. readAuthSettings reads device_limit with MustInt64(0), so an absent key yields zero. The anonymous device store enforces its device limit only when deviceLimit > 0.",
+      "consequences": [
+       {
+        "consequence": "When no loaded INI file supplies auth.anonymous.device_limit, setting GF_AUTH_ANONYMOUS_DEVICE_LIMIT alone is ignored by the environment override mechanism.",
+        "status": "supported"
+       },
+       {
+        "consequence": "In that configuration, AnonymousDeviceLimit remains zero rather than taking the environment-specified limit.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The resulting zero limit skips device-limit enforcement, so deployments attempting to enable it solely through the environment do not get the requested enforcement.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "If an operator sets GF_AUTH_ANONYMOUS_DEVICE_LIMIT to a positive limit but no loaded INI file contains auth.anonymous.device_limit, the override pass cannot apply that value. The setting subsequently defaults to zero and anonymous device-limit enforcement is skipped instead of enforcing the configured limit.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S6",
+      "S8"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "GetWebAssets inspects the cache under RLock and checks the saved value before acquiring the write lock, but does not recheck the cache afterward. Requests that saw a nil cache proceed to asset loading and cache assignment even if another request has since populated it. Manifest opening and JSON decoding occur while the global write lock is held. Both page and frontend-settings handlers call this function.",
+      "consequences": [
+       {
+        "consequence": "Concurrent production requests that initially observe a nil cache redundantly reload and decode the manifest after another request has populated the cache.",
+        "status": "supported"
+       },
+       {
+        "consequence": "During a cold-start burst, these redundant filesystem reads and JSON decodes execute serially under the global write lock.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The redundant loading delays queued page and frontend-settings requests that use GetWebAssets.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Cache readers are blocked while each redundant load holds the write lock.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When multiple production requests inspect a cold, nil cache before the first load completes, each subsequently acquires the write lock and reloads and decodes the manifest rather than using the now-populated cache. This causes redundant serialized work and lock contention for page and frontend-settings requests. The notes establish no crash, wrong result, data loss, security hole, or broken caller.",
+      "remainingIsOptional": true
+     }
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The registered Prometheus histogram has the help text \"histogram of plugin request sizes returned\". QueryData sums the lengths of v.JSON in req.Queries and observes that request size before forwarding to the plugin. CallResource observes len(req.Body) before forwarding to the plugin.",
+      "consequences": [
+       {
+        "consequence": "Prometheus metadata describes the observed incoming request payload sizes with the misleading word \"returned\", suggesting response sizes to operators reading the help text.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Operators actually interpret the observations as response sizes because of that wording.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Whenever this histogram's registered help text is exposed, its wording says \"returned\" although the QueryData and CallResource observations measure incoming request payload lengths. This is a metadata/documentation mismatch; the notes do not establish incorrect measurements or actual operator misinterpretation.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The request-size test cases construct requests containing only PluginContext, so the resource Body and query Queries are empty and both expected request sizes are zero. The tests check collection count, labels, histogram presence, and nonzero SampleCount, but do not check SampleSum. Production instrumentation sums len(v.JSON) for queries, uses len(req.Body) for resources, and observes the calculated size.",
+      "consequences": [
+       {
+        "consequence": "Replacing either request-size calculation with a constant zero would still pass these tests, leaving that instrumentation regression undetected.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The tests cannot distinguish correct request-size calculations from constant-zero calculations: empty request inputs produce zero bytes, and assertions do not validate the observed byte sum. A regression to constant zero would therefore pass these cases even though it would report incorrect sizes for nonempty bodies or query JSON. The notes show a coverage gap, not an existing incorrect production calculation.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test checks collection counts and, for both duration metrics, matching labels, histogram type, and nonzero SampleCount. It does not check SampleSum or bucket values. The implementation currently records float64(elapsed / time.Millisecond) for the milliseconds metric and elapsed.Seconds() for the seconds metric.",
+      "consequences": [
+       {
+        "consequence": "The test would pass if duration observations were constant zero, provided the expected metrics, labels, histogram type, and nonzero observation counts remained present.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test would pass if seconds were recorded in the milliseconds histogram instead of milliseconds, with the other asserted properties unchanged.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "If duration recording is changed to constant zero or to seconds in the milliseconds histogram, the existing assertions will not detect the incorrect values or units. The notes show a gap in test coverage, not an existing incorrect duration calculation in production.",
+      "remainingIsOptional": true
+     }
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "BuildIndex runs the builder and flushes the index before acquiring a lock solely to assign b.cache[key] = idx. GetIndex locks only its cache read. Search and handleEvent both use getOrCreateIndex, which reads the cache and builds on a miss without a per-key guard. Publication neither rechecks the cache nor closes an index it replaces. Events write to or delete from the returned index. Thus concurrent misses for the same NamespacedResource can build and publish separate indexes.",
+      "consequences": [
+       {
+        "consequence": "Concurrent requests for the same uncached NamespacedResource can build duplicate indexes and overwrite one another's cache entries.",
+        "status": "supported"
+       },
+       {
+        "consequence": "An event can update the first published index before another build replaces it, making that update absent from subsequent searches using the replacement index.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The replaced index is left open rather than closed during cache replacement.",
+        "status": "supported"
+       },
+       {
+        "consequence": "GetIndex previously blocked behind a build-wide lock.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When concurrent Search and/or handleEvent calls miss the cache for the same NamespacedResource, they can build independent indexes. If one build publishes and an event updates that index before another build publishes an index lacking the update, the later unconditional cache assignment discards the updated index. Subsequent searches can then omit the event's change, and the replaced index is not closed.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Startup launches the write-event listener goroutine before calling TotalDocs for the startup log. TotalDocs iterates b.cache without cacheMu.RLock. An event for a resource with no cached index can call getOrCreateIndex and then BuildIndex, which publishes b.cache[key] under cacheMu.Lock. GetIndex uses cacheMu.RLock/RUnlock, but TotalDocs does not, allowing its iteration to overlap cache publication.",
+      "consequences": [
+       {
+        "consequence": "A write event for an unindexed resource can cause a concurrent map iteration/write data race during the startup TotalDocs call.",
+        "status": "supported"
+       },
+       {
+        "consequence": "That concurrent map iteration/write can potentially cause a fatal runtime error during initialization.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When a write event for an uncached resource reaches BuildIndex and publishes an index while startup TotalDocs is iterating b.cache, the map is read and written concurrently without shared synchronization. This is a data race and can terminate the process with a concurrent map iteration/write runtime error.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "When dbType == \"postgres\", the test unconditionally calls t.Skip before initializing the database, selecting modules.StorageServer, starting ms.Run, or checking that GET /metrics returns HTTP 200. The skip is not limited to Drone or any environmental prerequisite. The server code registers instrumentation unless All or Core is enabled and separately registers the storage-server service.",
+      "consequences": [
+       {
+        "consequence": "The entire instrumentation-server test is skipped for every postgres run, including local runs.",
+        "status": "supported"
+       },
+       {
+        "consequence": "If instrumentation HTTP startup regresses for the postgres storage-server target, this test reports skipped rather than detecting that regression.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The underlying postgres test works locally, as the skip message asserts.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "The test failure is specifically caused by a CI environmental prerequisite that could be isolated or fixed.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "For dbType == \"postgres\", the unconditional skip removes startup and /metrics verification, including outside CI. This leaves a postgres instrumentation-startup regression undetected by this test; the notes do not establish any actual runtime regression or caller failure.",
+      "remainingIsOptional": true
+     }
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test case is named \"creating an object only in the unified store\" but configures both storage Create mocks to return exampleObj, nil and invokes Mode3.Create. Mode3.Create first calls Storage.Create, returns if it fails, and otherwise launches a goroutine that calls Legacy.Create.",
+      "consequences": [
+       {
+        "consequence": "The test case's name (and thus its label in test output) misleadingly describes creation as unified-store-only even though successful unified creation triggers an asynchronous legacy creation attempt.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When this test case is run or its name is read, its unified-store-only label misdescribes the exercised behavior: successful Storage.Create is followed by an asynchronous Legacy.Create call. The notes establish a misleading test name, not a functional failure.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S8",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9",
+      "S16"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S11"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The encoder defines UNKNOWN as 'na' and uses that value when Constants.GRANT_TYPE is null in the client session context. ClientCredentialsGrantType obtains a fresh context and calls generateAccessToken directly without setting that attribute. PermissionGrantType delegates to AuthorizationTokenService, which likewise creates a fresh context and generates the access token without setting the attribute. Fresh DefaultClientSessionContext instances have empty attribute maps, and these paths bypass the assignment in createTokenResponse.",
+      "consequences": [
+       {
+        "consequence": "Tokens issued through the checked client-credentials path carry 'na' rather than the known client-credentials grant in their encoded grant context.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Tokens issued through the checked UMA authorization path carry 'na' rather than the known UMA grant in their encoded grant context.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When an access token is generated through the checked client-credentials or UMA issuance path, its fresh ClientSessionContext lacks Constants.GRANT_TYPE. The encoder consequently emits 'na', losing the known grant identity in the token's grant metadata. The notes establish incorrect metadata, not a crash or downstream caller failure.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test constructs a factory, calls init(null) but not postInit, and registers only ro, cc, and na. It decodes \"ofrtac:5678\" and catches RuntimeException. Because ac is absent, the factory attempts sessionFactory.getProviderFactoriesStream(OAuth2GrantType.class) with a null sessionFactory. This throws NullPointerException before the decoder reaches its null-grant check and intended IllegalArgumentException.",
+      "consequences": [
+       {
+        "consequence": "The negative test accepts an unrelated fixture NullPointerException as a passing result because it catches RuntimeException.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The missing postInit leaves sessionFactory null, so resolving ac crashes during factory lookup before the decoder's unknown-grant validation is exercised.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The existing test would still pass if the decoder's null-grant validation were removed, because the earlier fixture NullPointerException would still be caught.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Using a fixture whose lookup returns no matching grant and asserting IllegalArgumentException specifically would make removal of the decoder's validation fail this test.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "With the current fixture (init(null), no postInit, and no ac registration), decoding \"ofrtac:5678\" throws NullPointerException during grant lookup. The test catches it as RuntimeException and passes without exercising the intended unknown-grant IllegalArgumentException, masking absence or failure of that validation.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S2",
+      "S5",
+      "S7",
+      "S8",
+      "S10",
+      "S11",
+      "S12",
+      "S18"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S3",
+      "S6",
+      "S14",
+      "S15",
+      "S19"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S13",
+      "S17"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Both English bundles contain `Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}.`. PersonalInfo passes server-error parameters through setUserProfileServerError, which builds numerically keyed parameters and spreads them into i18next t(). Both UIs retain default double-brace interpolation and receive backend message values unchanged; ThemeResource does not apply MessageFormat.",
+      "consequences": [
+       {
+        "consequence": "When the account UI displays this multivalued-size server validation error in English, the numeric placeholders and Java choice expression remain literal instead of displaying the attribute name, bounds, and selected singular/plural form.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The admin English bundle has the same incompatible syntax and its i18next configuration likewise cannot interpolate or evaluate it when that message is translated.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Displaying the English multivalued-size validation message through either UI's i18next translation leaves `{0}`, `{1}`, `{2}`, and `{2,choice,0#values|1#value|1<values}` unresolved. The account trigger is a multivalued-size server validation error handled by PersonalInfo; for admin, the defect occurs when the same message is translated with the documented configuration.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "For error-invalid-multivalued-size, the verifier replaces matches of \\{[0-9]+,choice,[^}]*} with \"...\" before anchor checks and HTML sanitization. The supplied choice expression has no inner closing brace, so its entire branch text, including the anchor, is removed from the string being validated. Neither HTML policy permits anchors. Runtime MessageFormat consumers format the original bundle value, not this normalized verifier string.",
+      "consequences": [
+       {
+        "consequence": "Prohibited anchor markup inside the supplied choice expression bypasses the verifier's translation-policy checks.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Runtime MessageFormat consumers expand the original choice branch, including its anchor text, when the corresponding branch is selected.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The injected link becomes an active link in the rendered output, with potential malicious-link exposure to users.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "A translation of error-invalid-multivalued-size containing an anchor inside a choice expression without an inner closing brace, such as {2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}, has that prohibited markup removed before validation and therefore escapes the anchor policy check. The original translation remains available to runtime MessageFormat consumers, which expand that anchor-containing branch when selected. The notes do not establish whether downstream rendering makes the link active.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The global canView() returns canViewClientDefault() || hasPermission(VIEW), without checking fine-grained all-clients MANAGE. Client-specific canView(client) permits viewing through configure/manage checks. The permission lookup falls back to the all-clients resource only when no client-specific resource exists, so a client-specific denial is not overridden by global MANAGE. For callers authorized to list clients (for example through QUERY_CLIENTS), getClients uses realm.getClientsStream() when global canView() is false and authorizes client representations before applying pagination, rather than fetching a database page. Default viewing checks use admin roles, not fine-grained MANAGE.",
+      "consequences": [
+       {
+        "consequence": "An administrator authorized to list clients, with all-clients MANAGE but no VIEW or default role-based viewing capability, is not recognized as having global viewing capability even though management can authorize viewing individual clients.",
+        "status": "supported"
+       },
+       {
+        "consequence": "For that administrator, getClients selects an unpaginated realm-wide client stream and performs client authorization before pagination rather than retrieving the requested database page.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Client-specific denial must remain effective rather than being overridden by all-clients MANAGE; the existing client-specific resource lookup preserves that denial.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When a list-authorized administrator has fine-grained all-clients MANAGE but lacks global VIEW and default role-based viewing capability, the global capability check misses MANAGE and sends listing through the realm-wide, authorization-before-pagination path instead of the database-paginated path. The notes establish this inefficient path selection, not a crash, incorrect returned result, data loss, security hole, or caller breakage. Any proposed shortcut must retain client-specific denials.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The denied-operation test calls getDefaultClientScopes().get(1) on the restricted client before calling removeDefaultClientScope(), inside the same try/catch accepting ForbiddenException. The scopes read requires VIEW, whereas removal separately requires MANAGE. MANAGE is granted only afterward, before the later successful removal.",
+      "consequences": [
+       {
+        "consequence": "With no permission granted, getDefaultClientScopes() throws ForbiddenException before removal is invoked, satisfying the test's expected denial without testing removal authorization.",
+        "status": "supported"
+       },
+       {
+        "consequence": "If removal's MANAGE check were deleted, the initial forbidden assertion would still pass and the later granted removal would still succeed, so this test would not detect that authorization regression.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "In the no-permission state, the test accepts the ForbiddenException from the prerequisite scopes read and never executes the removal under test. Consequently it falsely passes even in the specific broken implementation where removal's MANAGE check is removed. Fetching the scope ID through a privileged client first would isolate the restricted removal assertion.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "PasswordForm.configuredFor accepts conditional-passkey eligibility as an alternative to having a password; that eligibility checks passkeys enablement and the user's WebAuthn credential. PasswordForm populates WebAuthn form data but renders createLoginPassword(). The base login-password.ftl has only password UI and passwordVisibility.js, without the passkeys import or conditionalUIData call. The legacy keycloak theme inherits base and has no override, whereas keycloak.v2 includes those passkey integrations.",
+      "consequences": [
+       {
+        "consequence": "A passkey-only user with conditional passkeys enabled can satisfy PasswordForm.configuredFor.",
+        "status": "supported"
+       },
+       {
+        "consequence": "When PasswordForm challenges that user under the legacy keycloak theme (or another theme using the unchanged base template), the rendered password challenge lacks the conditional passkey UI available in keycloak.v2.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The passkey-only user cannot authenticate through that password-only challenge using their accepted passkey credential.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The user has no way to authenticate at all, including through any alternative flow or authenticator.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "With conditional passkeys enabled, a passkey-only user routed to PasswordForm under the legacy keycloak theme or an unchanged base-derived theme is accepted as configured but receives a password-only challenge without the passkey integration needed to use their credential there. The notes do not establish whether other authentication routes can recover the login.",
+      "remainingIsOptional": false
+     }
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "AlertRuleMenu renders MenuItemPauseRule only when canPause is true and rulerRuleType.grafana.rule(rulerRule) is true. GrafanaRuleListItem supplies promRule and groupIdentifier but no rulerRule; RuleActionsButtons forwards these without fetching a ruler rule. The type guard returns false for an undefined ruler rule. MenuItemPauseRule itself requires a RulerGrafanaRuleDTO to determine Pause versus Resume.",
+      "consequences": [
+       {
+        "consequence": "Pause/Resume menu actions are absent for rules reached through the checked GrafanaRuleListItem caller, including when the Prometheus-based permission allows pausing.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When a list-view rule is passed through GrafanaRuleListItem with only promRule and the user is permitted to pause it (canPause is true), the undefined rulerRule fails the Grafana ruler-rule guard, so the menu omits Pause/Resume despite that permission. This breaks access to the pause/resume action through that caller.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "AlertRuleMenu combines ruler and Prometheus delete abilities into canDelete, but renders Delete only when both canDelete and rulerRule are truthy and invokes handleDelete(rulerRule, groupIdentifier). The Grafana grouped and filtered list paths both use GrafanaRuleListItem, which supplies only promRule and groupIdentifier to RuleActionsButtons. That component consequently forwards an undefined rulerRule, despite already supplying an identifier-based delete handler.",
+      "consequences": [
+       {
+        "consequence": "In both Grafana grouped and filtered list views, users whose Prometheus-based delete permission succeeds do not see the Delete action because rulerRule is absent.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When a Grafana rule is shown through either the grouped or filtered list path with a Prometheus rule and group identifier but no rulerRule, the menu hides Delete even when canDelete is true. This prevents authorized users from deleting through that menu.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The named test renders the loader and checks only that the More button exists, has aria-label 'More', and contains text 'More'. It does not open the dropdown or assert menu options. A separate test clicks More and verifies Silence, Copy link, Duplicate, Export, and a total of four menu items. AlertRuleMenu renders its dropdown overlay separately from the MoreButton.",
+      "consequences": [
+       {
+        "consequence": "The named test would still pass if the dropdown were empty while the More button retained its checked presentation.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The named test does not itself verify the action-menu options implied by its title; those options are covered by a separate menu-click test.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The test title implies option coverage that its assertions do not provide: with an empty dropdown and an unchanged More button, this individual test would pass. The separate menu-click test already checks the options, so the notes establish no missing overall option coverage or runtime defect.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7",
+      "S9"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Updates load the original IDP through getById, which wraps it in an organization-aware model whose isEnabled also requires the organization to be enabled. Login-cache update invalidation returns early when both original and updated login predicates are false; these predicates check isEnabled and BROKER_PUBLIC. In contrast, cached login IDs are populated through idpDelegate.getForLogin using persisted login fields and BROKER_PUBLIC. The login bean rechecks isEnabled and the existing alias, but not BROKER_PUBLIC.",
+      "consequences": [
+       {
+        "consequence": "For an already cached public IDP whose organization is disabled, changing BROKER_PUBLIC to false can make both invalidation predicates false and leave its ID stale in the login cache.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Re-enabling the organization can cause the now-private broker to be displayed on the login page because the login bean does not recheck BROKER_PUBLIC.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When a public IDP is already in the login cache, its organization is disabled, and an administrator changes BROKER_PUBLIC to false, organization-aware evaluation of the original model can suppress login-cache invalidation. If the organization is subsequently re-enabled while the stale cache entry remains, the login bean can display that now-private IDP, contrary to its persisted login visibility setting.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test discards every getForLogin returned stream and checks only cached IdentityProviderListQuery existence and provider-ID counts. Repeated searches follow explicit cache invalidation, so they do not exercise a same-mode/same-organization cache hit. The implementation collects and caches provider IDs before reconstructing provider models and returning their stream.",
+      "consequences": [
+       {
+        "consequence": "A change that returns an empty stream or wrong provider models while leaving the cached query contents unchanged would still pass this test.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test does not verify returned provider identities or exercise a same-key cache-hit query.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The demonstrated issue is a test-coverage gap: when getForLogin returns an empty or incorrect provider stream but still caches the expected provider IDs, this test does not detect it. Searches after invalidation also leave the same-key cache-hit path untested. The notes do not establish that the current implementation actually returns incorrect providers.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test named test_from_dict_empty_array passes an empty dictionary {} to AssignmentSource.from_dict and asserts that the result is None. from_dict calls cls(**input_dict) and catches ValueError and TypeError. For {}, missing required source_name and integration_id constructor arguments cause a caught TypeError, yielding None. The test never supplies an empty list.",
+      "consequences": [
+       {
+        "consequence": "This test exercises missing required dictionary keys rather than an empty array input.",
+        "status": "supported"
+       },
+       {
+        "consequence": "This test would still pass if rejection of array inputs were broken while empty-dictionary handling remained unchanged.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The test name suggests empty-array coverage, but the actual input {} only verifies empty-dictionary handling. It leaves [] untested; no runtime failure or incorrect production result is established by the notes.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "When max_memory_percentage < 1.0 and submit reaches the memory check, the code iterates all flusher buffers and calls get_memory_info synchronously on each. There is one SpansBuffer per process; each uses a Redis client obtained without shard arguments and queries cluster-wide INFO without filtering by assigned_shards.",
+      "consequences": [
+       {
+        "consequence": "With P process buffers, each submit that reaches the enabled memory check performs P redundant cluster-wide memory queries rather than one.",
+        "status": "supported"
+       },
+       {
+        "consequence": "These repeated queries increase Redis traffic.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The synchronous queries occupy the submitting consumer thread while they execute.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The additional queries block ingestion or cause a material ingestion slowdown.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "With memory backpressure enabled (max_memory_percentage < 1.0), more than one process buffer, and submit reaching the memory check, the same cluster-wide memory information is fetched synchronously once per buffer, producing redundant Redis traffic and synchronous work. The notes do not establish an ingestion failure or material slowdown.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The docstring says it creates one process per shard. The implementation instead sets the worker count to min(max_processes, number of assigned shards), distributes shards round-robin across those workers, and creates one worker per mapped shard list. The CLI defaults flusher-processes to 1 and passes it as max_processes, so with assigned shards the default uses one worker for all of them.",
+      "consequences": [
+       {
+        "consequence": "Multiple assigned shards share a worker when the assigned shard count exceeds max_processes; with the CLI default of 1, all assigned shards share one worker.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Callers may rely on the docstring's promise of per-shard process isolation and be adversely affected by shared workers.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The docstring inaccurately promises one process per shard. When the number of assigned shards exceeds max_processes (for example, multiple assigned shards with the CLI default of 1), the implementation uses shared workers instead. The notes establish this documentation mismatch, but do not establish any resulting runtime failure or broken caller.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test asserts process counts and a total of four entries across the shard lists, but does not assert shard identities, uniqueness, or worker buffer contents. The flusher constructs each worker's SpansBuffer from that worker's mapped shard list and passes both to the worker. The current distribution algorithm assigns shards correctly.",
+      "consequences": [
+       {
+        "consequence": "A hypothetical mapping {0: [0, 1], 1: [0, 1]} passes every assertion in this test despite duplicating shards and omitting shards 2 and 3.",
+        "status": "supported"
+       },
+       {
+        "consequence": "With that hypothetical mapping, workers receive only shards 0 and 1, leaving shards 2 and 3 unflushed by those workers.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The test has a coverage gap: if distribution regresses to {0: [0, 1], 1: [0, 1]}, its count assertions still pass even though workers omit shards 2 and 3. No current runtime distribution defect is established; the existing algorithm assigns shards correctly.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The endpoint generates node_ids, calls nodestore.backend.get_multi(node_ids), and pairs error_ids positionally with events.values(). get_multi selects uncached IDs, builds its result dictionary from the uncached fetch results, then merges cached entries into that dictionary before returning it. Thus its dictionary value iteration order need not match the requested node ID order.",
+      "consequences": [
+       {
+        "consequence": "A mixed cached/uncached batch can associate error details with the wrong event IDs when a cached node precedes an uncached node in the request, because returned values are paired positionally with error_ids.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When the request includes a cached node before an uncached node, get_multi places uncached results before cached results, while the endpoint zips those values with error_ids in request order. The endpoint can therefore assign one event's payload to another event ID and produce incorrect error details. Looking up each payload by its corresponding node ID avoids this positional mismatch.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The endpoint unconditionally calls query_replay_instance before evaluating enable_error_context. That lookup executes a Snuba query and propagates query errors. Setting enable_error_context=false skips fetch_error_details and sets error_events to an empty list, but does not skip the preceding replay lookup, whose result is unnecessary in that case.",
+      "consequences": [
+       {
+        "consequence": "Summary requests with enable_error_context=false still incur an unnecessary Snuba database round trip.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Such opt-out requests can fail when the Snuba lookup fails, including due to Snuba unavailability, despite not needing its result for error context.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Opt-out summary requests otherwise need only recording storage, with no other dependencies.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When enable_error_context=false, the endpoint still executes an unnecessary Snuba replay lookup. If that query fails, its error propagates and can fail an opt-out summary request even though error-detail fetching is disabled and the lookup result is unused.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The numeric test's mock matches query.query === 'search-query', whereas the string test matches query.substringMatch. The hook puts search in substringMatch and currently returns early for numeric attributes. Without that guard, it would issue the request with substringMatch. The API mock requires all matchers to pass, records an unmatched-request error on a mismatch, and calls the response mock only for a match.",
+      "consequences": [
+       {
+        "consequence": "Removing the numeric early-return guard would issue a request that does not match or invoke searchQueryMock.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The expect(searchQueryMock).not.toHaveBeenCalled() assertion would still pass despite the forbidden request.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The regression may instead be detected through unmatched-request error handling rather than the mock-call assertion.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Changing the matcher to substringMatch would make the mock-call assertion directly detect that forbidden request.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "In the numeric-attribute test with search 'search-query', removal of the hook's numeric early-return guard would produce a forbidden request using substringMatch, but the test mock matches query.query. Consequently the mock is not called and the negative mock-call assertion passes; detection is left to unmatched-request handling rather than that assertion.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The shared prop documentation says the endpoint currently supports only LOGS. TransactionNameSearchBar supplies TraceItemDataset.SPANS to useGetTraceItemAttributeValues and invokes its returned fetcher. The hook forwards traceItemType as itemType, and the endpoint accepts supported trace item types and explicitly handles SPANS column definitions and attribute-value referrers.",
+      "consequences": [
+       {
+        "consequence": "The shared documentation incorrectly tells callers that SPANS is unsupported even though the endpoint supports it and TransactionNameSearchBar actively uses it.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When a developer reads the shared traceItemType prop documentation to determine valid datasets, the LOGS-only statement incorrectly excludes the supported, actively used SPANS dataset. The notes establish a documentation error, not a runtime failure.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S1",
+      "S19"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S13",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S12",
+      "S15",
+      "S17",
+      "S20"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S5",
+      "S10",
+      "S16",
+      "S21"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S11"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": []
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "evaluate declares and returns dict[DetectorGroupKey, DetectorEvaluationResult], populating it with results[result.group_key] = result. Its adjacent docstring incorrectly describes a list of DetectorEvaluationResult. The checked caller correctly iterates detector_results.values().",
+      "consequences": [
+       {
+        "consequence": "The docstring gives readers an incorrect return contract, describing a list rather than the dictionary actually returned.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Directly iterating the returned dictionary as though it were a list of evaluation results would yield group keys rather than evaluation results.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The docstring is inaccurate whenever readers consult it for evaluate's return contract. With a nonempty returned dictionary, direct iteration yields DetectorGroupKey values, not DetectorEvaluationResult objects. This is a conditional consequence of following the documentation, not an observed caller failure: the checked caller uses .values() correctly.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "MetricAlertDetectorHandler directly inherits StatefulDetectorHandler[QuerySubscriptionUpdate] and has an otherwise empty body (pass). StatefulDetectorHandler already exists and initializes state-update storage. The adjacent TODO still says the handler will become a stateful detector when that abstraction is built.",
+      "consequences": [
+       {
+        "consequence": "The TODO describes an already-existing and already-inherited abstraction as a future migration.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The outdated TODO misleads maintainers about which abstraction the handler uses.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When a maintainer reads the adjacent TODO, it presents use of a stateful-detector abstraction as future work despite that abstraction already being the handler's direct base class. Actual maintainer confusion is not established by the notes; no runtime incorrect behavior is identified.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test helper accepts value but does not use it: occurrence evidence_data is empty and returned event data has no measurement. The mocked hook delegates to this helper. The multi-group test inputs group_2=10 but constructs its expected occurrence using 6; its assertions compare results and producer calls rather than hook arguments. Production currently forwards group_key, value, and PriorityLevel(new_status) to the hook.",
+      "consequences": [
+       {
+        "consequence": "The occurrence assertions cannot detect an incorrectly forwarded measurement because the helper's outputs do not depend on value.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The multi-group test's expected occurrence uses 6 instead of the input measurement 10 for group_2 without causing an assertion failure.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A regression forwarding a constant or another group's measurement at this hook would go unnoticed by these occurrence assertions.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "There is a test-coverage gap: when group_2 has measurement 10, an expected occurrence constructed with measurement 6 is indistinguishable, and an incorrect measurement passed to the hook would likewise not be caught by these assertions. The notes show no current production forwarding error; production passes value correctly.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test sends a hardcoded callback state and checks only that the response contains 'Invalid installation request.'. OAuthLoginView runs before GitHubInstallation and returns that same default error on a state mismatch, missing access token, or missing authenticated login. The installation-not-found path instead raises IntegrationError('The GitHub installation could not be found.'). The test does not assert that the mocked installation lookup returning 404 was called.",
+      "consequences": [
+       {
+        "consequence": "The assertion does not establish that a nonexistent installation was looked up and rejected, because an earlier OAuth-validation failure satisfies it.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test can pass even if installation-not-found handling is broken, when the callback fails OAuth validation before reaching that handling.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "With a callback state that mismatches the pipeline state, or an OAuth exchange missing an access token or authenticated login, the test accepts the generic authentication error as success without reaching the nonexistent-installation lookup. This is a false-positive regression test: broken installation-not-found handling can remain undetected. The notes do not establish an actual production failure of that handling.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The module imports gettext_lazy as _. The helper defaults error_short to the plain string \"Invalid installation request.\" and places _(error_short) in the payload's data.error field. Two callers supply the plain strings \"GitHub installation pending deletion.\" and \"Github installed on another Sentry organization.\" Repository-wide Python search found no literal gettext calls for any of these three strings.",
+      "consequences": [
+       {
+        "consequence": "Django's static message extraction cannot discover these three short-message literals through _(error_short), and there are no literal gettext extraction sites for them in the searched Python code.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The refactor removed the literal gettext extraction sites that previously existed for the pending-deletion and already-installed messages.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Users encountering these errors in a non-English locale will receive untranslated short messages because translations are missing from the deployed catalogs.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When message catalogs are generated from the current Python extraction sites, the default invalid-installation short message and the two explicitly supplied short messages are not extracted. This prevents this code from supplying those messages for translation through the normal extraction workflow, affecting localization of the corresponding error payloads. Actual deployed catalog contents and resulting locale-specific output were not checked.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false
+    }
+   ]
+  }
+ }
+}

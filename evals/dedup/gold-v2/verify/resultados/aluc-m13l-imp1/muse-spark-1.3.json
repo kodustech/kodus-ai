@@ -1,0 +1,3014 @@
+{
+ "model": "muse-spark-1.3",
+ "verificador": "muse-spark-1.3",
+ "versao": "m13l-imp1",
+ "sobre": "m13l-h1t10f",
+ "prs": {
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In packages/features/ee/workflows/api/scheduleSMSReminders.ts the guard at :158 is `if (message?.length && message?.length > 0 && sendTo) {` with retryCount updates only at :184 inside that if (`retryCount: reminder.retryCount + 1`) and at :195 in catch, and no else before closing `}` at :188, so when sendTo is missing or message is empty the path falls through with no update.",
+      "consequences": [
+       {
+        "consequence": "Reminders with no phone number or empty body retry forever until scheduledDate",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "The unbounded rescheduling the PR claims to fix remains / PR fix is left incomplete",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When a reminder has missing sendTo or empty message, the falsy guard at :158 causes a skip with no retryCount increment and no delete/cancel in an else.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The catch at 189-197 unconditionally does prisma.workflowReminder.update retryCount to reminder.retryCount+1 for any exception thrown in the try that covers prisma.profile.findFirst at :111, getBookerBaseUrl at :119, customTemplate at :138, twilio.scheduleSMS at :159. The code at 29-43 does deleteMany where retryCount gt 1 (i.e. >1).",
+      "consequences": [
+       {
+        "consequence": "Two consecutive cron runs with a transient global failure increment every pending SMS reminder to retryCount 2",
+        "status": "supported"
+       },
+       {
+        "consequence": "The startup deleteMany then wipes the entire future SMS queue, not just permanently-invalid numbers",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Unconditional counting: any exception in profile/bookerUrl/templating/scheduleSMS (including transient rate-limit/Twilio outage) increments retryCount, so after two consecutive globally-failing runs reminders starting at 0 reach 2 and then satisfy the startup deleteMany retryCount gt 1 filter and are deleted, losing the future SMS queue.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Line 28 has comment '//delete all scheduled sms reminders where scheduled date is past current date' while lines 28-44 implement a two-branch OR delete where the second branch at lines 38-42 filters only on `{ retryCount: { gt: 1 } }` with no method or date filter.",
+      "consequences": [
+       {
+        "consequence": "Comment on line 28 is stale/incomplete because it describes only past-date deletion and omits the retryCount > 1 branch, requiring an update to describe both branches",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Comment on line 28 describes only deletion where scheduled date is past current date, while the OR delete also deletes any reminder with retryCount > 1 regardless of method or date; trigger is reading/maintaining lines 28-44 with the second OR branch present.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S6"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "addGuestsMutation onSuccess at lines 35-41 shows toast, sets isOpenDialog false and resets multiEmailValue to [\"\"] with no setIsInvalidEmail; the only setIsInvalidEmail(false) in file is at line 91 in Cancel onClick, with setIsInvalidEmail(true) at line 56, so success/close leaves isInvalidEmail true and banner at 76-84 persists.",
+      "consequences": [
+       {
+        "consequence": "after one failed validation the red emails_must_be_unique_valid error persists on the next open",
+        "status": "supported"
+       },
+       {
+        "consequence": "after one failed validation the red error persists through a successful add",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "After isInvalidEmail becomes true from a failed validation (line 56), a later onSuccess (lines 35-41) clears emails and closes dialog without clearing the flag, so reopening the dialog shows stale emails_must_be_unique_valid banner at lines 76-84.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Per checker notes: addGuests.schema.ts:5 defines `guests: z.array(z.string().email())` with no `.max`; addGuests.handler.ts:100-103 feeds derived guests data into `createMany: { data: guestsFullDetails }`; emails are sent via `await Promise.all(emailsToSend)` in email-manager.ts:549; attendee-level authorized callers are allowed.",
+      "consequences": [
+       {
+        "consequence": "any authorized caller including a mere attendee can submit thousands of emails",
+        "status": "supported"
+       },
+       {
+        "consequence": "unbounded createMany DB inserts proportional to guests input",
+        "status": "supported"
+       },
+       {
+        "consequence": "unbounded Promise.all email fanout in sendAddGuestsEmails proportional to guests input",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "No consequences contradicted. Submitting a large guests array (e.g., thousands of email strings) as an authorized attendee triggers proportional createMany attendee inserts and proportional Promise.all email sends with no schema max-length cap.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "packages/ui/form/MultiEmail.tsx:46 uses literal `<Tooltip content=\"Remove email\">` while the same file gets `const { t } = useLocale();` at line 13 and uses `{t(\"add_another\")}` at line 69.",
+      "consequences": [
+       {
+        "consequence": "User-facing Tooltip displays hard-coded English 'Remove email' that bypasses i18n and is not translated for non-English locales",
+        "status": "supported"
+       },
+       {
+        "consequence": "Inconsistent with surrounding strings in the same file that use t() for i18n",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When MultiEmail is rendered under a non-English locale, the remove-email Tooltip still shows English 'Remove email' instead of a translated string because content is a hard-coded literal rather than t(\\\"remove_email\\\") with a locale key.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7",
+      "S13"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S3",
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S12",
+      "S15"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes, evt.destinationCalendar is initialized to null when neither eventType.destinationCalendar nor organizerUser.destinationCalendar exists, and for COLLECTIVE team event types the code executes evt.destinationCalendar?.push(...teamDestinationCalendars) with optional chaining, which no-ops when the value is null.",
+      "consequences": [
+       {
+        "consequence": "collective team destination calendars are dropped for the organizer-without-calendar case",
+        "status": "supported"
+       },
+       {
+        "consequence": "secondary hosts never get events in that case",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "For a COLLECTIVE team event (isTeamEventType true and schedulingType COLLECTIVE) where both eventType.destinationCalendar and organizerUser.destinationCalendar are missing, evt.destinationCalendar stays null and the collected teamDestinationCalendars are discarded because the ?.push no-ops.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At lines 148-152 the code is `...(IS_TEAM_BILLING_ENABLED ? { slug } : {})` at line 151, so slug is included when IS_TEAM_BILLING_ENABLED is true and omitted when false, with requestedSlug also gated on IS_TEAM_BILLING_ENABLED at line 153.",
+      "consequences": [
+       {
+        "consequence": "organizations get slug when billing is enabled",
+        "status": "supported"
+       },
+       {
+        "consequence": "organizations lose slug when billing is disabled",
+        "status": "supported"
+       },
+       {
+        "consequence": "behavior is opposite of prior contract (inverted condition)",
+        "status": "supported"
+       },
+       {
+        "consequence": "slug/requestedSlug pairing is broken (no longer mutually exclusive)",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Inverted slug branch: organization creation includes slug (alongside requestedSlug, breaking mutual exclusivity) when IS_TEAM_BILLING_ENABLED is true, and omits slug when IS_TEAM_BILLING_ENABLED is false where slug is expected per publish and teams _post patterns. Trigger is creating an organization under either value of IS_TEAM_BILLING_ENABLED.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S1",
+      "S7",
+      "S10",
+      "S11",
+      "S13",
+      "S16"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S2",
+      "S8",
+      "S12",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S3",
+      "S9",
+      "S15"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S6",
+      "S17",
+      "S18"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Authorize verifies password only at lines 121-129 guarded by `if (user.password && !credentials.totpCode)`, so any truthy totpCode skips verifyPassword, and the backup-code branch at lines 131-156 verifies only backup codes with no password check before returning the user at 205. Thus backupCode + any totpCode value authenticates without password verification.",
+      "consequences": [
+       {
+        "consequence": "Backup-code login authenticates without verifying the password when credentials also contain any truthy totpCode value",
+        "status": "supported"
+       },
+       {
+        "consequence": "An attacker holding only a backup code can add a dummy totpCode to the credentials callback and log in without the password",
+        "status": "supported"
+       },
+       {
+        "consequence": "Two-factor protection (password + backup code) is reduced to one factor (backup code alone)",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When credentials contain a valid backupCode plus any truthy totpCode, authorize skips the line 121 password check because totpCode is truthy and the backup-code branch 131-156 returns the user without any password check, allowing login with backup code alone and no password.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "resetState() at lines 71-75 only clears password/error/step via setPassword(\"\"), setErrorMessage(null), setStep(ConfirmPassword) and never clears backupCodes, secret, dataUri nor revokes backupCodesUrl in resetState or on unmount; sensitive states declared at 64-67 are only set at 92,99,101,102 with revoke only at line 98.",
+      "consequences": [
+       {
+        "consequence": "Closing the modal after setup leaves TOTP secret in memory",
+        "status": "supported"
+       },
+       {
+        "consequence": "Closing the modal after setup leaves backup codes in memory",
+        "status": "supported"
+       },
+       {
+        "consequence": "Leaks the Blob object URL on every setup/close cycle",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "After setup populates secret/backupCodes/dataUri/backupCodesUrl, closing the modal invoking resetState leaves those values in state with no clearing and no URL.revokeObjectURL in resetState or on unmount, retaining secret/codes and leaking the object URL.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At apps/web/pages/api/auth/two-factor/totp/disable.ts:61 the code calls req.body.backupCode.replaceAll(\"-\", \"\") guarded only by apps/web/pages/api/auth/two-factor/totp/disable.ts:48 `if (user.twoFactorEnabled && req.body.backupCode)` with no typeof/string validation in the file, so truthy non-string values reach the string-only replaceAll and would throw.",
+      "consequences": [
+       {
+        "consequence": "A non-string JSON value (number/array) throws TypeError",
+        "status": "supported"
+       },
+       {
+        "consequence": "Returns 500 instead of the 400 IncorrectBackupCode contract",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Breaking error handling for callers expecting 400 contract",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Enabling error-probing",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Truthy non-string req.body.backupCode (e.g., number/array) with user.twoFactorEnabled true passes the truthiness check and reaches replaceAll at line 61, throwing TypeError.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "apps/web/components/auth/BackupCode.tsx:7 defines `export default function TwoFactor({ center = true })`, while apps/web/components/auth/TwoFactor.tsx:8 defines a separate `export default function TwoFactor`, and apps/web/pages/auth/login.tsx:32 imports the former as `import BackupCode from \"@components/auth/BackupCode\"`.",
+      "consequences": [
+       {
+        "consequence": "exported function name disagrees with file name and import contract (TwoFactor vs BackupCode.tsx / BackupCode)",
+        "status": "supported"
+       },
+       {
+        "consequence": "duplicates the name of the real TwoFactor component defined in TwoFactor.tsx",
+        "status": "supported"
+       },
+       {
+        "consequence": "misleads callers/readers about which component is being defined/used",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "BackupCode.tsx still defines and default-exports a function named TwoFactor instead of BackupCode, duplicating the name in TwoFactor.tsx. The mismatch is visible whenever the file is opened, searched for TwoFactor, or the exported symbol name is inspected, even though importing via `import BackupCode from \"@components/auth/BackupCode\"` still resolves to the intended component.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At apps/web/playwright/login.2fa.e2e.ts:53 the code does `await expect(page.locator([data-testid=two-factor-switch]).isChecked()).toBeTruthy()` without awaiting isChecked(), thus passing a Promise object to toBeTruthy(). The PR at apps/web/components/settings/EnableTwoFactorModal.tsx:135 adds `setStep(SetupStep.DisplayBackupCodes)` after enable, which the first test never dismisses (no backup-codes-close handling, unlike second test line 125).",
+      "consequences": [
+       {
+        "consequence": "Assertion `expect(locator.isChecked()).toBeTruthy()` never fails because isChecked() returns a Promise which is always truthy",
+        "status": "supported"
+       },
+       {
+        "consequence": "First enable-2FA test passes even after PR inserts DisplayBackupCodes step it never dismisses (false positive masking missing dismissal)",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Line 53 passes an un-awaited isChecked() Promise to toBeTruthy(), so the assertion is vacuously truthy. Trigger: running the first enable-2FA test (lines 50-54) — it passes regardless of actual switch state and without dismissing the new DisplayBackupCodes step.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The download test in apps/web/playwright/login.2fa.e2e.ts:112-117 only asserts expect(download.suggestedFilename()).toBe(\"cal-backup-codes.txt\") followed by // TODO: check file content with no content assertion.",
+      "consequences": [
+       {
+        "consequence": "Empty/wrong backupCodes blob with correct filename still passes the test",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Test passes when the downloaded backup-codes file is empty or contains wrong codes as long as the filename is cal-backup-codes.txt, because no file-content assertion is performed; triggered when running the login 2FA download test with a broken/incorrect blob generation that preserves the filename.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In apps/web/playwright/login.2fa.e2e.ts:120-122 the test clicks backup-codes-copy then only waits for toast-success, with an explicit `// TODO: check clipboard content`. In apps/web/components/settings/EnableTwoFactorModal.tsx:278-279 the app does `navigator.clipboard.writeText(backupCodes.map(formatBackupCode).join(\"\\n\"))` then unconditionally shows toast success.",
+      "consequences": [
+       {
+        "consequence": "Broken clipboard writeText (wrong format or empty) still passes the test because only toast is checked",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Test gap remains: after clicking backup-codes-copy, if writeText wrote empty or wrongly formatted content, the test would still pass because it only waits for toast-success which is shown unconditionally after writeText. Trigger is copy click with broken clipboard content implementation.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "When refreshTokenResponse.data.refresh_token is missing/falsy, lines 25-27 assign the literal string \"refresh_token\" to that field. Callers including Zoom VideoApiAdapter and Office365 CalendarService persist that parsed data into the credential DB key.",
+      "consequences": [
+       {
+        "consequence": "Stores bogus refresh token in DB",
+        "status": "supported"
+       },
+       {
+        "consequence": "breaking all future refreshes",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "masking provider errors",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When a provider refresh response has no refresh_token, the code injects literal string \"refresh_token\" which Zoom and Office365 callers then save to the credential DB, corrupting stored credentials.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In packages/app-store/_utils/oauth/createOAuthAppCredential.ts the team branch checks only members.some { userId, accepted:true } with no role check and creates a teamId credential, while the non-team path at line 59 calls throwIfNotHaveAdminAccessToTeam. The state.teamId comes from JSON.parse(req.query.state) in decodeOAuthState.ts, an unsigned user-controlled query param, and callbacks call the helper with no other admin check.",
+      "consequences": [
+       {
+        "consequence": "Any non-admin accepted team member can craft state.teamId to create team-level credentials",
+        "status": "supported"
+       },
+       {
+        "consequence": "Privilege escalation violating admin-only intent for team credential creation",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Accepted non-admin team member supplies arbitrary teamId via unsigned state query param to OAuth callback, passes membership-only accepted:true check, and triggers creation of team-level credential for that team without admin role check required in non-team path.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Cited code at line 86 checks `response.statusText !== \"OK\"` to throw HttpError, and at lines 101-107 builds jsforce.Connection from `credentialKey.instance_url`, `credentialKey.access_token`, `credentialKey.refresh_token` after `const accessTokenParsed = parseRefreshTokenResponse(accessTokenJson, salesforceTokenSchema)` where parsed tokens were available.",
+      "consequences": [
+       {
+        "consequence": "Refresh never takes effect (old token reused for new Connection)",
+        "status": "supported"
+       },
+       {
+        "consequence": "Valid refreshes can throw on runtimes where statusText is empty",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "After parsing refresh response, new Connection is still constructed with stale credentialKey access_token/instance_url instead of accessTokenParsed data, so that connection reuses old token; and error detection uses statusText !== \"OK\" instead of response.ok, so a successful refresh response whose statusText is not exactly \"OK\" triggers HttpError. Trigger: executing the token-refresh path with parsed tokens available, and receiving a successful HTTP response with non-\"OK\" statusText.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes: packages/app-store/_utils/oauth/createOAuthAppCredential.ts:13-14 contains '@param appData.type the app slug' and '@param appData.appId the app slug' (both described as slug), while apps/web/pages/api/webhook/app-credential.ts:87-88 distinguishes them as 'appId: appMetadata.slug' vs 'type: appMetadata.type'.",
+      "consequences": [
+       {
+        "consequence": "JSDoc misdocuments appData.type as 'the app slug' when it is the app credential type, misleading readers/callers about what to pass",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "JSDoc for appData.type says 'the app slug' instead of the credential type; triggered when a developer reads the JSDoc/IDE hover for createOAuthAppCredential or uses it to determine the value to supply for appData.type. No runtime crash, wrong return, data loss, security issue, or caller breakage is shown — only incorrect documentation.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S18"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S11",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S5",
+      "S16",
+      "S20"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S13"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S15",
+      "S17",
+      "S19"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The align-items() mixin in app/assets/stylesheets/common/foundation/mixins.scss:117-123 emits `-ms-align-items: $alignment;` on line 121 alongside `-ms-flex-align: $alignment;` on line 120.",
+      "consequences": [
+       {
+        "consequence": "Emitted -ms-align-items is dead/invalid for IE10/11 (only -ms-flex-align exists), showing wrong contract and leaving IE alignment dependent solely on -ms-flex-align",
+        "status": "supported"
+       },
+       {
+        "consequence": "IE alignment breaks when $alignment is flex-start/flex-end because -ms-flex-align needs start/end",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "-webkit-box-align breaks for flex-start/flex-end values and needs mapping to start/end",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Proven defect left: any invocation of align-items($alignment) emits an extra `-ms-align-items: $alignment` declaration that is not a valid IE10/11 property, alongside the valid `-ms-flex-align`. The claimed functional break for flex-start/flex-end via -ms-flex-align/-webkit-box-align was not checked.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Post#cook in app/models/post.rb:130-136 returns `raw` verbatim when cook_method == Post.cook_methods[:raw_html], skipping `post_analyzer.cook` and `Plugin::Filter.apply(:after_post_cook...)`. TopicEmbed in app/models/topic_embed.rb:22 creates posts with cook_method raw_html, and app/views/embed/best.html.erb:19 renders `<div class='cooked'><%= raw post.cooked %></div>` without escaping.",
+      "consequences": [
+       {
+        "consequence": "Skips the cooking/sanitization pipeline and plugin filters for raw_html posts",
+        "status": "supported"
+       },
+       {
+        "consequence": "RSS/readability HTML imported via TopicEmbed is rendered unsanitized in embed/best.html.erb",
+        "status": "supported"
+       },
+       {
+        "consequence": "Attacker-supplied script executes in the Discourse origin when the embed is viewed (XSS)",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Post with cook_method raw_html created via TopicEmbed from RSS/readability HTML has cooked set to raw verbatim without cooking/sanitization or after_post_cook filters, and viewing it via embed/best.html.erb outputs post.cooked with `raw` unescaped, so attacker-controlled feed HTML is rendered unsanitized. Trigger: import attacker-controlled RSS/readability HTML via TopicEmbed then view the embed.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "import_remote in app/models/topic_embed.rb:44-52 does open(url).read to build Readability::Document and passes opts[:title] || doc.title and doc.content directly to TopicEmbed.import, which does contents << ... assuming a String (e.g. line 13), with no nil check or rescue in the file. import_remote is called by RetrieveTopic via TopicRetriever and Disqus import.",
+      "consequences": [
+       {
+        "consequence": "unparseable pages with nil doc.content raise NoMethodError in import where contents << assumes a String",
+        "status": "supported"
+       },
+       {
+        "consequence": "dead URLs raise OpenURI errors from open(url).read with no handling",
+        "status": "supported"
+       },
+       {
+        "consequence": "RetrieveTopic and Disqus imports crash when import_remote raises",
+        "status": "supported"
+       },
+       {
+        "consequence": "no topic is created when that crash happens",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Passing nil doc.content (and title) from unparseable pages directly to import where contents << expects a String, and unhandled open(url).read failures on dead URLs, propagate as exceptions out of import_remote to RetrieveTopic/Disqus callers, breaking the import. Trigger: unparseable page yielding nil content or unreachable/dead URL.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "app/assets/javascripts/embed.js line 5 does `var comments = document.getElementById('discourse-comments')` and line 12 does `comments.appendChild(iframe)` with no null check in the file.",
+      "consequences": [
+       {
+        "consequence": "pages including the script without the placeholder throw TypeError",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "aborts embedding",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When embed.js runs on a page without an element with id 'discourse-comments', comments is null and comments.appendChild(iframe) is called unguarded, throwing TypeError and aborting embedding.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At lib/tasks/disqus.thor:148 the import creates topics via TopicEmbed.import_remote(user, t[:link], title: t[:title]) passing no category_id or thread created_at, and TopicEmbed at app/models/topic_embed.rb:48 performs a live fetch via open(url).read.",
+      "consequences": [
+       {
+        "consequence": "imported topics lose categories/timestamps",
+        "status": "supported"
+       },
+       {
+        "consequence": "import requires a live HTTP fetch per thread",
+        "status": "supported"
+       },
+       {
+        "consequence": "import fails when links are dead",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When importing Disqus threads, topics are created without the thread's category_id and created_at so categories/timestamps are lost, and each thread triggers a live HTTP fetch of t[:link] which fails when the link is dead/unreachable.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Line 14 renders post.created_at with strftime(\"%e %b %Y\") as link text for the post-date link, while neighbouring lines 3, 5 and 25 retrieve UI strings via I18n.t('embed.title'), I18n.t('embed.start_discussion') and I18n.t('embed.continue').",
+      "consequences": [
+       {
+        "consequence": "Date formatting hard-codes one locale's month names/order via strftime(\"%e %b %Y\") instead of locale-aware formatting",
+        "status": "supported"
+       },
+       {
+        "consequence": "Inconsistency with neighbouring strings which go through I18n.t",
+        "status": "supported"
+       },
+       {
+        "consequence": "Non-English users see non-localized dates instead of localized dates",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When rendering app/views/embed/best.html.erb with a non-English I18n.locale, the post date link still uses strftime(\"%e %b %Y\") English-style day/month/year while surrounding strings are localized via I18n.t.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In spec/jobs/poll_feed_spec.rb:12-28 each of the three 'requires ...' tests stubs only its named setting to falsy. Execution in app/jobs/scheduled/poll_feed.rb:15-17 is guarded by a triple-AND of all three settings. The two unstubbed settings retain their defaults from config/site_settings.yml:355-357 of false/''/'' treated as falsy, so the conjunction fails regardless of the named check.",
+      "consequences": [
+       {
+        "consequence": "The three 'requires ...' tests do not isolate the guard they name, giving false confidence to maintainers",
+        "status": "supported"
+       },
+       {
+        "consequence": "poll_feed is never called even if the named check were deleted, so deleting the named guard would not make the test fail",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "No claimed consequence is contradicted. Remaining defect is weak test isolation: with the two unstubbed settings left at falsy defaults, deleting the named condition from the triple-AND still leaves the guard false so poll_feed is not called and the requires-test still passes. Trigger: running any of the three requires-tests as currently written with only one setting stubbed falsy and the other two at falsy defaults, or running them after deleting the named check from poll_feed.rb.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S18"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S6",
+      "S13"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S19"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S20"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "db/migrate/20150818190757_create_embeddable_hosts.rb:25 executes `INSERT INTO embeddable_hosts (host, category_id, created_at, updated_at) VALUES ('#{h}', #{category_id}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)` where h comes from `val.split(\"\\n\")` with val from `SELECT value FROM site_settings WHERE name = 'embeddable_hosts'` at lines 18-24, with no escaping/quoting/sanitization.",
+      "consequences": [
+       {
+        "consequence": "a host value containing a single quote breaks the statement (SQL syntax error / migration failure)",
+        "status": "supported"
+       },
+       {
+        "consequence": "allows SQL injection via site_settings value (arbitrary SQL execution / security hole)",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Unescaped interpolation remains: if the stored site_settings value for embeddable_hosts contains a line with a single quote, that h interpolated into VALUES ('#{h}', ...) breaks the INSERT statement and fails the migration.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "app/models/embeddable_host.rb:17 does where(\"lower(host) = ?\", host).first with no downcase in the file, and callers app/controllers/embed_controller.rb:61 and app/models/topic_embed.rb:36 pass referer/URL host through without downcasing, so DB lower(host) is compared to the raw-case argument.",
+      "consequences": [
+       {
+        "consequence": "uppercase referer host (e.g. HTTP://EVILTROUT.COM) never matches a lowercase stored row",
+        "status": "supported"
+       },
+       {
+        "consequence": "allowed embeds using such a host are incorrectly rejected",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "With a lowercase row stored, a lookup with an uppercase/mixed-case host (e.g. referer HTTP://EVILTROUT.COM passed through undowncased) compares lower(host) to the raw uppercase value and returns nil instead of the allowed-host row.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In the plural branch at 196-200 when m[2] is truthy, the code calls obj[k].map(id => self._lookupSubType(subType, type, id, root)) directly, where _lookupSubType at 157-187 returns undefined when not found, with no Array check before map and no filtering of undefined results.",
+      "consequences": [
+       {
+        "consequence": "null/non-array *_ids payload crashes hydration (map called without array guard)",
+        "status": "supported"
+       },
+       {
+        "consequence": "dangling/missing id yields array containing undefined models instead of filtering/fallback",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "If obj[k] is null or non-array, obj[k].map throws and breaks hydration; if an id has no matching record, _lookupSubType returns undefined and the hydrated array keeps that undefined entry.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes, spec/fabricators/category_fabricator.rb:1 contains `Fabricator(:embeddable_host) do` and spec/fabricators/embeddable_host_fabricator.rb:1 contains `Fabricator(:category) do`, so each file defines the fabricator named by the other file.",
+      "consequences": [
+       {
+        "consequence": "Filenames disagree with contents — category_fabricator.rb defines :embeddable_host while embeddable_host_fabricator.rb defines :category",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The swapped definitions remain: spec/fabricators/category_fabricator.rb defines :embeddable_host instead of :category and spec/fabricators/embeddable_host_fabricator.rb defines :category instead of :embeddable_host. This is encountered whenever a developer opens either file or looks for a fabricator by its expected filename.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "spec/models/topic_spec.rb:1403-1404 does bare `expect(topic.expandable_first_post?).to eq(false)` with no embed_truncate / has_topic_embed / host setup; app/models/topic.rb:868-870 shows `SiteSetting.embed_truncate? && has_topic_embed?` with no host check in those lines; config/site_settings.yml:769 shows `embed_truncate: false` default so test passes on default false without exercising host logic.",
+      "consequences": [
+       {
+        "consequence": "test passes regardless of host logic",
+        "status": "supported"
+       },
+       {
+        "consequence": "test would still pass if host checking were broken/removed",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Test 'is false if embeddable_host is blank' asserts false without establishing embed_truncate true + has_topic_embed true preconditions or controlling host presence, so on default embed_truncate false it passes vacuously without exercising host logic. Trigger: running the test with defaults and no truncate/embed/host setup.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": true,
+     "julgado": {
+      "behavior": "Test at test/javascripts/models/store-test.js.es6:111 calls store.find('fruit', 2) but helper at test/javascripts/helpers/create-pretender.js.es6:226-227 for GET /fruits/:id ignores :id and unconditionally returns fruits[0] (id 1 apple with color_ids [1,2]); fruits[1] (id 2 banana has color_ids [3] per 42-43). Assertions at 115-117 check fruitCols ids 1 and 2, which match the returned fruits[0], not the requested id 2.",
+      "consequences": [
+       {
+        "consequence": "Assertions on colors [1,2] never cover fruit 2's actual color_ids [3] because test requests id 2 but validates id 1 data",
+        "status": "supported"
+       },
+       {
+        "consequence": "Plural _ids hydration is entirely unverified — no multi-element hydration is exercised",
+        "status": "contradicted"
+       }
+      ],
+      "remainingDefect": "When store.find('fruit', 2) is called, mock returns fruits[0] with color_ids [1,2] and both color assertions pass, so multi-element hydration path is still exercised, but against wrong id; linkage for requested id 2 / its single-element [3] is never checked and test is misleading.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S10",
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S5",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S7",
+      "S17"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As far as notes support: app/controllers/admin/groups_controller.rb:90 does group.users.delete(user_id). The canonical member-remove path app/models/group.rb:276-278 Group#remove does self.group_users.where(user: user).each(&:destroy). A separate method app/models/group.rb:287-292 destroy_deletions does gu.destroy and primary_group_id = NULL cleanup.",
+      "consequences": [
+       {
+        "consequence": "bypasses GroupUser destroy path/callbacks by using delete instead of destroy",
+        "status": "supported"
+       },
+       {
+        "consequence": "bypasses primary_group_id cleanup done in destroy_deletions that the delete path does not set up",
+        "status": "supported"
+       },
+       {
+        "consequence": "leaves concrete stale membership side-effects such as a dangling primary_group_id for the removed user",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "No consequences contradicted, so left is: when an admin calls remove_member for a user_id that is a member of the group, the membership is removed via users.delete, skipping the GroupUser destroy path used by Group#remove and the destroy_deletions-style destroy + primary_group_id cleanup. Checker shows the code difference but does not verify an actual dangling primary_group_id row or what GroupUser destroy callbacks do on single-member removal.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "add_members splits usernames on comma with `usernames.split(\",\").each` and passes each raw token to `User.find_by_username`, which only does `username.downcase` with no strip, while lines 77-78 still render success_json on save.",
+      "consequences": [
+       {
+        "consequence": "Input like 'alice, bob' looks up ' bob' with leading space via find_by_username",
+        "status": "supported"
+       },
+       {
+        "consequence": "Lookup silently fails / misses the spaced username",
+        "status": "supported"
+       },
+       {
+        "consequence": "Controller still returns success_json despite the miss",
+        "status": "supported"
+       },
+       {
+        "consequence": "Affected members are silently not added while caller sees success",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "With input like 'alice, bob', token ' bob' is looked up unstripped via downcase-only finder, misses, so that user is not added to the group but response is still success_json.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes, the members action in app/controllers/groups_controller.rb:22-26 computes `limit = (params[:limit] || 50).to_i` and `offset = params[:offset].to_i` and passes those raw values directly to `group.users.order(:username_lower).limit(limit).offset(offset)` with no min/max clamp or negativity floor.",
+      "consequences": [
+       {
+        "consequence": "A request with limit=1000000 forces loading/serializing the entire membership table in one response",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Causes memory/CPU blowup on large groups",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "No consequences contradicted. Remaining concrete behavior: members action uses attacker-controlled limit/offset with no max or negativity clamp, so a request with e.g. limit=1000000 or negative limit/offset passes that value unclamped directly to .limit(limit).offset(offset) on the group membership query.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5",
+      "S8"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Loop in app/controllers/uploads_controller.rb:66-69 continues while attempt > 0 and tempfile.size > SiteSetting.max_image_size_kb.kilobytes, calls OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: ...) discarding its return value, even though optimized_image.rb:160-169 returns false on non-zero exit (true/false signal). Execution then proceeds to Upload.create_for at line 72.",
+      "consequences": [
+       {
+        "consequence": "Failed converts retry up to 5 times, burning 5 ImageMagick runs",
+        "status": "supported"
+       },
+       {
+        "consequence": "wasting CPU on failed converts (e.g. SVG, invalid 80% geometry, corrupt image)",
+        "status": "supported"
+       },
+       {
+        "consequence": "Upload.create_for still runs with oversized/unmodified file",
+        "status": "supported"
+       },
+       {
+        "consequence": "upload fails validation",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "breaking the feature for those files",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Loop ignores false return from OptimizedImage.downsize and retries while tempfile.size stays over limit, then calls Upload.create_for with oversized/unmodified file. Trigger: oversized upload where downsize fails (returns false) e.g. SVG, invalid geometry, corrupt image, so size never drops below limit.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In app/assets/javascripts/discourse/lib/utilities.js:182 inside validateUploadedFile, code defines `var maxSizeKB = 10 * 1024; // 10MB` and does not use its `type` argument for size lookup, while per-type settings max_image_size_kb / max_attachment_size_kb exist.",
+      "consequences": [
+       {
+        "consequence": "Sites with smaller max_attachment_size_kb pass client validation then fail server-side",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Sites with limits >10MB incorrectly block valid uploads with wrong max_size_kb message",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Client check uses hardcoded 10MB instead of per-type SiteSetting lookup; triggered whenever max_image_size_kb or max_attachment_size_kb differs from 10240, e.g. attachment upload when max_attachment_size_kb is smaller, or any upload when configured limit is >10MB, so client validation diverges from configured per-type limit.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes: app/controllers/uploads_controller.rb:55 calls FileHelper.download(url, 10.megabytes, ...) and lib/file_helper.rb:9,18 fetches in a loop `while f.size <= max_file_size`. So the URL-download fetch cap is hardcoded to 10MB, not tied to SiteSetting.max_image_size_kb, and a smaller admin max_image_size_kb does not limit fetch size.",
+      "consequences": [
+       {
+        "consequence": "An API caller supplying a URL can cause the server to fetch up to 10MB",
+        "status": "supported"
+       },
+       {
+        "consequence": "A much smaller admin-configured max_image_size_kb cap does not limit that fetch",
+        "status": "supported"
+       },
+       {
+        "consequence": "This amplifies SSRF bandwidth/disk usage impact",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When SiteSetting.max_image_size_kb is set much smaller than 10MB, a URL upload via the API still triggers FileHelper.download with a 10MB cap (uploads_controller.rb:55, loop while f.size <= max_file_size), so the server fetches/stores up to 10MB exceeding the admin cap.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In app/controllers/uploads_controller.rb:65-68 create_upload sets attempt=5 and loops while attempt>0 and tempfile.size > SiteSetting.max_image_size_kb.kilobytes calling OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", ...) inline. Per app/models/optimized_image.rb:160-164 each downsize via convert_with runs a convert shell-out via backticks then ImageOptim.new.optimize_image!(to) inline, allowing up to 5 synchronous blocking iterations for an oversized upload.",
+      "consequences": [
+       {
+        "consequence": "Blocks the Rails request thread with CPU-intensive shell-outs per upload",
+        "status": "supported"
+       },
+       {
+        "consequence": "Enables easy request-thread exhaustion/DoS with large images",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When tempfile.size exceeds SiteSetting.max_image_size_kb.kilobytes, create_upload synchronously runs up to 5 sequential OptimizedImage.downsize calls, each doing a convert shell-out plus ImageOptim optimize inline, blocking the request thread before response.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes: pkg/api/webassets/webassets.go:48-60 acquires entryPointAssetsCacheMu.Lock() with defer Unlock() before both loads — readWebAssetsFromCDN(ctx, cdn) and readWebAssetsFromFile(...assets-manifest.json...) — and holds it until after them. Dev-mode cache bypass at lines 45-47 is confirmed.",
+      "consequences": [
+       {
+        "consequence": "Serializes all concurrent GetWebAssets callers on disk/network latency because exclusive lock is held across file read and HTTP fetch",
+        "status": "supported"
+       },
+       {
+        "consequence": "Blocks RLock fast-path readers behind the pending writer",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "In Dev mode where cache is bypassed every request serializes on file I/O",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Concurrent GetWebAssets callers serialize on blocking I/O because exclusive entryPointAssetsCacheMu.Lock() is held across readWebAssetsFromFile and readWebAssetsFromCDN. Trigger: multiple goroutines calling GetWebAssets concurrently on cold-miss (CDN or file path), and in Dev mode where cache is bypassed every request takes the locked file-I/O path.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes, config/initializers/i18n.rb:17 builds `[locale, SiteSetting.default_locale.to_sym, :en].uniq.compact` in FallbackLocaleList#[], calling `to_sym` on `SiteSetting.default_locale` before `uniq.compact`, so a nil/missing value raises NoMethodError.",
+      "consequences": [
+       {
+        "consequence": "FallbackLocaleList#[] raises NoMethodError when SiteSetting.default_locale is nil/missing instead of falling back to :en",
+        "status": "supported"
+       },
+       {
+        "consequence": "crashes fallback resolution instead of returning fallback chain ending in :en",
+        "status": "supported"
+       },
+       {
+        "consequence": "triggered on every missing-key lookup",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "triggerable during boot",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "triggerable when DB is down",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "FallbackLocaleList#[] raises NoMethodError when SiteSetting.default_locale is nil/missing (unset), because to_sym is called before uniq.compact, triggered when fallback resolution via #[] runs, instead of returning a chain falling back to :en.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As checker notes support: `I18n.ensure_loaded!(locale)` does `load_locale locale unless @loaded_locales.include?(locale)` with no escape/validation, and `load_locale` does `I18n.backend.load_translations(I18n.load_path.grep Regexp.new(\"\\.#{locale}\\.yml$\"))` (lib/freedom_patches/translate_accelerator.rb:56, 62-64). Reachable via `FallbackLocaleList#ensure_loaded!` in config/initializers/i18n.rb:20-21 (`self[I18n.locale].each { |l| I18n.ensure_loaded! l }`) where `I18n.locale` is set from `current_user.effective_locale` in app/controllers/application_controller.rb:153-154.",
+      "consequences": [
+       {
+        "consequence": "regex metacharacters in locale (e.g. .*) widen the load_path.grep match",
+        "status": "supported"
+       },
+       {
+        "consequence": "forces loading of unintended/all locale files - unexpected translation loading",
+        "status": "supported"
+       },
+       {
+        "consequence": "resource exhaustion / DoS from loading all files",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "No consequences contradicted. Left: unescaped locale interpolated into Regexp.new for load_path.grep then load_translations. Trigger: a locale containing regex metacharacters (e.g. .*) reaching ensure_loaded! via I18n.locale from current_user.effective_locale through FallbackLocaleList#ensure_loaded! widens the grep and loads unintended/matching-all .yml locale files, causing unexpected translations and extra load.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "DeviceID is taken from the unauthenticated X-Grafana-Device-Id header (impl.go:119) and stored via CreateOrUpdateDevice with only an empty check (impl.go:136-144) with no validation or rate-limit found. database.go:115-117 checks count >= deviceLimit and returns ErrDeviceLimitReached for new devices. client.go:44-47 propagates it as return nil, err.",
+      "consequences": [
+       {
+        "consequence": "Any anonymous caller can mint arbitrary device IDs to fill device slots up to deviceLimit",
+        "status": "supported"
+       },
+       {
+        "consequence": "After table is filled, legitimate new anonymous devices get ErrDeviceLimitReached",
+        "status": "supported"
+       },
+       {
+        "consequence": "Authentication is denied for those new devices, constituting trivial anonymous-access DoS introduced by the limit",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Unauthenticated caller sending requests with distinct non-empty X-Grafana-Device-Id values each consumes a slot toward deviceLimit; once count >= deviceLimit, any new legitimate device ID triggers ErrDeviceLimitReached and the auth path returns nil plus error, denying anonymous authentication.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "julgado": {
+      "behavior": "As far as notes support: client.go:44 Authenticate synchronously calls TagDevice(ctx,...) and handles error inline; impl.go:80-93 tagDeviceUI checks localCache then on miss calls anonStore.CreateOrUpdateDevice; database.go:109-116 CreateOrUpdateDevice does CountDevices only if s.deviceLimit > 0 (with early updateDevice if over limit) followed by INSERT/UPDATE. No prior async code shown.",
+      "consequences": [
+       {
+        "consequence": "Cache-miss anonymous authentication blocks Authenticate on synchronous DB work in the login hot path",
+        "status": "supported"
+       },
+       {
+        "consequence": "Every such cache-miss costs two DB round-trips (CountDevices + INSERT/UPDATE)",
+        "status": "contradicted"
+       },
+       {
+        "consequence": "Synchronous DB work adds latency and DB load on cache-miss",
+        "status": "supported"
+       },
+       {
+        "consequence": "Previously auth returned immediately via fire-and-forget goroutine",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "On localCache miss during anonymous Authenticate, Authenticate synchronously blocks on DB write (CreateOrUpdateDevice); when deviceLimit>0 configured it blocks on CountDevices plus INSERT/UPDATE, adding latency and DB load to the login hot path.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "NewMetricsMiddleware creates a single MetricsMiddleware instance via newMetricsMiddleware and returns a ClientMiddlewareFunc that on every invocation does `imw.next = next; return imw` (same object reused/mutated), whereas Logger/Contextual middlewares allocate a new struct per call (`&LoggerMiddleware{next: next...}` / `&ContextualLoggerMiddleware{next: next}`).",
+      "consequences": [
+       {
+        "consequence": "Concurrent or multiple decorator chains overwrite `next` on the same object causing data race",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Requests routed to the wrong next client",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Shared `imw` has its `next` field overwritten on every CreateClientMiddleware/middleware-func call; trigger is creating more than one chain (calling the returned func more than once, especially concurrently) so a later chain overwrites an earlier chain's `next`, routing earlier-chain requests to the wrong client with unsynchronized concurrent access.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker: pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go:49-58 builds logParams with only status/duration/eventName/time_before_plugin_request plus m.logger.FromContext(ctx) with no explicit pluginId/endpoint/uname/dsName/dsUID params; pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go:27-32 adds endpoint/pluginId/dsName/dsUID/uname to context via log.WithContextualAttributes; pkg/services/pluginsintegration/pluginsintegration.go:160-161 registers Contextual before Logger.",
+      "consequences": [
+       {
+        "consequence": "Creates hidden ordering dependency requiring ContextualLoggerMiddleware before LoggerMiddleware",
+        "status": "supported"
+       },
+       {
+        "consequence": "Standalone or reordered use silently logs without plugin identity",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "LoggerMiddleware relies solely on FromContext(ctx) for identity, so when used standalone or reordered so ContextualLoggerMiddleware is not before it, logRequest logs without plugin identity attributes (pluginId/endpoint/uname/dsName/dsUID).",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As checker notes support: pkg/plugins/log/fake.go:46-48 is `func (f *TestLogger) FromContext(_ context.Context) Logger { return NewTestLogger() }` - ignores receiver and context, returns fresh instance. Middleware at pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go:58 logs via `m.logger.FromContext(ctx).Info(\"Plugin Request Completed\", logParams...)`, so with the fake the Info goes to the fresh instance. Real wrapper at pkg/plugins/log/logger.go:48-55 returns contextual logger derived from `d.l.FromContext(ctx)`, preserving context.",
+      "consequences": [
+       {
+        "consequence": "Log write via LoggerMiddleware.FromContext(ctx).Info goes to a throwaway instance and is not observable on the original TestLogger Calls/Message",
+        "status": "supported"
+       },
+       {
+        "consequence": "Fake diverges from real wrapper that preserves logger context",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "No consequences contradicted. Left defect: TestLogger.FromContext returns NewTestLogger() instead of receiver/shared state, so any caller doing m.logger.FromContext(ctx).Info (e.g., LoggerMiddleware on Plugin Request Completed) writes to a throwaway logger invisible to assertions on the original TestLogger, unlike production wrapper.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes: pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:21 defines `func TestInstrumentationMiddleware(t *testing.T)` and :78 constructs the subject with `mw := newMetricsMiddleware(...)`, while pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:26 defines `type MetricsMiddleware struct` and :32 defines `func newMetricsMiddleware(...) *MetricsMiddleware`. So the test uses the old Instrumentation name while the code under test uses the Metrics name.",
+      "consequences": [],
+      "remainingDefect": "Naming inconsistency left: test function named TestInstrumentationMiddleware exercises MetricsMiddleware via newMetricsMiddleware; triggered whenever the test file is read, listed, or run.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go lines 101-109 the test uses `if tc.shouldInstrumentRequestSize { ... }` with no else branch, so for table cases where shouldInstrumentRequestSize is false (CheckHealth lines 40-46 and CollectMetrics lines 63-68) it performs no check on grafana_plugin_request_size_bytes.",
+      "consequences": [
+       {
+        "consequence": "When shouldInstrumentRequestSize is false (CheckHealth, CollectMetrics) the test asserts nothing about grafana_plugin_request_size_bytes",
+        "status": "supported"
+       },
+       {
+        "consequence": "If instrumentPluginRequestSize were incorrectly called for those endpoints, CollectAndCount would be 1 yet the test would still pass (false negative)",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Test performs no verification of grafana_plugin_request_size_bytes when shouldInstrumentRequestSize is false; triggered by running the CheckHealth or CollectMetrics cases with that flag false, an incorrect size instrumentation would go undetected and the test would incorrectly pass instead of failing.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "plugin_request_duration_seconds is defined with labels [\"source\",\"plugin_id\",\"endpoint\",\"status\",\"target\"] (metrics_middleware.go:57) but the test calls checkHistogram with only {\"plugin_id\",\"endpoint\",\"target\"} (metrics_middleware_test.go:95-99). checkHistogram only requires the expected subset to match plus non-zero sample count.",
+      "consequences": [
+       {
+        "consequence": "A broken status or source label (e.g. wrong status mapping) would still pass the test",
+        "status": "supported"
+       },
+       {
+        "consequence": "Incorrect observed values would still pass because only sample count is verified, not the observed values",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Test for plugin_request_duration_seconds checks only plugin_id/endpoint/target subset and non-zero sample count; if status or source labels are wrong, or observed histogram values are wrong but count>0, the check still passes.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As checker notes support: BuildIndex in pkg/storage/unified/search/bleve.go holds b.cacheMu only around the final cache store at lines 137-139 (`b.cache[key] = idx`), while bleve.New/builder/Flush at lines 98/104/126/132 run lock-free. TotalDocs at lines 144-154 iterates `b.cache` with no RLock. So whole-build serialization is gone and cache read in TotalDocs is unsynchronized with cache write.",
+      "consequences": [
+       {
+        "consequence": "concurrent BuildIndex for same key both run full build (bleve.New/builder/Flush) with last-writer-wins, wasting parallel index work",
+        "status": "supported"
+       },
+       {
+        "consequence": "double-counts IndexTenants metrics",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "leaks the loser's bleve index (never closed)",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "concurrent bleve.New on same file dir can fail/corrupt",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "concurrent map write of cache races unsynchronized TotalDocs iteration causing concurrent-map panic/crash",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "After removing contradicted consequences (none): concurrent BuildIndex calls for the same key both execute bleve.New/build/Flush lock-free and then serialize only `b.cache[key]=idx`, so duplicate work occurs and last writer wins; concurrently, that cache write races TotalDocs iteration of `b.cache` done without RLock. Trigger: two goroutines calling BuildIndex with same key at same time, and/or TotalDocs called concurrently with BuildIndex cache store.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "NewResourceServer creates ctx,cancel via context.WithCancel at line 229, stores them in the server struct at 246-247, calls s.Init(ctx) synchronously at 258-262, and on Init error logs and returns nil,err without calling s.cancel(); s.cancel() appears only in Stop at 333.",
+      "consequences": [
+       {
+        "consequence": "Failed startup leaks the server context because cancel is never called on the Init-error path",
+        "status": "supported"
+       },
+       {
+        "consequence": "Leaks lifecycle/watch resources partially started by Init on failed startup",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Leaves goroutines/channel watches alive after failed startup",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "On s.Init(ctx) returning error, NewResourceServer returns nil,err without calling s.cancel(), leaving the created s.ctx uncancelled. Trigger: failed startup where Init returns error.",
+      "remainingIsOptional": false
+     }
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "FilterViewResults in public/app/features/alerting/unified/rule-list/FilterView.tsx renders the Grafana branch as <GrafanaRuleListItem rule={rule} groupIdentifier={groupIdentifier} namespaceName={ruleWithOrigin.namespaceName} showLocation={true} /> with no key prop (lines 157-165), while the datasource branch renders <DataSourceRuleLoader key={key} ...> (line 165) and the unknown branch renders <UnknownRuleListItem key={key} ...> (lines 168-169).",
+      "consequences": [
+       {
+        "consequence": "Breaks React list reconciliation",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "wrong item reuse",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "stale actions/state",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "console key warnings for every Grafana hit",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Grafana-origin branch renders GrafanaRuleListItem without key={key}, inconsistent with the other branches; triggered when FilterViewResults list contains a Grafana rule.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As checker notes support: in useAllRulerRuleAbilities lines 242-245 isFederated is hardcoded to `false` with `// TODO: Add support for federated rules` and commented-out `isFederatedRuleGroup()` call; isFederatedRuleGroup exists but is not called in this hook; immutableRule is computed as `isProvisioned || isFederated || isPluginProvided`; Update/Delete abilities are gated by `MaybeSupportedUnlessImmutable`; groupIdentifierV2 carries no federated info.",
+      "consequences": [
+       {
+        "consequence": "Mimir federated rules appear editable — Update ability stays MaybeSupportedUnlessImmutable/true instead of immutable",
+        "status": "supported"
+       },
+       {
+        "consequence": "Mimir federated rules appear removable — Delete ability stays MaybeSupportedUnlessImmutable/true instead of immutable",
+        "status": "supported"
+       },
+       {
+        "consequence": "Mimir federated rules appear pausable / Pause allowed when should be immutable",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "No consequences contradicted. Remaining defect: when useAllRulerRuleAbilities evaluates a Mimir federated rule via the datasource path (not provisioned or plugin-provided), isFederated stays false so immutableRule stays false, so Update/Delete abilities return MaybeSupportedUnlessImmutable=true and federated rules are presented as editable/removable when they should be immutable.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Per checker notes: getEditableIdentifier has a prom-only path returning {ruleSourceName:'grafana', uid: promRule.uid} when prometheusRuleType.grafana.rule(promRule) is true with rulerRule undefined; the silence drawer renders only as `{rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer && (`; Silence menu can be shown via `canSilence = (silenceSupported && silenceAllowed) || (grafanaSilenceSupported && grafanaSilenceAllowed)`; list view GrafanaRuleListItem renders `<RuleActionsButtons promRule={rule} ... />` without ruler rule.",
+      "consequences": [
+       {
+        "consequence": "In list view with prom-only Grafana rule (rule undefined) Silence menu item can still be shown via grafana silence abilities",
+        "status": "supported"
+       },
+       {
+        "consequence": "Clicking Silence sets showSilenceDrawer but drawer guard on rulerRuleType.grafana.alertingRule(rule) fails so drawer never mounts",
+        "status": "supported"
+       },
+       {
+        "consequence": "Silence silently does nothing for that user/state – no silence UI appears",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When RuleActionsButtons is used with only promRule for a Grafana rule and rule undefined (e.g., GrafanaRuleListItem in list view) where grafana abilities enable Silence, activating Silence sets showSilenceDrawer but the drawer gated on rulerRuleType.grafana.alertingRule(rule) never mounts, so no silence drawer/UI results.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As checker notes support: public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:33-44 destructures `provenance` from `rule` and sets `isProvisioned: Boolean(provenance)`; public/app/features/alerting/unified/utils/rules.ts:171-172 defines provisioned check as `prometheusRuleType.grafana.rule(promRule) && Boolean(promRule.provenance)`; public/app/types/unified-alerting-dto.ts:135 types `provenance?: string` as optional. Abilities gate on isProvisionedPromRule.",
+      "consequences": [
+       {
+        "consequence": "If Prometheus groups response omits provenance, provisioned rules render as non-provisioned",
+        "status": "supported"
+       },
+       {
+        "consequence": "abilities gated on isProvisionedPromRule fail open to editable/removable for provisioned rules when provenance is missing",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When Prometheus groups response omits provenance (provenance undefined) for a provisioned rule, Boolean(provenance) is false so isProvisioned is false, the rule renders as non-provisioned, and isProvisionedPromRule returns false so edit/remove abilities fail open to allowed.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Lines 85-102 define test 'should render More button with action menu options' that only gets the More button and asserts presence, aria-label 'More', and textContent 'More', with no click to open the menu and no menuitem assertion.",
+      "consequences": [
+       {
+        "consequence": "Test never opens the More menu nor asserts menu items — it only checks More button presence/aria/text",
+        "status": "supported"
+       },
+       {
+        "consequence": "Test will not fail if menu actions break, leaving action menu options uncovered despite the test name",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Test named 'should render More button with action menu options' still passes when More menu actions/items are broken or missing because it only verifies More button presence/aria-label/text without opening the menu or asserting menuitems. Trigger: running this test while the More menu items/actions are broken or absent.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S8"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In pkg/apiserver/rest/dualwriter_mode3.go:139 Update passes the original objInfo to d.Legacy.Update for the async legacy write instead of the object returned by Storage.Update. Legacy.Update recomputes the object via objInfo.UpdatedObject(ctx, old) from its own old state per pkg/registry/apis/playlist/legacy_storage.go:147. The updateWrapper in pkg/apiserver/rest/dualwriter.go:142-143 pins a fixed object by returning u.updated, but this path does not use it.",
+      "consequences": [
+       {
+        "consequence": "legacy store can converge to a different object/version than unified storage wrote, breaking convergence between legacy and storage",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Async legacy Update reuses original objInfo and recomputes UpdatedObject from legacy old state instead of writing the object actually persisted to unified storage, allowing legacy to persist a different object/version than storage. Trigger: Update via mode3 where legacy old state differs from storage old state or UpdatedObject is old-state dependent.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes: pkg/apiserver/rest/dualwriter_mode3.go:50-57 performs Legacy.Create asynchronously inside a `go func()`, and pkg/apiserver/rest/dualwriter_mode3_test.go:63-76 calls dw.Create then asserts only on the returned obj with no Wait/Sleep/Eventually/AssertExpectations, setting a mock expectation for Legacy.Create but never waiting for or asserting the async goroutine, so assertions pass independent of the legacy write.",
+      "consequences": [
+       {
+        "consequence": "TestMode3_Create claims/purports to verify dual-write",
+        "status": "supported"
+       },
+       {
+        "consequence": "test never synchronizes on (waits for) the async Legacy.Create goroutine",
+        "status": "supported"
+       },
+       {
+        "consequence": "test never asserts/verifies the async Legacy.Create goroutine",
+        "status": "supported"
+       },
+       {
+        "consequence": "removing/disabling the go func with Legacy.Create would still leave the test passing - test passes independent of legacy write",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "TestMode3_Create calls dw.Create and checks only the returned object without synchronizing on or verifying the background Legacy.Create; if the async go func containing Legacy.Create is removed, fails, or has not yet run, the test still passes. Trigger: run TestMode3_Create with the Legacy.Create goroutine removed/disabled/delayed and observe a passing result.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S13",
+      "S14"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java normalizeValue at lines 124-127 does value.replaceAll(\"\\\\{[0-9]+,choice,[^}]*}\", \"...\") and is called at lines 84/86 before policy.sanitize(value) at line 92, so the entire {n,choice,...} block including any inner HTML is replaced with \"...\" before the HTML policy is applied.",
+      "consequences": [
+       {
+        "consequence": "HTML inside {n,choice,...} options is never checked, allowing a translation with tags like {2,choice,0#<script>...} to pass the verifier",
+        "status": "supported"
+       },
+       {
+        "consequence": "Smuggled tags that pass the verifier reach UI rendering as XSS",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Verifier false-negative: a message value containing HTML inside a {n,choice,...} block (e.g. containing {2,choice,0#<script>...}) has that whole block blanked to \"...\" by normalizeValue before policy.sanitize, so inner tags are not checked and the value passes verification when it should be flagged.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S3",
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S4",
+      "S5"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Context ctor at OAuth2GrantType.java:102 snapshots `grantType = formParams.getFirst(GRANT_TYPE)`; setFormParams at 105-107 replaces `this.formParams` without updating `grantType`; getGrantType at 173-175 returns the stored field; OAuth2GrantTypeBase.java:109 propagates `context.getGrantType()` to `clientSessionCtx.setAttribute(Constants.GRANT_TYPE, ...)`.",
+      "consequences": [
+       {
+        "consequence": "getGrantType() returns a stale value after setFormParams() replaces formParams with a different grant_type",
+        "status": "supported"
+       },
+       {
+        "consequence": "OAuth2GrantTypeBase.createTokenResponse stores that stale value as Constants.GRANT_TYPE",
+        "status": "supported"
+       },
+       {
+        "consequence": "the stale GRANT_TYPE encodes the wrong token-id prefix",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "If Context is constructed with formParams grant_type=X then setFormParams() is called with formParams containing grant_type=Y != X, getGrantType() still returns X and createTokenResponse stores X as Constants.GRANT_TYPE instead of Y.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Javadoc in OAuth2GrantTypeFactory.java:30 says shortcut is usually like 3-letters, while all nine OAuth2GrantTypeFactory implementations return 2-char strings (\"ac\", \"rt\", \"dg\", \"ci\", \"cc\", \"ro\", \"te\", \"pc\", \"pg\") matching 2+2+2 encoded prefix.",
+      "consequences": [
+       {
+        "consequence": "Javadoc disagrees with code: says 3-letter shortcut but all grant shortcuts are 2 chars, so doc should be fixed to 2-characters to match 6-char format",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Javadoc inaccuracy remains: OAuth2GrantTypeFactory.java:29-33 describes shortcut as usually like 3-letters while every getShortcut implementation returns 2 chars. Trigger is reading that Javadoc versus inspecting any implementation (e.g., \"ac\", \"rt\", \"dg\", \"ci\", \"cc\", \"ro\", \"te\", \"pc\", \"pg\").",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S10",
+      "S11",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S7",
+      "S9",
+      "S13"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S8"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "GroupAdapter.getSubGroupsCount at line 275 does `return model == null ? null : model.getSubGroupsCount()`, i.e. returns null when model == null (concurrent-delete case). GroupModel documents the method as Never returns null, and GroupUtils.java:90 propagates the return value directly via `representation.setSubGroupCount(group.getSubGroupsCount())`.",
+      "consequences": [
+       {
+        "consequence": "Violates GroupModel.getSubGroupsCount contract documented as Never returns null",
+        "status": "supported"
+       },
+       {
+        "consequence": "Diverges from JPA impl which returns 0 count",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Callers like GroupUtils.populateSubGroupCount propagate null subGroupCount",
+        "status": "supported"
+       },
+       {
+        "consequence": "Causes unboxing/NPE where non-null is expected",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Causes wrong output where non-null is expected",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "getSubGroupsCount returns null when model == null (e.g. group concurrently deleted), violating the Never-returns-null contract, and that null is passed directly to setSubGroupCount.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As checker notes support: ClientPermissionsV2.java:226-230 loops over permission.getScopes() to match the expected scope with no permission.getResourceId() check, while UserPermissionsV2.java:134-135 filters with `if (permission.getResourceId().equals(resource.getId()))`.",
+      "consequences": [
+       {
+        "consequence": "An evaluation result granting the scope on a different resource (other client or the all-clients resource when evaluating a per-client resource, or vice-versa) incorrectly authorizes the requested client — privilege escalation across clients.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "hasPermission returns true for the requested client when an evaluation result contains the expected scope but on a different resourceId (another client's resource, or all-clients resource vs per-client resource).",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "getClientsWithPermission iterates every Clients-type authorization resource via resourceStore.findByType and calls hasGrantedPermission -> root.evaluatePermission separately for each resource.",
+      "consequences": [
+       {
+        "consequence": "Listing/filtering clients triggers O(N) separate full policy evaluations where N is the number of client authorization resources",
+        "status": "supported"
+       },
+       {
+        "consequence": "Causes material slowdown on realms with many clients",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Causes DB/policy-store fanout on realms with many clients",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "getClientsWithPermission iterates all Clients-type resources and performs a separate hasGrantedPermission/evaluatePermission policy evaluation per resource, so cost grows with number of client resources; triggered when listing/filtering clients in a realm with many Clients authorization resources.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6",
+      "S7"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S4",
+      "S5"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "julgado": {
+      "behavior": "As far as checker notes support: the delegated WebAuthnAuthenticator.action() already enforces re-auth binding. Per services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java:192-202, if context.getUser() != null (resident/discoverable case) it gets firstAuthenticatedUserId = context.getUser().getId() and compares to the userId authenticated by the webauthn authenticator; on non-null mismatch it calls setErrorResponse(context, WEBAUTHN_ERROR_DIFFERENT_USER, null) and returns, rejecting the assertion rather than processing it as re-auth for the fixed user.",
+      "consequences": [
+       {
+        "consequence": "During re-authentication with context.getUser() fixed, an attacker/other user can POST a discoverable passkey assertion with a different userHandle and have it processed as re-auth for the fixed user",
+        "status": "contradicted"
+       },
+       {
+        "consequence": "User-substitution / bypass of the re-auth binding for the fixed user, succeeding re-auth via another user's passkey because the WebAuthn layer identifies the user from the assertion",
+        "status": "contradicted"
+       }
+      ],
+      "remainingDefect": "After removing the contradicted user-substitution/bypass, what is left (not checked by the notes) is only gate inconsistency: UsernamePasswordForm.action() delegates to webauthnAuth.action() on global isPasskeysEnabled() plus presence of webauthn params without applying the per-user isConditionalPasskeysEnabled(context.getUser()) check used for display. Trigger: re-authentication flow where context.getUser() is fixed (USER_SET_BEFORE_USERNAME_PASSWORD_AUTH set) with global passkeys enabled but per-user conditional not satisfied, and a POST containing webauthn params is submitted, which is then passed to WebAuthn handling instead of being gated upfront.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes: PasswordForm.authenticate() at line 52 calls isConditionalPasskeysEnabled(context.getUser()) reusing UsernamePasswordForm helper at 160-162 which returns true when webauthnAuth != null && webauthnAuth.isPasskeysEnabled() && (currentUser == null || currentUser.credentialManager().isConfiguredFor(...)); PasswordForm.requiresUser() returns true; login-password.ftl imports passkeys.ftl.",
+      "consequences": [
+       {
+        "consequence": "calls webauthnAuth.fillContextForm(context) without a user scope on null/unresolved user",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "producing a challenge/authenticators state inconsistent with the password template that now includes passkeys.ftl",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "causing wrong output or failed render instead of skipping passkeys",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When context.getUser()==null (misconfigured flow, alternative execution ordering) with webauthnAuth non-null and passkeys enabled at realm level, PasswordForm.authenticate() takes the null-tolerant true branch and proceeds with passkeys context filling for the password template that includes passkeys.ftl instead of skipping passkeys, yielding inconsistent challenge/authenticators state with wrong output or failed render.",
+      "remainingIsOptional": false
+     }
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "getLoginPredicate() builds predicate `idp.getOrganizationId() == null || Boolean.parseBoolean(idp.getConfig().get(OrganizationModel.BROKER_PUBLIC))` at IdentityProviderStorageProvider.java:254 with direct idp.getConfig().get() and no null-check on getConfig(). The predicate is exercised via getLoginPredicate().test(idp) in Infinispan registerIDPLoginInvalidation paths at 384,405,409. IdentityProviderModel.setConfig() does direct assignment `this.config = config` allowing null, so NPE is possible.",
+      "consequences": [
+       {
+        "consequence": "A model with null config throws NPE inside the predicate",
+        "status": "supported"
+       },
+       {
+        "consequence": "predicate is used by create/remove/update invalidation paths",
+        "status": "supported"
+       },
+       {
+        "consequence": "predicate is used by cached filtering",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "NPE crashes the invalidation path",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "NPE when getLoginPredicate().test() evaluates an IdentityProviderModel with null config (set via setConfig(null)) and non-null organizationId, because the second OR-branch dereferences idp.getConfig().get(); when reached via registerIDPLoginInvalidation it aborts/crashes that invalidation path. Short-circuit avoids NPE only when organizationId == null.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "julgado": {
+      "behavior": "The cited remove() code does not call registerIDPInvalidation(storedIdp) without a null check. It null-checks the result of idpDelegate.getByAlias(alias) and returns false cleanly for a non-existent alias.",
+      "consequences": [
+       {
+        "consequence": "Removing a non-existent alias causes null dereference on idp.getInternalId() instead of a clean false return.",
+        "status": "contradicted"
+       }
+      ],
+      "remainingDefect": "",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Cached getForLogin() loops over the cached list of internalIds and for each id calls session.identityProviders().getById(id). If a lookup returns null, it calls realmCache.registerInvalidation(cacheKey) and returns idpDelegate.getForLogin(mode, organizationId) fallback.",
+      "consequences": [
+       {
+        "consequence": "One login-broker listing becomes N per-ID getById lookups",
+        "status": "supported"
+       },
+       {
+        "consequence": "Cost grows O(N) with broker count",
+        "status": "supported"
+       },
+       {
+        "consequence": "Per-miss DB fallback via delegate getForLogin",
+        "status": "supported"
+       },
+       {
+        "consequence": "Per-miss invalidation retry via registerInvalidation",
+        "status": "supported"
+       },
+       {
+        "consequence": "Impacts hot login path",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When getForLogin() hits the cache containing N internalIds, it resolves each with an individual getById(id) call in a loop (N lookups scaling with broker count), and any miss triggers invalidation plus delegate reload. No wrong result, crash, data loss, or security hole shown; only extra per-ID lookup cost.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "OrganizationCacheTest sets BROKER_PUBLIC=true for i>=10 and links the 10 IDPs with i=10-19 to orgaId as org-linked IDPs, so all org-linked IDPs are public. IdentityProviderStorageProvider getLoginPredicate is `organizationId==null OR parseBoolean(BROKER_PUBLIC)`, so the org-branch always passes for this fixture.",
+      "consequences": [
+       {
+        "consequence": "Test fixture never covers the new BROKER_PUBLIC branch because all org-linked IDPs are created public",
+        "status": "supported"
+       },
+       {
+        "consequence": "Reverting the getLoginPredicate public-check leaves all getForLogin counts unchanged and the test still passes (fails to detect regression)",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "All 10 org-linked IDPs (i=10-19) have BROKER_PUBLIC=true so the org-branch of getLoginPredicate always passes; reverting/removing the public-check leaves the 5/5/10 getForLogin counts unchanged and the test still passes instead of failing. Trigger: running the fixture as-is with only public org-linked enabled IDPs and a mutated getLoginPredicate without the BROKER_PUBLIC check.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "AssignmentSource.from_dict() tries cls(**input_dict) and returns None on ValueError/TypeError; sync_assignee_outbound sets parsed_assignment_source to from_dict(assignment_source_dict) when the dict is truthy else None and passes it to should_sync; should_sync() with falsy sync_source skips the integration_id equality return-False cycle guard and falls through to return org_integration.config.get(key, False).",
+      "consequences": [
+       {
+        "consequence": "a corrupt or tampered assignment_source_dict fails open and re-enables the outbound sync the PR intends to suppress (parse-failure None treated as no-source, guard skipped, falls through to config)",
+        "status": "supported"
+       },
+       {
+        "consequence": "resuming the inbound/outbound sync cycle / loop",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When assignment_source_dict is truthy but has invalid/extra/missing keys, from_dict() returns None, the task passes None to should_sync('outbound_assignee', None), the integration_id cycle guard is skipped and the decision falls through to config, so if outbound sync is enabled it proceeds instead of being suppressed.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As checker notes support: src/sentry/integrations/mixins/issues.py:397-403 declares sync_assignee_outbound with **kwargs but no explicit assignment_source param, src/sentry/integrations/mixins/issues.py:411-416 declares sync_status_outbound with assignment_source, and src/sentry/integrations/tasks/sync_assignee_outbound.py:59-60 calls installation.sync_assignee_outbound(external_issue, user, assign=assign, assignment_source=parsed_assignment_source). So the param is on the status method while the assignee task passes assignment_source to the assignee method whose abstract only has **kwargs.",
+      "consequences": [
+       {
+        "consequence": "concrete sync_assignee_outbound overrides without **kwargs will raise TypeError on the new assignment_source kwarg",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "the status method gains a dead param that is never checked",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "assignment_source declared on sync_status_outbound instead of sync_assignee_outbound while the assignee task calls sync_assignee_outbound with assignment_source=parsed_assignment_source relying on abstract **kwargs and concrete override signatures; triggered when the sync_assignee_outbound task invokes installation.sync_assignee_outbound with assignment_source.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test method is named `test_from_dict_empty_array` but its body assigns `data: dict[str, Any] = {}` — an empty dict, not an empty array/list — so the name says empty_array while the body uses empty dict.",
+      "consequences": [
+       {
+        "consequence": "the array behaviour named by the test is never exercised by this test body",
+        "status": "supported"
+       },
+       {
+        "consequence": "the test passes even if array handling is broken",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Test `test_from_dict_empty_array` promises empty-array coverage but supplies empty dict `{}` instead of an empty list/array, so the empty-array input path is not exercised by this test. Trigger: executing/reading lines 8-11 where data is `{}`.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Test at tests/sentry/integrations/services/test_assignment_source.py:13 is named test_from_dict_inalid_data (misspelling 'inalid'), and its body verifies the invalid-payload guard in src/sentry/integrations/services/assignment_source.py:31-35 where from_dict returns None on TypeError.",
+      "consequences": [
+       {
+        "consequence": "Test is hidden from name-filtered runs such as -k invalid_data due to misspelling",
+        "status": "supported"
+       },
+       {
+        "consequence": "Invalid-payload guard is not selected and verified in those filtered runs until spelling is fixed to test_from_dict_invalid_data",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Test function misspelled as test_from_dict_inalid_data does not match -k invalid_data, so that filter misses the from_dict invalid-payload guard check; trigger is running pytest with name filter -k invalid_data.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "tests/sentry/workflow_engine/processors/test_detector.py:244-259 def build_mock_occurrence_and_event takes `value: int` but never references it, building IssueOccurrence with hardcoded subtitle=\"Some subtitle\" and evidence_data={}; callers pass hardcoded 6 while packets differ, e.g. packets {\"val1\": 100} and {\"val1\": 8} and packet {\"group_1\": 6, \"group_2\": 10} for group_2 expectation built with 6.",
+      "consequences": [
+       {
+        "consequence": "Expected occurrences built by the helper do not reflect the supplied value / packet value (same expectation regardless of value)",
+        "status": "supported"
+       },
+       {
+        "consequence": "Value-propagation bugs in build_occurrence_and_event would go undetected and not fail the test",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "build_mock_occurrence_and_event ignores its `value` argument and always emits the same hardcoded occurrence (subtitle=\\\"Some subtitle\\\", evidence_data={}); triggered on any call with differing values, e.g. passing 6 when packet value is 8/10/100/200, expectation does not vary.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Method `evaluate(self, data_packet: DataPacket[T])` is annotated `-> dict[DetectorGroupKey, DetectorEvaluationResult]` with docstring `Evaluates a given data packet and returns a list of DetectorEvaluationResult`. Body builds `results = {}`, assigns `results[result.group_key] = result`, and `return results` — i.e., returns a dict keyed by group_key, not a list.",
+      "consequences": [],
+      "remainingDefect": "Docstring for evaluate() describes return as list of DetectorEvaluationResult while signature and body return dict[DetectorGroupKey, DetectorEvaluationResult] keyed by group_key; triggered whenever evaluate() is read/called and docstring is relied on.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S5"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "update() at line 64 does `instance.type = validated_data.get(\"detector_type\", instance.group_type).slug` while the declared field at line 35 is `type = serializers.CharField()` with `validate_type`, and create() at line 133 uses `validated_data[\"type\"].slug`, so update looks up the wrong key and falls back to the existing group_type.",
+      "consequences": [
+       {
+        "consequence": "type updates are silently ignored, update falls back to existing group_type",
+        "status": "supported"
+       },
+       {
+        "consequence": "PUT type change never applies",
+        "status": "supported"
+       },
+       {
+        "consequence": "diverging from create() which uses validated_data[\"type\"]",
+        "status": "supported"
+       },
+       {
+        "consequence": "breaking caller assumption",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "update() looks up \\\"detector_type\\\" instead of \\\"type\\\", so when update is called with validated_data containing \\\"type\\\" different from instance.group_type, the supplied type is ignored and the instance retains the old group_type.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The use-table-widget-visualization branch at static/app/views/dashboards/widgetCard/chart.tsx:164-174 renders TableWidgetVisualization with hardcoded empty literals columns={[]} and tableData={{data:[], meta:{fields:{}, units:{}}}} and never references result.data/result.meta/fields, which are in scope and used only in the else branch at :186-187 as metadata={result.meta} data={result.data}.",
+      "consequences": [
+       {
+        "consequence": "dashboards show empty tables when flag is on — wrong output/regression",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When the use-table-widget-visualization branch is taken (flag on), TableWidgetVisualization is rendered with hardcoded empty columns/data/meta instead of result.data/result.meta/fields, producing empty tables / wrong output.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes, lines 94 and 98 use `Object.keys(tableData?.meta.fields)` and `tableData?.meta.fields[key]` with optional chaining only on `tableData` (`tableData?`), not on `meta`. Therefore when tableData is defined/non-nullish but meta is undefined/null, evaluating `.fields` throws TypeError.",
+      "consequences": [
+       {
+        "consequence": "throws TypeError / crashes the column-fallback/render path when tableData is defined but meta is missing, instead of completing fallback",
+        "status": "supported"
+       },
+       {
+        "consequence": "that triggering state corresponds to empty/error payloads where an empty table should be shown",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "No consequences contradicted. Remaining defect: defined tableData with missing/undefined meta causes lines 92-99 to access `.fields` on undefined and throw TypeError, breaking the column fallback. Trigger: tableData non-nullish with meta undefined/null.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes, src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py calls analytics.record at lines 81-86 unconditionally before the `if not features.has(\"organizations:preprod-artifact-assemble\", ...)` guard at lines 88-91 that returns 404, so assemble attempts are logged even when the feature is disabled/unauthorized.",
+      "consequences": [
+       {
+        "consequence": "inflates analytics by counting assemble attempts even when feature disabled/unauthorized",
+        "status": "supported"
+       },
+       {
+        "consequence": "leaks usage signal to an unauthorized party / security exposure",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "does work (analytics.record call) before the feature guard executes",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "No consequences contradicted. Remaining behavior: analytics.record fires on every request before the feature gate, so calls with organizations:preprod-artifact-assemble disabled or without authorization still emit an assemble-attempt event, inflating telemetry. Trigger: request to the assemble endpoint when the feature flag check at lines 88-91 would return 404.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx:69 the code builds `/organizations/${orgSlug}/trace-items/attributes/${attributeKey}/values/` via raw template interpolation where attributeKey comes from tag.key per :98, with no encodeURIComponent call in the file.",
+      "consequences": [
+       {
+        "consequence": "keys containing /, brackets or encoded chars break routing (wrong/failed request path)",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "path confusion/smuggling to unintended endpoints (requests reach unintended endpoint, security-relevant)",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Unencoded path segment: tag.key containing /, brackets or encoded chars interpolated raw into .../attributes/${attributeKey}/values/ produces malformed/ambiguous URL that misroutes or fails.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "get_environment_info in commit_context.py calls issue.get_recommended_event(), which performs a Snuba/eventstore fetch via get_events_snql, and GitHub and GitLab get_comment_body call get_environment_info once per issue in a for-issue-in-issues loop when generating the merged-PR comment.",
+      "consequences": [
+       {
+        "consequence": "N fetches per comment generation (one get_recommended_event Snuba/eventstore fetch per issue)",
+        "status": "supported"
+       },
+       {
+        "consequence": "amplifies latency on the PR-comment path",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Per-issue Snuba/eventstore fetch in comment generation: each linked issue triggers one issue.get_recommended_event() via get_environment_info, so generating a merged-PR comment for N linked issues performs N sequential fetches. Trigger: merged-PR comment path with multiple issues in the loop (e.g., github integration for issue in issues calling get_environment_info).",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As far as checker notes support: src/sentry/issues/endpoints/browser_reporting_collector.py has permission_classes = () at line 80, checks raw_data is list, then at 106-128 loops `for report in raw_data:` creating BrowserReportSerializer(data=report) and validating each report, then second loop `for browser_report in validated_reports:` calling metrics.incr per report, with no max-length / max-reports enforcement.",
+      "consequences": [
+       {
+        "consequence": "Attacker can POST huge arrays to unauthenticated endpoint causing CPU/memory blowup (DoS via unbounded per-report validation)",
+        "status": "supported"
+       },
+       {
+        "consequence": "Attacker can cause metric spam via unauthenticated per-report metrics.incr with no size limit",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "No contradicted consequences to remove. Left: unauthenticated endpoint accepts arbitrary-length list raw_data and does per-item serializer validation plus per-item metrics.incr with no max-reports check; triggered by POSTing a huge reports array to the collector endpoint.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As far as checker notes support: lines 61-66 do `summary: data.summary` and `tooFewFeedbacks: data.numFeedbacksUsed === 0 && !data.success` directly without optional chaining or data-undefined check, with only prior `if (isPending)` and `if (isError)` early returns.",
+      "consequences": [
+       {
+        "consequence": "throws cannot-read-property crash when query is disabled or returns no data (error-transition states)",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Unguarded dereference at lines 61-66 (data.summary / data.numFeedbacksUsed) that would throw only if reached with data undefined via disabled query or no-data/error-transition state; checker shows the unguarded access but does not show that such a state can reach those lines or that a crash occurs.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S1",
+      "S14",
+      "S15"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S2",
+      "S13"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At src/sentry/integrations/github/integration.py:481-482 `except Integration.DoesNotExist: return pipeline.next_step()` auto-advances the pipeline with no github_authenticated_user verification; the mismatch check is only later at 501-505 after the Integration exists, while the Integration is created asynchronously on installation-created webhook via ensure_integration in webhook.py:201-210.",
+      "consequences": [
+       {
+        "consequence": "Completing the pipeline before webhook delivery skips the installer-vs-OAuth-user mismatch check this PR is meant to enforce",
+        "status": "supported"
+       },
+       {
+        "consequence": "Letting a mismatched user finish setup",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When the Integration row does not yet exist because the asynchronous installation webhook has not delivered, the DoesNotExist branch calls pipeline.next_step() without installer-vs-OAuth-user verification, allowing a user whose OAuth identity differs from the installer to complete setup and bypass the intended mismatch enforcement.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At src/sentry/integrations/github/integration.py:132 the code assigns error_short to a plain-string literal \"Invalid installation request.\" (with similar plain literals at default/call sites) and at :141 builds \"data\": {\"error\": _(error_short)}, passing a variable to _() rather than a string literal.",
+      "consequences": [
+       {
+        "consequence": "error_short strings bypass translation extraction because _(error_short) uses a variable so makemessages cannot collect them, leaving them untranslated",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When the error path using error_short is taken (e.g., invalid installation request), the message is held in a variable defined as a plain string and passed as _(error_short), so makemessages extraction misses the literal and no catalog entry is created, leaving the error message in English in non-English locales.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At tests/sentry/integrations/github/test_integration.py:385-396 the test does GET setup_path with installation_id into resp, then overwrites resp with GET setup_path with code and state ddd023... and only asserts generic b\"Invalid installation request.\". In src/sentry/integrations/github/integration.py:412-413 OAuthLoginView returns generic error when request.GET state != pipeline.signature, before src/sentry/integrations/github/integration.py:493-498 where GitHubInstallation does Integration.objects.get(external_id=installation_id, status=ACTIVE) with DoesNotExist returning same generic error. Valid state referenced is 9cae5e..., so ddd023... causes early OAuth return before installation check.",
+      "consequences": [
+       {
+        "consequence": "First response (installation_id flow) is overwritten by second response with no assertion on the first",
+        "status": "supported"
+       },
+       {
+        "consequence": "Integration.DoesNotExist / not-ACTIVE branch in GitHubInstallation is not exercised/verified by this test flow",
+        "status": "supported"
+       },
+       {
+        "consequence": "Test only asserts the OAuth state-mismatch generic error, not the installation-check path",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "In tests 385-396 the installation_id GET is discarded without assert and the second GET uses bad state ddd023... (vs valid 9cae5e...), triggering early return at integration.py:412-413 with generic error, so integration.py:493-498 DoesNotExist/not-ACTIVE lookup is never reached in this flow and only generic Invalid installation request is asserted.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As far as checker notes support: the file obtains multiprocessing spawn context at line 53 and creates flusher processes via self.mp_context.Process at line 105, but guards process.kill() at lines 254-255 with isinstance(process, multiprocessing.Process), so the guard can fail for spawn-created processes and the kill can be skipped.",
+      "consequences": [
+       {
+        "consequence": "kill/terminate is skipped because the isinstance check fails for spawn-context processes",
+        "status": "supported"
+       },
+       {
+        "consequence": "hung/crashed flusher processes are left alive",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Isinstance guard at line 254 against multiprocessing.Process does not match processes created via spawn context at lines 53/105, so process.kill() (terminate in lines 253-257 path) is skipped when that cleanup path runs for a spawn-created flusher process.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Line 51 does `self.max_processes = max_processes or len(buffer.assigned_shards)` so negative ints (truthy) are kept. Lines 60-66 do `self.num_processes = min(self.max_processes, len(buffer.assigned_shards))` so negative is kept, build `{i: [] for i in range(self.num_processes)}` which is empty for negative, then `process_index = i % self.num_processes` and `self.process_to_shards_map[process_index].append(shard)`. Dict lookup with computed index then raises KeyError. Empty assigned_shards makes `min(...,0)` zero.",
+      "consequences": [
+       {
+        "consequence": "Negative max_processes leads to empty process_to_shards_map and KeyError on shard assignment path (i % num_processes / map lookup)",
+        "status": "supported"
+       },
+       {
+        "consequence": "Empty assigned_shards yields zero processes (num_processes == 0 / empty map)",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "With negative max_processes and non-empty assigned_shards, num_processes stays negative, the map from range() is empty, and the shard-assignment dict lookup raises KeyError; with empty assigned_shards, min(...,0) gives 0 processes/empty map.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "join() sets one shared deadline (`time.time() + timeout`) then loops processes sequentially, checking remaining_time and `break`ing when <=0, which skips the later `while is_alive / sleep` wait and `terminate()` for remaining processes.",
+      "consequences": [
+       {
+        "consequence": "once the shared deadline expires, remaining processes are not terminated",
+        "status": "supported"
+       },
+       {
+        "consequence": "remaining processes are leaked (left alive)",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "When join(timeout) is called with multiple processes and earlier waits consume the single shared deadline, the loop breaks with remaining_time <=0 and later processes are left alive without terminate(), leaking them.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "submit() in src/sentry/spans/consumers/process/flusher.py iterates `for buffer in self.buffers.values(): memory_infos.extend(buffer.get_memory_info())`. Each get_memory_info() in src/sentry/spans/buffer.py returns `iter_cluster_memory_usage(self.client)` where client is `get_redis_client()` for `SENTRY_SPAN_BUFFER_CLUSTER` ignoring `assigned_shards`. iter_cluster_memory_usage() in src/sentry/processing/backpressure/memory.py calls `cluster.info()` cluster-wide yielding per-node memory.",
+      "consequences": [
+       {
+        "consequence": "each submit() repeats identical cluster-wide Redis INFO queries N times (once per buffer) from the same cluster client, causing redundant Redis load",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Each submit() with N buffers in self.buffers issues N identical cluster-wide INFO sequences against the same SENTRY_SPAN_BUFFER_CLUSTER client because get_memory_info() ignores assigned_shards; trigger is submit() called when multiple buffers are configured.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Docstring at src/sentry/spans/consumers/process/flusher.py:32 says 'Creates one process per shard for parallel processing' while code sets self.num_processes = min(self.max_processes, len(buffer.assigned_shards)) and assigns shards round-robin via process_index = i % self.num_processes, with --flusher-processes defaulting to 1.",
+      "consequences": [
+       {
+        "consequence": "Docstring claim of one process per shard is made untrue/misleading by max_processes-capped sharing and needs update to describe capped/shared-shard manager",
+        "status": "supported"
+       },
+       {
+        "consequence": "With default --flusher-processes=1 one process handles all shards, contrary to docstring",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Docstring still claims one-process-per-shard when code caps processes and shares shards round-robin; triggered when max_processes < len(shards), e.g. default --flusher-processes=1 where a single process handles all assigned shards. Reader is misled about parallelism, code behavior itself is as implemented.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "As supported by checker notes: monkeypatch.setattr(\"time.sleep\", lambda _: None) at line 15 replaces time.sleep with a no-op, so time.sleep(0.1) at line 62 (with `import time` at line 1) calls the patched version and returns immediately with no 0.1s wait.",
+      "consequences": [
+       {
+        "consequence": "time.sleep(0.1) returns immediately with no wait and therefore provides no synchronization/delay for flusher threads",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "No consequences contradicted. Remaining defect: when the test runs with the line-15 monkeypatch active, execution of line-62 time.sleep(0.1) does nothing and returns immediately, so the intended 0.1s pause provides no time-based synchronization for background flusher threads.",
+      "remainingIsOptional": false
+     }
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In src/sentry/monitors/logic/incidents.py the threshold>1 path does list(reversed(previous_checkins[:failure_issue_threshold])) at line 48, then checks if any([... for checkin in previous_checkins]) at line 52 which is False for an empty list, with no `if not previous_checkins` guard before line 59 doing starting_checkin = previous_checkins[0]. The function containing this (try_incident_threshold) is called by mark_failed.",
+      "consequences": [
+       {
+        "consequence": "raises IndexError at starting_checkin = previous_checkins[0] when threshold>1 query returns no rows (empty list)",
+        "status": "supported"
+       },
+       {
+        "consequence": "crashes the mark_failed path via try_incident_threshold (consumer path)",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "IndexError at starting_checkin = previous_checkins[0] when previous_checkins is empty: after slicing for threshold>1 returns no rows, any([]) is False so execution falls through to indexing [0] with no empty-list guard. Trigger is empty previous_checkins list in the threshold>1 path.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "nit": false
+    }
+   ]
+  }
+ }
+}

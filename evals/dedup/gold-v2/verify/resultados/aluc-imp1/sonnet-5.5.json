@@ -1,0 +1,1914 @@
+{
+ "model": "sonnet-5.5",
+ "verificador": "claude-sonnet-5.5@sdk",
+ "versao": "imp1",
+ "sobre": "h1t10f",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S10"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7",
+      "S9",
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S13",
+      "S14"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The handler computes isAttendee by matching the user's email against booking.attendees by email only (line 52). It throws FORBIDDEN only if the user is not a team admin/owner, not the organizer, and not an attendee (lines 54-56). An attendee who passes this check can add guests; the handler then calls eventManager.updateCalendarAttendees (line 165) and sendAddGuestsEmails (line 168) for the new guests.",
+      "consequences": [
+       {
+        "consequence": "An attendee matched only by email passes the permission check and can add guests to the booking.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The handler updates the calendar event and sends emails/invites to the added guests on the organizer's behalf.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Any attendee can use this to send invites/emails to arbitrary addresses.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The attendee's email is not verified/confirmed, so identity is established by email match alone.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Any person listed as an attendee (matched solely by email, with no confirmation of the email) can add arbitrary guest addresses to a booking, causing calendar updates and invite emails to be sent to those addresses under the organizer's event. Trigger: an authenticated user whose email equals an attendee's email calls the add-guests handler with arbitrary guest emails. Whether attendees should be allowed at all, or whether email confirmation is required, is a design question the checker did not find to be a factual error.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At MultiEmail.tsx line 46, the Tooltip is rendered with the hard-coded English string content=\"Remove email\". The component already has `t` from useLocale (line 13) and uses it for the neighbouring label t(\"add_another\") (line 69), so this tooltip text is not passed through translation.",
+      "consequences": [
+       {
+        "consequence": "The tooltip text \"Remove email\" is hard-coded English and bypasses the translation mechanism.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The component already calls useLocale (t) and the neighbouring label uses t(\"add_another\"), so t is available for this string.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Users with a non-English locale see the tooltip in English instead of their language.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The remove-button tooltip always displays the English text \"Remove email\" regardless of the user's selected locale, because it is not wrapped in t(...) and has no locale key. It is triggered whenever the tooltip is shown for a user with a non-English locale. This is a localization inconsistency only; nothing crashes, returns a wrong result, loses data or breaks a caller.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The code builds `message` as a template string `${err.data?.code}: ${t(err.message)}`, which is always a non-empty string, then passes `message || t(\"unable_to_add_guests\")` to showToast as an error toast. The `||` fallback can never be used. If `err.data?.code` is undefined, the toast text begins with \"undefined: \".",
+      "consequences": [
+       {
+        "consequence": "The template string is always truthy, so the `|| t(\"unable_to_add_guests\")` fallback is dead code.",
+        "status": "supported"
+       },
+       {
+        "consequence": "When err.data?.code is undefined, the user sees an error toast reading \"undefined: ...\".",
+        "status": "supported"
+       },
+       {
+        "consequence": "The user can see an untranslated raw message in the toast.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When an error arrives without `err.data?.code` (e.g. a non-TRPC or network error), the error toast shows \"undefined: <message>\" instead of the intended translated fallback \"unable_to_add_guests\", because the template string is always truthy and the fallback never runs. The untranslated-raw-message claim is not verified by the notes. The impact is a confusing error toast text only; nothing crashes, and no data is lost or corrupted.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S1",
+      "S8",
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S3",
+      "S5",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S6",
+      "S7",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S15"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "parseRefreshTokenResponse throws 'Invalid refreshed tokens were returned' when parsing fails (parseRefreshTokenResponse.ts:21-23). CalendarService.ts:263-264 calls it without try/catch and then evaluates `tokenResponse.success && tokenResponse.data`, so a parse failure propagates out of refreshAccessToken rather than reaching that check.",
+      "consequences": [
+       {
+        "consequence": "The `tokenResponse.success` check on the next line is redundant/dead code because the helper throws on parse failure.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A failed parse/refresh now throws out of refreshAccessToken instead of keeping the old credentials.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The previous error logging was removed.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When the refresh response fails to parse (e.g. the token endpoint returns an invalid or error payload), parseRefreshTokenResponse throws and the exception propagates uncaught out of refreshAccessToken in office365calendar CalendarService. The old credentials are not retained and callers see a thrown error rather than the previous handled fallback. The `success` check afterward is unreachable for the failure case. Whether error logging was removed was not verified.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S13",
+      "S15",
+      "S18",
+      "S20"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8",
+      "S11",
+      "S14",
+      "S19"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S12",
+      "S17"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S10",
+      "S21"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The checker notes contain no verdict or evidence, so nothing about the cited code is confirmed. The comment describes retryCount being incremented only inside an if-block that requires both message and sendTo and a falsy scheduleSMS result, but this was not verified against the repository.",
+      "consequences": [
+       {
+        "consequence": "retryCount is not incremented when sendTo is missing or the message is empty, because the if-block is skipped.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Reminders with a missing or invalid phone number or empty message are retried on every cron run until their date.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "This defeats the stated purpose of the PR, which is to stop endless retries.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Unverified: if the comment's description is accurate, a reminder with a missing sendTo or empty message never has retryCount incremented, so it is reprocessed on every cron run until its date. The checker notes neither confirm nor contradict this.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The checker notes contain no verdict or evidence. The cited line is claimed to be the default export of BackupCode.tsx, named `TwoFactor`, the same name as the separate TOTP component. This was not verified by the checker.",
+      "consequences": [
+       {
+        "consequence": "The default export is named `TwoFactor`, duplicating the name of the TOTP component (copy-paste leftover).",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "The mismatched name misleads readers of the code.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "The mismatched name makes stack traces and React devtools component names misleading.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "If the claim is accurate, the BackupCode component is named `TwoFactor`, which is confusing for readers and debugging output (stack traces, devtools). There is no runtime failure, wrong result, data loss, security issue or broken caller attributable to the name alone, since default imports can use any local name.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At line 50 of the disable handler, the code logs the error \"Missing encryption key; cannot proceed with backup code login.\" when the encryption key is missing. The handler's purpose is disabling 2FA: it ends by updating the user with backupCodes: null and twoFactorEnabled: false (lines 102-108). It does not perform a login.",
+      "consequences": [
+       {
+        "consequence": "The log message wording is wrong: it says 'backup code login' although the endpoint disables 2FA and does not log in.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The misleading message could cause confusion when someone reads the logs to diagnose a missing encryption key failure.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When the encryption key is missing, the handler logs a message that refers to 'backup code login' instead of disabling 2FA with a backup code. This is a misleading log string only; the control flow and the disable behavior are not affected.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The update action in app/controllers/admin/embedding_controller.rb (lines 9-11) only calls render_serialized(@embedding, EmbeddingSerializer, ...). It applies no params to @embedding and persists nothing. fetch_embedding builds @embedding as an OpenStruct from EmbeddableHost.all, so no model is saved.",
+      "consequences": [
+       {
+        "consequence": "The update action does not change or persist anything and only re-renders the embedding.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The client's saveChanges appears to succeed while doing nothing (a successful response is returned but no changes are saved).",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Any PUT/PATCH to the update action with changes to the embedding returns a serialized embedding as if it succeeded, but the submitted changes are neither applied nor stored. Admins who save changes silently lose them, and a subsequent fetch returns the unchanged data.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "spec/fabricators/embeddable_host_fabricator.rb (lines 1-27) defines the category fabricators :category, :diff_category, :happy_category and :private_category. spec/fabricators/category_fabricator.rb (lines 1-4) defines Fabricator(:embeddable_host) with host \"eviltrout.com\" and a category. So the file names and contents are swapped relative to their names.",
+      "consequences": [
+       {
+        "consequence": "File names and contents are swapped: embeddable_host_fabricator.rb holds the category fabricators and category_fabricator.rb holds the :embeddable_host fabricator.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Specs using these fabricators would break or fail to find them.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Fabricator definitions live in files whose names do not match their contents (category fabricators in embeddable_host_fabricator.rb, the :embeddable_host fabricator in category_fabricator.rb). This is a naming/organization problem; the checker notes do not show any crash, wrong result or broken caller, since Fabricator loads all files in the directory regardless of file name.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "julgado": {
+      "behavior": "expandable_first_post? in app/models/topic.rb (868-870) returns `SiteSetting.embed_truncate? && has_topic_embed?` with no embeddable-host check. The spec at 1403-1405, named 'is false if embeddable_host is blank', sets up no host and no stubs. It passes because embed_truncate defaults to false (site_settings.yml:769), so the && short-circuits before has_topic_embed? is evaluated.",
+      "consequences": [
+       {
+        "consequence": "The test does not exercise any embeddable-host condition; its name disagrees with its body, since expandable_first_post? no longer checks hosts.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test passes specifically because has_topic_embed? is unstubbed and false on a built topic.",
+        "status": "contradicted"
+       },
+       {
+        "consequence": "The test passes because embed_truncate defaults to false, short-circuiting before has_topic_embed? is evaluated (a different mechanism than the comment states, but the test still passes vacuously).",
+        "status": "supported"
+       },
+       {
+        "consequence": "The suggested fix (stub has_topic_embed? true, set embed_truncate true, or remove the test) would make the test meaningful or remove the misleading test.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The spec 'is false if embeddable_host is blank' is misleading and vacuous: it has no host setup and passes only because embed_truncate defaults to false, so it does not test any host-related behavior that expandable_first_post? no longer has. No production behavior is wrong; the test gives false coverage and a misleading name.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S7",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S5",
+      "S8",
+      "S10",
+      "S13"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "julgado": {
+      "behavior": "Line 11 of embed.html.erb outputs request.referer with ERB's `<%= %>`, which HTML-escapes the value (a single quote becomes &#39;). The referer is not marked html_safe, so it is emitted escaped inside the inline script string.",
+      "consequences": [
+       {
+        "consequence": "A referer on the allowed host containing a single quote in its path can terminate the JS string literal and execute attacker-controlled script (XSS).",
+        "status": "contradicted"
+       },
+       {
+        "consequence": "The referer is interpolated unescaped into the inline script.",
+        "status": "contradicted"
+       },
+       {
+        "consequence": "The target origin is not built from the validated URI (scheme://host[:port]) and is not emitted via to_json/j.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "No concrete defect is supported by the checker notes. At most, the full referer (including path) is used rather than just the origin, and it is HTML-escaped rather than JS-escaped. This could yield an incorrect value (e.g. &#39; entities, or a path included where only an origin is expected) in the script string, but the notes do not show this breaking anything.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "app/models/topic_embed.rb:48 calls Kernel#open(url) and passes the result's .read to Readability::Document.new, with no scheme validation. Callers lib/topic_retriever.rb:52 and lib/tasks/disqus.thor:148 pass the URL through. invalid_host? at lib/topic_retriever.rb:14-19 checks only the host, not the scheme.",
+      "consequences": [
+       {
+        "consequence": "The URL scheme is never validated before Kernel#open is called on it.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The URL originates from the embed_url request parameter and RSS item links and is passed through to open without scheme checks.",
+        "status": "supported"
+       },
+       {
+        "consequence": "With open-uri, Kernel#open can execute commands for strings beginning with '|' or read local files, so attacker-controlled input could lead to command execution or local file disclosure.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "The host check in TopicRetriever may limit exploitability, but the notes say this does not contradict the comment.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Kernel#open is called on an externally influenced URL with no scheme validation. Input such as a string starting with '|' or a local file path, supplied via embed_url or an RSS item link, can reach open. Because open-uri's Kernel#open treats those as commands or file paths, this could allow command execution or local file reads. The host-only check in invalid_host? may reduce but does not eliminate the exposure, since the notes do not show it blocks such strings.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "topic_embed.rb saves imported feed/remote-page content as a post with cook_method raw_html. Post cooking returns the raw content unchanged for raw_html (post.rb:133), and best.html.erb outputs post.cooked with `raw` (line 19), so the content is rendered without sanitization. topic_embed.rb:13 also interpolates url directly into href='#{url}' without escaping.",
+      "consequences": [
+       {
+        "consequence": "Imported HTML skips the sanitizer because cook_method is raw_html and cooking returns the raw content",
+        "status": "supported"
+       },
+       {
+        "consequence": "best.html.erb renders the stored content with `raw post.cooked`, so unsanitized HTML is served to viewers (stored XSS)",
+        "status": "supported"
+       },
+       {
+        "consequence": "The url is interpolated unescaped into an href attribute, allowing attribute injection or a malicious URL",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Content fetched from a feed or remote page that contains script or malicious HTML (e.g. <script> or onerror handlers), or a url containing a quote or javascript: scheme, is stored as-is and rendered unescaped via `raw post.cooked` in best.html.erb, executing in viewers' browsers (stored XSS).",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At app/models/topic_embed.rb:13, `contents << \"\\n<hr>\\n<small>...\"` appends the footer in place onto the `contents` string passed as the argument to `self.import(user, url, title, contents)`. This mutates the caller's string object rather than creating a new one.",
+      "consequences": [
+       {
+        "consequence": "Raises FrozenError when the caller passes a frozen string as contents.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Appends the footer a second time if the same string object is imported again, since the caller's string was already mutated.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Mutates the caller's string in place, a side effect visible to the caller.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Calling import with a frozen string for contents raises FrozenError, and calling import twice with the same string object duplicates the footer in the content (and the caller's original string is altered). Triggered by frozen string input or by reusing the same string object across imports.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At embed.js:17 the message handler does `if (discourseUrl.indexOf(e.origin) === -1) { return; }`. It ignores the message only when e.origin is not a substring of the discourseUrl string. So an empty origin, or any origin that is a substring of the URL (e.g. a prefix or partial host), passes the check rather than being rejected by exact comparison.",
+      "consequences": [
+       {
+        "consequence": "The check is a substring test rather than an exact origin comparison, so an empty origin or any origin appearing inside the discourseUrl string passes the filter.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Messages from origins other than the Discourse origin can be accepted by the handler (weakened origin validation).",
+        "status": "supported"
+       },
+       {
+        "consequence": "A concrete exploit or specific damage resulting from accepting such messages (e.g. what the handler does with the message data).",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The origin validation is too loose: a message event whose e.origin is an empty string or a substring of discourseUrl (for example 'https://disc' or a bare host fragment if it appears in the URL) is processed as if it came from the Discourse site, instead of being rejected. Exact equality with the URL's origin would be needed.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "Line 13 builds the post body by interpolating the url directly into `<a href='#{url}'>#{url}</a>` with no HTML escaping. Line 11 only checks that the url matches /^https?:\\/\\//, which does not restrict quotes or markup. Line 22 creates the post with cook_method raw_html, and post.rb:133 returns raw content without sanitizing for that cook method. The Nokogiri pass in absolutize_urls does not strip markup, so the url ends up in the output as written.",
+      "consequences": [
+       {
+        "consequence": "A url containing a quote or markup is output as live HTML, because it is unescaped, the post is cooked as raw_html, and no sanitization is applied.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The injected markup is rendered through `raw post.cooked`, which allows attribute breakout or script injection (XSS) for viewers of the topic.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Escaping with ERB::Util.html_escape or CGI.escapeHTML for both the href and the link text would fix the problem.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "A url that starts with http:// or https:// but contains a single quote, angle brackets or other markup (for example `http://x/' onmouseover='...` or `http://x/<script>...`) is inserted unescaped into the raw_html post body. It is served unsanitized, so it can break out of the href attribute or inject arbitrary HTML/JS into the topic page, which is a stored XSS hole.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The job runs poll_feed only if SiteSetting.feed_polling_enabled? && feed_polling_url.present? && embed_by_username.present?. The two spec tests stub only feed_polling_url or embed_by_username to nil and do not stub feed_polling_enabled?, which defaults to false in site_settings.yml. So poll_feed is not called in those tests regardless of the other settings.",
+      "consequences": [
+       {
+        "consequence": "feed_polling_enabled? defaults to false and is not stubbed, so poll_feed is never called in the 'requires feed_polling_url' and 'requires embed_by_username' tests regardless of the other setting.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Those tests would still pass if the feed_polling_url / embed_by_username conditions were removed from the job, so they do not actually verify those conditions.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The two tests are vacuous: with feed_polling_enabled? left at its default false, they pass whether or not the url/username presence checks exist, so a regression removing those guards would go undetected. No production code misbehaves; the weakness is in test coverage only.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "EmbedController has a before_filter :ensure_embeddable that raises Discourse::InvalidAccess when SiteSetting.embeddable_host is blank (default is ''). The spec at lines 8-11 sets no embeddable_host and has no stubs, so the filter raises before params.require(:embed_url) is reached.",
+      "consequences": [
+       {
+        "consequence": "The 'is 404 without an embed_url' test never sets embeddable_host, so ensure_embeddable rejects the request before the embed_url param check runs.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test passes without the embed_url check being exercised, so it gives false confidence and would still pass if the missing-param handling were removed or broken.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The referer also needs to be stubbed so the missing param is the only failure cause.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The spec 'is 404 without an embed_url' does not test what it claims. With embeddable_host blank by default, the before_filter raises InvalidAccess (404) before params.require(:embed_url) runs, so the test passes even if the embed_url check is deleted or broken. A regression in missing-param handling would go undetected. Whether the referer must also be stubbed was not verified.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The spec's 'not a url' test (lines 21-25) does not stub SiteSetting.embeddable_host, so it uses the blank default ''. In lib/topic_retriever.rb:15, invalid_host? compares SiteSetting.embeddable_host != URI(@embed_url).host and returns true via a rescue when URI parsing raises. With the blank default, the comparison is true even if no InvalidURIError is raised.",
+      "consequences": [
+       {
+        "consequence": "The 'not a url' test would still pass (invalid_host? true) even if the InvalidURIError rescue were broken or removed, so it does not isolate the rescue path.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test gives a false sense of coverage for the malformed-URL handling; a regression in the rescue would go undetected.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Production code misbehaves or crashes on malformed URLs.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The test is weak: with embeddable_host blank, a malformed embed URL is rejected regardless of the rescue, so removing or breaking the InvalidURIError rescue would not fail this test. Trigger: any change that breaks the rescue while the spec still runs with the blank default host. This is a test-coverage gap only; no runtime behavior is shown to be wrong.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S6",
+      "S9"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The action reads limit as (params[:limit] || 50).to_i and offset as params[:offset].to_i, then queries group.users.order(:username_lower).limit(limit).offset(offset). No clamp, maximum, or validation exists in the action, so zero, negative, and very large limit values pass through unchanged to the query.",
+      "consequences": [
+       {
+        "consequence": "The client-supplied limit has no upper bound, so a caller can request an arbitrarily large limit.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Zero and negative limit values are not handled and are passed through to the query unchanged.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A large limit forces loading and serializing of every member of a large group in one request, causing heavy load or a slow request.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Offset is not forced to be non-negative.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "A client can pass an arbitrarily large limit (or a zero/negative limit or negative offset) and the action forwards it unvalidated to the query. A very large limit lets a single request pull a whole large group's members, which may be expensive. The notes do not confirm the resulting resource impact or how the database handles negative values (possible error). The missing bound and validation are confirmed.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The spec at line 115 calls `xhr :put, :remove_member, group_id: 1, user_id: 42`. In config/routes.rb, `remove_member` is routed only via `delete \"members\"` (line 49), while `put \"members\"` (line 50) routes to `groups#add_members`. So the test uses PUT for an action that production routes only to DELETE.",
+      "consequences": [
+       {
+        "consequence": "The test uses a verb (PUT) that is not routed to remove_member in production, so it does not mirror a real request.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test exercises the action with a verb that is never routed in production, so it does not match the real request.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test fails, errors, or gives a wrong result because of the verb mismatch.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "Production behavior is broken or affected by this spec.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The spec 'cannot remove members from automatic groups' issues PUT to remove_member, a verb/action pairing that is not routed in production (only DELETE is). The test is therefore not faithful to real requests. Depending on the Rails version, controller specs may bypass strict verb routing, so the test might still pass, and the checker notes do not show a failure or wrong result. The mismatch is a test-fidelity issue only, and the fix is to use `xhr :delete`.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "translate loads only config.locale (line 68: load_locale(config.locale) unless already loaded). The fallback chain [locale, default_locale, :en] is configured in config/initializers/i18n.rb, but fallbacks.ensure_loaded! is only called in application_controller.rb:159. Translation results are cached at lines 74-76.",
+      "consequences": [
+       {
+        "consequence": "Outside controllers (jobs, mailers, rake), fallback locales (default_locale, :en) are not loaded by translate, since only the current locale is loaded there.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A key missing in the current locale falls back to a locale that is not loaded, so it returns 'translation missing' in those contexts.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The LRU cache stores the 'translation missing' result, so it persists for later lookups.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "In non-controller contexts (jobs, mailers, rake tasks) where only config.locale has been loaded, translating a key that is absent from the current locale does not fall back to default_locale or :en and returns 'translation missing'. That result is cached by the LRU cache at lines 74-76. Triggered by a missing key in the current locale before the fallback locales have been loaded by a controller request.",
+      "remainingIsOptional": false
+     }
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test creates device 32mdo31deeqwes, then submits only a new DeviceID \"keep\" and expects ErrDeviceLimitReached. In database.go, when count >= s.deviceLimit, the store calls s.updateDevice(ctx, device), so existing devices should be updated at the limit. The test never re-submits an existing device at the limit.",
+      "consequences": [
+       {
+        "consequence": "The test only checks that a new device is rejected at the limit and never exercises updating an existing device at the limit.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test would still pass if updateDevice always returned ErrDeviceLimitReached, so a regression in updating existing devices at the limit would go undetected.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Test coverage gap: no test re-submits the existing device (DeviceID 32mdo31deeqwes) at the device limit and verifies it is updated without error. A regression where updateDevice always returns ErrDeviceLimitReached would not be caught. No production behavior is shown to be wrong.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S2",
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S4",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test at lines 101-109 only has an `if tc.shouldInstrumentRequestSize { ... }` block that asserts on the request size metric. There is no else branch. CheckHealth and CollectMetrics set the flag to false, so for those cases nothing asserts the request size metric is absent.",
+      "consequences": [
+       {
+        "consequence": "For the shouldInstrumentRequestSize=false cases (CheckHealth, CollectMetrics), the test never asserts that the request size metric is absent.",
+        "status": "supported"
+       },
+       {
+        "consequence": "If size instrumentation were wrongly added to CheckHealth or CollectMetrics, the test would still pass and not catch the regression.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Test coverage gap: a regression that adds request size instrumentation to CheckHealth or CollectMetrics would go undetected by this test, since the false cases have no negative assertion. No current production behavior is wrong.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "nit": true,
+     "julgado": {
+      "behavior": "In the 'error when creating object in the unified store fails' test case, the failing Create expectation is registered only via setupLegacyFn (lines 40-43), with no setupStorageFn. The test builds one shared mock (m := &mock.Mock{}) and wraps it in both legacyStoreMock and storageMock (lines 51-54). The mode 3 dual writer calls d.Storage.Create first (dualwriter_mode3.go:42) and returns on error, so the storage Create picks up the error registered through the legacy setup only because the mock is shared.",
+      "consequences": [
+       {
+        "consequence": "The failing Create expectation is registered only through setupLegacyFn, not setupStorageFn.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test passes only because legacy and storage wrappers share a single mock, so the storage Create receives the error registered via the legacy setup.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test therefore does not independently or properly exercise a storage failure; the setup is misleading and fragile.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Production code behaves incorrectly or the test gives a wrong result today.",
+        "status": "contradicted"
+       }
+      ],
+      "remainingDefect": "The test setup is misleading: the storage failure is registered through the legacy setup and only works because both wrappers share one mock. If the mocks were separated or the call order changed, the test would break or stop covering the storage-failure path. Currently the test passes and still exercises the real code path (Storage.Create returns an error and the writer returns it), so nothing crashes or returns a wrong result in production.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In dualwriter_mode3.go, the Mode3 Create, Update, Delete and DeleteCollection call d.Legacy.* inside a `go func()` after the storage write. The Mode3 tests use one shared mock for legacy and storage, and they neither wait for nor assert on the legacy call.",
+      "consequences": [
+       {
+        "consequence": "The Mode3 tests never verify the asynchronous legacy write, because they do not wait for it or assert on it.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Because legacy and storage share one mock, the tests cannot tell legacy calls from storage calls.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Removing the legacy Create, Update, Delete or DeleteCollection calls would not make these tests fail.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "Test coverage gap: if the legacy write in Mode3 Create/Update/Delete/DeleteCollection were removed or broken, the tests would still pass, so a regression would go undetected. This is a gap in the tests only; production code behavior is not shown to be wrong.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S15"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S2",
+      "S8",
+      "S14"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At lines 96-97 of dualwriter_mode3.go, an enriched logger `log` is created via d.Log.WithValues(\"name\", name, \"kind\", options.Kind, \"method\", method), but the context is then built with klog.NewContext(ctx, d.Log), i.e. the unenriched logger. The ctx passed to the storage and legacy delete calls therefore carries a logger without the name, kind and method values. List at line 82 correctly uses klog.NewContext(ctx, log).",
+      "consequences": [
+       {
+        "consequence": "The context passed to downstream delete calls carries the unenriched d.Log, so logs emitted from those calls via the context logger lack the name, kind and method values.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The inconsistency with List, which uses the enriched log in its context, is a real deviation within the same file.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Delete operations crash, return wrong results, or lose data because of this.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "In the delete path, when ctx is passed to the storage and legacy delete calls, any logging from those calls through the context logger omits the name, kind and method key-values, making delete log lines harder to correlate. Triggered on every delete through this dual-writer mode 3 code path. Only log metadata is lost.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12",
+      "S19"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S5",
+      "S9",
+      "S16"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S10",
+      "S11",
+      "S17",
+      "S18"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The checker notes contain no verdict or evidence, so nothing about the cited code is confirmed. The comment says BuildIndex writes b.cache under a lock while TotalDocs ranges over b.cache without a lock, but the checker did not verify this.",
+      "consequences": [
+       {
+        "consequence": "BuildIndex writes b.cache under Lock while TotalDocs reads (ranges over) b.cache without any lock",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "TotalDocs is called from search.init after the watch goroutine starts, so it can run concurrently with BuildIndex writes",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "A concurrent map read/write causes a fatal runtime error (crash)",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Unverified: if TotalDocs ranges over b.cache without holding the lock while BuildIndex writes to it concurrently, the process could hit a concurrent map read/write fatal error. The trigger would be TotalDocs running while BuildIndex is updating the cache. The checker did not confirm any part of this.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test starts a reader thread with new Thread(...).start() and never joins it or uses a latch. The main thread immediately performs the deletes, then sets deletedAll to true, then asserts that caughtExceptions is empty.",
+      "consequences": [
+       {
+        "consequence": "The deletes can finish before the reader thread performs its first read, so the test may never exercise concurrent reads during deletion.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A failing read in the reader thread can occur after the assertion on caughtExceptions has run, so the failure goes unnoticed.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test can pass even when the underlying bug is present, because of the missing synchronization.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The test has a race: with no latch to wait for the reader's first read and no join before the assertion, the deletes may complete before any read happens, or a reader exception may be added after the empty-check. Either way the test can pass while the concurrency bug it is meant to catch is present, which makes it unreliable as a regression test.",
+      "remainingIsOptional": false
+     }
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S7",
+      "S8",
+      "S10",
+      "S12"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In useAllGrafanaPromRuleAbilities, MaybeSupported is set to `loading ? NotSupported : AlwaysSupported` and does not consider an undefined rule (the skipToken case). With an undefined rule, Duplicate is therefore computed as supported, gated only by the Grafana rule-create permission (toAbility(duplicateSupported, rulesPermissions.create)). AlertRuleMenu passes skipToken for non-Grafana rules and computes canDuplicate by ORing the ruler ability with the Grafana ability.",
+      "consequences": [
+       {
+        "consequence": "The Grafana abilities hook reports Duplicate as supported (gated only by the Grafana create permission) when the rule is undefined.",
+        "status": "supported"
+       },
+       {
+        "consequence": "AlertRuleMenu ORs the Grafana ability with the ruler ability, so the Duplicate menu item can appear for data-source (cloud) rules when the user has the Grafana rule-create permission, even if the ruler check denies it.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "For data-source (cloud) rules, AlertRuleMenu passes skipToken to the Grafana abilities hook. The hook treats the undefined rule as always supported, so Duplicate evaluates to [true, grafanaCreatePermission]. Any user with the Grafana rule-create permission therefore sees Duplicate on cloud rules, even when the ruler ability denies it. This is an incorrect UI result, with the Duplicate action shown where it should not be.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "julgado": {
+      "behavior": "At useAbilities.ts:301-302 a comment says 'All GrafanaPromRuleDTO rules are Grafana-managed by definition' above `const isAlertingRule = prometheusRuleType.grafana.alertingRule(rule);`. That call maps to isGrafanaPromAlertingRule (rules.ts:134-135), a separate check from the recording-rule one (isGrafanaPromRecordingRule). Lines 323-329 gate Silence, ModifyExport, Pause, Restore and DeletePermanently on isAlertingRule. So the comment describes Grafana-managed status while the variable checks for alerting rules.",
+      "consequences": [
+       {
+        "consequence": "The comment text does not describe the variable it sits above (it talks about Grafana-managed rules, while the variable is an alerting-rule check).",
+        "status": "supported"
+       },
+       {
+        "consequence": "The code itself behaves incorrectly: Pause, Export and Silence are enabled for Grafana recording rules.",
+        "status": "contradicted"
+       },
+       {
+        "consequence": "Readers of the comment will expect Pause, Export and Silence to be enabled for recording rules, which is a misleading-documentation effect.",
+        "status": "supported"
+       },
+       {
+        "consequence": "isGrafanaPromAlertingRule returns false for recording rules (the checker assumed this and did not open the implementation).",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The comment above `isAlertingRule` is misleading: it states that all GrafanaPromRuleDTO rules are Grafana-managed, but the variable is an alerting-rule check, so a reader may wrongly infer that the gated actions apply to recording rules. The trigger is only someone reading or maintaining this code. Runtime behavior is not shown to be wrong.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At useAbilities.ts:309, `const MaybeSupported = loading ? NotSupported : AlwaysSupported;` sets the support value from `loading`. That `loading` comes from useIsGrafanaPromRuleEditable (:289), which gets it from `useFolder(folderUID)` (:351). So support depends on the folder fetch's loading state, while the comment at line 308 says there is no loading state.",
+      "consequences": [
+       {
+        "consequence": "The comment at line 308 claims there is no loading state, but the next line uses `loading` from the folder fetch to choose the support value, so the comment is misleading.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Readers or maintainers may be misled about how support is determined. This is documentation-only; no runtime failure is claimed or shown.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The comment at lines 308-309 is inaccurate: it says there is no loading state, yet `MaybeSupported` is `NotSupported` while the folder is loading and `AlwaysSupported` otherwise. This is a stale or misleading comment only. No runtime behavior is wrong, and the trigger is simply reading the code.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test 'should render More button with action menu options' locates the button via byRole('button', { name: 'More' }) and only asserts that it is present, that its aria-label is 'More', and that its text is 'More'. It never clicks the button or inspects any menu items.",
+      "consequences": [
+       {
+        "consequence": "The aria-label and text assertions are tautological because the button is already found by the name 'More'.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test never opens the menu or checks its actions, so it does not verify the 'action menu options' its name claims.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test would pass even if the menu had no actions or the abilities were broken.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The test name promises verification of action menu options, but the test only checks that a button named 'More' exists. A regression where the menu is empty or the ability checks are broken would go undetected. This is a gap in test coverage and a misleading test name; production code is not affected.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S10",
+     "membros": [
+      "S1",
+      "S7",
+      "S10"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S4",
+      "S8"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S9"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "When the 'use-table-widget-visualization' feature flag is enabled, chart.tsx lines 164-174 render TableWidgetVisualization with columns={[]} and tableData={{data: [], meta: {fields: {}, units: {}}}}. result.data and result.meta are only used in the else (flag off) branch at lines 186-187, so the flagged branch never receives the query results.",
+      "consequences": [
+       {
+        "consequence": "With the flag enabled, TableWidgetVisualization receives empty columns, data and meta instead of result.data and result.meta.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Every table widget renders empty for organizations that have the flag enabled.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "For any organization with 'use-table-widget-visualization' enabled, all table widgets in dashboards render with no columns and no rows, even when the query returns data, because the flagged branch hardcodes empty columns, data and meta instead of using result.data and result.meta.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In the number-type test, the mock endpoint matcher checks `query.query === 'search-query'`, but the hook sends the search term as `query.substringMatch` (hook line 53). The string-type test (line 73) correctly matches on `substringMatch`. So the number-type mock never matches any request the hook would send.",
+      "consequences": [
+       {
+        "consequence": "The number-type test's mock can never match the hook's request because it matches on `query.query` rather than `query.substringMatch`.",
+        "status": "supported"
+       },
+       {
+        "consequence": "`expect(searchQueryMock).not.toHaveBeenCalled()` would pass even if the number short-circuit were removed, so the test cannot detect a regression of that behavior.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Matching on `query.substringMatch` as the string-type test does would let the not-called assertion actually fail.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The number-type test gives false confidence: if the hook's number short-circuit were removed and the hook issued a request for number attributes with a search term, the test would still pass because its mock matcher uses the wrong key (`query.query` instead of `query.substringMatch`). This affects only test coverage; production behavior is unaffected.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S8"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "At lines 281-283 of PasskeysUsernamePasswordFormTest.java, a comment reads '// set passwordless policy for discoverable keys', but the code only calls .setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE).update(), which disables passkeys for the realm. The test's header comment at line 278 also says passkeys are not enabled for the realm.",
+      "consequences": [
+       {
+        "consequence": "The comment text 'set passwordless policy for discoverable keys' no longer matches the code, which only disables passkeys for the realm (stale comment).",
+        "status": "supported"
+       },
+       {
+        "consequence": "The stale comment may mislead readers about what the updater does; no runtime failure, wrong result, or test breakage is claimed.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The inline comment is stale and misdescribes the code: it says a passwordless policy for discoverable keys is set, while the code disables passkeys for the realm. This only affects readability and triggers no incorrect runtime behavior.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test patches `time.sleep` to `lambda _: None` via monkeypatch at line 15, for the whole test. The added `time.sleep(0.1)` at line 62 resolves to that patched function through the `time` module, so it returns immediately and waits for nothing.",
+      "consequences": [
+       {
+        "consequence": "The added `time.sleep(0.1)` is a no-op because `time.sleep` is patched to `lambda _: None`.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Nothing waits for the flusher threads before `step.join()` and the `messages` assertion, so the added sleep provides no synchronization.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test may be flaky or fail because the `messages` assertion can run before the flusher threads have produced output.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The added `time.sleep(0.1)` at line 62 has no effect since `time.sleep` is monkeypatched to a no-op. The intended delay for flusher threads never happens. Whether this makes the test fail or flake depends on thread timing and `step.join()` behavior, which the checker did not verify.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The flusher sets num_processes = min(max_processes, len(buffer.assigned_shards)) and assigns each shard to a process via i % num_processes. So the process count is capped by max_processes and multiple shards can share one process, while the docstring at lines 31-32 says it 'Creates one process per shard'.",
+      "consequences": [
+       {
+        "consequence": "The docstring 'Creates one process per shard' is inaccurate because the process count is capped by max_processes and shards are shared across processes via modulo.",
+        "status": "supported"
+       },
+       {
+        "consequence": "No runtime failure, wrong result, or data loss is claimed; the comment only asserts documentation inaccuracy.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "The docstring misdescribes the shard-to-process mapping: when there are more assigned shards than max_processes (--flusher-processes), several shards share a process, contrary to 'one process per shard'. This can mislead readers, but runtime behavior is unaffected.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S6"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S5",
+      "S7",
+      "S8"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The assignment source dataclass declares `queued: datetime = timezone.now()`, so `queued` always has a default datetime value. `to_dict` returns `asdict(self)`, which always includes `queued`. The test `test_to_dict` asserts `result.get(\"queued\") is not None`, which holds for any instance, so it is vacuous.",
+      "consequences": [
+       {
+        "consequence": "The assertion `result.get(\"queued\") is not None` can never fail because `queued` always has a default datetime and is included in to_dict output.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test does not verify that to_dict returns the correct queued value, so a regression in how queued is serialized would go undetected.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The test gives weak coverage: if to_dict dropped, altered, or mis-serialized the `queued` value (as long as it stayed non-None), the test would still pass. Triggered by any change to to_dict's handling of `queued`. No production code is wrong; only the test's strength is affected.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The test test_from_dict_empty_array in tests/sentry/integrations/services/test_assignment_source.py declares `data: dict[str, Any] = {}`, so it passes an empty dict to the code under test, while its name says 'array'.",
+      "consequences": [
+       {
+        "consequence": "The test name says 'empty_array' but the body passes an empty dict, so the name does not match the body (misleading name).",
+        "status": "supported"
+       },
+       {
+        "consequence": "Renaming to test_from_dict_empty_dict would make the name accurately describe the test input.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The test name is misleading: it says 'array' but the input is an empty dict. Nothing crashes or returns a wrong result; a reader may just misunderstand what input is being tested.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The get_failure_reason function (code around lines 123-127 and 156) returns per-status singular strings such as 'A missed check-in was detected' when there is a single status, or '%(problem_checkins)s check-ins detected' for a list. Its docstring at lines 131-137 contains the typo 'humam readible' and gives examples like 'A failed check-in was detected' and '...were detected' that differ from the real output.",
+      "consequences": [
+       {
+        "consequence": "The docstring examples do not match the strings the code actually returns.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The docstring contains the typo 'humam readible'.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The docstring of get_failure_reason is inaccurate: its example outputs ('A failed check-in was detected', '...were detected') differ from the real return values ('A missed check-in was detected', '<list> check-ins detected'), and it has a typo ('humam readible'). This is a documentation-only mismatch; no runtime behavior is affected.",
+      "remainingIsOptional": true
+     }
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The evaluate() method in detector.py has a signature `-> dict[DetectorGroupKey, DetectorEvaluationResult]` and its body returns a dict `results` keyed by group key. Its docstring (lines 226-244) still says it returns a list of `DetectorEvaluationResult`.",
+      "consequences": [
+       {
+        "consequence": "The evaluate() docstring says it returns a list of DetectorEvaluationResult, while the code returns a dict mapping group key to DetectorEvaluationResult, so the docstring is stale/inaccurate.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The docstring misdescribes the return type as a list when the method returns a dict keyed by DetectorGroupKey. A reader relying on the docstring could be misled about the return shape, but no runtime behavior is affected.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In src/sentry/incidents/grouptype.py lines 10-11, a TODO comment ('This will be a stateful detector when we build that abstraction') sits directly above `class MetricAlertDetectorHandler(StatefulDetectorHandler[QuerySubscriptionUpdate])`, so the class already subclasses StatefulDetectorHandler.",
+      "consequences": [
+       {
+        "consequence": "The TODO comment is stale/misleading because MetricAlertDetectorHandler already subclasses StatefulDetectorHandler.",
+        "status": "supported"
+       },
+       {
+        "consequence": "Leaving the stale TODO causes any runtime failure or incorrect behavior.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "A stale TODO comment misleads readers into thinking the stateful detector abstraction has not been built yet, although the class already uses StatefulDetectorHandler. This is a documentation inaccuracy only; no input or state triggers incorrect runtime behavior.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "nit": false
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "When Integration.objects.get for the installation_id raises Integration.DoesNotExist, the code returns pipeline.next_step() immediately. The comparison of the OAuth-authenticated GitHub user to the installer (sender login) happens only at lines 501-505, after an Integration row is found, so it is skipped in this branch.",
+      "consequences": [
+       {
+        "consequence": "When no Integration row exists for the installation_id, the flow continues to the next step without comparing the OAuth user to the installer.",
+        "status": "supported"
+       },
+       {
+        "consequence": "An attacker can supply an installation_id they do not own before the installation webhook has created the row and thereby bypass the new ownership verification.",
+        "status": "not_checked"
+       },
+       {
+        "consequence": "The bypass allows the attacker to link or take over someone else's GitHub installation (security impact).",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "If the installation_id has no Integration row yet (e.g. the installation webhook has not been processed), the pipeline advances via next_step() without any check that the OAuth-authenticated GitHub user is the installer. The verification is therefore skipped in this state. The checker notes do not show what the later steps do with an unverified installation_id, so the exploit and its impact are not confirmed, but the skipped check itself is real.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "In integration.py, `req = safe_urlopen(...)` at line 423 runs before the `try:` at line 425, which wraps only `safe_urlread`. The later call `get_user_info(payload[\"access_token\"])` at line 434 is also not wrapped. `get_user_info` in identity/github/provider.py calls `resp.raise_for_status()`, so it can raise on API errors. Both calls are therefore unguarded against network or API exceptions.",
+      "consequences": [
+       {
+        "consequence": "safe_urlopen is outside the try block, so a transport failure during the token exchange raises out of the handler uncaught.",
+        "status": "supported"
+       },
+       {
+        "consequence": "get_user_info can raise on network or API errors (raise_for_status), and the call is unwrapped, so the exception propagates.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The propagated exceptions surface to the user as unhandled 500 responses instead of the error(request, self.active_organization) page.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "When the GitHub token exchange request (safe_urlopen) fails at the transport level, or get_user_info gets an HTTP error or network failure, the exception is not caught in the pipeline step. The user's GitHub integration install flow aborts with an exception rather than showing the intended error page. The exact HTTP status the user sees (500) was not verified, since framework-level exception handling was not checked.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "The helper at integration.py:141 builds the error payload with `_(error_short)`, wrapping a variable in gettext at runtime. The default value (line 132) and the callers at lines 471 and 488 pass plain string literals that are not marked for extraction. The extractor therefore cannot see those literals, so they never enter the message catalog.",
+      "consequences": [
+       {
+        "consequence": "The translation extractor cannot see the string literals passed to the helper (default and callers at lines 471 and 488), because `_()` wraps a variable.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The short error messages sent to the user are no longer translatable, since the strings are absent from the catalog and will be shown in English.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The old code wrapped the literals directly in `_()`, so this is a regression from previously translatable messages.",
+        "status": "not_checked"
+       }
+      ],
+      "remainingDefect": "Error messages such as \"GitHub installation pending deletion.\", \"Github installed on another Sentry organization.\" and \"Invalid installation request.\" are never extracted into the translation catalog. Users with a non-English locale who hit these error paths see the English text instead of a translation. Nothing crashes and no data is affected.",
+      "remainingIsOptional": false
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "julgado": {
+      "behavior": "test_github_user_mismatch hardcodes the state value (test_integration.py:445) and asserts only the generic 'Invalid installation request.' message (line 454). That message is the default error_short in integration.py:132, and error() is used on several paths (lines 413, 432, 436, 498, 505). The test has no success control, such as the same flow passing with sender 'octocat'.",
+      "consequences": [
+       {
+        "consequence": "The assertion uses only the generic error message that every error() path returns, so it cannot tell a sender/login mismatch apart from other failures.",
+        "status": "supported"
+       },
+       {
+        "consequence": "A wrong hardcoded state, a token failure or a missing integration would pass the test just as well as a real mismatch, because the state is hardcoded and only the generic message is checked.",
+        "status": "supported"
+       },
+       {
+        "consequence": "The test lacks a positive control showing the same flow succeeds when the sender matches, so it does not isolate the mismatch as the only possible failure.",
+        "status": "supported"
+       }
+      ],
+      "remainingDefect": "The test can pass for the wrong reason. If the hardcoded state is invalid, token exchange fails, or the integration is missing, the generic error is returned and the test still passes without exercising the sender/login mismatch check. A regression in the mismatch logic could go undetected if another error path still produces the same message. This is a weakness in test quality only; no production code is affected.",
+      "remainingIsOptional": true
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6",
+      "S8"
+     ],
+     "nit": false
+    }
+   ]
+  }
+ }
+}
