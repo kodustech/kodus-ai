@@ -15,7 +15,7 @@ What runs when, and what each eval answers: [README.md](README.md). These rules 
 - End every runner with an explicit `process.exit`: 0 pass, 1 quality or gate failure, 2 infra. The engine leaves handles open, so a runner that just returns from `main()` can hang CI after it has finished.
 - Exit 2 is "not measured". Never turn it into a pass or a warning, and always log the reason next to it. A count with no reason is how a dead judge key went unseen for weeks. One exception, written down: a run may leave up to 5% of its cases unmeasured (`infraBudget` in the result) and gate on the rest — beyond that it is exit 2. Comparisons then use the cases BOTH runs measured, never two different subsets.
 - If the eval drives the engine, add a step to `evals/wiring-smoke.js` with `model: true`.
-- Name the review stage it covers in `evals/stages.js`, so it reaches the quality panel. `evals/stage-signals.spec.ts` fails when a wiring step belongs to no stage.
+- Name the review stage it covers in `evals/stages.js`, so it reaches the quality panel. `evals/stage-signals.spec.ts` fails when a wiring step belongs to no stage, and when a stage of the review pipeline is neither a stage there nor in `PLUMBING`: a new pipeline stage comes with how it is tested.
 
 - Alerts must stay rare and true. A drop is only a regression after the confirmation run (`evals/investigation/confirm-gate.js`), and only a new or worsening one mentions people. Don't add a path that pings on a single run, on infra, or on a failure that already alerted.
 - The investigation agent is advisory. Its reading never sets the verdict, the gate or a floor, and the nightly message goes out without it when the agent fails. Keep it read-only (`Read,Grep,Glob`); the evidence holds model-written text.

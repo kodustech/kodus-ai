@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { STAGES } = require('./stages');
+const { STAGES, PLUMBING } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { wiringRows, nightlyRows } = require('./stage-signals');
 
-type Stage = { id: string; eval: string | null; model: string; wiring: string[]; nightly?: boolean };
+type Stage = { id: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: boolean; friday?: boolean };
 type Row = { name: string; status: string; value: number | null; meta: Record<string, unknown> };
 
 // Steps of evals/wiring-smoke.js that check the harness, not a review stage.
@@ -14,6 +14,14 @@ const NOT_A_STAGE = ['preflight'];
 
 const wiringSteps = Array.from(
     fs.readFileSync(path.join(__dirname, 'wiring-smoke.js'), 'utf8').matchAll(/\bname: '([a-z-]+)'/g),
+    (m) => m[1],
+);
+
+// The stages the review pipeline runs, read from its strategy's constructor.
+const pipelineStages = Array.from(
+    fs
+        .readFileSync(path.join(__dirname, '../libs/code-review/pipeline/strategy/code-review-pipeline.strategy.ts'), 'utf8')
+        .matchAll(/private readonly \w+: (\w+Stage)\b/g),
     (m) => m[1],
 );
 
@@ -32,6 +40,16 @@ describe('evals/stages.js', () => {
         expect(wiringSteps.length).toBeGreaterThan(5);
         expect(wiringSteps.filter((step) => !claimed.includes(step) && !NOT_A_STAGE.includes(step))).toEqual([]);
         expect(claimed.filter((step: string) => !wiringSteps.includes(step))).toEqual([]);
+    });
+
+    // Adding a pipeline stage means saying how it is tested: a stage here, or plumbing.
+    it('places every review pipeline stage in a stage or in PLUMBING, and nowhere else', () => {
+        const staged = STAGES.flatMap((s: Stage) => s.pipeline || []);
+        const plumbing = Object.keys(PLUMBING);
+        expect(pipelineStages.length).toBeGreaterThan(10);
+        expect(pipelineStages.filter((c) => !staged.includes(c) && !plumbing.includes(c))).toEqual([]);
+        expect([...staged, ...plumbing].filter((c) => !pipelineStages.includes(c))).toEqual([]);
+        expect(plumbing.filter((c) => staged.includes(c))).toEqual([]);
     });
 
     it('points every eval at a folder that exists, and only "none" at no eval', () => {
@@ -86,5 +104,14 @@ describe('stage-signals', () => {
         expect(finder.meta).toMatchObject({ floor: 0.24, baseline: 0.357, precision: 0.5 });
         expect(nightlyRows(nightly, 'pass')[0].status).toBe('green');
         expect(nightlyRows(null, 'infra')[0]).toMatchObject({ status: 'infra', value: null });
+    });
+
+    it('says, per model, what runs: the nightly measures one, Friday only runs the tier-0 ones', () => {
+        const nightly = { model: 'deepseek-v4-flash@fireworks', metrics: { recall_mean: 0.4 }, gate: {} };
+        const finder = nightlyRows(nightly, 'pass')[0].meta.by_model;
+        expect(finder).toContainEqual({ model: 'deepseek-v4-flash@fireworks', coverage: 'measured', schedule: 'nightly' });
+        expect(finder).toContainEqual({ model: 'gpt-6-sol', coverage: 'runs', schedule: 'friday' });
+        const dedup = wiringRows(allOk(wiringSteps), 'deepseek-v4-flash@fireworks').find((r: Row) => r.name === 'evals.stage.dedup');
+        expect((dedup.meta.by_model as { coverage: string }[]).every((m) => m.coverage === 'none')).toBe(true);
     });
 });
