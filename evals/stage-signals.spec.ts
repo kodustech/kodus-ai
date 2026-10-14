@@ -124,6 +124,18 @@ describe('stage-signals', () => {
         expect(wiringRows([...allOk(wiringSteps), { step: 'pr-paths-filter', ok: true, problem: null }]).find((r: Row) => r.name === 'evals.stage.dedup')?.status).toBe('green');
     });
 
+    it("keeps a stage's own failure red on a night the smoke also failed its own check", () => {
+        const results = [
+            ...allOk(wiringSteps).map((r) => (r.step === 'dedup-engine' ? { ...r, ok: false, problem: 'exit 1' } : r)),
+            { step: 'pr-paths-filter', ok: false, problem: 'incomplete trace', ms: 0, calls: 0 },
+        ];
+        const rows: Row[] = wiringRows(results);
+        const dedup = rows.find((r) => r.name === 'evals.stage.dedup');
+        expect(dedup?.status).toBe('red');
+        expect(dedup?.meta).toMatchObject({ reason: 'dedup-engine: exit 1', failed: ['dedup-engine'], harness: 'wiring smoke failed: pr-paths-filter: incomplete trace' });
+        expect(rows.find((r) => r.name === 'evals.stage.anchoring')?.status).toBe('infra');
+    });
+
     it('reports the finder from the nightly: recall against the floor, status from the verdict', () => {
         const nightly = {
             model: 'deepseek-v4-flash@fireworks',

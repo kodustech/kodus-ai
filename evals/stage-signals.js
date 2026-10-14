@@ -58,9 +58,12 @@ function baseMeta(stage) {
 function wiringRows(results, stages = STAGES) {
     const byStep = new Map((results || []).map((r) => [r.step, r]));
     // A failed entry no stage claims (the smoke's own trace check) fails the whole
-    // smoke, so no wired stage's result can be trusted that night.
+    // smoke, so a wired stage whose steps all passed cannot be trusted that night.
+    // A stage's own failure still reports red: it is the actionable signal.
     const claimed = new Set(stages.flatMap((stage) => stage.wiring));
     const harness = (results || []).filter((r) => !claimed.has(r.step) && !r.ok);
+    const harnessReason = harness.length ? `wiring smoke failed: ${harness.map((r) => `${r.step}: ${r.problem}`).join('; ')}` : null;
+    const withHarness = (meta) => (harnessReason ? { ...meta, harness: harnessReason } : meta);
     return stages
         .filter((stage) => !stage.nightly)
         .map((stage) => {
@@ -70,13 +73,14 @@ function wiringRows(results, stages = STAGES) {
                 // schedule (unit suite, E2E matrix): meta.measured says which.
                 return { name: NAME_PREFIX + stage.id, status: 'skipped', value: null, unit: null, meta };
             }
-            if (harness.length) {
+            const failed = stage.wiring.map((step) => byStep.get(step)).filter((r) => r && !r.ok);
+            if (failed.length) {
                 return {
                     name: NAME_PREFIX + stage.id,
-                    status: 'infra',
+                    status: 'red',
                     value: null,
                     unit: null,
-                    meta: { ...meta, reason: `wiring smoke failed: ${harness.map((r) => `${r.step}: ${r.problem}`).join('; ')}` },
+                    meta: withHarness({ ...meta, reason: failed.map((r) => `${r.step}: ${r.problem}`).join('; '), failed: failed.map((r) => r.step) }),
                 };
             }
             const missing = stage.wiring.filter((step) => !byStep.has(step));
@@ -86,19 +90,13 @@ function wiringRows(results, stages = STAGES) {
                     status: 'infra',
                     value: null,
                     unit: null,
-                    meta: { ...meta, reason: `wiring step(s) did not run: ${missing.join(', ')}` },
+                    meta: withHarness({ ...meta, reason: `wiring step(s) did not run: ${missing.join(', ')}` }),
                 };
             }
-            const failed = stage.wiring.map((step) => byStep.get(step)).filter((r) => !r.ok);
-            return {
-                name: NAME_PREFIX + stage.id,
-                status: failed.length ? 'red' : 'green',
-                value: null,
-                unit: null,
-                meta: failed.length
-                    ? { ...meta, reason: failed.map((r) => `${r.step}: ${r.problem}`).join('; '), failed: failed.map((r) => r.step) }
-                    : meta,
-            };
+            if (harnessReason) {
+                return { name: NAME_PREFIX + stage.id, status: 'infra', value: null, unit: null, meta: { ...meta, reason: harnessReason } };
+            }
+            return { name: NAME_PREFIX + stage.id, status: 'green', value: null, unit: null, meta };
         });
 }
 
