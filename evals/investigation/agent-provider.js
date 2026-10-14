@@ -516,7 +516,7 @@ function buildCurrentPrompts(caseData) {
     };
 }
 
-function serializeResult(caseId, agentResult, remoteCommands) {
+function serializeResult(caseId, agentResult, remoteCommands, repoHandle) {
     return {
         caseId,
         reasoning: agentResult.findings?.reasoning || '',
@@ -540,6 +540,8 @@ function serializeResult(caseId, agentResult, remoteCommands) {
             replayCalls: Array.isArray(remoteCommands.calls)
                 ? remoteCommands.calls.length
                 : null,
+            repoPrepared: !!repoHandle,
+            headSha: repoHandle ? repoHandle.sha : null,
         },
     };
 }
@@ -600,6 +602,8 @@ class InvestigationAgentProvider {
 
     async callApi(prompt, context, options) {
         let stage = 'parse-prompt';
+        // Declared outside the try so the finally below can always release it.
+        let repoHandle = null;
         try {
             const rawPrompt =
                 typeof prompt === 'string'
@@ -635,9 +639,24 @@ class InvestigationAgentProvider {
             const { input, systemPrompt, userPrompt } =
                 buildCurrentPrompts(caseData);
             stage = 'build-replay-commands';
-            const remoteCommands = new ReplayRemoteCommands(
-                parseMaybeJson(caseData.toolReplay) || {},
-            );
+            // RECALL_REAL_REPO=1: search a real git worktree at the PR's head
+            // instead of replaying recorded tool calls. The replay only answers
+            // calls captured when the dataset was built; any other call gets an
+            // empty answer the real repository would not give. Falls back to
+            // replay when the clone or the commit isn't available locally;
+            // `repoPrepared` in the trace says which one ran.
+            let remoteCommands;
+            if (process.env.RECALL_REAL_REPO === '1') {
+                const { prepareRepo } = require('./prepare-repo');
+                const { LocalRepoCommands } = require('./local-repo-commands');
+                repoHandle = await prepareRepo(caseData, caseData.caseId);
+                if (repoHandle) remoteCommands = new LocalRepoCommands(repoHandle.dir);
+            }
+            if (!remoteCommands) {
+                remoteCommands = new ReplayRemoteCommands(
+                    parseMaybeJson(caseData.toolReplay) || {},
+                );
+            }
 
             stage = 'run-agent-loop';
             // runAgentLoop(input, secrets): `secrets` was split out of `input` so
@@ -683,6 +702,7 @@ class InvestigationAgentProvider {
                 caseData.caseId || 'unknown-case',
                 agentResult,
                 remoteCommands,
+                repoHandle,
             );
             writeResultArtifact('last-output.json', output);
 
@@ -720,6 +740,14 @@ class InvestigationAgentProvider {
             return {
                 ...payload,
             };
+        } finally {
+            // Always drop the worktree: cases run in parallel and each one adds
+            // a full checkout to disk.
+            if (repoHandle) {
+                try {
+                    await repoHandle.cleanup();
+                } catch {}
+            }
         }
     }
 }
