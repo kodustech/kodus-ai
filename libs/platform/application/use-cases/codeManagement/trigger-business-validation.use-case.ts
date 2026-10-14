@@ -229,6 +229,33 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
      * with the settings on screen, saved or not. Nothing is written unless
      * `post` is set; then it publishes like `@kody -v business-logic`.
      */
+    /**
+     * "Try it" with a task alone: reads it as a validation would, with the
+     * settings on screen. On a repository's page, `#12` is that repository's.
+     */
+    async tryReadTask(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        task: string;
+        settings?: BusinessLogicConfig;
+        repositoryId?: string;
+    }) {
+        const repository =
+            params.repositoryId && params.repositoryId !== 'global'
+                ? await this.resolveRepository({
+                      organizationAndTeamData: params.organizationAndTeamData,
+                      repositoryId: params.repositoryId,
+                  }).catch(() => undefined)
+                : undefined;
+        return this.businessValidationService.tryRead(
+            params.organizationAndTeamData,
+            params.task,
+            resolveBusinessLogicSettings(params.settings),
+            repository
+                ? { owner: repository.owner, name: repository.name }
+                : undefined,
+        );
+    }
+
     async testOnPullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         prUrl: string;

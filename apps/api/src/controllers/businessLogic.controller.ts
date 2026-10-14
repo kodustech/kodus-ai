@@ -19,10 +19,7 @@ import {
 
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
 import { BusinessLogicInsightsService } from '@libs/agents/business-validation/runs/insights.service';
-import {
-    type BusinessLogicConfig,
-    resolveBusinessLogicSettings,
-} from '@libs/agents/business-validation/settings';
+import { type BusinessLogicConfig } from '@libs/agents/business-validation/settings';
 import { TriggerBusinessValidationUseCase } from '@libs/platform/application/use-cases/codeManagement/trigger-business-validation.use-case';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
@@ -147,16 +144,22 @@ export class BusinessLogicController {
             teamId: string;
             task: string;
             settings?: BusinessLogicConfig;
+            /** The settings page's repository, so `#12` is its issue. */
+            repositoryId?: string;
         },
     ) {
         if (!body?.teamId || !body?.task?.trim()) {
             throw new BadRequestException('teamId and task are required');
         }
-        return this.businessValidationService.tryRead(
-            { organizationId: this.organizationId(), teamId: body.teamId },
-            body.task.trim(),
-            resolveBusinessLogicSettings(body.settings),
-        );
+        return this.triggerBusinessValidation.tryReadTask({
+            organizationAndTeamData: {
+                organizationId: this.organizationId(),
+                teamId: body.teamId,
+            },
+            task: body.task.trim(),
+            settings: body.settings,
+            repositoryId: body.repositoryId,
+        });
     }
 
     @Post('test')

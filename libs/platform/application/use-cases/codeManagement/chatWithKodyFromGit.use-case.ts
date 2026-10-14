@@ -14,6 +14,7 @@ import { ConversationAgentUseCase } from '@libs/agents/application/use-cases/con
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
+import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
 import {
     PermissionValidationService,
     ValidationErrorType,
@@ -261,6 +262,8 @@ export class ChatWithKodyFromGitUseCase {
         private readonly businessLogicPublisher?: BusinessLogicPublisher,
         @Optional()
         private readonly businessLogicReplies?: BusinessLogicReplies,
+        @Optional()
+        private readonly webhookContextService?: WebhookContextService,
     ) {}
 
     async execute(params: WebhookParams): Promise<void> {
@@ -290,9 +293,19 @@ export class ChatWithKodyFromGitUseCase {
                 repository,
             );
 
-            const organizationAndTeamData = integrationConfig
-                ? this.extractOrganizationAndTeamData(integrationConfig)
+            // A repository connected in more than one organization: answer as
+            // the team whose code review runs on it, as the review webhook
+            // does, not as whichever integration is found first.
+            const reviewing = this.webhookContextService
+                ? await this.webhookContextService
+                      .getContext(params.platformType, String(repository.id))
+                      .catch(() => null)
                 : null;
+            const organizationAndTeamData =
+                reviewing?.organizationAndTeamData ??
+                (integrationConfig
+                    ? this.extractOrganizationAndTeamData(integrationConfig)
+                    : null);
 
             if (
                 !integrationConfig ||
@@ -632,6 +645,40 @@ export class ChatWithKodyFromGitUseCase {
         }
     }
 
+    /**
+     * Whether the commenter opened the PR, by account id. Logins don't line
+     * up across platforms: GitLab and Azure send display names for the
+     * commenter, and a GitLab note carries only the MR author's id.
+     */
+    private senderIsPullRequestAuthor(
+        params: WebhookParams,
+    ): boolean | undefined {
+        const p = params.payload;
+        const pairs: Record<string, [unknown, unknown]> = {
+            [PlatformType.GITHUB]: [
+                p?.sender?.id,
+                p?.issue?.user?.id ?? p?.pull_request?.user?.id,
+            ],
+            [PlatformType.GITLAB]: [
+                p?.user?.id,
+                p?.merge_request?.author_id ?? p?.merge_request?.author?.id,
+            ],
+            [PlatformType.BITBUCKET]: [
+                p?.actor?.uuid ?? p?.actor?.account_id,
+                p?.pullrequest?.author?.uuid ??
+                    p?.pullrequest?.author?.account_id,
+            ],
+            [PlatformType.AZURE_REPOS]: [
+                p?.resource?.comment?.author?.id,
+                p?.resource?.pullRequest?.createdBy?.id,
+            ],
+        };
+        const [sender, author] = pairs[params.platformType] ?? [];
+        if (sender === undefined || sender === null) return undefined;
+        if (author === undefined || author === null) return undefined;
+        return String(sender) === String(author);
+    }
+
     private getPullRequestAuthorLogin(
         params: WebhookParams,
     ): string | undefined {
@@ -698,6 +745,7 @@ export class ChatWithKodyFromGitUseCase {
                     canWrite: this.senderCanWrite(params),
                 },
                 authorLogin: this.getPullRequestAuthorLogin(params),
+                senderIsAuthor: this.senderIsPullRequestAuthor(params),
             })
             .catch(() => ({ handled: false as const }));
         if (!result.handled) {

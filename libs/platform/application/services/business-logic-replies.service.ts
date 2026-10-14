@@ -1,3 +1,4 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Injectable } from '@nestjs/common';
 
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
@@ -18,7 +19,10 @@ import {
 } from '@libs/agents/business-validation/runs/validation-run.repository';
 import { createLogger } from '@libs/core/log/logger';
 
-import { BusinessLogicPublisher } from './business-logic-publisher.service';
+import {
+    BusinessLogicPublisher,
+    hasChecks,
+} from './business-logic-publisher.service';
 
 export interface BusinessLogicReplyInput {
     request: Omit<BusinessValidationRequest, 'door'>;
@@ -33,6 +37,12 @@ export interface BusinessLogicReplyInput {
     };
     /** The PR author, who can't waive their own requirements. */
     authorLogin?: string;
+    /**
+     * Whether the sender is the PR author, compared by account id where the
+     * platform gives one. Logins and display names differ across platforms
+     * (GitLab notes carry the author's id only).
+     */
+    senderIsAuthor?: boolean;
 }
 
 export type BusinessLogicReplyResult =
@@ -134,9 +144,10 @@ export class BusinessLogicReplies {
                 text,
             );
         const isAuthor =
-            !!input.authorLogin &&
-            input.authorLogin.toLowerCase() ===
-                input.sender.login.toLowerCase();
+            input.senderIsAuthor ??
+            (!!input.authorLogin &&
+                input.authorLogin.toLowerCase() ===
+                    input.sender.login.toLowerCase());
         if (isAuthor || input.sender.canWrite === false) {
             return {
                 handled: true,
@@ -228,9 +239,13 @@ export class BusinessLogicReplies {
             reply: await say(
                 [
                     `Got it.${intent.movedTo ? ` ${intent.movedTo} exists,` : ''} I marked ${names} as accepted by @${input.sender.login} and updated the table above.`,
-                    passed
-                        ? 'The kody/business-logic check is now green. This decision is recorded on the PR.'
-                        : 'Other findings still keep the kody/business-logic check from passing.',
+                    hasChecks(request.platformType as PlatformType | undefined)
+                        ? passed
+                            ? 'The kody/business-logic check is now green. This decision is recorded on the PR.'
+                            : 'Other findings still keep the kody/business-logic check from passing.'
+                        : passed
+                          ? 'Nothing left fails the business logic validation. This decision is recorded on the PR.'
+                          : 'Other findings still fail the business logic validation.',
                 ].join(' '),
             ),
         };

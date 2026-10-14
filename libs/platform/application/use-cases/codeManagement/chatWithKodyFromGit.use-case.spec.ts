@@ -163,6 +163,111 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
     });
 
+    it('answers as the team whose review runs on the repository when it is connected in two organizations', async () => {
+        const webhookContextService = {
+            getContext: jest.fn().mockResolvedValue({
+                organizationAndTeamData: {
+                    organizationId: 'org-2',
+                    teamId: 'team-2',
+                },
+                teamAutomationId: 'automation-2',
+            }),
+        };
+        const twoOrgs = new ChatWithKodyFromGitUseCase(
+            codeManagementService as any,
+            conversationAgentUseCase as any,
+            businessValidationService as any,
+            permissionValidationService as any,
+            leaseManager as any,
+            pullRequestsService as any,
+            undefined,
+            undefined,
+            undefined,
+            webhookContextService as any,
+        );
+
+        await twoOrgs.execute({
+            event: 'issue_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action: 'created',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                issue: {
+                    id: 456,
+                    body: 'PR description body',
+                    pull_request: {
+                        url: 'https://api.github.com/repos/kodus/kodus-extension/pulls/132',
+                    },
+                },
+                comment: { id: 123, body: '@kody -v business-logic' },
+                sender: { id: 'user-1', login: 'alice' },
+            },
+        } as any);
+
+        expect(webhookContextService.getContext).toHaveBeenCalledWith(
+            PlatformType.GITHUB,
+            'repo-1',
+        );
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationAndTeamData: {
+                    organizationId: 'org-2',
+                    teamId: 'team-2',
+                },
+            }),
+        );
+    });
+
+    it.each([
+        [
+            PlatformType.GITLAB,
+            {
+                user: { id: 7, name: 'Rafa Lima' },
+                merge_request: { author_id: 7 },
+            },
+            true,
+        ],
+        [
+            PlatformType.GITLAB,
+            { user: { id: 8, name: 'Nina' }, merge_request: { author_id: 7 } },
+            false,
+        ],
+        [
+            PlatformType.GITHUB,
+            { sender: { id: 1, login: 'rafa' }, issue: { user: { id: 1 } } },
+            true,
+        ],
+        [
+            PlatformType.BITBUCKET,
+            {
+                actor: { uuid: '{a}' },
+                pullrequest: { author: { uuid: '{a}' } },
+            },
+            true,
+        ],
+        [
+            PlatformType.AZURE_REPOS,
+            {
+                resource: {
+                    comment: { author: { id: 'x' } },
+                    pullRequest: { createdBy: { id: 'y' } },
+                },
+            },
+            false,
+        ],
+        [PlatformType.GITLAB, { user: { id: 7 } }, undefined],
+    ])(
+        'tells the PR author by account id on %s',
+        (platformType, payload, expected) => {
+            expect(
+                (useCase as any).senderIsPullRequestAuthor({
+                    platformType,
+                    payload,
+                }),
+            ).toBe(expected);
+        },
+    );
+
     it('passes the original Jira URL command body to business logic validation', async () => {
         const jiraUrl =
             'https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1441';

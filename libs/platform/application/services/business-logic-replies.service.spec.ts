@@ -1,3 +1,4 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { DEFAULT_BUSINESS_LOGIC_SETTINGS } from '@libs/agents/business-validation/settings';
 
 import { BusinessLogicReplies } from './business-logic-replies.service';
@@ -46,7 +47,7 @@ const request = {
     organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
     repository: { id: 'repo-1', name: 'notes' },
     pullRequest: { number: 47 },
-    platformType: 'github',
+    platformType: PlatformType.GITHUB,
     diff: '',
 };
 
@@ -110,6 +111,41 @@ describe('BusinessLogicReplies', () => {
             reply: expect.stringContaining('not the PR author'),
         });
         expect(publisher.publish).not.toHaveBeenCalled();
+    });
+
+    it('knows the author by account id when the platform sends a display name for the commenter (GitLab)', async () => {
+        const { replies, publisher } = build({
+            intent: 'accept',
+            findings: [1],
+        });
+
+        const result = await replies.handle({
+            request: { ...request, platformType: PlatformType.GITLAB },
+            message: 'out of scope',
+            sender: { login: 'Rafa Lima' },
+            authorLogin: undefined,
+            senderIsAuthor: true,
+        });
+
+        expect(result).toMatchObject({
+            reply: expect.stringContaining('not the PR author'),
+        });
+        expect(publisher.publish).not.toHaveBeenCalled();
+    });
+
+    it('does not talk about a check where the platform has none', async () => {
+        const { replies } = build({ intent: 'accept', findings: [1] });
+
+        const result = await replies.handle({
+            request: { ...request, platformType: PlatformType.GITLAB },
+            message: 'out of scope',
+            sender: { login: 'Nina' },
+            senderIsAuthor: false,
+        });
+
+        expect(result.handled && result.reply).not.toContain(
+            'kody/business-logic',
+        );
     });
 
     it("marks a reviewer's acceptance, checks the task it moved to exists, and turns the check green", async () => {
