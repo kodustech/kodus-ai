@@ -54,7 +54,6 @@ export const KodyRulesToolbar = ({
         entityLabel === "rules"
             ? listFilters.origins.size +
               listFilters.severities.size +
-              (listFilters.kodySync ? 1 : 0) +
               (listFilters.withSyncErrors ? 1 : 0) +
               (listFilters.pausedOnly ? 1 : 0)
             : 0;
@@ -161,6 +160,7 @@ export type VisibleScopes = {
 
 const ORIGIN_OPTIONS: InferredRuleOrigin[] = [
     "Auto-sync",
+    "Agent file",
     "Onboarding",
     "Kody-generated",
     "Library",
@@ -430,20 +430,6 @@ export const FilterPopoverContent = ({
                                 </div>
                             );
                         })}
-
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="origin-kody-sync"
-                                checked={listFilters.kodySync}
-                                onCheckedChange={(checked) =>
-                                    onListFiltersChange({
-                                        ...listFilters,
-                                        kodySync: Boolean(checked),
-                                    })
-                                }
-                            />
-                            <Label htmlFor="origin-kody-sync">@kody-sync</Label>
-                        </div>
                     </div>
                 </section>
             )}

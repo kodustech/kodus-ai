@@ -26,6 +26,7 @@ const CATEGORIES = [
     "cross_file",
     "business_logic",
     "deterministic",
+    "repo_instruction",
 ];
 
 const SEVERITIES = ["critical", "high", "medium", "low"];

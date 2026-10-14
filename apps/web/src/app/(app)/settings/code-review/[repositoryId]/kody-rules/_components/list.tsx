@@ -19,8 +19,6 @@ type KodyRulesListProps = {
         onToggle: (ruleId: string) => void;
         isEligible: (rule: KodyRuleWithInheritanceDetails) => boolean;
     };
-    /** Repo's `ideRulesSyncEnabled`; forwarded to each row's OriginBadge. */
-    syncEnabledForRepo?: boolean;
 };
 
 export const KodyRulesList = ({
@@ -28,7 +26,6 @@ export const KodyRulesList = ({
     tab,
     onAnyChange,
     bulkSelection,
-    syncEnabledForRepo,
 }: KodyRulesListProps) => {
     const entityLabel = tab === "memories" ? "memories" : "rules";
 
@@ -64,7 +61,6 @@ export const KodyRulesList = ({
                         onAnyChange={onAnyChange}
                         showSuggestionsButton={tab === "review-rules"}
                         selection={selection}
-                        syncEnabledForRepo={syncEnabledForRepo}
                     />
                 );
             })}

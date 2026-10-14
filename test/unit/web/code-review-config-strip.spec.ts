@@ -9,12 +9,10 @@ import * as path from "path";
  *   its hardcoded `expectedKeys` whitelist before the payload reaches
  *   the backend.
  *
- *   When the IDE auto-sync toggle-off modal was added, we wired
- *   `ideSyncDisableAction` into the payload and the
- *   `CodeReviewGlobalConfig` type — but forgot to whitelist it here.
- *   Result: the field was silently dropped, the backend always saw the
- *   payload as if the user picked "keep" by default, and rules stayed
- *   ACTIVE after the user explicitly chose Delete.
+ *   A field added to the payload and the `CodeReviewGlobalConfig` type
+ *   but not whitelisted here is silently dropped: the save answers 201
+ *   and the backend never sees the value (it happened with the old
+ *   IDE-sync toggle-off action).
  *
  *   Importing helpers.ts directly under bare jest pulls in the whole
  *   Next.js / next-auth / api-proxy stack which doesn't transpile
@@ -34,9 +32,6 @@ const HELPER_SOURCE = fs.readFileSync(HELPER_PATH, "utf-8");
 
 const REQUIRED_WHITELIST_KEYS = [
     "ideRulesSyncEnabled",
-    // The bug from production. Must always be in the whitelist or
-    // the toggle-off action never reaches the backend.
-    "ideSyncDisableAction",
     "kodyRulesGeneratorEnabled",
     // Denylist of git reviewers to exclude from past-review learning. Must be
     // whitelisted or the picker's selection never reaches the backend.

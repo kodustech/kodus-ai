@@ -24,12 +24,14 @@ import {
 import {
     KodyRule,
     KodyRuleRequestType,
+    KodyRulesOrigin,
     KodyRulesType,
 } from "@services/kodyRules/types";
 import { isCentralizedPrResponse } from "@services/parameters/types";
 import { ArrowRightIcon, ChevronDownIcon } from "lucide-react";
 import PierreDiff from "src/app/(app)/pull-requests/[repositoryId]/[prNumber]/_components/pierre-diff";
 import { cn } from "src/core/utils/components";
+import { isKodyRuleFileSource } from "src/core/utils/kody-rules/infer-origin";
 
 import { getCentralizedPrToastPayload } from "../../../_utils/centralized-pr-feedback";
 import { OriginBadge } from "./origin-badge";
@@ -56,6 +58,15 @@ const kindOf = (rule: KodyRule): PendingKind =>
     isUpdateRequest(rule) ? "update" : isMemory(rule) ? "memory" : "rule";
 
 const entityNoun = (rule: KodyRule) => (isMemory(rule) ? "memory" : "rule");
+
+// What the onboarding import created before it was limited to Kody rule
+// files: stored at the global scope with no source repository. The data
+// migration moved these back to pending.
+const isOnboardingImport = (rule: KodyRule) =>
+    rule.origin === KodyRulesOrigin.REPO_FILE_SYNC &&
+    rule.repositoryId === "global" &&
+    !rule.sourceRepositoryId &&
+    !isKodyRuleFileSource(rule.sourcePath);
 
 // Flatten an item's editable fields into one document so a proposed change
 // renders as a single before/after diff.
@@ -263,6 +274,7 @@ export const PendingSection = ({
 
     const total = pendingRules.length;
     const hasMore = total > PREVIEW_COUNT;
+    const onboardingImports = pendingRules.filter(isOnboardingImport).length;
     const visible = showAll
         ? pendingRules
         : pendingRules.slice(0, PREVIEW_COUNT);
@@ -295,6 +307,20 @@ export const PendingSection = ({
                     {collapsed ? "Show" : "Hide"}
                 </Button>
             </div>
+
+            {!collapsed && onboardingImports > 0 && (
+                <p className="text-text-secondary text-xs">
+                    {onboardingImports === 1
+                        ? "1 rule was"
+                        : `${onboardingImports} rules were`}{" "}
+                    imported during onboarding from coding-agent files
+                    (CLAUDE.md, AGENTS.md, .cursor/rules) or dependency
+                    manifests. Coding-agent files are no longer turned into
+                    rules, so{" "}
+                    {onboardingImports === 1 ? "it waits" : "they wait"} for
+                    your approval before applying to reviews.
+                </p>
+            )}
 
             {!collapsed && (
                 <>

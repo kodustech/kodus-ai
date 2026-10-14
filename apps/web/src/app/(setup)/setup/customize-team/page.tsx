@@ -2,286 +2,157 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IssueSeverityLevelBadge } from "@components/system/issue-severity-level-badge";
 import { Button } from "@components/ui/button";
 import { Checkbox } from "@components/ui/checkbox";
 import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
+import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
-import { changeStatusKodyRules } from "@services/kodyRules/fetch";
+import type { AgentInstructionFilesByRepository } from "@services/kodyRules/fetch";
 import { KodyRulesStatus, type KodyRule } from "@services/kodyRules/types";
+import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
 import { useSuspenseGetCodeReviewParameter } from "@services/parameters/hooks";
-import { isCentralizedPrResponse } from "@services/parameters/types";
-import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
+import { isAgentInstructionSource } from "src/core/utils/kody-rules/infer-origin";
 import { useFetch } from "src/core/utils/reactQuery";
 import { safeArray } from "src/core/utils/safe-array";
 
 import { StepIndicators } from "../_components/step-indicators";
 
-const KodyRuleCard = ({
-    rule,
-    selected,
-    repositoryName,
-    onToggle,
-}: {
-    rule: KodyRule;
-    selected: boolean;
-    repositoryName?: string;
-    onToggle: () => void;
-}) => {
-    return (
-        <div
-            role="button"
-            tabIndex={0}
-            onClick={onToggle}
-            onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onToggle();
-                }
-            }}
-            className={cn(
-                "flex flex-row items-start gap-4 rounded-xl border p-4 text-left transition-colors",
-                selected
-                    ? "border-primary-light bg-primary-light/5"
-                    : "border-card-lv3 hover:border-card-lv3/80",
-            )}>
-            <div className="flex flex-1 flex-col gap-2">
-                <div className="flex flex-col gap-1">
-                    <div className="flex items-start justify-between gap-3">
-                        <span className="text-sm font-semibold">
-                            {rule.title}
-                        </span>
+const NEXT_STEP = "/setup/choosing-a-pull-request";
 
-                        {rule.severity && (
-                            <IssueSeverityLevelBadge severity={rule.severity} />
-                        )}
-                    </div>
-                </div>
-
-                <span className="text-text-secondary line-clamp-3 text-xs">
-                    {rule.rule}
-                </span>
-            </div>
-            <Checkbox checked={selected} />
-        </div>
-    );
-};
+// Rule files are imported in the background when repositories are selected,
+// so the list may still be filling in when this step opens.
+const IMPORT_POLL_MS = 5000;
+const IMPORT_POLL_WINDOW_MS = 15000;
 
 export default function CustomizeTeamPage() {
     const router = useRouter();
-    const { userId } = useAuth();
     const { teamId } = useSelectedTeamId();
     const { configValue } = useSuspenseGetCodeReviewParameter(teamId);
-    const [selectedRules, setSelectedRules] = useState<string[]>([]);
-    const [isSavingRules, setIsSavingRules] = useState(false);
-    const [noRulesTimeoutReached, setNoRulesTimeoutReached] = useState(false);
+    const [useAgentInstructions, setUseAgentInstructions] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [importWindowOver, setImportWindowOver] = useState(false);
 
-    const {
-        data: pendingRules = [],
-        isLoading: isPendingRulesLoading,
-        isFetching: isPendingRulesFetching,
-        isRefetching: isPendingRulesRefetching,
-    } = useFetch<Array<KodyRule>>(
-        KODY_RULES_PATHS.PENDING_IDE_RULES,
-        { params: { teamId } },
+    useEffect(() => {
+        const timeout = setTimeout(
+            () => setImportWindowOver(true),
+            IMPORT_POLL_WINDOW_MS,
+        );
+        return () => clearTimeout(timeout);
+    }, []);
+
+    const selectedRepositories = useMemo(
+        () =>
+            new Map(
+                (configValue?.repositories || []).map((repo) => [
+                    String(repo.id),
+                    repo.name,
+                ]),
+            ),
+        [configValue?.repositories],
+    );
+
+    const { data: syncedRules } = useFetch<Array<KodyRule>>(
+        KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER,
+        { params: { key: "origin", value: "repo_file_sync" } },
         !!teamId,
         {
-            refetchInterval: (data) => {
-                const rules = Array.isArray(data) ? data : [];
-                const hasValidRules = rules.some((rule) => rule?.uuid);
-                return hasValidRules ? false : 15000;
-            },
-            staleTime: 10000,
+            refetchInterval: importWindowOver ? false : IMPORT_POLL_MS,
+            staleTime: 0,
         },
     );
 
-    const repositoryNameById = useMemo(() => {
-        return new Map(
-            (configValue?.repositories || []).map((repo) => [
-                repo.id,
-                repo.name,
-            ]),
-        );
-    }, [configValue?.repositories]);
-
-    const pendingRuleIds = useMemo(
+    // Only the rules imported from this team's selected repositories, and
+    // only from Kody rule files.
+    const importedRules = useMemo(
         () =>
-            safeArray<KodyRule>(pendingRules)
-                .map((rule) => rule.uuid)
-                .filter((id): id is string => Boolean(id)),
-        [pendingRules],
+            safeArray<KodyRule>(syncedRules).filter(
+                (rule) =>
+                    !!rule.repositoryId &&
+                    selectedRepositories.has(String(rule.repositoryId)) &&
+                    !isAgentInstructionSource(rule.sourcePath),
+            ),
+        [syncedRules, selectedRepositories],
     );
 
-    const areArraysEqual = (a: string[], b: string[]) => {
-        if (a.length !== b.length) return false;
-        const sortedA = [...a].sort();
-        const sortedB = [...b].sort();
-        return sortedA.every((id, idx) => id === sortedB[idx]);
-    };
-
-    useEffect(() => {
-        setSelectedRules((prev) => {
-            if (areArraysEqual(prev, pendingRuleIds)) return prev;
-
-            if (prev.length === 0) return pendingRuleIds;
-
-            const stillSelected = prev.filter((id) =>
-                pendingRuleIds.includes(id),
-            );
-            const newOnes = pendingRuleIds.filter(
-                (id) => !stillSelected.includes(id),
-            );
-
-            const next = [...stillSelected, ...newOnes];
-
-            if (areArraysEqual(prev, next)) return prev;
-
-            return next;
-        });
-    }, [pendingRuleIds]);
-
-    useEffect(() => {
-        if (pendingRuleIds.length > 0) {
-            setNoRulesTimeoutReached(false);
-            return;
-        }
-
-        const timeout = setTimeout(() => setNoRulesTimeoutReached(true), 15000);
-
-        return () => clearTimeout(timeout);
-    }, [pendingRuleIds]);
-
-    // Keep the loading state visible while there are no rules and the timeout hasn't been reached
-    const showEmptyStateSpinner = useMemo(
-        () => pendingRules.length === 0 && !noRulesTimeoutReached,
-        [noRulesTimeoutReached, pendingRules.length],
+    const { data: agentFiles, isLoading: isLoadingAgentFiles } = useFetch<
+        AgentInstructionFilesByRepository[]
+    >(
+        KODY_RULES_PATHS.AGENT_INSTRUCTION_FILES,
+        { params: { teamId } },
+        !!teamId,
     );
 
-    const isSyncingRules = pendingRules.length === 0 && !noRulesTimeoutReached;
-    const noRulesAfterSync = pendingRules.length === 0 && noRulesTimeoutReached;
-    const hasSelectedRules = selectedRules.length > 0;
-
-    const highlightItems = useMemo(() => {
-        const items: Array<{
-            label: string;
-            helper?: string;
-            accent?: boolean;
-        }> = [
-            { label: "Bugs" },
-            { label: "Security" },
-            { label: "Performance" },
-        ];
-
-        if (hasSelectedRules) {
-            items.push({
-                label: "Team standards",
-                helper:
-                    selectedRules.length === 1
-                        ? "1 custom rule selected"
-                        : `${selectedRules.length} custom rules selected`,
-                accent: true,
-            });
-        }
-
-        return items;
-    }, [hasSelectedRules, selectedRules.length]);
-
-    const toggleRule = (ruleId: string) => {
-        if (!ruleId) return;
-
-        setSelectedRules((prev) =>
-            prev.includes(ruleId)
-                ? prev.filter((id) => id !== ruleId)
-                : [...prev, ruleId],
+    const repositoriesWithAgentFiles =
+        safeArray<AgentInstructionFilesByRepository>(agentFiles).filter(
+            (repo) => repo.files.length > 0,
         );
-    };
 
-    const handleApplyAndContinue = async () => {
+    const highlightItems = [
+        { label: "Bugs" },
+        { label: "Security" },
+        { label: "Performance" },
+        ...(importedRules.length > 0
+            ? [
+                  {
+                      label: "Team rules",
+                      helper:
+                          importedRules.length === 1
+                              ? "1 rule from .kody/rules"
+                              : `${importedRules.length} rules from .kody/rules`,
+                  },
+              ]
+            : []),
+        ...(useAgentInstructions
+            ? [
+                  {
+                      label: "Coding-agent instructions",
+                      helper: "read during review",
+                  },
+              ]
+            : []),
+    ];
+
+    const goNext = () => router.push(NEXT_STEP);
+
+    const handleContinue = async () => {
         if (!teamId) {
-            toast({
-                variant: "danger",
-                description: "Missing team. Please try again.",
-            });
+            goNext();
             return;
         }
-
-        const pendingIds = pendingRules
-            .map((rule) => rule.uuid)
-            .filter((id): id is string => Boolean(id));
-
         try {
-            setIsSavingRules(true);
-            const toActivate = selectedRules;
-            const toDelete = pendingIds.filter(
-                (id) => !selectedRules.includes(id),
+            setIsSaving(true);
+            // Saved once at global level: every repository follows it unless
+            // it sets its own value later in Settings.
+            const result = await createOrUpdateCodeReviewParameter(
+                { ideRulesSyncEnabled: useAgentInstructions },
+                teamId,
+                "global",
             );
-            const prUrls = new Set<string>();
-
-            if (toActivate.length) {
-                const activationResult = await changeStatusKodyRules(
-                    toActivate,
-                    KodyRulesStatus.ACTIVE,
-                );
-
-                if (
-                    isCentralizedPrResponse(activationResult) &&
-                    activationResult.prUrl
-                ) {
-                    prUrls.add(activationResult.prUrl);
-                }
+            if (result?.error) {
+                toast({
+                    variant: "warning",
+                    description:
+                        "We couldn't save this choice. You can change it later in Settings.",
+                });
             }
-
-            if (toDelete.length) {
-                const deletionResult = await changeStatusKodyRules(
-                    toDelete,
-                    KodyRulesStatus.DELETED,
-                );
-
-                if (
-                    isCentralizedPrResponse(deletionResult) &&
-                    deletionResult.prUrl
-                ) {
-                    prUrls.add(deletionResult.prUrl);
-                }
-            }
-
-            const hasCentralizedPr = prUrls.size > 0;
-
-            toast(
-                hasCentralizedPr
-                    ? {
-                          variant: "success",
-                          title: "Rules Proposed In PR",
-                          description: `Your changes were queued in centralized config PR: ${Array.from(prUrls)[0]}`,
-                      }
-                    : {
-                          variant: "success",
-                          title: "Rules Saved",
-                          description: "Rules saved for your team.",
-                      },
-            );
-            router.push("/setup/choosing-a-pull-request");
+            goNext();
         } catch (error) {
-            console.error("Error reviewing fast IDE rules", error);
+            console.error(
+                "Error saving coding-agent instructions choice",
+                error,
+            );
             toast({
                 variant: "danger",
-                description:
-                    "We couldn't save your selection. Please try again.",
+                description: "We couldn't save your choice. Please try again.",
             });
         } finally {
-            setIsSavingRules(false);
+            setIsSaving(false);
         }
-    };
-
-    const handleSkip = () => {
-        if (isSavingRules) return;
-
-        router.push("/setup/choosing-a-pull-request");
     };
 
     return (
@@ -292,8 +163,10 @@ export default function CustomizeTeamPage() {
                         Teach Kody how your team builds software
                     </h1>
                     <p className="text-text-secondary mt-2 text-base">
-                        Rules add your team’s standards to every review. By
-                        default, Kody checks bugs, security, and performance.
+                        By default, Kody checks bugs, security, and performance.
+                        Rules your team wrote for Kody, and the instructions it
+                        wrote for coding agents, can add your standards to every
+                        review.
                     </p>
                     <div className="mt-5 flex flex-col gap-2">
                         {highlightItems.map((item) => (
@@ -301,8 +174,8 @@ export default function CustomizeTeamPage() {
                                 key={item.label}
                                 className={cn(
                                     "bg-card-lv2 border-border flex items-center justify-between gap-2 rounded-xl border p-3 text-sm transition-all duration-300",
-                                    item.accent &&
-                                        "border-primary-light/80 bg-primary-light/5 ring-primary-light/30 shadow-[0_12px_40px_rgba(0,0,0,0.06)] ring-1",
+                                    item.helper &&
+                                        "border-primary-light/80 bg-primary-light/5 ring-primary-light/30 ring-1",
                                 )}>
                                 <div className="flex items-center gap-2">
                                     <span className="font-semibold">
@@ -328,122 +201,115 @@ export default function CustomizeTeamPage() {
                 <div className="flex flex-1 flex-col gap-8">
                     <StepIndicators.Auto />
 
-                    <Heading variant="h2">Review your Kody Rules</Heading>
+                    <div className="flex flex-col gap-3">
+                        <Heading variant="h2">
+                            Rules from your repositories
+                        </Heading>
+                        <span className="text-text-secondary text-sm">
+                            Kody Rule files in{" "}
+                            <code className="text-xs">.kody/rules</code> are
+                            imported as written and kept in sync. Nothing else
+                            in your repositories becomes a rule.
+                        </span>
 
-                    <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="flex flex-col gap-1">
-                                <span className="text-text-secondary text-sm">
-                                    These rules are auto detected from your
-                                    codebase. Review what matters now and adjust
-                                    anytime in Settings.
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-row items-center justify-end">
-                            {pendingRules.length > 0 && (
-                                <span className="text-primary-light shrink-0 text-xs">
-                                    {selectedRules.length} selected of{" "}
-                                    {pendingRules.length}
-                                </span>
-                            )}
-                        </div>
-
-                        {pendingRules.length === 0 ? (
-                            <div className="bg-card-lv1 border-card-lv3 text-text-secondary flex flex-col gap-2 rounded-xl border p-4 text-sm">
-                                <div className="text-text-primary flex items-center gap-2 font-semibold">
-                                    {showEmptyStateSpinner ? <Spinner /> : null}
-                                    <span>
-                                        {noRulesTimeoutReached
-                                            ? "No rules generated this time"
-                                            : "We're syncing rules from your repositories"}
-                                    </span>
-                                </div>
-
-                                <span className="text-text-primary">
-                                    {noRulesTimeoutReached
-                                        ? "We couldn't find rules from your repo configs this time. You can continue and add or edit rules later in Settings."
-                                        : "Kody is scanning your config files and preparing recommendations. They will appear here automatically, and you can keep going in the meantime."}
+                        {importedRules.length === 0 ? (
+                            <div className="bg-card-lv1 border-card-lv3 text-text-secondary flex items-center gap-2 rounded-xl border p-4 text-sm">
+                                {!importWindowOver && <Spinner />}
+                                <span>
+                                    {importWindowOver
+                                        ? "No Kody Rule files found. You can add them any time; Kody keeps them in sync."
+                                        : "Looking for Kody Rule files in your repositories…"}
                                 </span>
                             </div>
                         ) : (
-                            <div className="flex max-h-[45vh] flex-col gap-3 overflow-y-auto pr-1">
-                                {pendingRules.map((rule) => {
-                                    const ruleId = rule.uuid ?? rule.title;
-
-                                    return (
-                                        <KodyRuleCard
-                                            key={ruleId}
-                                            rule={rule}
-                                            repositoryName={
-                                                rule.repositoryId
-                                                    ? repositoryNameById.get(
-                                                          rule.repositoryId,
-                                                      )
-                                                    : undefined
-                                            }
-                                            selected={
-                                                !!rule.uuid &&
-                                                selectedRules.includes(
-                                                    rule.uuid,
-                                                )
-                                            }
-                                            onToggle={() =>
-                                                rule.uuid &&
-                                                toggleRule(rule.uuid)
-                                            }
-                                        />
-                                    );
-                                })}
-                            </div>
+                            <ul className="bg-card-lv1 border-card-lv3 flex max-h-[30vh] flex-col gap-2 overflow-y-auto rounded-xl border p-4 text-sm">
+                                {importedRules.map((rule) => (
+                                    <li
+                                        key={rule.uuid ?? rule.title}
+                                        className="flex items-center justify-between gap-3">
+                                        <span className="font-medium">
+                                            {rule.title}
+                                        </span>
+                                        <span className="text-text-secondary shrink-0 text-xs">
+                                            {selectedRepositories.get(
+                                                String(rule.repositoryId),
+                                            )}
+                                            {rule.status ===
+                                                KodyRulesStatus.PENDING &&
+                                                " · awaiting approval"}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
                         )}
-
-                        <span className="text-text-secondary text-right text-xs">
-                            You can edit these rules anytime in Settings.
-                        </span>
                     </div>
 
-                    <div className="flex flex-col items-center gap-4">
-                        {!isSyncingRules && !noRulesAfterSync && (
-                            <Button
-                                size="lg"
-                                variant="primary"
-                                className="w-full"
-                                loading={isSavingRules}
-                                disabled={
-                                    isSavingRules ||
-                                    (pendingRules.length > 0 &&
-                                        selectedRules.length === 0)
-                                }
-                                onClick={handleApplyAndContinue}>
-                                {`Apply ${selectedRules.length} and continue`}
-                            </Button>
-                        )}
+                    <div className="flex flex-col gap-3">
+                        <label className="bg-card-lv1 flex cursor-pointer items-center justify-between gap-6 rounded-xl p-5">
+                            <div className="flex flex-col gap-1">
+                                <Heading variant="h2">
+                                    Use your coding-agent instructions in
+                                    reviews?
+                                </Heading>
+                                <span className="text-text-secondary text-sm">
+                                    Kody reads the CLAUDE.md, AGENTS.md,
+                                    .cursor/rules and Copilot instructions that
+                                    cover the changed files, and points out
+                                    changes that break them. They never become
+                                    rules. Off unless you turn it on.
+                                </span>
+                            </div>
+                            <Switch
+                                checked={useAgentInstructions}
+                                onCheckedChange={setUseAgentInstructions}
+                            />
+                        </label>
 
-                        {noRulesAfterSync && (
-                            <Button
-                                size="lg"
-                                variant="primary"
-                                className="w-full"
-                                onClick={handleSkip}
-                                disabled={isSavingRules}>
-                                Continue to the next step
-                            </Button>
-                        )}
+                        <div className="text-text-secondary flex flex-col gap-1 px-1 text-xs">
+                            {isLoadingAgentFiles ? (
+                                <span className="flex items-center gap-2">
+                                    <Spinner className="size-3" />
+                                    Looking for coding-agent files…
+                                </span>
+                            ) : repositoriesWithAgentFiles.length === 0 ? (
+                                <span>
+                                    No coding-agent files found in the selected
+                                    repositories.
+                                </span>
+                            ) : (
+                                <>
+                                    <span>Files Kody would read:</span>
+                                    {repositoriesWithAgentFiles.map((repo) => (
+                                        <span key={repo.repositoryId}>
+                                            <span className="text-text-primary font-medium">
+                                                {repo.repositoryName}
+                                            </span>
+                                            : {repo.files.join(", ")}
+                                        </span>
+                                    ))}
+                                </>
+                            )}
+                        </div>
+                    </div>
 
-                        {!noRulesAfterSync && (
-                            <button
-                                type="button"
-                                onClick={handleSkip}
-                                disabled={isSavingRules}
-                                className={cn(
-                                    "text-primary-light text-sm hover:underline",
-                                    isSavingRules && "opacity-60",
-                                )}>
-                                I'll do this later
-                            </button>
-                        )}
+                    <div className="flex items-center gap-3">
+                        <Button
+                            size="lg"
+                            variant="cancel"
+                            className="flex-1"
+                            onClick={goNext}
+                            disabled={isSaving}>
+                            Skip for now
+                        </Button>
+                        <Button
+                            size="lg"
+                            variant="primary"
+                            className="flex-1"
+                            onClick={handleContinue}
+                            loading={isSaving}
+                            disabled={isSaving}>
+                            Continue
+                        </Button>
                     </div>
                 </div>
             </div>
