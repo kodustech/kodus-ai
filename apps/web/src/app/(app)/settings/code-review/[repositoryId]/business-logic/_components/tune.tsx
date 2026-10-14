@@ -50,8 +50,11 @@ export const Tune = ({
                             Tune to your team
                         </span>
                         <span className="text-text-secondary text-xs">
-                            Where criteria live · what fails the check · team
-                            guidance
+                            Where criteria live ·{" "}
+                            {platformHasChecks
+                                ? "what fails the check"
+                                : "what blocks the merge"}{" "}
+                            · team guidance
                         </span>
                     </span>
                     <CollapsibleIndicator />
