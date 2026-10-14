@@ -32,8 +32,12 @@
 //              its row is then `skipped` and `model` says how it is checked
 //   byHand   — evals that can measure it on a real model, but only when someone
 //              runs them by hand: what it takes to start measuring the stage
-//   nightly  — true when the nightly measures it with a real model; its row then
-//              comes only from the nightly, never from the wiring smoke
+//   nightly  — the result the nightly measures it with on a real model
+//              (stage-signals.js READERS); its row then comes only from the
+//              nightly, never from the wiring smoke
+//   metric   — what the measured number counts, shown under it
+//   set      — what the model reviews to produce it
+//   caveat   — what a green number does not prove
 //   friday   — when the Friday check (evals/tier0-smoke.js) runs it on every
 //              tier-0 model: the key of its outcome in that check's
 //              `evals.tier0.<model>` meta. Proves it still runs there, measures
@@ -78,7 +82,9 @@ const STAGES = [
         eval: 'evals/investigation',
         model: 'real',
         wiring: ['finder-recall'],
-        nightly: true,
+        nightly: 'finder-recall',
+        metric: 'of known bugs found',
+        set: 'real PRs whose bugs we know',
         friday: 'review',
         history: 'evals.nightly.recall',
         byHand: ['evals/trace-context'],
@@ -230,10 +236,13 @@ const STAGES = [
         label: 'Kody Rules agent: flags every place a PR breaks a rule',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/kody-rules',
-        model: 'scripted',
+        model: 'real',
         wiring: ['kody-rules'],
-        byHand: ['evals/kody-rules'],
-        note: 'scripted model only on a schedule; real-model runs are on demand',
+        nightly: 'kody-rules',
+        metric: 'of known rule violations flagged',
+        set: 'real PRs where we know every line that breaks a rule',
+        caveat: 'The set holds mechanical rules only (no console, no any, no process.env, no generic Error): a green night says the rule machinery works, not that Kody is good at harder rules.',
+        note: 'occurrence recall and clean-file specificity on github-cases against their floors, when its files changed',
     },
     {
         id: 'pr-comments',
