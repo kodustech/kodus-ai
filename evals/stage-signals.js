@@ -133,13 +133,12 @@ function finderCases(rows = []) {
         const m = row.metadata || {};
         const checks = `Finds the known bugs in "${finderTitle(row.caseId)}"`;
         if (!Number.isInteger(m.goldens)) return { id: row.caseId, checks, hits: 0, total: 0, unmeasured: true };
-        return {
-            id: row.caseId,
-            checks,
-            hits: m.matched ?? 0,
-            total: m.goldens,
-            detail: (m.goldenResults || []).map((g) => ({ what: g.golden, ok: Boolean(g.found) })),
-        };
+        // Counted from the bugs shown, never from `matched`: on a confirmed night
+        // confirm-gate.js marks a bug found when either run found it but keeps
+        // the first run's `matched`, and the two would disagree.
+        const detail = (m.goldenResults || []).map((g) => ({ what: g.golden, ok: Boolean(g.found) }));
+        if (!detail.length) return { id: row.caseId, checks, hits: m.matched ?? 0, total: m.goldens };
+        return { id: row.caseId, checks, hits: detail.filter((d) => d.ok).length, total: detail.length, detail };
     });
 }
 

@@ -38,8 +38,9 @@ function resultProblems(result) {
     if (!result || typeof result !== 'object') return ['no result'];
     for (const key of ['eval', 'question', 'model']) if (!result[key]) problems.push(`missing ${key}`);
     if (!result.metric || !Number.isFinite(result.metric.value)) problems.push('missing metric.value');
-    if (!Array.isArray(result.cases) || !result.cases.length) problems.push('no cases');
-    for (const c of result.cases || []) {
+    const cases = Array.isArray(result.cases) ? result.cases : [];
+    if (!cases.length) problems.push('no cases');
+    for (const c of cases) {
         if (!c.id) problems.push('a case without id');
         if (!c.checks) problems.push(`case ${c.id}: no checks sentence`);
         if (!Number.isInteger(c.hits) || !Number.isInteger(c.total) || c.hits < 0 || c.hits > c.total) problems.push(`case ${c.id}: hits/total ${c.hits}/${c.total}`);
@@ -47,12 +48,12 @@ function resultProblems(result) {
     return problems;
 }
 
-// Two runs of the same cases as one: counts summed, an item ok only when ok in both.
+// Two runs as one, over the cases BOTH runs have (evals/AGENTS.md: never two
+// different subsets): counts summed, an item ok only when ok in both.
 function poolCases(a = [], b = []) {
     const byId = new Map(b.map((c) => [c.id, c]));
-    return a.map((c) => {
+    return a.filter((c) => byId.has(c.id)).map((c) => {
         const other = byId.get(c.id);
-        if (!other) return c;
         const okIn = new Map((other.detail || []).map((d) => [d.what, d.ok]));
         return {
             ...c,
@@ -76,6 +77,7 @@ function signalCases(cases = []) {
         total: c.total,
         ...(c.detail && c.detail.length ? { detail: c.detail.slice(0, MAX_DETAIL).map((d) => ({ what: clip(d.what), ok: Boolean(d.ok) })) } : {}),
         ...(c.detail && c.detail.length > MAX_DETAIL ? { more: c.detail.length - MAX_DETAIL } : {}),
+        ...(c.unmeasured ? { unmeasured: true } : {}),
     }));
 }
 

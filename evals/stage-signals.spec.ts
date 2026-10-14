@@ -195,8 +195,12 @@ describe('stage-signals', () => {
         const [finder]: Row[] = nightlyRows(nightly, 'pass');
         expect(finder.meta.case_results).toEqual([
             { id: caseId, checks: `Finds the known bugs in "${prTitle}"`, hits: 1, total: 2, detail: [{ what: 'bug A', ok: true }, { what: 'bug B', ok: false }] },
-            { id: 'did-not-run', checks: 'Finds the known bugs in "did-not-run"', hits: 0, total: 0 },
+            { id: 'did-not-run', checks: 'Finds the known bugs in "did-not-run"', hits: 0, total: 0, unmeasured: true },
         ]);
+        // A confirmed night: a bug counts as found when either run found it, and
+        // the count follows the bugs shown, not the first run's `matched`.
+        const confirmed = { ...nightly, rows: [{ caseId, metadata: { goldens: 2, matched: 1, goldenResults: [{ golden: 'bug A', found: true }, { golden: 'bug B', found: true }] } }] };
+        expect(nightlyRows(confirmed, 'pass')[0].meta.case_results[0]).toMatchObject({ hits: 2, total: 2 });
     });
 
     it('gives every stage whose eval has a README the question that README answers', () => {
