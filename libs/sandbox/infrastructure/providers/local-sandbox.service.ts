@@ -50,6 +50,25 @@ const CMD_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 5 * 1024 * 1024; // 5 MB — cap output to prevent memory issues
 
 /**
+ * Per-program argument blocklist for `exec`. The command whitelist admits
+ * `find` and `fd` as read-only finders, but both accept flags that run an
+ * arbitrary program (`-exec`/`-execdir`/`-ok` on find, `-x`/`-X`/`--exec` on
+ * fd) — host RCE on a self-hosted worker — or that write/delete files
+ * (`-delete`, `-fprint*`, `-fls`). Other readers accept flags that follow
+ * symlinks out of the clone (`find -L/-H/-follow`, `fd -L/--follow`, `grep
+ * -R/--dereference-recursive/--dereference`, ast-grep `-U/--update-all` which
+ * rewrites files). A flag matched here fails the command. Programs with no
+ * entry (cat/head/tail/wc/file) carry no such flag and pass through.
+ */
+const DANGEROUS_FLAGS: Record<string, RegExp> = {
+    find: /^-(exec|execdir|ok|okdir|delete|fprint|fprintf|fprint0|fls|L|H|follow)$/,
+    fd: /^(-x|-X|--exec|--exec-batch|-L|--follow)$/,
+    grep: /^(-R|--dereference-recursive|--dereference)$/,
+    sg: /^(-U|--update-all)$/,
+    'ast-grep': /^(-U|--update-all)$/,
+};
+
+/**
  * Variables that tell git which repository to work on. They outrank `-C` and
  * `cwd`: a process started from a git hook (the pre-push test suite) inherits
  * GIT_DIR, and `git init <tempDir>` then re-initialized the caller's
@@ -645,7 +664,56 @@ export class LocalSandboxService implements ISandboxProvider {
                         };
                     }
 
+                    // Two of the whitelisted programs are file *finders* that
+                    // also carry flags turning them into command runners or
+                    // writers (`find -exec sh -c ...`, `fd -x ...`, `find
+                    // -delete`), and several readers carry flags that follow
+                    // symlinks out of the clone (`find -L`, `grep -R`). The
+                    // whitelist alone does not make them read-only, so reject
+                    // those flags per program. Readers without such flags
+                    // (cat/head/tail/wc/file) have no entry and pass through.
+                    const dangerousFlag = DANGEROUS_FLAGS[program];
+                    if (dangerousFlag) {
+                        const bad = args.find((a) => dangerousFlag.test(a));
+                        if (bad) {
+                            return {
+                                stdout: `Flag "${bad}" is not allowed for "${program}" in local sandbox (it can execute, write, delete, or follow symlinks out of the repo).`,
+                                stderr: '',
+                                exitCode: 1,
+                            };
+                        }
+                    }
+
                     validated.push({ program, args });
+                }
+
+                // Defense in depth for the disclosure vector: a whitelisted
+                // reader still follows symlinks, so a symlink committed in the
+                // repo (or a path reached through a symlinked directory) would
+                // let `cat`/`head`/… escape the clone. Mirror `read`: for every
+                // argument that resolves to an existing path, refuse anything
+                // whose real path leaves the repo. Non-path args (grep
+                // patterns, flag values) don't exist on disk and are skipped.
+                const repoRealForArgs = await realpath(repoDir);
+                for (const { args } of validated) {
+                    for (const arg of args) {
+                        if (arg.startsWith('-')) {
+                            continue; // flags, already screened above
+                        }
+                        let real: string;
+                        try {
+                            real = await realpath(join(repoDir, arg));
+                        } catch {
+                            continue; // not a real path → a pattern/flag value
+                        }
+                        if (!this.isPathInside(repoRealForArgs, real)) {
+                            return {
+                                stdout: `Argument "${arg}" resolves outside the repository (symlink escape) and is not allowed.`,
+                                stderr: '',
+                                exitCode: 1,
+                            };
+                        }
+                    }
                 }
 
                 if (validated.length === 1) {
