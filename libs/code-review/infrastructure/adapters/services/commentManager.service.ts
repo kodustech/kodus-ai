@@ -14,6 +14,7 @@ import {
 } from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { getPRDescriptionLimit } from '@libs/code-review/utils/fit-pr-description';
 import { buildCommentFromSuggestion } from '@libs/common/utils/comment-builder.utils';
+import { extractTaskReferences } from '@libs/agents/business-validation/task-references';
 import { extractTaskReferenceLines } from '@libs/common/utils/codeManagement/prTaskReferences';
 import {
     BehaviourForExistingDescription,
@@ -715,8 +716,14 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     // logic validation, `@kody -v business-logic` — with no
                     // task to resolve. Carry those lines into the replacement.
                     if (replacesDescription) {
+                        // The same reader business logic uses, so a line it
+                        // would read the task from (`AB#12`, a tracker link)
+                        // is one the summary keeps.
                         const taskReferences = extractTaskReferenceLines(
                             updatedPR?.body ?? '',
+                            (line) =>
+                                extractTaskReferences({ body: line }).length >
+                                0,
                         );
 
                         if (taskReferences.length) {

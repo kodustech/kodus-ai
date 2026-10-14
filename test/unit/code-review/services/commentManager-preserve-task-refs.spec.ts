@@ -128,6 +128,27 @@ describe('CommentManagerService – task references survive a replaced descripti
         expect(result).toContain('PROJ-42');
     });
 
+    it.each([
+        ['an Azure Boards work item', 'Closes AB#12'],
+        [
+            'an Azure Boards link',
+            'Implements https://dev.azure.com/acme/web/_workitems/edit/12',
+        ],
+    ])('keeps %s when the description is replaced', async (_kind, line) => {
+        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
+            body: `${line}\n\nSome prose.`,
+        });
+
+        const result = await generate({
+            generatePRSummary: true,
+            behaviourForExistingDescription: 'replace',
+            behaviourForNewCommits: BehaviourForNewCommits.NONE,
+        });
+
+        expect(result).toContain(line);
+        expect(result).not.toContain('Some prose.');
+    });
+
     it('replaces a description that carries no reference, as before', async () => {
         mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
             body: 'Just some prose with no task link.',
