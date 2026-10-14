@@ -61,6 +61,15 @@ export function extractTaskReferences(
             // "feat(SAA-96)" in the title and "Part of SAA-96" in the body:
             // the PR said it delivers a slice, so that is what counts.
             earlier.intent = strongerIntent(earlier.intent, reference.intent);
+            // `fix/12-add-login` and "Closes #12": the PR named the issue
+            // outright, so its title no longer has to match.
+            if (
+                earlier.kind === 'git_issue' &&
+                earlier.titleHint &&
+                !(reference.kind === 'git_issue' && reference.titleHint)
+            ) {
+                delete earlier.titleHint;
+            }
         }
     }
 
@@ -200,14 +209,32 @@ function extractFromText(
         source,
     }));
     if (source === 'branch') {
-        // `12-add-login`, the branch GitHub creates from issue #12. Only at
-        // the start: after a prefix (`fix/404-on-login`) a number is a status
-        // code or a name as often as an issue.
-        collect(/^(\d{1,6})(?=-[A-Za-z])/g, (m) => ({
+        // `12-add-login`, the branch GitHub and GitLab create from issue #12,
+        // and `issue-12` / `gh-12`, which say so.
+        collect(/^(\d{1,6})(?=[-_][A-Za-z])/g, (m) => ({
             kind: 'git_issue',
             id: m[1],
             raw: m[0],
             source,
+        }));
+        collect(
+            /(?<![A-Za-z0-9])(?:issues?|gh)[-_#]?(\d{1,6})(?!\d)/gi,
+            (m) => ({
+                kind: 'git_issue',
+                id: m[1],
+                raw: m[0],
+                source,
+            }),
+        );
+        // `feature/12-add-login`: after a prefix a number is a status code or
+        // a name as often as an issue (`fix/404-on-login`), so the issue
+        // counts only if its title shares a word with the rest of the name.
+        collect(/(?<=\/)(\d{1,6})[-_]([A-Za-z][A-Za-z0-9_-]*)/g, (m) => ({
+            kind: 'git_issue',
+            id: m[1],
+            raw: m[0],
+            source,
+            titleHint: m[2],
         }));
     }
     // Trackers write keys in capitals; only a branch or a typed command

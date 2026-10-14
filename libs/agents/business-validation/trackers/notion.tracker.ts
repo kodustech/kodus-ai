@@ -39,6 +39,7 @@ export class NotionTracker extends McpTaskTracker {
                   ? textField(page, ['text', 'markdown', 'content', 'body'])
                   : undefined;
         const description = text ? pageText(text) : undefined;
+        const fields = text ? pageProperties(text) : {};
         if (!description) {
             return { status: 'not_found' };
         }
@@ -50,6 +51,9 @@ export class NotionTracker extends McpTaskTracker {
                 title: page ? textField(page, ['title', 'name']) : undefined,
                 description,
                 url: reference.url,
+                // A team may keep the criteria in a property: "criteria live
+                // in Acceptance criteria" reads it by name.
+                ...(Object.keys(fields).length ? { fields } : {}),
             },
         };
     }
@@ -86,6 +90,17 @@ function pageText(text: string): string | undefined {
     return (
         [lines.join('\n'), content.trim()].filter(Boolean).join('\n\n') ||
         undefined
+    );
+}
+
+/** The page's text properties, by name. */
+function pageProperties(text: string): Record<string, string> {
+    const properties = /<properties>([\s\S]*?)<\/properties>/.exec(text)?.[1];
+    return Object.fromEntries(
+        Object.entries(asRecord(parseJson(properties))).filter(
+            (entry): entry is [string, string] =>
+                typeof entry[1] === 'string' && entry[1].trim() !== '',
+        ),
     );
 }
 

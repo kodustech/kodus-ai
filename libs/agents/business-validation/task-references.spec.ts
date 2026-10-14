@@ -106,10 +106,34 @@ describe('issue number in the branch', () => {
         expect(ids({ branch: '12-add-login' })).toEqual(['git_issue:12']);
     });
 
-    it('does not read a number after a prefix: it is a status code or a name as often as an issue', () => {
-        expect(ids({ branch: 'fix/404-on-login' })).toEqual([]);
-        expect(ids({ branch: 'hotfix/500-error-page' })).toEqual([]);
-        expect(ids({ branch: 'test/1908-utf8-title' })).toEqual([]);
+    it('reads `issue-12` and `gh-12` as issue #12, not as a key', () => {
+        expect(ids({ branch: 'issue-12' })).toEqual(['git_issue:12']);
+        expect(ids({ branch: 'nina/gh-12-add-login' })).toEqual([
+            'git_issue:12',
+        ]);
+    });
+
+    it('reads a number after a prefix only with the rest of the name, for the title to confirm', () => {
+        const hinted = (branch: string) =>
+            extractTaskReferences({ branch }).map((r) =>
+                r.kind === 'git_issue' ? `${r.id}:${r.titleHint}` : r.id,
+            );
+        expect(hinted('feature/12-add-login')).toEqual(['12:add-login']);
+        expect(hinted('users/ana/8_checkout')).toEqual(['8:checkout']);
+        // A status code reads the same way; the issue's title tells them apart.
+        expect(hinted('fix/404-on-login')).toEqual(['404:on-login']);
+        expect(hinted('12-add-login')).toEqual(['12:undefined']);
+    });
+
+    it('drops the title check once the PR names the issue outright', () => {
+        const [reference] = extractTaskReferences({
+            branch: 'feature/12-add-login',
+            body: 'Closes #12',
+        });
+        expect(reference).toMatchObject({ kind: 'git_issue', id: '12' });
+        expect(
+            reference.kind === 'git_issue' && reference.titleHint,
+        ).toBeFalsy();
     });
 
     it('does not read dates or versions as an issue', () => {

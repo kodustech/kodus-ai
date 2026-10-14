@@ -30,6 +30,7 @@ function tracker(
                       task: {
                           tracker: name,
                           id: r.id,
+                          title: tasks[r.id],
                           description: tasks[r.id],
                       },
                   }
@@ -129,6 +130,44 @@ describe('resolveTasks', () => {
     });
 });
 
+describe('an issue number after a branch prefix', () => {
+    const issues = (titles: Record<string, string>) =>
+        tracker('Git Issues', titles, { reads: ['git_issue'] });
+
+    it('counts the issue when its title shares a word with the branch', async () => {
+        const result = await resolveTasks(
+            extractTaskReferences({ branch: 'feature/12-add-login' }),
+            [issues({ '12': 'Login page for guests' })],
+            context,
+        );
+        expect(result.kind).toBe('found');
+    });
+
+    it('does not judge an unrelated issue a status code happens to number', async () => {
+        const result = await resolveTasks(
+            extractTaskReferences({ branch: 'fix/404-on-login' }),
+            [issues({ '404': 'Dark mode toggle' })],
+            context,
+        );
+        expect(result.kind).toBe('not_found');
+    });
+
+    it('matches accents and plurals, not three-letter words like "add"', async () => {
+        const read = (branch: string, title: string) =>
+            resolveTasks(
+                extractTaskReferences({ branch }),
+                [issues({ '7': title })],
+                context,
+            ).then((r) => r.kind);
+        await expect(
+            read('feat/7-relatorio-mensal', 'Relatórios mensais'),
+        ).resolves.toBe('found');
+        await expect(read('fix/7-add-cache', 'Add dark mode')).resolves.toBe(
+            'not_found',
+        );
+    });
+});
+
 describe('repositoryForLookup', () => {
     it('splits a name given as owner/name, so #12 is read in the right repository', () => {
         expect(
@@ -150,5 +189,14 @@ describe('repositoryForLookup', () => {
                 fullName: 'acme/platform/notes',
             }),
         ).toEqual({ owner: 'acme/platform', name: 'notes' });
+    });
+
+    it('reads the namespace from the path, not a display-name owner (GitLab)', () => {
+        expect(
+            repositoryForLookup({
+                name: 'acme.dev/notes',
+                owner: 'Acme Corp',
+            }),
+        ).toEqual({ owner: 'acme.dev', name: 'notes' });
     });
 });

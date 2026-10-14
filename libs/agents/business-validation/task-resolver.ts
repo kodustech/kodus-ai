@@ -47,7 +47,12 @@ export async function resolveTasks(
         readable ||= capable.length > 0;
         let missingFrom: TaskTracker[] = [];
         for (const tracker of capable) {
-            const lookup = await tracker.read(reference, context);
+            const read = await tracker.read(reference, context);
+            const lookup: typeof read =
+                read.status === 'found' &&
+                !matchesTitleHint(reference, read.task.title)
+                    ? { status: 'not_found', tools: read.tools }
+                    : read;
             attempts.push({
                 reference: reference.raw,
                 tracker: tracker.name,
@@ -111,6 +116,55 @@ export async function resolveTasks(
     };
 }
 
+/** Branch words that say what kind of change it is, not which task. */
+const BRANCH_FILLER = new Set([
+    'feat',
+    'feature',
+    'fix',
+    'bugfix',
+    'hotfix',
+    'chore',
+    'refactor',
+    'issue',
+    'task',
+    'update',
+    'from',
+    'into',
+    'remove',
+    'change',
+    'support',
+    'with',
+    'para',
+]);
+
+function words(text: string): string[] {
+    return text
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length >= 4 && !BRANCH_FILLER.has(w));
+}
+
+/**
+ * Whether an issue read for `fix/12-add-login` is the one the branch means:
+ * its title shares a word with `add-login` (`login` ~ `Login page`,
+ * `checkout` ~ `Checkouts`). Issue #404 "Dark mode" is not `fix/404-on-login`.
+ */
+export function matchesTitleHint(
+    reference: TaskReference,
+    title: string | undefined,
+): boolean {
+    if (reference.kind !== 'git_issue' || !reference.titleHint) {
+        return true;
+    }
+    const hint = words(reference.titleHint);
+    const inTitle = words(title ?? '');
+    return hint.some((h) =>
+        inTitle.some((t) => t.startsWith(h) || h.startsWith(t)),
+    );
+}
+
 const MAX_NEARBY_READS = 4;
 
 /**
@@ -162,7 +216,8 @@ async function nearbyTasks(
 /**
  * The PR's repository as a tracker reads `#12` against: owner and bare name.
  * Some doors name it `owner/name`; the lookup then asked for
- * `owner/owner/name` and found nothing.
+ * `owner/owner/name` and found nothing. The path's namespace wins over
+ * `owner`, which GitLab fills with the group's display name ("Acme Corp").
  */
 export function repositoryForLookup(repository: {
     name: string;
@@ -174,7 +229,7 @@ export function repositoryForLookup(repository: {
         : (repository.fullName ?? '');
     const cut = full.lastIndexOf('/');
     return {
-        owner: repository.owner ?? (cut > 0 ? full.slice(0, cut) : undefined),
+        owner: cut > 0 ? full.slice(0, cut) : repository.owner,
         name: repository.name.slice(repository.name.lastIndexOf('/') + 1),
     };
 }

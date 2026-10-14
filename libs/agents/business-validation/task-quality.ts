@@ -4,6 +4,11 @@ import type { BusinessLogicSettings } from './settings';
 
 /** A description shorter than this, with no criteria, does not say what "done" is. */
 const MIN_DESCRIPTION = 80;
+/** Below this, a description next to a title adds nothing to judge against. */
+const MIN_DESCRIPTION_WORDS = 6;
+
+const wordCount = (text: string) =>
+    text.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length;
 
 /** How much the task says, graded once here; the judge never regrades it. */
 export function gradeTask(task: Task): TaskQuality {
@@ -17,7 +22,9 @@ export function gradeTask(task: Task): TaskQuality {
     if (criteria.length || countListItems(description) >= 2) {
         return 'COMPLETE';
     }
-    if (title && description) {
+    // "Improve tickets" / "Make tickets better." says no more than a bare
+    // title: a description counts once it says something.
+    if (title && wordCount(description) >= MIN_DESCRIPTION_WORDS) {
         return 'PARTIAL';
     }
     if (description) {
@@ -33,8 +40,9 @@ export function canJudgeAgainst(quality: TaskQuality): boolean {
 
 /**
  * The task with its acceptance criteria taken from where the team said they
- * live: a heading in the description, or a field (UC-05, UC-23). Left as is
- * when that place is empty, so the judge still reads the whole description.
+ * live: a heading in the description, or a field (UC-05, UC-23). When that
+ * place isn't on this task (a Git issue has no custom fields), they are
+ * detected as with "Detect automatically".
  */
 export function applyCriteriaLocation(
     task: Task,
@@ -43,15 +51,38 @@ export function applyCriteriaLocation(
     if (criteria.location === 'auto') {
         return detectCriteria(task);
     }
+    const text = criteriaPlaceText(task, criteria);
+    if (!text) {
+        return detectCriteria(task);
+    }
+    const items = listItems(text);
+    if (items.length) {
+        return { ...task, acceptanceCriteria: items };
+    }
+    // A field with one criterion per line and no bullets (a Notion property).
+    const lines = text
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 3);
+    if (lines.length >= 2) {
+        return { ...task, acceptanceCriteria: lines };
+    }
+    return { ...task, acceptanceCriteria: [text.trim()] };
+}
+
+/** What sits where the team said criteria live, when that place is on the task. */
+export function criteriaPlaceText(
+    task: Task,
+    criteria: BusinessLogicSettings['criteria'],
+): string | undefined {
+    if (criteria.location === 'auto') {
+        return undefined;
+    }
     const text =
         criteria.location === 'heading'
             ? sectionUnder(task.description ?? '', criteria.heading)
             : fieldText(task, criteria.field);
-    const items = text ? listItems(text) : [];
-    if (items.length) {
-        return { ...task, acceptanceCriteria: items };
-    }
-    return text ? { ...task, acceptanceCriteria: [text.trim()] } : task;
+    return text?.trim() || undefined;
 }
 
 /** Headings teams put acceptance criteria under, normalized. */

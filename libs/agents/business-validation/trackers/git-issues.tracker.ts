@@ -20,18 +20,27 @@ export class GitIssuesTracker extends McpTaskTracker {
         super(session);
     }
 
+    /**
+     * `#12`, and a number a team's own id pattern captured (`TCK-(\d+)` on
+     * `TCK-12`): the built-in key shapes never yield a bare number.
+     */
     canRead(reference: TaskReference): boolean {
-        return reference.kind === 'git_issue';
+        return (
+            reference.kind === 'git_issue' ||
+            (reference.kind === 'key' && /^\d+$/.test(reference.id))
+        );
     }
 
     protected async lookup(
         reference: TaskReference,
         context: TrackerReadContext,
     ): Promise<TrackerLookup> {
-        if (reference.kind !== 'git_issue') {
+        if (!this.canRead(reference)) {
             return { status: 'not_found' };
         }
-        const repository = reference.repository ?? context.repository;
+        const repository =
+            (reference.kind === 'git_issue' && reference.repository) ||
+            context.repository;
         if (!repository?.owner || !repository.name) {
             return {
                 status: 'error',
@@ -62,9 +71,10 @@ export class GitIssuesTracker extends McpTaskTracker {
             status: 'found',
             task: {
                 tracker: this.name,
-                id: reference.repository
-                    ? `${repository.owner}/${repository.name}#${reference.id}`
-                    : `#${reference.id}`,
+                id:
+                    reference.kind === 'git_issue' && reference.repository
+                        ? `${repository.owner}/${repository.name}#${reference.id}`
+                        : `#${reference.id}`,
                 title:
                     typeof issue.title === 'string' ? issue.title : undefined,
                 description:

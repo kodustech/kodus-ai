@@ -17,7 +17,7 @@ export class TaskNotFoundError extends Error {}
 export class TrackerUnavailableError extends Error {}
 
 const NOT_FOUND_PATTERN =
-    /\b(?:not[\s_-]?found|object_not_found|does(?: not|n't) exist|could(?: not|n't) find|unable to find|no (?:such )?(?:issue|task|ticket|work ?item|page|record)s?\b|404)\b/i;
+    /\b(?:not[\s_-]?found|object_not_found|failed to retrieve [\w\s]{0,40}? with (?:public )?id|does(?: not|n't) exist|could(?: not|n't) find|unable to find|no (?:such )?(?:issue|task|ticket|work ?item|page|record)s?\b|404)\b/i;
 
 /**
  * One MCP server, opened only for the tools a tracker reads with. Tools the

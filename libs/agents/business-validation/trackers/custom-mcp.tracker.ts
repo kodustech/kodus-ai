@@ -155,6 +155,7 @@ export class CustomMcpTracker extends McpTaskTracker {
                 'summary',
                 'name',
             ]);
+            const named = namedCustomFields(item);
             const description = joinSections([
                 htmlToText(
                     textField(fields, [
@@ -173,6 +174,7 @@ export class CustomMcpTracker extends McpTaskTracker {
                         'acceptanceCriteria',
                     ]),
                 ),
+                customFieldsText(named),
             ]);
             if (!title && !description) {
                 // It names the task but says nothing of it: watchers, dates, links.
@@ -191,6 +193,7 @@ export class CustomMcpTracker extends McpTaskTracker {
                         'app_url',
                         'url',
                     ]),
+                    ...(Object.keys(named).length ? { fields: named } : {}),
                 },
             };
         }
@@ -333,6 +336,38 @@ export function buildReadArgs(
         (name) => args[name] === undefined,
     );
     return missing.length ? undefined : args;
+}
+
+/** Custom fields shorter than this are labels and ids, not requirements. */
+const MIN_CUSTOM_FIELD_TEXT = 20;
+
+/**
+ * Text custom fields kept as `[{ name, value }]` (ClickUp `value`, Asana
+ * `text_value` / `display_value`), by name, where teams often keep criteria.
+ */
+function namedCustomFields(
+    item: Record<string, unknown>,
+): Record<string, string> {
+    const list = Array.isArray(item.custom_fields) ? item.custom_fields : [];
+    const out: Record<string, string> = {};
+    for (const entry of list.map(asRecord)) {
+        const text = htmlToText(
+            textField(entry, ['value', 'text_value', 'display_value']),
+        );
+        if (typeof entry.name === 'string' && text) {
+            out[entry.name] = text;
+        }
+    }
+    return out;
+}
+
+function customFieldsText(named: Record<string, string>): string | undefined {
+    const long = Object.entries(named).filter(
+        ([, text]) => text.length >= MIN_CUSTOM_FIELD_TEXT,
+    );
+    return long.length
+        ? `Other fields:\n${long.map(([name, text]) => `${name}:\n${text}`).join('\n\n')}`
+        : undefined;
 }
 
 function takesRepository(tool: MCPToolRaw): boolean {
