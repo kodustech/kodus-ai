@@ -36,6 +36,31 @@ const makeContext = (
     }) as unknown as CodeReviewPipelineContext;
 
 describe('buildOrchestratorInput — context→agent wiring', () => {
+    it('forwards the collected coding-agent instructions into the agent input', () => {
+        const repoInstructions = {
+            files: [
+                {
+                    path: 'CLAUDE.md',
+                    content: 'Use pnpm.',
+                    appliesTo: '**',
+                    truncated: false,
+                },
+            ],
+            otherFiles: [],
+            dropped: [],
+            truncated: false,
+            indexedCount: 1,
+        };
+        const input = buildOrchestratorInput(makeContext(), {
+            ...computed,
+            repoInstructions,
+        });
+        expect(input.repoInstructions).toBe(repoInstructions);
+        expect(
+            buildOrchestratorInput(makeContext(), computed).repoInstructions,
+        ).toBeUndefined();
+    });
+
     it('forwards reviewDirective from context into the agent input', () => {
         const input = buildOrchestratorInput(
             makeContext({

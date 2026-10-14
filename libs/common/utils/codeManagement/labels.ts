@@ -17,6 +17,8 @@ export enum LabelType {
     BUSINESS_LOGIC = 'business_logic',
     /** A scanner's finding, not the model's. See libs/code-review/infrastructure/analyzers. */
     DETERMINISTIC = 'deterministic',
+    /** A change that breaks the repository's coding-agent instructions (CLAUDE.md, AGENTS.md, ...). */
+    REPO_INSTRUCTION = 'repo_instruction',
 }
 
 enum ShieldColor {
@@ -76,6 +78,8 @@ const getLabelShield = (label: string) => {
             return `${shield}${ShieldColor.TEAL})`;
         case LabelType.DETERMINISTIC:
             return `${shield}${ShieldColor.INDIGO})`;
+        case LabelType.REPO_INSTRUCTION:
+            return `${shield}${ShieldColor.BLUE})`;
         default:
             return '';
     }

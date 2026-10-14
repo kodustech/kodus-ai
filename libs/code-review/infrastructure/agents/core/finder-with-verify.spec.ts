@@ -96,3 +96,72 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
         expect(r.droppedByVerify[0].evidence).toBe('refuted');
     });
 });
+
+describe('runFinderWithVerify — repo_instruction findings', () => {
+    it('hands the verifier the repository instructions', async () => {
+        const instructionFindings = {
+            reasoning: 'one convention break',
+            suggestions: [
+                {
+                    relevantFile: 'a.ts',
+                    label: 'repo_instruction',
+                    suggestionContent: 'CLAUDE.md says "Amounts are integer cents."',
+                    existingCode: 'x',
+                    improvedCode: 'y',
+                    severity: 'medium',
+                },
+            ],
+        };
+        const verifierPrompts: string[] = [];
+        mockResolve.mockImplementation(() => ({
+            model: new MockLanguageModelV3({
+                doGenerate: (async (opts: any) => {
+                    const sys = JSON.stringify(opts?.prompt ?? '');
+                    const isVerifier = sys.includes('REFUTE');
+                    if (isVerifier) verifierPrompts.push(sys);
+                    const tc = isVerifier
+                        ? { id: 'v', name: 'submitVerdict', input: { keep: true, rationale: 'ok' } }
+                        : { id: 'f', name: 'submitResult', input: instructionFindings };
+                    return {
+                        content: [{ type: 'tool-call', toolCallId: tc.id, toolName: tc.name, input: JSON.stringify(tc.input) }],
+                        finishReason: 'tool-calls',
+                        usage: { inputTokens: 5, outputTokens: 5 },
+                        warnings: [],
+                    };
+                }) as any,
+            }),
+            callOptions: {},
+            providerOptions: {},
+            modelName: 'mock',
+            usageIdentity: {},
+        }));
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+
+        await runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                repoInstructions: {
+                    files: [{ path: 'CLAUDE.md', content: 'Amounts are integer cents.', appliesTo: '**', truncated: false }],
+                    otherFiles: [],
+                    dropped: [],
+                    truncated: false,
+                    indexedCount: 1,
+                },
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(verifierPrompts.length).toBeGreaterThan(0);
+        expect(verifierPrompts.every((p) => p.includes('<RepositoryInstructions>'))).toBe(true);
+    });
+});

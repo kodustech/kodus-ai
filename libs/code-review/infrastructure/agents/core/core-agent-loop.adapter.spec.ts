@@ -1239,6 +1239,83 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
         ]);
     });
 
+    // A repo_instruction finding is judged against the repository's
+    // coding-agent instructions; without them the verifier drops it as style.
+    it('threads repoInstructions to the verifier for a repo_instruction finding', async () => {
+        const doGenerate = (async (opts: any) => {
+            const sys = JSON.stringify(opts?.prompt ?? opts ?? '');
+            const isVerifier =
+                sys.includes('REFUTE') ||
+                sys.includes('verdict') ||
+                sys.includes('verify');
+            const tc = isVerifier
+                ? {
+                      id: 'v',
+                      name: 'submitVerdict',
+                      input: sys.includes('Money columns end in _cents.')
+                          ? { keep: true, rationale: 'breaks CLAUDE.md' }
+                          : { keep: false, rationale: 'style only' },
+                  }
+                : {
+                      id: 'f',
+                      name: 'submitResult',
+                      input: {
+                          reasoning: 'one candidate',
+                          suggestions: [
+                              {
+                                  relevantFile: 'a.ts',
+                                  label: 'repo_instruction',
+                                  suggestionContent:
+                                      'CLAUDE.md says "Amounts are integer cents."',
+                                  existingCode: 'const total = 1.5;',
+                                  improvedCode: 'const totalCents = 150;',
+                                  severity: 'medium',
+                              },
+                          ],
+                      },
+                  };
+            return {
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: tc.id,
+                        toolName: tc.name,
+                        input: JSON.stringify(tc.input),
+                    },
+                ],
+                finishReason: 'tool-calls',
+                usage: { inputTokens: 5, outputTokens: 5 },
+                warnings: [],
+            };
+        }) as any;
+
+        const out = await runAgentLoopViaCore(
+            makeInput(new MockLanguageModelV3({ doGenerate }), {
+                repoInstructions: {
+                    files: [
+                        {
+                            path: 'CLAUDE.md',
+                            content:
+                                'Amounts are integer cents. Money columns end in _cents.',
+                            appliesTo: '**',
+                            truncated: false,
+                        },
+                    ],
+                    otherFiles: [],
+                    dropped: [],
+                    truncated: false,
+                    indexedCount: 1,
+                },
+            }),
+            secrets,
+        );
+
+        expect(out.droppedByVerify).toHaveLength(0);
+        expect(out.findings.suggestions.map((s: any) => s.relevantFile)).toEqual([
+            'a.ts',
+        ]);
+    });
+
     // The evidence gate's forceFull re-verify (finder.agent.ts's second,
     // unevidenced-only LlmVerifier instance) is a one-line duplicate of the
     // first pass's `previousDecisions` forwarding, but was never itself

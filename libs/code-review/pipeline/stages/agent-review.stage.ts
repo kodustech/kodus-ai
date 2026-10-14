@@ -102,6 +102,12 @@ import {
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import {
+    collectRepoInstructions,
+    shouldCollectRepoInstructions,
+    type RepoInstructionsContext,
+} from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
+import { AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS } from '@libs/common/utils/kody-rules/file-patterns';
+import {
     CodeReviewPipelineContext,
     resolvedModel,
     resolvedProvider,
@@ -348,6 +354,115 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         private readonly licenseService?: ILicenseService,
     ) {
         super();
+    }
+
+    /**
+     * The repository's coding-agent instructions (CLAUDE.md, AGENTS.md,
+     * .cursor/rules, ...) that govern the changed files, read from the PR's
+     * target branch when the repository opted in (`ideRulesSyncEnabled`). Never fails
+     * the review: a git host error just means the review runs without them.
+     */
+    private async resolveRepoInstructions(
+        context: CodeReviewPipelineContext,
+        changedFiles: Array<{ filename: string }>,
+        adaptiveProfile: { kind?: string; dropCallGraph?: boolean },
+        prNumber: number,
+    ): Promise<RepoInstructionsContext | undefined> {
+        const enabled = context.codeReviewConfig?.ideRulesSyncEnabled === true;
+        const logMetadata = {
+            organizationId: context.organizationAndTeamData?.organizationId,
+            teamId: context.organizationAndTeamData?.teamId,
+            repositoryId: context.repository?.id,
+            prNumber,
+        };
+
+        if (
+            !shouldCollectRepoInstructions(
+                context.codeReviewConfig,
+                adaptiveProfile,
+            )
+        ) {
+            if (enabled) {
+                this.logger.log({
+                    message: `[repo-instructions] skipped for PR#${prNumber}: adaptive-fit profile ${adaptiveProfile.kind} drops optional context`,
+                    context: this.stageName,
+                    metadata: { ...logMetadata, profile: adaptiveProfile.kind },
+                });
+            }
+            return undefined;
+        }
+
+        const organizationAndTeamData = context.organizationAndTeamData;
+        const repository = {
+            id: String(context.repository?.id ?? ''),
+            name: context.repository?.name,
+        };
+        // The target branch, never the head: what a PR is checked against is
+        // what the team merged, not text the PR itself adds or edits.
+        const ref = context.pullRequest?.base?.ref;
+        if (!ref) {
+            this.logger.warn({
+                message: `[repo-instructions] skipped for PR#${prNumber}: target branch unknown`,
+                context: this.stageName,
+                metadata: logMetadata,
+            });
+            return undefined;
+        }
+        const startedAt = Date.now();
+
+        const result = await collectRepoInstructions({
+            changedFiles: changedFiles.map((f) => f.filename),
+            listFiles: async () => {
+                const files =
+                    (await this.codeManagementService.getRepositoryAllFiles({
+                        organizationAndTeamData,
+                        repository,
+                        filters: {
+                            branch: ref,
+                            filePatterns: [
+                                ...AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS,
+                            ],
+                        },
+                    })) ?? [];
+                return files.map((f: { path: string }) => f.path);
+            },
+            readFile: async (path) => {
+                const response =
+                    await this.codeManagementService.getRepositoryContentFile({
+                        organizationAndTeamData,
+                        repository,
+                        file: { filename: path },
+                        pullRequest: { head: { ref }, base: { ref } },
+                    });
+                const raw = response?.data?.content;
+                if (!raw) return null;
+                return response?.data?.encoding === 'base64'
+                    ? Buffer.from(raw, 'base64').toString('utf-8')
+                    : raw;
+            },
+        });
+
+        const bytes = result.files.reduce(
+            (sum, f) => sum + Buffer.byteLength(f.content),
+            0,
+        );
+        this.logger.log({
+            message: `[repo-instructions] PR#${prNumber}: indexed=${result.indexedCount} inlined=${result.files.length} dropped=${result.dropped.length} bytes=${bytes} truncated=${result.truncated}${result.error ? ` error=${result.error}` : ''}`,
+            context: this.stageName,
+            metadata: {
+                ...logMetadata,
+                ref,
+                durationMs: Date.now() - startedAt,
+                indexed: result.indexedCount,
+                inlined: result.files.map((f) => f.path),
+                dropped: result.dropped,
+                bytes,
+                truncated: result.truncated,
+                error: result.error,
+            },
+        });
+
+        return result.files.length ? result : undefined;
     }
 
     /**
@@ -705,6 +820,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     changedFiles,
                 );
 
+            const repoInstructions = await this.resolveRepoInstructions(
+                context,
+                changedFiles,
+                adaptiveProfile,
+                prNumber,
+            );
+
             const result = await this.reviewOrchestrator.execute(
                 buildOrchestratorInput(context, {
                     changedFiles,
@@ -718,6 +840,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     heavy: resolvedHeavy,
                     kodyRules: await this.prepareKodyRulesForReview(context),
                     linkedRepoAccess,
+                    repoInstructions,
                 }),
             );
 

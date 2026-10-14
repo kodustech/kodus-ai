@@ -224,6 +224,7 @@ export async function runAgentLoopViaCore(
             // run at all (not fast/self-contained); harmless otherwise.
             heavy: !!input.heavy && !skipHeavyPasses,
             previousDecisions: input.previousDecisions,
+            repoInstructions: input.repoInstructions,
             telemetryMetadata: input.telemetryMetadata,
             agentName: input.agentName,
             usageRunName: input.usageRunName,

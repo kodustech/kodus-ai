@@ -27,8 +27,13 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 import {
     buildVerifierPrompt,
     VERIFIER_REPEAT_RULE,
+    VERIFIER_REPO_INSTRUCTION_RULE,
 } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
-import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import {
+    formatPreviousDecisions,
+    renderRepoInstructionFiles,
+} from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import type { RepoInstructionsContext } from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/structured-output-repair';
 import {
     recoverVerdictObject,
@@ -133,12 +138,26 @@ export function buildVerifierAgentSpec(
     };
 }
 
+function repoInstructionEvidence(
+    finding: FinderSuggestion,
+    repoInstructions?: RepoInstructionsContext,
+): string {
+    if (finding.label !== 'repo_instruction') return '';
+    const files = repoInstructions?.files ?? [];
+    const block = files.length
+        ? `<RepositoryInstructions>\n${renderRepoInstructionFiles(files).join('\n')}\n</RepositoryInstructions>`
+        : '<RepositoryInstructions>No instruction files were provided for this review.</RepositoryInstructions>';
+    return `Label: repo_instruction\n${VERIFIER_REPO_INSTRUCTION_RULE}\n${block}`;
+}
+
 /** Format a finding into the verifier's per-run task prompt (HV2 evidence).
  *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
- *  file — see LlmVerifier.verify(). */
+ *  file — see LlmVerifier.verify(). `repoInstructions` is read only for a
+ *  `repo_instruction` candidate. */
 export function verifierPromptFor(
     finding: FinderSuggestion,
     previousDecisions?: readonly PrDecisionRecord[],
+    repoInstructions?: RepoInstructionsContext,
 ): string {
     const bundle = [
         `File: ${finding.relevantFile}`,
@@ -148,6 +167,7 @@ export function verifierPromptFor(
         `Severity: ${finding.severity ?? 'unknown'}`,
         `Claim: ${finding.suggestionContent}`,
         finding.existingCode ? `Code:\n${finding.existingCode}` : '',
+        repoInstructionEvidence(finding, repoInstructions),
         formatPreviousDecisions(previousDecisions),
         previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
     ]
@@ -273,6 +293,9 @@ export interface LlmVerifierParams {
      *  NOT done here (line numbers shift across commits); the model judges
      *  whether a same-file record is "the same issue" semantically. */
     previousDecisions?: PrDecisionRecord[];
+    /** The coding-agent instructions the finder reviewed against; evidence
+     *  for `repo_instruction` candidates only. */
+    repoInstructions?: RepoInstructionsContext;
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -356,7 +379,11 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         const state = await this.runner.run(
             spec,
             {
-                prompt: verifierPromptFor(candidate, matchingDecisions),
+                prompt: verifierPromptFor(
+                    candidate,
+                    matchingDecisions,
+                    this.params.repoInstructions,
+                ),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),
                 ),

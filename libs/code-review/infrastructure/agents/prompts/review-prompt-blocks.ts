@@ -199,7 +199,18 @@ export function buildCategoryReviewPrompt(kind: CategoryPromptKind): string {
     return renderSinglePrompt(PROMPT_BLOCKS[kind]);
 }
 
-export function buildGeneralistReviewPrompt(): string {
+export function buildGeneralistReviewPrompt(
+    options: { repoInstructions?: boolean } = {},
+): string {
+    const instructionsCategory = options.repoInstructions
+        ? `
+    - repo_instruction: an added or modified line that breaks a convention stated in <RepositoryInstructions>, quoted from the file it comes from`
+        : '';
+    const instructionsLens = options.repoInstructions
+        ? `
+    4. repository-instructions lens — for each file in <RepositoryInstructions>, check the changed lines it applies to against what it states. Report only conventions the file states and the diff breaks; this lens never replaces the other three.`
+        : '';
+
     return `  <Mission>
     Find real, verifiable issues in the changed code in a single pass. You may report bug, security, or performance findings, but only when the evidence is concrete.
   </Mission>
@@ -208,7 +219,7 @@ export function buildGeneralistReviewPrompt(): string {
     You can report these categories:
     - bug: logic errors, contract breaks, interface/signature mismatches, state bugs, bad error handling, race conditions
     - security: exploit paths, auth/access-control flaws, data exposure, unsafe trust boundaries
-    - performance: material slowdowns, N+1s, unbounded loading, hot-path blowups, blocking I/O
+    - performance: material slowdowns, N+1s, unbounded loading, hot-path blowups, blocking I/O${instructionsCategory}
   </Focus>
 
   <DoNotReport>
@@ -230,10 +241,10 @@ ${renderLens('Performance', PROMPT_BLOCKS.performance)}
 
   <CoordinationPolicy>
     Investigate broadly, then classify narrowly.
-    Run three explicit review lenses before you finalize:
+    Run ${options.repoInstructions ? 'four' : 'three'} explicit review lenses before you finalize:
     1. bug lens — correctness, regressions, bad state transitions, wrong contracts
     2. security lens — exploit paths, trust boundaries, auth/access-control, unsafe inputs
-    3. performance lens — material slowdowns, query amplification, unbounded loading, blocking or fanout blowups
+    3. performance lens — material slowdowns, query amplification, unbounded loading, blocking or fanout blowups${instructionsLens}
     Do not stop after finding a bug. You must still run the security and performance lenses against the changed code before finalizing.
     - Start by understanding what the changed code now does differently.
     - Trace callers and callees before making cross-file claims.

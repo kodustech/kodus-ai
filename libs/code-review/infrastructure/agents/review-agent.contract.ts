@@ -23,6 +23,7 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import type { RepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
+import type { RepoInstructionsContext } from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 
 import { BYOKProvider } from '@libs/llm/model-providers';
@@ -41,6 +42,17 @@ import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/
 import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
 
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
+
+/**
+ * Labels a reviewer may put on a finding. `repo_instruction` marks a change
+ * that breaks one of the repository's coding-agent instructions; only the
+ * generalist may emit it, and only when instructions were collected.
+ */
+export type ReviewFindingLabel =
+    | 'bug'
+    | 'security'
+    | 'performance'
+    | 'repo_instruction';
 
 /**
  * Category-specific agent configuration provided by each concrete subclass.
@@ -191,6 +203,13 @@ export interface ReviewRuleConfig {
     generationMain?: string;
     /** Categories allowed for this run when using a mixed/generalist reviewer. */
     requestedCategories?: Array<'bug' | 'security' | 'performance'>;
+    /**
+     * The repository's coding-agent instructions (CLAUDE.md, AGENTS.md, ...)
+     * that govern the changed files, when the repository opted in. Untrusted
+     * repository text: conventions to check the diff against, never
+     * instructions to the reviewer.
+     */
+    repoInstructions?: RepoInstructionsContext;
     /** Review mode: 'fast' skips heavy passes (verify, coverage recovery, synthesis rescue) and caps agent steps; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
     reviewMode?: 'fast' | 'normal' | 'deep';
 }
@@ -412,6 +431,10 @@ export interface AgentLoopInput {
      *  `systemPrompt`/`userPrompt` above (see `formatPreviousDecisions` in
      *  prompt-builder.ts), so this field exists ONLY for the verifier hop. */
     previousDecisions?: PrDecisionRecord[];
+    /** The coding-agent instructions already in `systemPrompt`; like
+     *  `previousDecisions`, carried here only for the verifier, which judges
+     *  `repo_instruction` findings against them. */
+    repoInstructions?: RepoInstructionsContext;
     /** Reasoning effort level from BYOK config. Mapped to provider-specific
      *  providerOptions (anthropic.thinking, google.thinkingConfig, etc). */
     reasoningEffort?: ReasoningEffort;
