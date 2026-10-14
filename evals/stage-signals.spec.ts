@@ -155,6 +155,7 @@ describe('stage-signals', () => {
     });
 
     it('reports kody-rules from its own result: occurrence recall against its floor, with specificity', () => {
+        // Made-up floors and levels: the real ones live only in evals/kody-rules/kody-targets.json.
         const result = {
             model: 'deepseek-v4-flash@fireworks',
             cases: 14,

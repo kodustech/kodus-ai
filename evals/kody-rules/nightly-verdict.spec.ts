@@ -1,5 +1,5 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { decide, pool } = require('./nightly-verdict');
+const { decide, pool, nextState } = require('./nightly-verdict');
 
 // Made-up floors: the real ones live only in kody-targets.json.
 const floors = { occurrenceRecall: 0.8, specificity: 0.9 };
@@ -51,6 +51,15 @@ describe('kody-rules nightly verdict', () => {
         expect(decide({ first: null })).toMatchObject({ verdict: 'infra', mention: false });
         expect(decide({ first: run(0, { erroredRuns: 10 }) })).toMatchObject({ verdict: 'infra', mention: false });
         expect(decide({ first: run(30), confirm: null })).toMatchObject({ verdict: 'infra', mention: false });
+    });
+
+    it('keeps the last measured state through a night that did not measure, so a drop does not alert twice', () => {
+        const red = { verdict: 'regression', occurrenceRecall: 0.7, specificity: 1 };
+        const kept = nextState('infra', null, red);
+        expect(kept).toEqual(red);
+        expect(decide({ first: run(30), confirm: run(31), previous: kept })).toMatchObject({ verdict: 'still-red', mention: false });
+        expect(nextState('infra', null, null)).toMatchObject({ verdict: 'infra' });
+        expect(nextState('pass', run(40), red)).toMatchObject({ verdict: 'pass', occurrenceRecall: 40 / 43 });
     });
 
     it('pools counts, not rates', () => {

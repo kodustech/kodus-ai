@@ -145,7 +145,9 @@ jobs:
                       node evals/shared/engine-files.js changed engine-files.txt changed-files.txt > engine-changes.txt
                       node evals/shared/engine-files.js changed kody-rules-files.txt changed-files.txt --runner=evals/kody-rules/real-agent.js > kody-rules-changes.txt
                   fi
-                  if [ "$FORCE" = "true" ] || [ -z "$base" ] || [ -s kody-rules-changes.txt ]; then
+                  # changed-files.txt exists only when the diff against $base was
+                  # computed; without it nothing is known, so measure.
+                  if [ "$FORCE" = "true" ] || [ -z "$base" ] || [ ! -f changed-files.txt ] || [ -s kody-rules-changes.txt ]; then
                       echo "kody_rules_run=true" >> "$GITHUB_OUTPUT"
                       echo "kody-rules: measuring ($(wc -l < kody-rules-changes.txt) of its files changed since ${base:-no base})"
                   else

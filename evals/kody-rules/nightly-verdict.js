@@ -57,6 +57,14 @@ function pool(a, b) {
     };
 }
 
+// The state the next night compares with. A night that did not measure is not
+// a quality result: it keeps the last measured state, so a drop that already
+// alerted stays red without mentioning anyone again.
+function nextState(verdict, final, previous) {
+    if (verdict === 'infra' && previous) return previous;
+    return { verdict, occurrenceRecall: final?.occurrenceRecall ?? null, specificity: final?.specificity ?? null };
+}
+
 function decide({ first, confirm, previous }) {
     if (!measured(first)) return { verdict: 'infra', final: first || null, mention: false };
     if (!belowFloor(first)) return { verdict: 'pass', final: first, mention: false };
@@ -103,9 +111,10 @@ function main() {
         console.error('usage: nightly-verdict.js --first=<result.json> [--confirm=<result.json>] [--previous=<state.json>] --out=<final.json> --state=<state.json>');
         return 2;
     }
-    const { verdict, final, mention } = decide({ first: readJson(arg('first')), confirm: readJson(arg('confirm')), previous: readJson(arg('previous')) });
+    const previous = readJson(arg('previous'));
+    const { verdict, final, mention } = decide({ first: readJson(arg('first')), confirm: readJson(arg('confirm')), previous });
     fs.writeFileSync(out, `${JSON.stringify({ ...(final || {}), verdict }, null, 2)}\n`);
-    fs.writeFileSync(statePath, `${JSON.stringify({ verdict, occurrenceRecall: final?.occurrenceRecall ?? null, specificity: final?.specificity ?? null }, null, 2)}\n`);
+    fs.writeFileSync(statePath, `${JSON.stringify(nextState(verdict, final, previous), null, 2)}\n`);
     const msg = message(verdict, final);
     console.log(`${verdict}${mention ? ' (mention)' : ''}: ${msg.title} — ${msg.description}`);
     if (process.env.GITHUB_OUTPUT) {
@@ -117,4 +126,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { decide, pool, WORSE };
+module.exports = { decide, pool, nextState, WORSE };
