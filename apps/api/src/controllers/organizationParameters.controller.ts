@@ -54,6 +54,7 @@ import {
     Body,
     Controller,
     Delete,
+    ForbiddenException,
     Get,
     Inject,
     Post,
@@ -86,6 +87,19 @@ import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
 @UseGuards(TenantScopeGuard)
+/**
+ * Keys the generic create-or-update endpoint must refuse (GHSA-vhp8 #1).
+ * These are privileged/system-managed and have their own controllers; the
+ * frontend never writes them here. A denylist (not an allowlist) is used so
+ * ordinary self-service config keys keep working — only these are blocked.
+ */
+const SENSITIVE_ORG_PARAM_KEYS = new Set<OrganizationParametersKey>([
+    OrganizationParametersKey.LICENSE_KEY,
+    OrganizationParametersKey.LICENSE_ASSIGNED_USERS,
+    OrganizationParametersKey.SPEND_LIMIT_CONFIG,
+    OrganizationParametersKey.FIRST_REVIEW_AT,
+]);
+
 @Controller('organization-parameters')
 export class OrganizationParametersController {
     constructor(
@@ -152,6 +166,17 @@ export class OrganizationParametersController {
             configValue: any;
         },
     ) {
+        // Privileged keys must not be writable through this generic endpoint —
+        // they are managed by dedicated controllers (license/billing) or set
+        // by the system. Without this, any member could e.g. zero the spend
+        // limit or inject a license key (GHSA-vhp8-28q6-jvrj #1). The shared
+        // use case still lets those dedicated flows set them.
+        if (SENSITIVE_ORG_PARAM_KEYS.has(body.key)) {
+            throw new ForbiddenException(
+                `Parameter "${body.key}" cannot be set through this endpoint`,
+            );
+        }
+
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {

@@ -1,3 +1,7 @@
+import { ForbiddenException } from '@nestjs/common';
+
+import { OrganizationParametersKey } from '@libs/core/domain/enums';
+
 import { CodeManagementController } from './codeManagement.controller';
 import { OrganizationParametersController } from './organizationParameters.controller';
 
@@ -78,5 +82,53 @@ describe('tenant isolation — organizationId comes from the principal', () => {
                 }),
             }),
         );
+    });
+});
+
+/**
+ * GHSA-vhp8-28q6-jvrj #1 — the generic create-or-update endpoint accepted the
+ * full key enum, letting any member write privileged keys (spend limit,
+ * license). It must refuse those while still allowing ordinary config keys.
+ */
+describe('organization-parameters create-or-update — key denylist (GHSA-vhp8 #1)', () => {
+    const makeController = () => {
+        const controller: any = Object.create(
+            OrganizationParametersController.prototype,
+        );
+        const execute = jest.fn().mockResolvedValue({});
+        controller.createOrUpdateOrganizationParametersUseCase = { execute };
+        controller.request = { user: { organization: { uuid: 'o1' } } };
+        return { controller, execute };
+    };
+
+    it('refuses a privileged key (SPEND_LIMIT_CONFIG)', async () => {
+        const { controller, execute } = makeController();
+        await expect(
+            controller.createOrUpdate({
+                key: OrganizationParametersKey.SPEND_LIMIT_CONFIG,
+                configValue: { monthlyLimit: 0 },
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('refuses LICENSE_KEY', async () => {
+        const { controller, execute } = makeController();
+        await expect(
+            controller.createOrUpdate({
+                key: OrganizationParametersKey.LICENSE_KEY,
+                configValue: 'x',
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('allows an ordinary self-service key (TIMEZONE_CONFIG)', async () => {
+        const { controller, execute } = makeController();
+        await controller.createOrUpdate({
+            key: OrganizationParametersKey.TIMEZONE_CONFIG,
+            configValue: { timezone: 'UTC' },
+        });
+        expect(execute).toHaveBeenCalled();
     });
 });
