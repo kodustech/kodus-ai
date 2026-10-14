@@ -119,7 +119,10 @@ describe('stage-signals', () => {
         const results = [...allOk(wiringSteps), { step: 'pr-paths-filter', ok: false, problem: 'incomplete trace', ms: 0, calls: 0 }];
         const rows: Row[] = wiringRows(results);
         for (const stage of scheduled) expect(rows.find((r) => r.name === `evals.stage.${stage.id}`)?.status).toBe('infra');
-        expect(rows.find((r) => r.name === 'evals.stage.dedup')?.meta.reason).toBe('wiring smoke failed: pr-paths-filter: incomplete trace');
+        expect(rows.find((r) => r.name === 'evals.stage.dedup')?.meta).toMatchObject({
+            reason: 'wiring smoke failed: pr-paths-filter: incomplete trace',
+            harness: 'wiring smoke failed: pr-paths-filter: incomplete trace',
+        });
         expect(rows.find((r) => r.name === 'evals.stage.posting')?.status).toBe('skipped');
         expect(wiringRows([...allOk(wiringSteps), { step: 'pr-paths-filter', ok: true, problem: null }]).find((r: Row) => r.name === 'evals.stage.dedup')?.status).toBe('green');
     });

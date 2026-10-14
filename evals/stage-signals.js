@@ -94,7 +94,7 @@ function wiringRows(results, stages = STAGES) {
                 };
             }
             if (harnessReason) {
-                return { name: NAME_PREFIX + stage.id, status: 'infra', value: null, unit: null, meta: { ...meta, reason: harnessReason } };
+                return { name: NAME_PREFIX + stage.id, status: 'infra', value: null, unit: null, meta: withHarness({ ...meta, reason: harnessReason }) };
             }
             return { name: NAME_PREFIX + stage.id, status: 'green', value: null, unit: null, meta };
         });
