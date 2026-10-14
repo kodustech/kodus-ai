@@ -6,7 +6,7 @@
 // reconciliation and @@PATH_MISMATCH@@ drop. Tools are served from a
 // deterministic replay (no sandbox / GitHub), exactly like the finder eval.
 //
-//   node evals/kody-rules/real-agent.js [--runs=3] [--model=gpt-5.4-mini]
+//   node evals/kody-rules/real-agent.js [--runs=3] [--model=gpt-5.4-mini] [--gate] [--output=<result.json>]
 //
 // The model is driven through the real `buildModelFromSlot` self-hosted path:
 // API_LLM_PROVIDER_MODEL + API_OPEN_AI_API_KEY (+ optional API_OPENAI_FORCE_BASE_URL).
@@ -285,6 +285,25 @@ function unifiedPatch(numbered) {
     return out.join('\n');
 }
 
+// LLM.run reports each model call's usage through this port; production registers
+// a billing span there (libs/llm/llm-observability.ts). The sharded agent makes its
+// calls through LLM.run, not the agent-run usage span stubbed above, so without
+// this the run reported 0 tokens and no cost.
+function countTokens() {
+    const { setLlmObservability } = require(path.join(__dirname, '../../libs/llm/llm-observability.ts'));
+    setLlmObservability({
+        runAiSdkLLMInSpan: async ({ exec }) => {
+            const result = await exec();
+            const u = (result && result.usage) || {};
+            global.__EVAL_TOK = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
+            global.__EVAL_TOK.in += u.inputTokens ?? 0;
+            global.__EVAL_TOK.out += u.outputTokens ?? 0;
+            global.__EVAL_TOK.cacheRead += u.inputTokenDetails?.cacheReadTokens ?? u.cachedInputTokens ?? 0;
+            return result;
+        },
+    });
+}
+
 async function main() {
     // tier-0 model ids route through the shared seam (any supported provider);
     // legacy local presets (DO models) keep working via the registry below.
@@ -302,6 +321,7 @@ async function main() {
     }
 
     const provider = buildProvider();
+    countTokens();
 
     const LINE_TOL = 2; // a flag "lands" on a real site if within ±2 lines
     let multiTotalSites = 0, multiCaughtSites = 0, caughtAllRuns = 0, totalMultiRuns = 0;
@@ -403,6 +423,34 @@ async function main() {
     console.log(`specificity (files):  ${pct(cleanFiles - falseAlarmFiles, cleanFiles)}%  (${falseAlarmFiles}/${cleanFiles} clean files false-alarmed)`);
     const tok = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
     console.log(`TOKENS: input=${tok.in}  output=${tok.out}  cacheRead=${tok.cacheRead}  cacheWrite=${tok.cacheWrite}  over ${totalRuns} agentic sessions`);
+
+    // --output: the counts behind every rate, so a confirming run can be pooled
+    // with the first (nightly-verdict.js) and the nightly can report the stage.
+    if (args.output) {
+        const ratio = (a, b) => (b ? a / b : null);
+        const result = {
+            model: MODELKEY,
+            dataset: DATASET,
+            runs: RUNS,
+            cases: cases.length,
+            sites: occTotal,
+            caught: occCaught,
+            flagged: flaggedTotal,
+            offSite: lineNoiseTotal,
+            cleanFiles,
+            falseAlarmFiles,
+            occurrenceRecall: ratio(occCaught, occTotal),
+            linePrecision: ratio(flaggedTotal - lineNoiseTotal, flaggedTotal),
+            specificity: cleanFiles ? (cleanFiles - falseAlarmFiles) / cleanFiles : null,
+            floors: { occurrenceRecall: OCC_MIN / 100, specificity: SPEC_MIN / 100 },
+            observed: MODEL_TARGET.observed ? { occurrenceRecall: MODEL_TARGET.observed.occ / 100, specificity: MODEL_TARGET.observed.spec / 100 } : null,
+            tokens: tok,
+            erroredRuns,
+            totalRuns,
+        };
+        fs.mkdirSync(path.dirname(path.resolve(args.output)), { recursive: true });
+        fs.writeFileSync(args.output, `${JSON.stringify(result, null, 2)}\n`);
+    }
 
     if (GATE) {
         // Infra guard: if the environment (quota/rate-limit/key) broke enough

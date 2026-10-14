@@ -4,11 +4,11 @@ import * as path from 'path';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { STAGES, GROUPS, PLUMBING } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { wiringRows, nightlyRows } = require('./stage-signals');
+const { wiringRows, nightlyRows, READERS } = require('./stage-signals');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { tier0 } = require('./shared/tier0-models');
 
-type Stage = { id: string; name: string; group: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: boolean; friday?: string; byHand?: string[] };
+type Stage = { id: string; name: string; group: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: string; friday?: string; byHand?: string[] };
 type Row = { name: string; status: string; value: number | null; meta: Record<string, unknown> };
 
 // Steps of evals/wiring-smoke.js that check the harness, not a review stage.
@@ -152,6 +152,31 @@ describe('stage-signals', () => {
         expect(finder.meta).toMatchObject({ floor: 0.24, baseline: 0.357, precision: 0.5 });
         expect(nightlyRows(nightly, 'pass')[0].status).toBe('green');
         expect(nightlyRows(null, 'infra')[0]).toMatchObject({ status: 'infra', value: null });
+    });
+
+    it('reports kody-rules from its own result: occurrence recall against its floor, with specificity', () => {
+        const result = {
+            model: 'deepseek-v4-flash@fireworks',
+            cases: 14,
+            runs: 2,
+            sites: 86,
+            occurrenceRecall: 0.7,
+            specificity: 1,
+            linePrecision: 0.9,
+            floors: { occurrenceRecall: 0.8, specificity: 0.9 },
+            observed: { occurrenceRecall: 0.93, specificity: 1 },
+            tokens: { in: 10, out: 1 },
+        };
+        const [row]: Row[] = nightlyRows(result, 'regression', 'kody-rules');
+        expect(row).toMatchObject({ name: 'evals.stage.kody-rules', status: 'red', value: 0.7 });
+        expect(row.meta).toMatchObject({ floor: 0.8, baseline: 0.93, specificity: 1, specificity_floor: 0.9, metric: 'of known rule violations flagged' });
+        expect(row.meta.caveat).toEqual(expect.stringContaining('mechanical rules only'));
+        expect(nightlyRows(null, 'infra', 'kody-rules')[0]).toMatchObject({ status: 'infra', value: null });
+        expect(nightlyRows(result, 'pass', 'finder')[0]).toMatchObject({ status: 'infra' });
+    });
+
+    it('has a reader for every nightly-measured stage', () => {
+        for (const stage of (STAGES as Stage[]).filter((s) => s.nightly)) expect(Object.keys(READERS)).toContain(stage.nightly);
     });
 
     it('lists the tier-0 models a Friday stage runs on, and no models for any other stage', () => {

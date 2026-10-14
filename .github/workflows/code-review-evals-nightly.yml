@@ -42,7 +42,15 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 #   until an engine file changes again.
 # - The agent's reading never lowers an alert.
 #
-# Jobs: changed → measure → investigate (red nights only) → notify.
+# Jobs: changed → measure → investigate (red nights only) → notify, and
+# kody-rules beside them.
+#
+# kody-rules: the Kody Rules eval (evals/kody-rules, github-cases) on the same
+# model, only when a file it loads changed. Same alerting rules: a run below the
+# floor is measured again and the two are pooled (evals/kody-rules/nightly-
+# verdict.js); only a confirmed new or worse drop mentions people; infra never
+# does. Its result is the evals.stage.kody-rules row. A night where it did not
+# measure fails the run, so it is not a baseline.
 #
 # Secrets (repo-level): BYOK_FIREWORKS_API_KEY (model), BYOK_OPENAI_API_KEY
 # (judge), CLAUDE_CODE_OAUTH_TOKEN (investigation, subscription auth),
@@ -82,6 +90,7 @@ jobs:
         timeout-minutes: 20
         outputs:
             run: ${{ steps.diff.outputs.run }}
+            kody_rules_run: ${{ steps.diff.outputs.kody_rules_run }}
             base: ${{ steps.diff.outputs.base }}
         steps:
             - uses: actions/checkout@v6.0.2
@@ -103,9 +112,10 @@ jobs:
                   EOF
             # Against the scripted model, no keys: a broken harness would spend the
             # night's budget measuring nothing. Also records the files finder-recall
-            # loads — the only changes this night can measure.
+            # loads — the only changes this night can measure — and those the
+            # kody-rules eval loads.
             - name: Wiring smoke + files finder-recall loads
-              run: node evals/wiring-smoke.js --engine-files=engine-files.txt --results=wiring-results.json
+              run: node evals/wiring-smoke.js --engine-files=engine-files.txt --kody-rules-files=kody-rules-files.txt --results=wiring-results.json
             # One row per review stage (evals/stages.js) from tonight's wiring
             # smoke: which stages have an eval, and whether it still runs. Every
             # night, measured or not; the finder's row comes from the measure job.
@@ -126,12 +136,21 @@ jobs:
                   FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
               run: |
                   : > engine-changes.txt
+                  : > kody-rules-changes.txt
                   base=$(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
                       --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
                   echo "base=$base" >> "$GITHUB_OUTPUT"
                   if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
                       git diff --name-only "$base" HEAD > changed-files.txt
                       node evals/shared/engine-files.js changed engine-files.txt changed-files.txt > engine-changes.txt
+                      node evals/shared/engine-files.js changed kody-rules-files.txt changed-files.txt > kody-rules-changes.txt
+                  fi
+                  if [ "$FORCE" = "true" ] || [ -z "$base" ] || [ -s kody-rules-changes.txt ]; then
+                      echo "kody_rules_run=true" >> "$GITHUB_OUTPUT"
+                      echo "kody-rules: measuring ($(wc -l < kody-rules-changes.txt) of its files changed since ${base:-no base})"
+                  else
+                      echo "kody_rules_run=false" >> "$GITHUB_OUTPUT"
+                      echo "kody-rules: none of the $(wc -l < kody-rules-files.txt) files it loads changed since $base — skipping"
                   fi
                   # A confirmed drop that already alerted is not re-measured (or
                   # re-posted) until an engine file changes after it.
@@ -174,6 +193,8 @@ jobs:
                   path: |
                       engine-changes.txt
                       engine-files.txt
+                      kody-rules-changes.txt
+                      kody-rules-files.txt
                   retention-days: 90
             - name: Notify Discord (harness broken)
               if: failure()
@@ -186,6 +207,100 @@ jobs:
                   description: |
                       Wiring smoke failed before spending anything · `pnpm eval:wiring` reproduces it
                       [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+    kody-rules:
+        name: "Kody Rules · DeepSeek · 14 PRs"
+        needs: changed
+        if: needs.changed.outputs.kody_rules_run == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            # The last measured night's verdict, so a drop that already alerted
+            # stays red without mentioning anyone again.
+            - name: Last measured night
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  for id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
+                      --branch main --status completed --limit 30 --json databaseId --jq '.[].databaseId'); do
+                      [ "$id" = "$GITHUB_RUN_ID" ] && continue
+                      has=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts" \
+                          --jq '[.artifacts[] | select(.name == "kody-rules-report" and (.expired | not))] | length')
+                      [ "$has" = "0" ] && continue
+                      gh run download "$id" -R "$GITHUB_REPOSITORY" -n kody-rules-report -D previous >/dev/null 2>&1 || true
+                      break
+                  done
+            - name: Run kody-rules (measured again when below the floor)
+              id: run
+              env:
+                  BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+              # exit 1 = below the floor: measure the same commit again, then
+              # nightly-verdict.js pools both runs and decides.
+              run: |
+                  kr() { node evals/kody-rules/real-agent.js --dataset=github-cases --model="$MODEL" --runs=1 --gate --output="$1"; }
+                  mkdir -p kody-rules-report
+                  code=0; kr kody-rules-report/first.json || code=$?
+                  confirm=""
+                  if [ "$code" -eq 1 ]; then
+                      echo "::notice::below the floor, measuring the same commit again before alerting"
+                      kr kody-rules-report/confirm.json || true
+                      confirm="--confirm=kody-rules-report/confirm.json"
+                  fi
+                  node evals/kody-rules/nightly-verdict.js --first=kody-rules-report/first.json $confirm \
+                      --previous=previous/state.json --out=kody-rules-report/final.json --state=kody-rules-report/state.json
+            - name: Stage signal (kody-rules)
+              if: always()
+              env:
+                  VERDICT: ${{ steps.run.outputs.verdict }}
+              run: node evals/stage-signals.js --nightly=kody-rules-report/final.json --stage=kody-rules --verdict="${VERDICT:-infra}" --out=stage-rows-kody-rules.json
+            - name: Report stage signal (kody-rules)
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  rows: stage-rows-kody-rules.json
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: kody-rules-report
+                  path: kody-rules-report/
+                  retention-days: 90
+            - name: Notify Discord
+              if: always() && steps.run.outputs.post == 'true'
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: ${{ steps.run.outputs.status }}
+                  title: ${{ steps.run.outputs.title }}
+                  description: |
+                      ${{ steps.run.outputs.description }}
+                      [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+                  nodetail: "true"
+                  content: ${{ steps.run.outputs.mention == 'true' && '@here' || '' }}
+            # A night that did not measure is never a baseline: failing the run
+            # keeps the next night from skipping it.
+            - name: Not measured
+              if: always() && steps.run.outputs.verdict != 'pass' && steps.run.outputs.verdict != 'oscillation' && steps.run.outputs.verdict != 'regression' && steps.run.outputs.verdict != 'still-red'
+              run: |
+                  echo "::error::kody-rules did not measure tonight (key, quota or crash); see the step above"
+                  exit 1
 
     measure:
         name: "finder recall · DeepSeek · 30 PRs"

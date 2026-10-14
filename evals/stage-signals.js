@@ -7,9 +7,10 @@
 //       nightly-measured ones: green or red from its wiring steps, infra when a
 //       step did not run, skipped for a stage the wiring smoke does not run
 //       (meta.measured says how it is checked: unit suite, E2E matrix, by hand, or not).
-//   node evals/stage-signals.js --nightly=<nightly.json> --verdict=<verdict> --out=<rows.json>
-//       the nightly-measured stages: recall against the floor, status from the
-//       nightly verdict (evals/ci-report.js).
+//   node evals/stage-signals.js --nightly=<result.json> --verdict=<verdict> [--stage=<id>] --out=<rows.json>
+//       one nightly-measured stage (default finder): its number against its
+//       floor, status from the nightly verdict (evals/ci-report.js for the
+//       finder, evals/kody-rules/nightly-verdict.js for kody-rules).
 //
 // Writes a JSON array of rows for .github/actions/report-signal (`rows`). Telemetry:
 // it never fails a job over a result, only over bad arguments (exit 2).
@@ -50,6 +51,8 @@ function baseMeta(stage) {
         wiring: stage.wiring,
         note: stage.note,
         by_hand: stage.byHand || [],
+        ...(stage.metric ? { metric: stage.metric, set: stage.set } : {}),
+        ...(stage.caveat ? { caveat: stage.caveat } : {}),
         ...(stage.history ? { history: stage.history } : {}),
         ...fridayMeta(stage),
     };
@@ -100,37 +103,58 @@ function wiringRows(results, stages = STAGES) {
         });
 }
 
-function nightlyRows(nightly, verdict, stages = STAGES) {
+// How each nightly-measured stage reads its result: the number, its floor, the
+// level it usually sits at, and what else the panel shows.
+const READERS = {
+    // evals/investigation/run-recall.js (after confirm-gate.js)
+    'finder-recall': (r) => {
+        const check = (r.gate?.checks || []).find((c) => c.name === 'recall_mean');
+        return {
+            value: r.metrics?.recall_mean,
+            floor: check?.floor ?? null,
+            baseline: r.gate?.observed?.recall_mean ?? null,
+            extra: { precision: r.metrics?.precision_mean ?? null, model: r.model || null, cases: r.cases ?? null, unmeasured: r.unmeasured ?? null },
+        };
+    },
+    // evals/kody-rules/real-agent.js --output (after nightly-verdict.js)
+    'kody-rules': (r) => ({
+        value: r.occurrenceRecall,
+        floor: r.floors?.occurrenceRecall ?? null,
+        baseline: r.observed?.occurrenceRecall ?? null,
+        extra: {
+            specificity: r.specificity ?? null,
+            specificity_floor: r.floors?.specificity ?? null,
+            line_precision: r.linePrecision ?? null,
+            model: r.model || null,
+            cases: r.cases ?? null,
+            sites: r.sites ?? null,
+            runs: r.runs ?? null,
+            tokens: r.tokens || null,
+        },
+    }),
+};
+
+function nightlyRows(result, verdict, stageId = 'finder', stages = STAGES) {
     return stages
-        .filter((stage) => stage.nightly)
+        .filter((stage) => stage.nightly && stage.id === stageId)
         .map((stage) => {
             const meta = baseMeta(stage);
-            const recall = nightly?.metrics?.recall_mean;
-            if (!nightly || !Number.isFinite(recall)) {
+            const read = result ? READERS[stage.nightly](result) : null;
+            if (!read || !Number.isFinite(read.value)) {
                 return {
                     name: NAME_PREFIX + stage.id,
                     status: 'infra',
                     value: null,
                     unit: 'ratio',
-                    meta: { ...meta, reason: nightly ? 'the nightly result has no recall' : 'no nightly result' },
+                    meta: { ...meta, reason: result ? 'the nightly result has no value' : 'no nightly result' },
                 };
             }
-            const check = (nightly.gate?.checks || []).find((c) => c.name === 'recall_mean');
             return {
                 name: NAME_PREFIX + stage.id,
                 status: VERDICT_STATUS[verdict] || 'infra',
-                value: recall,
+                value: read.value,
                 unit: 'ratio',
-                meta: {
-                    ...meta,
-                    floor: check?.floor ?? null,
-                    baseline: nightly.gate?.observed?.recall_mean ?? null,
-                    precision: nightly.metrics.precision_mean ?? null,
-                    model: nightly.model || null,
-                    cases: nightly.cases ?? null,
-                    unmeasured: nightly.unmeasured ?? null,
-                    verdict: verdict || null,
-                },
+                meta: { ...meta, floor: read.floor, baseline: read.baseline, ...read.extra, verdict: verdict || null },
             };
         });
 }
@@ -153,10 +177,10 @@ function main() {
     const wiring = arg('wiring');
     const nightly = arg('nightly');
     if (!out || (!wiring && !nightly)) {
-        console.error('usage: stage-signals.js (--wiring=<results.json> | --nightly=<nightly.json> --verdict=<v>) --out=<rows.json>');
+        console.error('usage: stage-signals.js (--wiring=<results.json> | --nightly=<result.json> --verdict=<v> [--stage=<id>]) --out=<rows.json>');
         return 2;
     }
-    const rows = wiring ? wiringRows(readJson(wiring)) : nightlyRows(readJson(nightly), arg('verdict'));
+    const rows = wiring ? wiringRows(readJson(wiring)) : nightlyRows(readJson(nightly), arg('verdict'), arg('stage') || 'finder');
     fs.writeFileSync(out, `${JSON.stringify(rows, null, 2)}\n`);
     for (const row of rows) console.log(`${row.status.padEnd(7)} ${row.name}${row.value === null ? '' : ` = ${row.value}`}`);
     return 0;
@@ -164,4 +188,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { wiringRows, nightlyRows, NAME_PREFIX };
+module.exports = { wiringRows, nightlyRows, READERS, NAME_PREFIX };
