@@ -67,7 +67,7 @@ const START = '<!-- kody-pr-summary:start -->';
 const END = '<!-- kody-pr-summary:end -->';
 const MOCK_SUMMARY = 'MOCK_GENERATED_SUMMARY_BODY';
 
-const { applyModelEnv } = require('../shared/tier0-models');
+const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
 const { buildEvalModel } = require('../shared/build-model');
 
 // exit-2 helper — infra errors ALWAYS fail (a broken model must never look green).
@@ -316,8 +316,11 @@ function routingChecks() {
     //    assertion: gpt-mini stays gpt-mini, gemini-flash stays gemini-flash.
     if (!MOCK) {
         const m = buildEvalModel({}, SUMMARY_DEFAULT);
-        if (m.modelId !== MODEL) {
-            failures.push(`self-hosted summary routed to '${m.modelId}', expected the configured '${MODEL}'`);
+        // A route served by another host (`@fireworks`) configures its
+        // doModel; that is the id the summary must use.
+        const configured = TIER0[MODEL]?.doModel || MODEL;
+        if (m.modelId !== configured) {
+            failures.push(`self-hosted summary routed to '${m.modelId}', expected the configured '${configured}'`);
         }
     }
     return failures;
