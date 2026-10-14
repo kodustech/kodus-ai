@@ -28,7 +28,8 @@
 //                on-demand an eval exists but nothing runs it on a schedule
 //                none      no eval
 //   wiring   — evals/wiring-smoke.js steps that run it (scripted or mocked);
-//              empty for an eval that runs in the unit test suite instead
+//              empty for an eval that runs elsewhere (unit suite, E2E matrix):
+//              its row is then `skipped` and `model` says how it is checked
 //   byHand   — evals that can measure it on a real model, but only when someone
 //              runs them by hand: what it takes to start measuring the stage
 //   nightly  — true when the nightly measures it with a real model; its row then

@@ -5,7 +5,8 @@
 //   node evals/stage-signals.js --wiring=<results.json> --out=<rows.json>
 //       results from `evals/wiring-smoke.js --results`. Every stage except the
 //       nightly-measured ones: green or red from its wiring steps, infra when a
-//       step did not run, skipped for a stage with no scheduled eval.
+//       step did not run, skipped for a stage the wiring smoke does not run
+//       (meta.measured says how it is checked: unit suite, E2E matrix, by hand, or not).
 //   node evals/stage-signals.js --nightly=<nightly.json> --verdict=<verdict> --out=<rows.json>
 //       the nightly-measured stages: recall against the floor, status from the
 //       nightly verdict (evals/ci-report.js).
@@ -65,6 +66,8 @@ function wiringRows(results, stages = STAGES) {
         .map((stage) => {
             const meta = baseMeta(stage);
             if (!stage.wiring.length) {
+                // Not run by the wiring smoke. Its eval may still run elsewhere on a
+                // schedule (unit suite, E2E matrix): meta.measured says which.
                 return { name: NAME_PREFIX + stage.id, status: 'skipped', value: null, unit: null, meta };
             }
             if (harness.length) {
