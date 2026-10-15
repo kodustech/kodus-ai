@@ -137,9 +137,11 @@ describe('WebhookContextService', () => {
                 [omarHerreraConfig, ikatecConfig],
             );
 
-            const result = await service.getContext(PlatformType.GITLAB, '93', {
-                host: 'gitlab.ikatec.cloud',
-            });
+            const result = await service.getContext(
+                PlatformType.GITLAB,
+                '93',
+                { host: 'gitlab.ikatec.cloud' },
+            );
 
             expect(result?.organizationAndTeamData.organizationId).toBe(
                 'org-ikatec',
@@ -148,20 +150,18 @@ describe('WebhookContextService', () => {
         });
 
         it('normalises host (full URL, trailing slash, casing) before comparing', async () => {
-            const configA = buildConfig(
-                'org-a',
-                'team-a',
-                'GitLab.IKATEC.cloud',
-            );
+            const configA = buildConfig('org-a', 'team-a', 'GitLab.IKATEC.cloud');
             const configB = buildConfig('org-b', 'team-b', 'vcs.789.com.mx');
 
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
                 [configA, configB],
             );
 
-            const result = await service.getContext(PlatformType.GITLAB, '93', {
-                host: 'https://gitlab.ikatec.cloud/agnus/agnuscloud',
-            });
+            const result = await service.getContext(
+                PlatformType.GITLAB,
+                '93',
+                { host: 'https://gitlab.ikatec.cloud/agnus/agnuscloud' },
+            );
 
             expect(result?.organizationAndTeamData.organizationId).toBe(
                 'org-a',
@@ -176,9 +176,11 @@ describe('WebhookContextService', () => {
                 [configA, configB],
             );
 
-            const result = await service.getContext(PlatformType.GITLAB, '93', {
-                host: 'unrelated.host',
-            });
+            const result = await service.getContext(
+                PlatformType.GITLAB,
+                '93',
+                { host: 'unrelated.host' },
+            );
 
             // Falls back to the first candidate from the original list.
             expect(result?.organizationAndTeamData.organizationId).toBe(
@@ -217,9 +219,11 @@ describe('WebhookContextService', () => {
                 [configWithoutHost, configIkatec],
             );
 
-            const result = await service.getContext(PlatformType.GITLAB, '93', {
-                host: 'gitlab.ikatec.cloud',
-            });
+            const result = await service.getContext(
+                PlatformType.GITLAB,
+                '93',
+                { host: 'gitlab.ikatec.cloud' },
+            );
 
             // Without the safeguard the filter would pick configIkatec, which
             // might be wrong if the legacy config (org-legacy) was actually the
