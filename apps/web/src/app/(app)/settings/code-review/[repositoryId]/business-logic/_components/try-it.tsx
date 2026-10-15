@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button } from "@components/ui/button";
 import { Card } from "@components/ui/card";
-import { Heading } from "@components/ui/heading";
 import { Input } from "@components/ui/input";
 import {
     useTestOnPullRequest,
@@ -39,26 +38,21 @@ export const ReadTask = ({
         });
 
     return (
-        <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">
-            <span className="flex flex-col">
-                <span className="text-text-primary text-sm font-medium">
-                    Read a task
-                </span>
-                <span className="text-text-secondary text-xs">
-                    See what Kody reads from one of your tasks with the source
-                    above, saved or not.
-                </span>
-            </span>
-            <div className="flex flex-wrap items-center gap-2">
-                <Input
-                    className="min-w-60 flex-1"
-                    placeholder="Task id or link, e.g. SAA-96, #12 or a ClickUp link"
-                    value={task}
-                    onChange={(e) => setTask(e.target.value)}
-                    onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-                        if (e.key === "Enter" && task.trim()) run();
-                    }}
-                />
+        <TestCard
+            title="Read a task"
+            hint="See what Kody reads from a task with the source above.">
+            <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                    <Input
+                        size="md"
+                        placeholder="Task id or link, e.g. SAA-96 or #12"
+                        value={task}
+                        onChange={(e) => setTask(e.target.value)}
+                        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                            if (e.key === "Enter" && task.trim()) run();
+                        }}
+                    />
+                </div>
                 <Button
                     size="md"
                     variant="secondary"
@@ -74,9 +68,30 @@ export const ReadTask = ({
                 </p>
             )}
             {tryRead.data && <TaskRead result={tryRead.data} />}
-        </Card>
+        </TestCard>
     );
 };
+
+/** The frame both tests share, so they read as one kind of thing. */
+const TestCard = ({
+    title,
+    hint,
+    children,
+}: {
+    title: string;
+    hint: string;
+    children: ReactNode;
+}) => (
+    <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">
+        <span className="flex flex-col">
+            <span className="text-text-primary text-sm font-medium">
+                {title}
+            </span>
+            <span className="text-text-secondary text-xs">{hint}</span>
+        </span>
+        {children}
+    </Card>
+);
 
 /**
  * The whole check on a pull request, with the settings on screen, saved or
@@ -113,30 +128,28 @@ export const TryIt = ({
     };
 
     return (
-        <section className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-                <Heading variant="h3">Check a pull request</Heading>
-                <p className="text-text-secondary text-sm">
-                    Runs the whole check with the settings on this page, saved
-                    or not, against the task the pull request references or the
-                    one you name. Nothing is posted until you choose to.
-                </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-                <Input
-                    className="min-w-60 flex-1"
-                    placeholder="Pull request link, e.g. https://github.com/acme/web/pull/47"
-                    value={prUrl}
-                    onChange={(e) => setPrUrl(e.target.value)}
-                    onKeyDown={runOnEnter}
-                />
-                <Input
-                    className="w-56"
-                    placeholder="Task (optional), e.g. SAA-96"
-                    value={task}
-                    onChange={(e) => setTask(e.target.value)}
-                    onKeyDown={runOnEnter}
-                />
+        <TestCard
+            title="Check a pull request"
+            hint="Runs the full check with the settings on this page, saved or not. Nothing is posted until you choose to.">
+            <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-[3]">
+                    <Input
+                        size="md"
+                        placeholder="Pull request link"
+                        value={prUrl}
+                        onChange={(e) => setPrUrl(e.target.value)}
+                        onKeyDown={runOnEnter}
+                    />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <Input
+                        size="md"
+                        placeholder="Task (optional)"
+                        value={task}
+                        onChange={(e) => setTask(e.target.value)}
+                        onKeyDown={runOnEnter}
+                    />
+                </div>
                 <Button
                     size="md"
                     variant="secondary"
@@ -174,7 +187,7 @@ export const TryIt = ({
                     onPost={() => post.mutate({ ...payload(), post: true })}
                 />
             )}
-        </section>
+        </TestCard>
     );
 };
 
