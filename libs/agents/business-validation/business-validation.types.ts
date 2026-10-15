@@ -27,6 +27,12 @@ export type TaskReference =
           /** Set when the key came from a tracker URL. */
           host?: 'linear' | 'jira';
           url?: string;
+          /**
+           * Written in lower case in a title or description (`feat(kod-10)`),
+           * where `gpt-5` and `node-22` are names: it counts only where a
+           * connected tracker has that team or project.
+           */
+          loose?: true;
       }
     | {
           kind: 'git_issue';

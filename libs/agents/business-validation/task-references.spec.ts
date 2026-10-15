@@ -168,15 +168,25 @@ describe("the team's own id pattern (#1884)", () => {
 });
 
 describe('task keys by case', () => {
-    it('reads a lowercase key only where trackers write one: the branch and the command', () => {
+    it('marks a lowercase key in prose as loose, and trusts it in the branch and the command', () => {
+        const loose = (sources: Parameters<typeof extractTaskReferences>[0]) =>
+            extractTaskReferences(sources).map(
+                (r) => `${r.id}${'loose' in r && r.loose ? ' loose' : ''}`,
+            );
         expect(
-            ids({ title: 'feat: summarize threads with gpt-5 mini' }),
-        ).toEqual([]);
-        expect(ids({ body: 'Moves to node-22 and es-2022.' })).toEqual([]);
-        expect(ids({ branch: 'nina/saa-96-sticky-notes' })).toEqual([
-            'key:SAA-96',
+            loose({ title: 'feat: summarize threads with gpt-5 mini' }),
+        ).toEqual(['GPT-5 loose']);
+        expect(loose({ title: 'feat(kod-10): sticky notes' })).toEqual([
+            'KOD-10 loose',
         ]);
-        expect(ids({ command: 'saa-96' })).toEqual(['key:SAA-96']);
+        expect(loose({ body: 'Moves to node-22 and es-2022.' })).toEqual([
+            'NODE-22 loose',
+            'ES-2022 loose',
+        ]);
+        expect(loose({ branch: 'nina/saa-96-sticky-notes' })).toEqual([
+            'SAA-96',
+        ]);
+        expect(loose({ command: 'saa-96' })).toEqual(['SAA-96']);
         expect(ids({ title: 'feat(SAA-96): sticky notes' })).toEqual([
             'key:SAA-96',
         ]);

@@ -1,5 +1,6 @@
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
 import { IntentJudge } from '@libs/agents/business-validation/judge/intent-judge';
+import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
 import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
 import { BusinessLogicValidationStage } from '@libs/code-review/pipeline/stages/business-logic-validation.stage';
@@ -95,6 +96,12 @@ export async function driveCurrentStage(
         const translate = jest
             .spyOn(IntentJudge.prototype, 'translate')
             .mockImplementation(async (message) => message);
+        // No model answers here, with or without a key in the environment:
+        // the agents that read or find a task are measured by
+        // evals/task-finder, and each case reads only what the direct read did.
+        const agentRun = jest
+            .spyOn(AiSdkAgentRunner.prototype, 'run')
+            .mockRejectedValue(new Error('no model in this eval'));
 
         // The real publisher, writing to a code host that records comments.
         const posted: string[] = [];
@@ -167,6 +174,7 @@ export async function driveCurrentStage(
         );
         judge.mockRestore();
         translate.mockRestore();
+        agentRun.mockRestore();
 
         const comment: string | undefined = posted[posted.length - 1];
         return {

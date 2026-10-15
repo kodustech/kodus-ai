@@ -23,6 +23,7 @@ export async function resolveTasks(
     context: TrackerReadContext,
 ): Promise<TaskResolution> {
     const attempts: ResolutionAttempt[] = [];
+    references = await withoutStrayKeys(references, trackers, context);
     if (!references.length) {
         return { kind: 'no_reference', attempts };
     }
@@ -152,6 +153,36 @@ function confirmed(
         !matchesTitleHint(reference, lookup.task.title)
         ? { status: 'not_found', tools: lookup.tools }
         : lookup;
+}
+
+/**
+ * Drops a lower-case key from a title or description (`node-22`) unless a
+ * connected tracker has its team or project, so `feat(kod-10)` reads KOD-10
+ * and a version number never reaches a tracker.
+ */
+async function withoutStrayKeys(
+    references: TaskReference[],
+    trackers: TaskTracker[],
+    context: TrackerReadContext,
+): Promise<TaskReference[]> {
+    const kept: TaskReference[] = [];
+    for (const reference of references) {
+        if (reference.kind !== 'key' || !reference.loose) {
+            kept.push(reference);
+            continue;
+        }
+        for (const tracker of trackers) {
+            if (
+                await tracker
+                    .ownsReference?.(reference, context)
+                    .catch(() => false)
+            ) {
+                kept.push(reference);
+                break;
+            }
+        }
+    }
+    return kept;
 }
 
 function attemptOf(

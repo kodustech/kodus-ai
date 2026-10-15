@@ -256,19 +256,28 @@ function extractFromText(
             titleHint: m[2],
         }));
     }
-    // Trackers write keys in capitals; only a branch or a typed command
-    // lowercases them (`nina/saa-96-sticky-notes`). In prose, `gpt-5` and
-    // `node-22` are names.
+    // Trackers write keys in capitals; a branch or a typed command lowercases
+    // them (`nina/saa-96-sticky-notes`). In prose, `gpt-5` and `node-22` are
+    // names far more often than `feat(kod-10)` is a task, so a lower-case key
+    // there is loose: the resolver keeps it only where a tracker has the team.
     const lowercase = source === 'branch' || source === 'command';
     collect(
-        lowercase
-            ? /(?<![A-Za-z0-9_])([A-Za-z][A-Za-z0-9_]*)-(\d+)(?![A-Za-z0-9_])/g
-            : /(?<![A-Za-z0-9_])([A-Z][A-Z0-9_]*)-(\d+)(?![A-Za-z0-9_])/g,
+        /(?<![A-Za-z0-9_])([A-Z][A-Z0-9_]*)-(\d+)(?![A-Za-z0-9_])/g,
+        (m) => ({
+            kind: 'key',
+            id: `${m[1]}-${m[2]}`,
+            raw: m[0],
+            source,
+        }),
+    );
+    collect(
+        /(?<![A-Za-z0-9_])([A-Za-z][A-Za-z0-9_]*)-(\d+)(?![A-Za-z0-9_])/g,
         (m) => ({
             kind: 'key',
             id: `${m[1].toUpperCase()}-${m[2]}`,
             raw: m[0],
             source,
+            ...(lowercase ? {} : { loose: true as const }),
         }),
     );
 

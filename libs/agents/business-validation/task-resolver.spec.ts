@@ -82,6 +82,37 @@ describe('resolveTasks', () => {
         });
     });
 
+    it('reads a lowercase key in the title when a tracker has that team', async () => {
+        const linear = tracker('Linear', { 'KOD-10': 'x' }, { teams: ['KOD'] });
+        const result = await resolveTasks(
+            refs('', 'feat(kod-10): sticky notes'),
+            [linear],
+            context,
+        );
+        expect(result.kind).toBe('found');
+        expect(linear.reads).toEqual(['KOD-10']);
+    });
+
+    it('never sends a lowercase version to a tracker, nor counts it toward a release (UC-14, UC-17)', async () => {
+        const linear = tracker('Linear', { 'KOD-10': 'x' }, { teams: ['KOD'] });
+        const noTask = await resolveTasks(
+            refs('', 'feat: migrate to node-22 and es-2022 with gpt-5'),
+            [linear],
+            context,
+        );
+        expect(noTask.kind).toBe('no_reference');
+        const withTask = await resolveTasks(
+            refs(
+                'Bumps node-22, es-2022, python-3 and gpt-5.',
+                'feat(KOD-10): x',
+            ),
+            [linear],
+            context,
+        );
+        expect(withTask.kind).toBe('found');
+        expect(linear.reads).toEqual(['KOD-10']);
+    });
+
     it('flags a typo of a real team key and names real tasks one typo away (UC-21)', async () => {
         const linear = tracker('Linear', { 'SAA-99': 'x' }, { teams: ['SAA'] });
         const result = await resolveTasks(
