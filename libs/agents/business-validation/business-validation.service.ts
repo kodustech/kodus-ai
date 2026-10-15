@@ -507,6 +507,11 @@ export class BusinessValidationService {
                 ? undefined
                 : { thin: found.task };
         }
+        // An answer with neither a requirement list nor a status skipped the
+        // verdict: that is no verdict, not a gap.
+        if (!verdict.requirements && !verdict.status) {
+            return undefined;
+        }
         const settled = await this.checkGaps(
             request,
             settleVerdict(verdict, { unseenFiles }),

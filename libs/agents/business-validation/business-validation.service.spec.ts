@@ -3,7 +3,10 @@ import {
     authorClaimSection,
     BusinessValidationService,
 } from './business-validation.service';
-import { resolveBusinessLogicSettings } from './settings';
+import {
+    DEFAULT_BUSINESS_LOGIC_SETTINGS,
+    resolveBusinessLogicSettings,
+} from './settings';
 import { resolveTasks } from './task-resolver';
 import { buildTaskTrackers } from './trackers/tracker-catalog';
 
@@ -243,6 +246,41 @@ describe('BusinessValidationService · a MISSING the repository refutes', () => 
                 )
             ).requirements[0].state,
         ).toBe('missing');
+    });
+});
+
+describe('BusinessValidationService · an answer without a verdict', () => {
+    it('is no verdict, not a gap', async () => {
+        const service = new BusinessValidationService(
+            {} as any,
+            {} as any,
+            { findByKey: async () => undefined } as any,
+            { loadInstructions: () => '', listReferences: () => [] } as any,
+        );
+        const judgeWith = (verdict: Record<string, unknown>) =>
+            (service as any).judgeTask(
+                {
+                    door: 'auto',
+                    organizationAndTeamData: { organizationId: 'org-1' },
+                },
+                DEFAULT_BUSINESS_LOGIC_SETTINGS,
+                { task: { tracker: 'Linear', id: 'SAA-96', title: 'Notes' } },
+                'diff',
+                [],
+                'en-US',
+                async () => ({ judge: async () => verdict }),
+            );
+
+        await expect(
+            judgeWith({ needsMoreInfo: false, summary: 'Looks fine.' }),
+        ).resolves.toBeUndefined();
+        await expect(
+            judgeWith({
+                needsMoreInfo: false,
+                summary: 'Looks fine.',
+                status: 'compliant',
+            }),
+        ).resolves.toMatchObject({ passed: true });
     });
 });
 
