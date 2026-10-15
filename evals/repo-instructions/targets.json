@@ -1,0 +1,7 @@
+{
+    "__doc": [
+        "Per-model floors for the repo-instructions gate: violation sites reported with the setting on.",
+        "Calibrate from two full runs of one commit (evals/AGENTS.md, \"Floors and judges\"); never copy these numbers elsewhere."
+    ],
+    "models": {}
+}

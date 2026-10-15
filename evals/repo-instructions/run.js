@@ -8,23 +8,35 @@
 // ./cases.js. Scoring is deterministic: ground truth is the enumerated
 // violation sites, no judge.
 //
-//   node evals/repo-instructions/run.js --model=<tier0 id> [--arm=both|on|off] [--limit=N] [--concurrency=N] [--output=path]
+//   node evals/repo-instructions/run.js --model=<tier0 id> [--arm=both|on|off] [--limit=N] [--concurrency=N] [--output=path] [--gate]
 //
-// Exit: 0 measured, 2 infra (more than 5% of runs failed). No floor yet: a
-// floor needs two calibration runs of the same commit (evals/AGENTS.md).
+// Writes the shared result (evals/shared/eval-result.js): per case, the
+// violation sites the on arm reported, out of all of them. --gate fails below
+// the model's floor in ./targets.json, and on any repo_instruction finding in
+// the off arm, whatever the floor.
+//
+// Exit: 0 pass, 1 below the floor or a leak (--gate), 2 did not measure (more
+// than 5% of runs failed, or the result breaks the shared shape).
 const fs = require('fs');
 const path = require('path');
 
 const { buildCases, DECOY } = require('./cases');
+const { catalog } = require('./catalog');
 const { TIER0 } = require('../shared/tier0-models');
+const { countTokens, tokensUsed } = require('../shared/eval-kit');
+const { evalQuestion, resultProblems } = require('../shared/eval-result');
 
 const RESULTS_DIR = path.join(__dirname, '../investigation/results');
 const LINE_TOLERANCE = 2;
 const INFRA_BUDGET = 0.05;
 
 function parseArgs(argv) {
-    const out = { model: 'gpt-5.4', arm: 'both', limit: null, concurrency: 4, output: '' };
+    const out = { model: 'gpt-5.4', arm: 'both', limit: null, concurrency: 4, output: '', gate: false };
     for (const arg of argv.slice(2)) {
+        if (arg === '--gate') {
+            out.gate = true;
+            continue;
+        }
         const m = arg.match(/^--([^=]+)=(.*)$/);
         if (!m) {
             console.error(`unknown argument ${arg}`);
@@ -36,7 +48,7 @@ function parseArgs(argv) {
         else if (m[1] === 'output') out.output = m[2];
         else if (m[1] === 'concurrency') out.concurrency = Math.max(1, Number(m[2]) || 1);
         else {
-            console.error(`unknown flag --${m[1]}. Known: --model --arm --limit --concurrency --output`);
+            console.error(`unknown flag --${m[1]}. Known: --model --arm --limit --concurrency --output --gate`);
             process.exit(2);
         }
     }
@@ -84,6 +96,10 @@ function scoreOn(testCase, findings) {
     );
     const decoyPattern = /pnpm|package-lock|yarn\.lock/i;
     return {
+        siteResults: sites.map((s) => ({
+            what: `${s.file}:${s.line}`,
+            ok: instruction.some((f) => f.relevantFile === s.file && overlaps(f, s.line)),
+        })),
         instructionFindings: instruction.length,
         truePositives: instruction.filter(isTrue).length,
         sites: sites.length,
@@ -131,6 +147,7 @@ function summarize(rows) {
 
 async function main() {
     const args = parseArgs(process.argv);
+    countTokens();
     let cases = buildCases();
     if (Number.isFinite(args.limit)) cases = cases.slice(0, args.limit);
     const arms = args.arm === 'both' ? ['on', 'off'] : [args.arm];
@@ -174,29 +191,74 @@ async function main() {
     );
 
     const infra = rows.filter((r) => r.status === 'infra').length;
-    const report = {
+    const metrics = summarize(rows);
+    const checksById = new Map(catalog().map((c) => [c.id, c.checks]));
+    const resultCases = cases.map((testCase) => {
+        const on = rows.find((r) => r.caseId === testCase.caseId && r.arm === 'on');
+        const detail = on?.status === 'ok' ? on.score.siteResults : [];
+        return {
+            id: testCase.caseId,
+            checks: checksById.get(testCase.caseId),
+            hits: detail.filter((d) => d.ok).length,
+            total: detail.length,
+            detail,
+            ...(on?.status === 'ok' ? {} : { unmeasured: true }),
+        };
+    });
+    const floor = (require('./targets.json').models[args.model] || {}).floor ?? null;
+    const leaks = metrics.off?.leakedInstructionLabels ?? 0;
+    const result = {
+        eval: 'repo-instructions',
+        question: evalQuestion('evals/repo-instructions'),
         model: args.model,
+        runs: 1,
+        metric: {
+            name: 'violation sites reported with the setting on',
+            value: metrics.on?.occurrenceRecall ?? null,
+            floor,
+            baseline: null,
+        },
+        cases: resultCases,
+        tokens: tokensUsed(),
+        infra: { errored: infra, total: rows.length },
         arms,
-        cases: cases.length,
-        runs: rows.length,
-        infraFailures: infra,
-        metrics: summarize(rows),
+        metrics,
         rows,
     };
     const output = args.output || path.join(RESULTS_DIR, `repo-instructions-${args.model.replace(/[^\w.-]+/g, '-')}.json`);
     fs.mkdirSync(path.dirname(output), { recursive: true });
-    fs.writeFileSync(output, JSON.stringify(report, null, 2));
-    console.log(`metrics ${JSON.stringify(report.metrics)}`);
+    fs.writeFileSync(output, `${JSON.stringify(result, null, 2)}\n`);
+    console.log(`metrics ${JSON.stringify(metrics)}`);
     console.log(`wrote ${path.relative(process.cwd(), output)}`);
 
     if (rows.length === 0 || infra / rows.length > INFRA_BUDGET) {
         console.error(`not measured: ${infra} of ${rows.length} run(s) failed on infra (budget ${INFRA_BUDGET * 100}%)`);
-        process.exit(2);
+        return 2;
     }
-    process.exit(0);
+    if (arms.includes('on')) {
+        const problems = resultProblems(result);
+        if (problems.length) {
+            console.error(`not measured: the result breaks the shared shape: ${problems.join('; ')}`);
+            return 2;
+        }
+    }
+    if (args.gate) {
+        if (leaks > 0) {
+            console.error(`gate: ${leaks} repo_instruction finding(s) with the setting off`);
+            return 1;
+        }
+        if (floor !== null && result.metric.value !== null && result.metric.value < floor) {
+            console.error(`gate: ${result.metric.value} below the floor ${floor} for ${args.model}`);
+            return 1;
+        }
+    }
+    return 0;
 }
 
-main().catch((error) => {
-    console.error(`infra: ${error instanceof Error ? error.stack : String(error)}`);
-    process.exit(2);
-});
+main().then(
+    (code) => process.exit(code),
+    (error) => {
+        console.error(`infra: ${error instanceof Error ? error.stack : String(error)}`);
+        process.exit(2);
+    },
+);

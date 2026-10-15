@@ -34,6 +34,7 @@ const { spawn } = require('child_process');
 const { startFakeLlmServer } = require('./shared/fake-llm-server');
 const { readTrace, uncovered } = require('./shared/engine-files');
 const { DECOY: REPO_INSTRUCTIONS_DECOY } = require('./repo-instructions/cases');
+const { resultProblems } = require('./shared/eval-result');
 
 const ROOT = path.join(__dirname, '..');
 const PR_WORKFLOW = '.github/workflows/code-review-evals-pr.yml';
@@ -135,10 +136,13 @@ async function main() {
             args: ['evals/repo-instructions/run.js', '--model=eval-fake', '--limit=1', `--output=${path.join(scratch, 'repo-instructions.json')}`],
             // The scripted finding is labeled repo_instruction once the block is
             // in the prompt; the verifier must then get the instruction files.
-            check: (verdictPrompts) =>
-                verdictPrompts.some((p) => p.includes('labeled repo_instruction') && p.includes(REPO_INSTRUCTIONS_DECOY))
-                    ? null
-                    : `expected a verifier prompt carrying the CLAUDE.md, got ${verdictPrompts.length} verifier prompt(s) without it`,
+            check: (verdictPrompts) => {
+                if (!verdictPrompts.some((p) => p.includes('labeled repo_instruction') && p.includes(REPO_INSTRUCTIONS_DECOY))) {
+                    return `expected a verifier prompt carrying the CLAUDE.md, got ${verdictPrompts.length} verifier prompt(s) without it`;
+                }
+                const problems = resultProblems(readJson(path.join(scratch, 'repo-instructions.json')));
+                return problems.length ? `result breaks the shared shape: ${problems.join('; ')}` : null;
+            },
         },
         { name: 'anchoring', model: true, args: ['evals/anchoring/anchor-eval.js', '--model=eval-fake', '--limit=1'] },
         { name: 'pr-summary', model: true, args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'] },
