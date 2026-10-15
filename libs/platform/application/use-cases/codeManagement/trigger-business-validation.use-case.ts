@@ -241,7 +241,20 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 ? await this.resolveRepository({
                       organizationAndTeamData: params.organizationAndTeamData,
                       repositoryId: params.repositoryId,
-                  }).catch(() => undefined)
+                  }).catch((error) => {
+                      this.logger.warn({
+                          message:
+                              'Could not resolve the repository; reading the task without it',
+                          context: TriggerBusinessValidationUseCase.name,
+                          error,
+                          metadata: {
+                              organizationId:
+                                  params.organizationAndTeamData.organizationId,
+                              repositoryId: params.repositoryId,
+                          },
+                      });
+                      return undefined;
+                  })
                 : undefined;
         return this.businessValidationService.tryRead(
             params.organizationAndTeamData,

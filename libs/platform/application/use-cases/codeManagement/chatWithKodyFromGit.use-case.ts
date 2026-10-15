@@ -299,7 +299,19 @@ export class ChatWithKodyFromGitUseCase {
             const reviewing = this.webhookContextService
                 ? await this.webhookContextService
                       .getContext(params.platformType, String(repository.id))
-                      .catch(() => null)
+                      .catch((error) => {
+                          this.logger.warn({
+                              message:
+                                  'Could not resolve the webhook context; answering as the integration config',
+                              context: ChatWithKodyFromGitUseCase.name,
+                              error,
+                              metadata: {
+                                  platformType: params.platformType,
+                                  repositoryId: repository.id,
+                              },
+                          });
+                          return null;
+                      })
                 : null;
             const organizationAndTeamData =
                 reviewing?.organizationAndTeamData ??
