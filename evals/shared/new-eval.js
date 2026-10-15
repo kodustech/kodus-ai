@@ -159,7 +159,8 @@ function main() {
   4. evals/stages.js: name the stage it covers (eval: 'evals/${name}'), so it reaches the panel.
   5. evals/wiring-smoke.js: a step with model: true running it on --model=eval-fake.
   6. Calibrate the floor in targets.json from two full runs (evals/AGENTS.md).
-  7. To measure it every night it changes: add it to evals/nightly-evals.js (its stage gets nightly: 'shared').
+  7. To measure it every night it changes, and on Friday on every tier-0 model: add it to evals/nightly-evals.js
+     (its stage gets nightly: 'shared' and a friday key).
 evals/stage-signals.spec.ts fails until 4 and 5 agree, and every catalog is valid.`);
     return 0;
 }

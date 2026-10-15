@@ -5,10 +5,14 @@
  * night or a Friday that did not measure is never reported as healthy, and that
  * the message says what moved and what to do.
  */
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { nightlyReport, tier0Report } = require('./ci-report');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { classifyFailure } = require('./tier0-smoke');
+const { classifyFailure, runFewCases, tier0Signal } = require('./tier0-smoke');
 
 const row = (caseId: string, recall: number, found: string[] = [], missed: string[] = []) => ({
     caseId,
@@ -146,6 +150,18 @@ describe('tier-0 report', () => {
         expect(report.description).toContain('✅ a\n❌ **b** · review: no findings\n   `no finding parsed` → customers on this model are affected\n❓ **c** · no result, the job crashed');
     });
 
+    it('names a stage that no longer runs on the model, after a review that passed', () => {
+        const stages = [
+            { key: 'kody_rules', stage: 'kody-rules', status: 'broken', reason: 'measured 4 cases and got nothing right' },
+            { key: 'reply_addressing', stage: 'reply-addressing', status: 'pass', reason: null },
+        ];
+        const report = tier0Report(['a'], read({ a: { ...pass('a'), evals: stages } }));
+        expect(report.status).toBe('failure');
+        expect(report.description).toContain('❌ **a** · kody-rules: measured 4 cases and got nothing right');
+        expect(report.description).toContain('measured 4 cases and got nothing right\n   customers on this model are affected');
+        expect(report.markdown).toContain('❌ **a**: review ok (30 tool calls, 5 findings, 100s) · summary ok · kody-rules broken · reply-addressing ok');
+    });
+
     it('treats a broken PR summary as a broken model', () => {
         expect(tier0Report(['a'], read({ a: { ...pass('a'), prSummary: { status: 'broken', reason: 'GATE FAILED' } } })).status).toBe('failure');
     });
@@ -156,6 +172,90 @@ describe('tier-0 report', () => {
         expect(report.title).toBe('⚠️ Tier-0 · 0/1 model ok');
         expect(report.description).toContain('⚠️ **a** · review: no credit (same as last week)');
         expect(report.markdown).toContain('_(same as last week)_');
+    });
+});
+
+describe('tier-0 stages on a few cases', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tier0-few-'));
+    // A stand-in eval: writes the shared result its data file holds, prints its
+    // stdout and stderr, and exits with `exit` (0 with a result, else 1).
+    const runner = path.join(dir, 'fake-eval.js');
+    fs.writeFileSync(
+        runner,
+        [
+            "const fs = require('fs');",
+            "const arg = (k) => (process.argv.find((a) => a.startsWith('--' + k + '=')) || '').slice(k.length + 3);",
+            "const data = JSON.parse(fs.readFileSync(arg('data'), 'utf8'));",
+            "if (data.result) fs.writeFileSync(arg('output'), JSON.stringify(data.result));",
+            'console.log(data.stdout);',
+            'console.error(data.stderr);',
+            'process.exit(data.exit ?? (data.result ? 0 : 1));',
+        ].join('\n'),
+    );
+    const fake = (name: string, result: unknown, stderr = '', stdout = '', exit?: number) => {
+        const data = path.join(dir, `${name}.json`);
+        fs.writeFileSync(data, JSON.stringify({ result, stderr, stdout, exit }));
+        return { key: name, stage: name, run: [runner, `--data=${data}`] };
+    };
+    const shared = (hits: number, errored = 0, total = 10) => ({ cases: [{ id: 'c1', checks: 'Checks c1', hits, total: 2 }], infra: { errored, total } });
+
+    it('runs when it measured and got something right; is broken when it got nothing right', () => {
+        expect(runFewCases('m', fake('ok', shared(1)), dir)).toMatchObject({ status: 'pass', hits: 1, total: 2 });
+        expect(runFewCases('m', fake('none', shared(0)), dir)).toMatchObject({ status: 'broken', reason: 'measured 1 cases and got nothing right' });
+    });
+
+    it('tells a provider refusal from a stage that fails on the model when calls failed', () => {
+        expect(runFewCases('m', fake('refused', shared(1, 5), '429 Too Many Requests'), dir)).toMatchObject({ status: 'infra' });
+        expect(runFewCases('m', fake('noverdict', shared(1, 5), 'Reply classifier returned no verdict'), dir)).toMatchObject({ status: 'broken', reason: '5 of 10 calls failed: Reply classifier returned no verdict' });
+        expect(runFewCases('m', fake('crash', null, 'TypeError: x is not a function'), dir)).toMatchObject({ status: 'broken', reason: 'TypeError: x is not a function' });
+    });
+
+    // Kody Rules says only that its rule checks failed to run; the engine's own
+    // [LLM-ERROR] log line says why.
+    it('reads a provider refusal from the engine\'s LLM error log when the eval hides it', () => {
+        const hidden = '[case a run 0] Kody Rules could not be evaluated: all 4 rule check(s) failed to run.\n[case b run 0] Kody Rules could not be evaluated: all 4 rule check(s) failed to run.';
+        const credit = 'WARN: [LLM-ERROR] kodus-rules-review-agent.shard: "managed-default" failed (QUOTA_EXCEEDED) — Your credit balance is too low';
+        // One refused call per failed one, as the engine logs them.
+        const each = (line: string) => Array.from({ length: 10 }, () => line).join('\n');
+        expect(runFewCases('m', fake('credit', shared(0, 10), hidden, each(`\x1b[33m${credit}\x1b[39m`)), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: Your credit balance is too low' });
+        const ciLine = JSON.stringify({ level: 'warn', context: 'runWithModelFailover', msg: '[LLM-ERROR] code-review: "managed-default" failed (QUOTA_EXCEEDED) — Your credit balance is too low' });
+        expect(runFewCases('m', fake('credit-json', shared(0, 10), hidden, each(ciLine)), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: Your credit balance is too low' });
+        const unsupported = 'WARN: [LLM-ERROR] kodus-rules-review-agent.shard: "managed-default" failed (UNKNOWN) — Function tools with reasoning_effort are not supported';
+        expect(runFewCases('m', fake('unsupported', shared(0, 10), hidden, unsupported), dir)).toMatchObject({ status: 'broken' });
+        // One rate-limited call among calls that failed for another reason: broken.
+        const oneRateLimit = 'WARN: [LLM-ERROR] classifyImplicitReply: "managed-default" failed (RATE_LIMIT) — 429 Too Many Requests';
+        const noVerdict = Array.from({ length: 9 }, (_, i) => `c${i}#0: Reply classifier returned no verdict`).join('\n');
+        expect(runFewCases('m', fake('mixed', shared(0, 10), noVerdict, oneRateLimit, 2), dir)).toMatchObject({ status: 'broken', reason: '10 of 10 calls failed: Reply classifier returned no verdict' });
+    });
+
+    // Each eval holds its own budget: it exits 2 above it. Kody Rules exits 2 only
+    // under --gate, so at least half the calls must have run.
+    it('takes the eval\'s own word on whether it measured', () => {
+        expect(runFewCases('m', fake('one-of-four', shared(1, 1, 4)), dir)).toMatchObject({ status: 'pass' });
+        expect(runFewCases('m', fake('half', shared(1, 2, 4), '[case a run 0] Kody Rules could not be evaluated'), dir)).toMatchObject({ status: 'broken' });
+        const oneRefused = 'reply-addressing: 16 cases\nc1#0: 429 Too Many Requests\n❌ INFRA ERROR: 1/16 calls failed (budget 0)';
+        expect(runFewCases('m', fake('one-refused', shared(1, 1, 16), oneRefused, '', 2), dir)).toMatchObject({ status: 'infra', reason: '1 of 16 calls failed: 429 Too Many Requests' });
+    });
+
+    it('names the error most calls failed with, not the eval\'s summary line', () => {
+        const noVerdict = 'reply-addressing: 2 cases\nc1#0: Reply classifier returned no verdict\nc2#0: Reply classifier returned no verdict\n❌ INFRA ERROR: 2/2 calls failed (budget 0)';
+        expect(runFewCases('m', fake('noverdict2', shared(0, 10), noVerdict), dir)).toMatchObject({ status: 'broken', reason: '10 of 10 calls failed: Reply classifier returned no verdict' });
+        const refused = '[case a run 0] 429 Too Many Requests\n[case b run 0] 429 Too Many Requests\n❌ INFRA ERROR: 2/2 calls failed';
+        expect(runFewCases('m', fake('refused2', shared(0, 10), refused), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: 429 Too Many Requests' });
+    });
+});
+
+describe('tier-0 signal', () => {
+    const result = (review: string, summary: string, ...parts: string[]) => ({ status: review, seconds: 12, prSummary: { status: summary }, evals: parts.map((status, i) => ({ key: `p${i}`, status })) });
+
+    // The panel's row for the model: the worst part decides, the review included.
+    it('is red when any part is broken, infra when one was not reached, green only when all ran', () => {
+        expect(tier0Signal(result('pass', 'pass', 'pass', 'pass'))).toMatchObject({ status: 'green', value: '12000', meta: { review: 'pass', pr_summary: 'pass', p0: 'pass', p1: 'pass' } });
+        expect(tier0Signal(result('broken', 'pass', 'infra', 'pass')).status).toBe('red');
+        expect(tier0Signal(result('pass', 'pass', 'broken', 'infra')).status).toBe('red');
+        expect(tier0Signal(result('pass', 'infra', 'pass', 'pass')).status).toBe('infra');
+        expect(tier0Signal(result('infra', 'pass', 'pass', 'pass')).status).toBe('infra');
+        expect(tier0Signal(result('pass', 'skipped')).status).toBe('green');
     });
 });
 
