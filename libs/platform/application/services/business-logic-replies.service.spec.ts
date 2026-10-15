@@ -51,7 +51,7 @@ const request = {
     diff: '',
 };
 
-function build(intent: any, revalidated?: any) {
+function build(intent: any, revalidated?: any, latest: any = run) {
     const service = {
         classifyReply: jest.fn(async () => intent),
         inTeamLanguage: jest.fn(async (_org: unknown, text: string) => text),
@@ -69,7 +69,7 @@ function build(intent: any, revalidated?: any) {
             comment: 'updated',
         })),
     };
-    const runs = { latestForPullRequest: jest.fn(async () => run) };
+    const runs = { latestForPullRequest: jest.fn(async () => latest) };
     return {
         replies: new BusinessLogicReplies(
             service as any,
@@ -130,19 +130,22 @@ describe('BusinessLogicReplies', () => {
         expect(publisher.publish).not.toHaveBeenCalled();
     });
 
-    it('never talks about a check, on any platform', async () => {
-        const { replies } = build({ intent: 'accept', findings: [1] });
+    it.each([PlatformType.GITHUB, PlatformType.GITLAB])(
+        'never talks about a check, on any platform (%s)',
+        async (platformType) => {
+            const { replies } = build({ intent: 'accept', findings: [1] });
 
-        const result = await replies.handle({
-            request: { ...request, platformType: PlatformType.GITLAB },
-            message: 'out of scope',
-            sender: { login: 'Nina' },
-        });
+            const result = await replies.handle({
+                request: { ...request, platformType },
+                message: 'out of scope',
+                sender: { login: 'Nina' },
+            });
 
-        expect(result.handled && result.reply).not.toMatch(
-            /kody\/business-logic|check/,
-        );
-    });
+            expect(result.handled && result.reply).not.toMatch(
+                /kody\/business-logic|check/,
+            );
+        },
+    );
 
     it("marks a reviewer's acceptance, checks the task it moved to exists, and says nothing is left to merge", async () => {
         const { replies, service, publisher } = build({
@@ -246,6 +249,39 @@ describe('BusinessLogicReplies', () => {
             handled: true,
             reply: expect.stringContaining('still MISSING'),
         });
+    });
+
+    it('re-checks a dispute with the id when the task link is not one the parser reads back', async () => {
+        const { replies, service } = build(
+            {
+                intent: 'dispute',
+                findings: [1],
+                files: [],
+                claim: 'covered',
+            },
+            { outcome: { kind: 'skipped', reason: 'x', message: 'x' } },
+            {
+                ...run,
+                tasks: [
+                    {
+                        ...run.tasks[0],
+                        tracker: 'Tickets',
+                        id: 'OPS-12',
+                        url: 'https://app.clickup.com/t/86a1b2c3d',
+                    },
+                ],
+            },
+        );
+
+        await replies.handle({
+            request,
+            message: "it's covered",
+            sender: { login: 'rafa' },
+        });
+
+        expect(service.validate).toHaveBeenCalledWith(
+            expect.objectContaining({ taskInput: 'OPS-12' }),
+        );
     });
 
     it('accepts nothing when the task it moved to does not exist', async () => {

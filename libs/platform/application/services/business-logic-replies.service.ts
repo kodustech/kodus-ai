@@ -12,6 +12,7 @@ import type {
 import { deriveStatus } from '@libs/agents/business-validation/judge/validation-verdict';
 import { outcomeFromRun } from '@libs/agents/business-validation/runs/run-mapping';
 import type { RunTask } from '@libs/agents/business-validation/runs/validation-run.model';
+import { extractTaskReferences } from '@libs/agents/business-validation/task-references';
 import {
     type ValidationRunRecord,
     ValidationRunRepository,
@@ -46,8 +47,8 @@ interface Located {
 /**
  * Replies to the Business Logic comment that decide something:
  *
- * - a reviewer waives a finding, e.g. "moved to SAA-102" (UC-37). Never the
- *   PR author: they can ask for a re-check, but only someone else waives;
+ * - someone on the team waives a finding, e.g. "moved to SAA-102" (UC-37).
+ *   The comment records who; on GitHub only people with write access may;
  * - the author says the code already covers it (UC-38). Kody re-checks with
  *   what they pointed at, then keeps or changes the state and says why.
  *
@@ -250,10 +251,11 @@ export class BusinessLogicReplies {
         const fullRequest: BusinessValidationRequest = {
             ...request,
             door: 'command',
-            // The task(s) the comment was about, not whatever the PR says now.
-            // The URL when there is one: a Notion page id alone is not a
-            // reference the parser reads back.
-            taskInput: run.tasks.map((t) => t.url ?? t.id).join(' '),
+            // The task(s) the comment was about, not whatever the PR says now,
+            // each as a reference the parser reads back.
+            taskInput: run.tasks
+                .map((t) => readBack(t, settings.taskIdPattern))
+                .join(' '),
             settings,
             authorClaim: {
                 claim: intent.claim || input.message,
@@ -359,6 +361,17 @@ function openFindings(run: ValidationRunRecord): Located[] {
         });
     }
     return located;
+}
+
+/**
+ * A task as `extractTaskReferences` reads it back: its link when the parser
+ * knows it (a Notion page id alone is not a reference), else its id (a
+ * ClickUp link is not, but `86a1b2c3d` may match the team's pattern).
+ */
+function readBack(task: RunTask, taskIdPattern?: string): string {
+    const reads = (text: string) =>
+        extractTaskReferences({ command: text }, { taskIdPattern }).length > 0;
+    return task.url && reads(task.url) ? task.url : task.id;
 }
 
 function sameText(a: string, b: string): boolean {
