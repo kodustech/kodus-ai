@@ -298,8 +298,12 @@ export default function CustomizeTeamPage() {
                                     ) : (
                                         <>
                                             <span>
-                                                Files Kody reads when they cover
-                                                the changed files:
+                                                Found on each repository&apos;s
+                                                default branch. A review reads
+                                                them from the pull
+                                                request&apos;s target branch,
+                                                when they cover the changed
+                                                files:
                                             </span>
                                             {repositoriesWithAgentFiles.map(
                                                 (repo) => (
