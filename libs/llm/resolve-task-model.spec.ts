@@ -581,15 +581,18 @@ describe('resolveTaskSlot — an OpenAI-compatible credential on OpenAI itself',
         expect(slot?.fallback?.baseURL).toBeUndefined();
     });
 
-    it('moves an override pasted for the compatible adapter under openai', () => {
-        const withOverride = (override: string) => {
-            const config: any = compat('https://api.openai.com/v1', 'gpt-6-sol');
+    it('moves an override pasted for the compatible adapter under openai, only when the slot is served as openai', () => {
+        const withOverride = (override: string, baseURL = 'https://api.openai.com/v1') => {
+            const config: any = compat(baseURL, 'gpt-6-sol');
             config.models[0].reasoningConfigOverride = override;
             return resolveTaskSlot(config, 'codeReview', {}).slot?.reasoningConfigOverride;
         };
-        expect(JSON.parse(withOverride('{"openaiCompatible":{"reasoningEffort":"high"}}')!)).toEqual({ openai: { reasoningEffort: 'high' } });
+        const compatShaped = '{"openaiCompatible":{"reasoningEffort":"high"}}';
+        expect(JSON.parse(withOverride(compatShaped)!)).toEqual({ openai: { reasoningEffort: 'high' } });
         expect(withOverride('{"reasoningEffort":"high"}')).toBe('{"reasoningEffort":"high"}');
         expect(withOverride('not json')).toBe('not json');
+        // Behind a proxy the slot stays openai_compatible, and so does its override.
+        expect(withOverride(compatShaped, 'https://litellm.example.com/v1')).toBe(compatShaped);
     });
 
     it('leaves a proxy and a non-reasoning model on openai_compatible', () => {
