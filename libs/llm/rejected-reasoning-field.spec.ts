@@ -3,9 +3,11 @@ jest.mock('@libs/common/utils/crypto', () => ({
     encrypt: (v: string) => v,
 }));
 
+import { tool } from 'ai';
 import { z } from 'zod';
 
 import { LLM } from './llm';
+import { resolveTaskSlot } from './resolve-task-model';
 import {
     clearRefusals,
     MAX_REFUSAL_RETRIES,
@@ -361,5 +363,103 @@ describe('rejectedReasoningField', () => {
                 apiError(500, 'json: unknown field "thinking"'),
             ),
         ).toBeUndefined();
+    });
+});
+
+/** OpenAI's own answer on chat completions for the gpt-5.6 / gpt-6 line, verbatim
+ *  from production (2026-09-30). */
+const TOOLS_WITH_EFFORT = {
+    error: {
+        message:
+            "Function tools with reasoning_effort are not supported for gpt-6-sol in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+        type: 'invalid_request_error',
+        param: null,
+        code: null,
+    },
+};
+
+const withTool = (slot: any) =>
+    LLM.run({
+        byokConfig: { ...slot, apiKey: 'k' },
+        organizationId: 'org-1',
+        messages: [{ role: 'user', content: 'ping' }],
+        loop: {
+            tools: {
+                ping: tool({
+                    description: 'ping',
+                    inputSchema: z.object({}),
+                    execute: async () => 'pong',
+                }),
+            },
+            maxSteps: 1,
+        },
+        runName: 'rejected-reasoning-field-spec',
+    } as any);
+
+describe('an OpenAI reasoning model with tools', () => {
+    let up: ReturnType<typeof upstream> | undefined;
+    const realFetch = globalThis.fetch;
+    afterEach(() => {
+        up?.restore();
+        up = undefined;
+        globalThis.fetch = realFetch;
+        clearRefusals();
+    });
+
+    it('on OpenAI itself through an OpenAI-compatible credential goes to /v1/responses with its effort', async () => {
+        const urls: string[] = [];
+        const bodies: any[] = [];
+        globalThis.fetch = (async (input: any, init: any) => {
+            urls.push(String(input?.url ?? input));
+            bodies.push(init?.body ? JSON.parse(String(init.body)) : undefined);
+            // 400 so the SDK does not retry: the request is what this asserts.
+            return new Response(
+                JSON.stringify({ error: { message: 'stop here' } }),
+                {
+                    status: 400,
+                    headers: { 'content-type': 'application/json' },
+                },
+            );
+        }) as typeof fetch;
+        const { slot } = resolveTaskSlot(
+            {
+                version: 2,
+                credentials: [
+                    {
+                        id: 'c-cp',
+                        provider: 'openai_compatible',
+                        apiKey: 'k',
+                        settings: { baseURL: 'https://api.openai.com/v1' },
+                    },
+                ],
+                models: [
+                    { id: 'm-1', credentialId: 'c-cp', model: 'gpt-6-sol' },
+                ],
+                routing: { defaultModelId: 'm-1' },
+            } as any,
+            'codeReview',
+        );
+        await withTool(slot).catch(() => undefined);
+        expect(urls[0]).toBe('https://api.openai.com/v1/responses');
+        expect(bodies[0].reasoning?.effort).toBeDefined();
+        expect(bodies[0].tools).toHaveLength(1);
+    });
+
+    it('behind a proxy that forwards to chat completions is asked again without the effort', async () => {
+        up = upstream({
+            respond: (body) =>
+                body?.reasoning_effort !== undefined && body?.tools?.length
+                    ? TOOLS_WITH_EFFORT
+                    : undefined,
+        });
+        await withTool({
+            provider: 'openai_compatible',
+            model: 'gpt-6-sol',
+            baseURL: 'https://litellm.example.com/v1',
+        });
+        expect(up.bodies).toHaveLength(2);
+        expect(up.bodies[0].reasoning_effort).toBeDefined();
+        expect(up.bodies[1].reasoning_effort).toBeUndefined();
+        expect(up.bodies[1].tools).toHaveLength(1);
     });
 });

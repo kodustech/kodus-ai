@@ -32,9 +32,10 @@ const OPTION_KEYS: Record<ReasoningField, string[]> = {
 export const MAX_REFUSAL_RETRIES = Object.keys(OPTION_KEYS).length;
 
 const FIELD = '(thinking|reasoning_effort)';
-// Only wordings that say the FIELD is unknown. A 400 that names the field for
-// its value ("reasoning_effort 'max' is not supported", or an error envelope's
-// `param`) is a configuration the user has to see, so it is not matched.
+// Wordings that refuse the FIELD itself: unknown to the upstream, or not allowed
+// together with function tools on that endpoint. A 400 about the field's VALUE
+// ("reasoning_effort 'max' is not supported", or an error envelope's `param`)
+// is a configuration the user has to see, so it is not matched.
 const REFUSALS = [
     // Go's encoding/json with DisallowUnknownFields (OpenCode Go upstreams).
     new RegExp(`unknown field\\W{1,4}${FIELD}\\b`, 'i'),
@@ -48,6 +49,12 @@ const REFUSALS = [
         `unrecognized request argument supplied\\W{1,4}${FIELD}\\b`,
         'i',
     ),
+    // OpenAI's chat completions for the gpt-5.6 / gpt-6 line: the effort and an
+    // agent loop's tools cannot go together there ("…use /v1/responses or set
+    // reasoning_effort to 'none'"). A call on OpenAI's own host is served on
+    // /v1/responses instead (providers/openai/endpoint.ts); this one came
+    // through a proxy, which may not serve that endpoint.
+    new RegExp(`function tools with ${FIELD} (?:is|are) not supported`, 'i'),
 ];
 
 /**
